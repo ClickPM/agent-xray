@@ -9,9 +9,11 @@
     "gen-client": "encore gen client --output ../web/lib/api-client.ts --env local"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.3",
     "encore.dev": "1.57.13"
   },
   "devDependencies": {
+    "@types/node": "^22.20.1",
     "typescript": "^5.8.0"
   }
 }

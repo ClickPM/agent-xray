@@ -66,6 +66,12 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、业务工具必须纯函数、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**;SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
 10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。
 
+## 钉版本
+
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| `@earendil-works/pi-coding-agent` | **0.84.3**(exact,lockfile 固定) | pi SDK 本体(`createAgentSession`/`defineTool`/扩展系统都在这个包);R1 实测通过。升级前先在本地过一遍 34 事件兼容性(`docs/security.md` §7) |
+
 ## 本地开发
 
 ```powershell

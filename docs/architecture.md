@@ -34,12 +34,14 @@ Caddy :443(自动 TLS,单机反代)
 
 ## 事件模式与观测
 
-pi 扩展系统 34 种事件按四模式分组,观测者扩展全量订阅、采集 `{eventType, mode, timestamp, data(sanitized)}` 推给前端:
+pi 扩展系统 34 种事件按四模式分组,观测者扩展全量订阅、采集 `{eventType, mode, timestamp, data(sanitized)}` 推给前端(计数为 R1 对 `@earendil-works/pi-coding-agent@0.84.3` 类型面的实测,修正了旧记载 notify 18/合计 33 的笔误;逐事件清单见 `apps/api/spike/events.ts`):
 
-- **notify**(18):agent/turn/message/tool_execution/session 生命周期通知
-- **veto**(6):tool_call、session_before_* 等可否决点
-- **chain**(7):context、tool_result 等链式修改点
+- **notify**(19):agent/turn/message/tool_execution/session/provider-response/model 生命周期通知
+- **veto**(6):tool_call、session_before_*、project_trust 等可否决点
+- **chain**(7):context、before_provider_*、before_agent_start、message_end、tool_result、resources_discover 等链式修改点
 - **takeover**(2):input、user_bash 接管点
+
+R1 实测注意:bare `createAgentSession()` 不向扩展广播 `session_start`/`resources_discover`,需在创建后调用 `session.bindExtensions({ mode: "print" })`(run 模式层职责);R3 正式实现沿用此调用。
 
 前端右栏三视图 = 同一事件流的三种投影:Timeline(时序瀑布)、Chain View(单事件的链式传递)、Lifecycle Map(生命周期节点图)。
 
