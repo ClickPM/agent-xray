@@ -99,14 +99,24 @@ export const ask = api.raw(
         promptError = err;
       }
       // R2:助手文本落库(思考增量不持久化)。prompt 失败也持久化已流出的部分文本,
-      // 保证库内历史与客户端所见一致(codex review P2);持久化失败只记日志。
+      // 保证库内历史与客户端所见一致(codex review P2)。落库失败不得静默宣称 done,
+      // 以显式 error 事件收尾(adversarial review medium);幂等重试/outbox 协议
+      // 属 R3 正式 /agent/ask 的设计(rounds/BACKLOG.md)。
+      let persistError: unknown;
       if (assistantText) {
-        await appendMessage(rec.id, "assistant", assistantText).catch((err) =>
-          console.error("persist assistant message failed:", err),
-        );
+        try {
+          await appendMessage(rec.id, "assistant", assistantText);
+        } catch (err) {
+          persistError = err;
+          console.error("persist assistant message failed:", err);
+        }
       }
       if (promptError) {
         sse(resp, "error", { message: String(promptError) });
+      } else if (persistError) {
+        sse(resp, "error", {
+          message: `turn finished but assistant reply was NOT persisted: ${String(persistError)}`,
+        });
       } else {
         sse(resp, "done", {
           sessionId: rec.id,

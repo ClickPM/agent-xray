@@ -117,8 +117,12 @@ export interface SpikeSessionRecord {
   /** 会话行已落库(ask.ts 建行成功后置位);未持久化的会话(如 mem 基线)不触发落库 */
   persisted: boolean;
   seq: number;
-  /** 已落库的最大事件 seq(R2 持久化游标;flushTraceEvents 推进) */
-  flushedSeq: number;
+  /**
+   * 待落库事件队列,与展示数组 events 分离(adversarial review high:
+   * 展示数组的容量逐出不得造成落库缺口)。flush 排干本队列,失败整批退回队首重试;
+   * 超 PENDING_FLUSH_MAX 丢最旧并显式记日志——丢弃只会发生在这条日志之后,绝不静默。
+   */
+  pendingFlush: CapturedEvent[];
   /** flush 串行化链:同会话任意时刻只有一个批量写在跑 */
   flushChain: Promise<void>;
   /** 水位触发的 flush 已排队,避免高频事件重复入队 */
@@ -130,9 +134,10 @@ export interface SpikeSessionRecord {
 }
 
 const MAX_EVENTS_PER_SESSION = 2000;
-// 未落库事件达到该水位就触发一次增量 flush:确保内存队列逐出(上限 2000)之前
-// 事件已进 Postgres,长对话轨迹不丢头(codex review P2)
+// 待落库队列达到该水位就触发一次增量 flush(codex review P2:长对话轨迹不丢头)
 const FLUSH_THRESHOLD = 500;
+// 待落库队列硬上限(内存安全,R1 基线同口径):库持续不可用时丢最旧并显式记日志
+export const PENDING_FLUSH_MAX = 5000;
 const MAX_ACTIVE_SESSIONS = 8;
 
 const registry = new Map<string, SpikeSessionRecord>();
@@ -155,14 +160,29 @@ function capture(rec: SpikeSessionRecord, eventType: string, event: unknown): vo
   };
   rec.events.push(captured);
   if (rec.events.length > MAX_EVENTS_PER_SESSION) rec.events.shift();
+  queuePendingEvent(rec, captured);
   maybeScheduleFlush(rec);
   for (const listener of rec.listeners) listener(captured);
 }
 
-/** 未落库事件超水位时排队一次增量 flush(fire-and-forget,失败只记日志)。 */
+/**
+ * 事件入待落库队列(展示数组容量与落库解耦)。队列超硬上限时丢最旧一条并
+ * 显式记日志——这是唯一允许丢事件的位置,丢弃必然伴随日志,不存在静默缺口。
+ */
+export function queuePendingEvent(rec: SpikeSessionRecord, e: CapturedEvent): void {
+  rec.pendingFlush.push(e);
+  if (rec.pendingFlush.length > PENDING_FLUSH_MAX) {
+    const dropped = rec.pendingFlush.shift()!;
+    console.error(
+      `trace backlog overflow for session ${rec.id}: dropped seq ${dropped.seq} (cap ${PENDING_FLUSH_MAX})`,
+    );
+  }
+}
+
+/** 待落库队列超水位时排队一次增量 flush(fire-and-forget,失败只记日志并留队重试)。 */
 function maybeScheduleFlush(rec: SpikeSessionRecord): void {
   if (!rec.persisted || rec.disposed || rec.flushQueued) return;
-  if (rec.seq - 1 - rec.flushedSeq < FLUSH_THRESHOLD) return;
+  if (rec.pendingFlush.length < FLUSH_THRESHOLD) return;
   rec.flushQueued = true;
   void flushTraceEvents(rec)
     .catch((err) => console.error("incremental trace flush failed:", err))
@@ -219,7 +239,7 @@ export async function createSpikeSession(
     disposed: false,
     persisted: false,
     seq: 0,
-    flushedSeq: -1,
+    pendingFlush: [],
     flushChain: Promise.resolve(),
     flushQueued: false,
     events: [],
@@ -262,16 +282,22 @@ export async function createSpikeSession(
 }
 
 /**
- * 把内存队列里尚未落库的轨迹事件批量写入 Postgres(R2;事件在采集时已脱敏)。
- * 经 flushChain 串行化:水位触发的增量 flush 与请求收尾的最终 flush 不并发,
- * flushedSeq 单调推进;appendTraceEvents 本身幂等(ON CONFLICT DO NOTHING)。
+ * 排干待落库队列,批量写入 Postgres(R2;事件在采集时已脱敏)。
+ * 经 flushChain 串行化:水位触发的增量 flush 与请求收尾的最终 flush 不并发。
+ * 写库失败时整批退回队首,由后续 flush 重试——队列是唯一事实来源,不存在
+ * 跨缺口推进游标的问题;appendTraceEvents 幂等(ON CONFLICT DO NOTHING),
+ * 「提交成功但连接断开」的重试不会产生重复行。
  */
 export function flushTraceEvents(rec: SpikeSessionRecord): Promise<void> {
   const run = async () => {
-    const pending = rec.events.filter((e) => e.seq > rec.flushedSeq);
-    if (pending.length === 0) return;
-    await appendTraceEvents(rec.id, pending);
-    rec.flushedSeq = Math.max(rec.flushedSeq, pending[pending.length - 1].seq);
+    if (rec.pendingFlush.length === 0) return;
+    const batch = rec.pendingFlush.splice(0, rec.pendingFlush.length);
+    try {
+      await appendTraceEvents(rec.id, batch);
+    } catch (err) {
+      rec.pendingFlush.unshift(...batch);
+      throw err;
+    }
   };
   rec.flushChain = rec.flushChain.then(run, run);
   return rec.flushChain;
@@ -282,4 +308,8 @@ export function disposeSpikeSession(rec: SpikeSessionRecord): void {
   rec.session.dispose();
   rec.disposed = true;
   rec.listeners.clear();
+  rec.pendingFlush.length = 0;
+  // 出注册表:建行失败等错误路径反复触发时不得无界残留(adversarial review medium);
+  // track:false 会话本就不在注册表,delete 为 no-op
+  registry.delete(rec.id);
 }

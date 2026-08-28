@@ -57,7 +57,14 @@
   - **[P2] DB 建行失败泄漏 pi 会话**(ask.ts)——`createDbSession` 失败路径不 dispose 已注册的 pi 会话,Postgres 不可用时反复请求可占满 8 会话上限。**整改**:建行失败立即 `disposeSpikeSession` 再返回 500;`persisted` 仅在建行成功后置位。
   - 审查推理中另涉及会话端点公开可枚举——最终 findings 未列;站点按设计无用户概念(`docs/security.md` §6 无注册无上传),工作台会话列表即公开演示语义,不整改。
 - 整改后回归:`dev.ps1 check` 通过;`dev.ps1 test` 11/11 全绿;真实对话一轮完整跑通,60 条轨迹事件 seq 0–59 连续落库、消息/标题正常。
-- 结论:整改后 PASS
+- 初审结论:整改后 PASS
+- **复审**(所有者问询后补做,codex `/codex:adversarial-review --background`,thread 01a04783-f45d-7952-9018-ad843f3d8213,针对三条 P2 整改本身):verdict needs-attention,3 条 findings 全部采纳整改:
+  - **[high] 增量 flush 仍可能跨被逐出的 seq 静默丢轨迹**——展示数组(capped 2000)兼任落库队列,慢库/库故障期间事件继续逐出,`flushedSeq` 会跨缺口推进。**整改**:落库队列与展示数组彻底分离——新增独立 `pendingFlush` 队列(展示数组的容量逐出不再影响落库);flush 排干队列,失败整批退回队首由后续 flush 重试;`flushedSeq` 游标删除(队列即唯一事实来源,不存在跨缺口推进);队列硬上限 `PENDING_FLUSH_MAX=5000`(内存安全),超限丢最旧**必伴随显式日志**,不存在静默缺口。复审建议的「durable backlog(落盘)」不采纳:spike 接线 R3 会整体替换,内存有界队列 + 显式丢弃日志已消除「静默」丢失,落盘队列的复杂度留给 R3 正式实现权衡。
+  - **[medium] 助手消息落库失败被吞,客户端收 done 但历史缺失**——**部分采纳**:落库失败不再宣称 `done`,改以显式 SSE `error` 事件收尾(客户端明确知道本轮未持久化);完整的幂等重试/outbox 协议(turn 级去重键)属 R3 正式 `/agent/ask` 设计,已记 `rounds/BACKLOG.md`。
+  - **[medium] dispose 不删 registry,建行失败循环无界残留**——**采纳**:`disposeSpikeSession` 原子 `registry.delete(rec.id)` 并清空 `pendingFlush`;track:false 会话不在注册表,delete 为 no-op,mem 基线行为不变。spike 无「回放已 dispose 会话」的依赖方(正常对话会话从不 dispose,dispose 仅发生在错误路径与 mem 基线)。
+  - 复审建议的回归测试落地:新增 `apps/api/spike/runtime.test.ts` 3 用例(排干入库 / 失败退回重试不重复 / 硬上限有界丢弃),`vitest.config.ts` 关闭文件级并行(两个 DB 测试文件互扰防护)。
+- 复审整改后回归:`dev.ps1 check` 通过;`dev.ps1 test` 3 文件 14/14 全绿;真实对话一轮 97 条轨迹事件 seq 0–96 连续(SQL 断言 contiguous=true)、消息/标题正常。
+- 复审结论:整改后 PASS
 
 ## 失败处理
 
