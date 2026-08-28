@@ -13,5 +13,7 @@ export default defineConfig({
     environment: "node",
     include: ["**/*.test.ts"],
     exclude: ["node_modules/**", "encore.gen/**", ".encore/**"],
+    // store.test.ts 与 runtime.test.ts 共用 agent 库且有全表清理,文件间不并行
+    fileParallelism: false,
   },
 });
