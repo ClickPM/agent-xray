@@ -1,0 +1,17 @@
+{
+  "name": "agent-xray-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "encore run",
+    "check": "encore check",
+    "gen-client": "encore gen client --output ../web/lib/api-client.ts --env local"
+  },
+  "dependencies": {
+    "encore.dev": "^1.49.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

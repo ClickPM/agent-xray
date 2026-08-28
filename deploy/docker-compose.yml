@@ -1,0 +1,70 @@
+# Agent X-Ray 单机部署(境内轻量服务器)
+# 用法:cp .env.example .env && chmod 600 .env && docker compose up -d
+# 注意:web/api 的 Dockerfile 在实现阶段补齐;本文件为框架版,结构与安全约束已定稿。
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+  web:
+    build:
+      context: ../apps/web
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      - NODE_ENV=production
+    expose:
+      - "3000"
+
+  api:
+    build:
+      context: ../apps/api
+    restart: unless-stopped
+    # 安全约束(docs/security.md 第 3 层):非 root、只读根 FS、无特权、限内存
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "10001:10001"
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    environment:
+      - DATABASE_URL=postgresql://app:${POSTGRES_PASSWORD}@postgres:5432/xray
+      # pi 只读工具专用连接(SELECT-only 角色,初始化见迁移脚本)
+      - AGENT_RO_DATABASE_URL=postgresql://agent_ro:${AGENT_RO_PASSWORD}@postgres:5432/xray
+      - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
+      - LLM_PROXY_BASE=${LLM_PROXY_BASE}
+      # 高危工具双闸之一(默认不设):XRAY_UNLOCK_DANGEROUS_TOOLS
+    expose:
+      - "4000"
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=xray
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pg_data:

@@ -1,0 +1,26 @@
+# Agent X-Ray — Caddy 反代(备案通过并解析域名后,把 :80 换成你的域名即自动 TLS)
+# 备案期自测:改成 :8080 并在安全组放行对应端口。
+:80 {
+	encode zstd gzip
+
+	# API(含两条 SSE:/api/agent/*、/api/trace/stream)
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy api:4000 {
+			# SSE 长连接
+			flush_interval -1
+		}
+	}
+
+	# 管理后台可选 IP 白名单(启用时取消注释并填入自己的出口 IP)
+	# @adminBlocked {
+	# 	path /admin*
+	# 	not remote_ip 1.2.3.4
+	# }
+	# respond @adminBlocked 403
+
+	# 前端(Next.js)
+	handle {
+		reverse_proxy web:3000
+	}
+}
