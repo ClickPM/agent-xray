@@ -4,10 +4,15 @@
 	encode zstd gzip
 
 	# API(含两条 SSE:/api/agent/*、/api/trace/stream)
+	#
+	# 端口契约:Encore 自托管镜像默认监听 8080,compose 里用 PORT=4000 显式对齐这里。
+	# 两处必须同改,别只改一边(deploy/docker-compose.yml 的 api.environment)。
 	handle /api/* {
 		uri strip_prefix /api
 		reverse_proxy api:4000 {
-			# SSE 长连接
+			# SSE 长连接:-1 = 每次写入立即 flush,不做响应缓冲。
+			# Caddy 的 reverse_proxy 默认不设响应超时,长连接不会被自己掐断;
+			# 若将来在前面加云 LB / CDN,必须为这两条 SSE 路径单独关闭缓冲与空闲超时。
 			flush_interval -1
 		}
 	}

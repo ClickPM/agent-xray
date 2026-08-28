@@ -12,6 +12,7 @@
 | **R0** | 工程初始化:CLAUDE.md · rounds 框架 · dev.ps1 · skills · MCP · 依赖安装冒烟 | ✅ 已完成 | 2026-08-28 |
 | **R1** | ⚠️ pi 内核风险门禁 spike(in-process · 34 事件 · SSE ×2 · 内存基线) | ✅ 全门禁通过([任务卡](rounds/round-01/round-01.md),codex 审查整改后 PASS) | 2026-08-28 |
 | **R2** | 数据层:迁移 · 会话/消息/轨迹落库 · encore test 基建 · gen client | ✅ 已完成([任务卡](rounds/round-02/round-02.md),codex 审查整改后 PASS) | 2026-08-28 |
+| **R-BUN** | 运行时统一 bun(开发/测试/预发/生产)+ 部署方式按架构评审整改 | 🔄 进行中([任务卡](rounds/round-bun/round-bun.md),13 项门禁全过,待 codex 审查) | — |
 | **R3** | Runtime 对话流真实化(/agent/ask SSE + 前端切真实数据源) | ⬜ | — |
 | **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ⬜ | — |
 | **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ⬜ | — |
@@ -53,6 +54,18 @@
 - agent 服务:会话创建/续接/列表端点;对话消息与轨迹事件落库(重启不丢,`docs/architecture.md` 既定决策)
 - `encore test` 基建(vitest,`dev.ps1 test` 可跑),对库读写路径出首批测试
 - `encore gen client` 产出接入 `apps/web/lib/`(仅类型与数据层,不动 UI)
+
+### R-BUN — 运行时统一 bun + 部署方式整改(跨轮基础设施轮)
+
+不属于 R0–R11 的线性序列,是一轮横切基础设施改造:把开发/测试/预发/生产四个环境的 JS 运行时统一为 bun 1.4.0,同时把 `deploy/` 从「框架版」推进到可用状态(依据 2026-08-29 的架构评审 P1 清单)。
+
+- 运行时:`apps/api/encore.app` 开 `bun-runtime` 实验位;构建配 `--base oven/bun:1.4.0-slim`;`apps/web/Dockerfile` 同基座;测试经 `bun --bun vitest run`
+- 部署:compose 从 `build:` 改 `image:<git-sha>`(不可变镜像)、补 `deploy/infra-config.json`、安全参数补齐(`cap_drop ALL`/`pids_limit`/tmpfs 限容/网络分段/healthcheck/`stop_grace_period`)、`mem_limit` 2g → 1g
+- 文档:容量段从「每会话固定 X MB」改为公式;升级流程从服务器 `git pull + build` 改为不可变镜像拉取(消化 BACKLOG 里那条与规则 10 的冲突)
+- 验收:R1/R2 的全部门禁在 bun 下复刻通过(34 事件 / SSE ×2 / 落库与重启 / 脱敏 / 内存基线重新建档)
+- **止损**:任一门禁在 bun 下不过且当轮无法解决 → 回退成本为零(实验位 + 基座参数各一行,npm lockfile 全程未动),弃分支即可
+
+> ⚠️ 本轮暴露一个 **R9 阻塞项**:Encore 自托管镜像**不执行数据库迁移**(实测,空库直起则触库端点 500)。方案候选已列在任务卡,需所有者裁定后才能宣告预发部署成功。
 
 ### R3 — Runtime 对话流真实化
 
@@ -98,10 +111,15 @@
 
 ### R9 — 容器化与 130 预发部署
 
-- api 镜像:`encore build docker`;web 镜像:Next standalone;`deploy/docker-compose.yml` 从框架版定稿(含 `agent_ro` 初始化、`.env` 装配)
-- 130 部署流程文档 + 脚本:本机构建镜像 → 传输(save/load 或 registry)→ 130 `docker compose up -d`
-- 预发全链路验证:三 Tab + /admin + SSE ×2 + 限额;安全约束核验(非 root / read_only / mem_limit / SSE 脱敏抽查)
-- 验收:130 上从干净环境按文档一次部署成功
+> R-BUN 已把镜像构建、compose 定稿、安全参数、文档四块前移完成(bun 基座、不可变镜像、`infra-config.json`、`cap_drop`/`pids_limit`/网络分段/healthcheck)。R9 只剩「在 130 上真跑一遍 + 补齐尚未落地的部分」。
+
+- **先解掉阻塞项:数据库迁移方案定稿**(R-BUN 实测:自托管镜像不执行迁移,空库直起触库端点 500)。候选见 `rounds/round-bun/round-bun.md`,需所有者裁定后落成脚本 + 文档
+- `agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色 + 仅 SELECT `notes_*` 授权(R6 建表后补授权的顺序写进文档)
+- 130 部署流程文档 + 脚本:`dev.ps1 build` → `docker save | ssh | docker load` → 130 `docker compose up -d`
+- 预发全链路验证:三 Tab + /admin + SSE ×2 + 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / 镜像内无 node / `/spike/*` 404 / postgres 仅 `back` 网段可达 / SSE 脱敏抽查)
+- SSE 运维口径:心跳 15s、断线重连(trace `afterSeq` 回放)、`docker compose stop api` 时客户端收到明确断流而非静默挂起
+- 回滚演练:`IMAGE_TAG` 换回上一 SHA + `up -d` 真跑一次
+- 验收:130 上从干净环境按文档一次部署成功,且回滚演练通过
 
 ### R10 — 安全加固与上线检查单
 

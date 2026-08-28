@@ -1,0 +1,7 @@
+# 构建上下文只含源码与依赖清单;宿主机的 node_modules / 构建产物一律不进镜像
+node_modules
+.next
+.env*
+Dockerfile
+.dockerignore
+npm-debug.log*

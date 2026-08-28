@@ -2,11 +2,12 @@
   "name": "agent-xray-api",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.4.0",
   "type": "module",
   "scripts": {
     "dev": "encore run",
     "check": "encore check",
-    "test": "vitest run --passWithNoTests",
+    "test": "bun --bun vitest run --passWithNoTests",
     "gen-client": "encore gen client --output ../web/lib/api-client.ts --env local"
   },
   "dependencies": {
