@@ -111,12 +111,12 @@ export const ask = api.raw(
           console.error("persist assistant message failed:", err);
         }
       }
-      if (promptError) {
-        sse(resp, "error", { message: String(promptError) });
-      } else if (persistError) {
-        sse(resp, "error", {
-          message: `turn finished but assistant reply was NOT persisted: ${String(persistError)}`,
-        });
+      // 任一失败都以 error 收尾;双失败合并进同一条消息,持久化失败不被掩盖
+      if (promptError || persistError) {
+        const parts: string[] = [];
+        if (promptError) parts.push(String(promptError));
+        if (persistError) parts.push(`assistant reply NOT persisted: ${String(persistError)}`);
+        sse(resp, "error", { message: parts.join("; ") });
       } else {
         sse(resp, "done", {
           sessionId: rec.id,
