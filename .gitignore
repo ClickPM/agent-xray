@@ -16,6 +16,8 @@ encore.gen/
 !.env.example
 *.pem
 *.key
+.secrets.local.cue
+.secrets.*.cue
 
 # build & misc
 dist/
