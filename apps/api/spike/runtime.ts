@@ -13,6 +13,7 @@ import type {
   InlineExtension,
   ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
+import { appendTraceEvents } from "../agent/store";
 import { ALL_EVENTS, EVENT_MODES, sanitizeEvent, type EventMode } from "./events";
 
 const deepSeekApiKey = secret("DeepSeekApiKey");
@@ -113,7 +114,15 @@ export interface SpikeSessionRecord {
   session: AgentSession;
   createdAt: number;
   disposed: boolean;
+  /** 会话行已落库(ask.ts 建行成功后置位);未持久化的会话(如 mem 基线)不触发落库 */
+  persisted: boolean;
   seq: number;
+  /** 已落库的最大事件 seq(R2 持久化游标;flushTraceEvents 推进) */
+  flushedSeq: number;
+  /** flush 串行化链:同会话任意时刻只有一个批量写在跑 */
+  flushChain: Promise<void>;
+  /** 水位触发的 flush 已排队,避免高频事件重复入队 */
+  flushQueued: boolean;
   events: CapturedEvent[];
   listeners: Set<(e: CapturedEvent) => void>;
   subscribed: string[];
@@ -121,6 +130,9 @@ export interface SpikeSessionRecord {
 }
 
 const MAX_EVENTS_PER_SESSION = 2000;
+// 未落库事件达到该水位就触发一次增量 flush:确保内存队列逐出(上限 2000)之前
+// 事件已进 Postgres,长对话轨迹不丢头(codex review P2)
+const FLUSH_THRESHOLD = 500;
 const MAX_ACTIVE_SESSIONS = 8;
 
 const registry = new Map<string, SpikeSessionRecord>();
@@ -143,7 +155,20 @@ function capture(rec: SpikeSessionRecord, eventType: string, event: unknown): vo
   };
   rec.events.push(captured);
   if (rec.events.length > MAX_EVENTS_PER_SESSION) rec.events.shift();
+  maybeScheduleFlush(rec);
   for (const listener of rec.listeners) listener(captured);
+}
+
+/** 未落库事件超水位时排队一次增量 flush(fire-and-forget,失败只记日志)。 */
+function maybeScheduleFlush(rec: SpikeSessionRecord): void {
+  if (!rec.persisted || rec.disposed || rec.flushQueued) return;
+  if (rec.seq - 1 - rec.flushedSeq < FLUSH_THRESHOLD) return;
+  rec.flushQueued = true;
+  void flushTraceEvents(rec)
+    .catch((err) => console.error("incremental trace flush failed:", err))
+    .finally(() => {
+      rec.flushQueued = false;
+    });
 }
 
 function makeObserver(rec: SpikeSessionRecord): InlineExtension {
@@ -192,7 +217,11 @@ export async function createSpikeSession(
     session: undefined as unknown as AgentSession,
     createdAt: Date.now(),
     disposed: false,
+    persisted: false,
     seq: 0,
+    flushedSeq: -1,
+    flushChain: Promise.resolve(),
+    flushQueued: false,
     events: [],
     listeners: new Set(),
     subscribed: [],
@@ -230,6 +259,22 @@ export async function createSpikeSession(
   await session.bindExtensions({ mode: "print" });
   if (opts.track !== false) registry.set(rec.id, rec);
   return rec;
+}
+
+/**
+ * 把内存队列里尚未落库的轨迹事件批量写入 Postgres(R2;事件在采集时已脱敏)。
+ * 经 flushChain 串行化:水位触发的增量 flush 与请求收尾的最终 flush 不并发,
+ * flushedSeq 单调推进;appendTraceEvents 本身幂等(ON CONFLICT DO NOTHING)。
+ */
+export function flushTraceEvents(rec: SpikeSessionRecord): Promise<void> {
+  const run = async () => {
+    const pending = rec.events.filter((e) => e.seq > rec.flushedSeq);
+    if (pending.length === 0) return;
+    await appendTraceEvents(rec.id, pending);
+    rec.flushedSeq = Math.max(rec.flushedSeq, pending[pending.length - 1].seq);
+  };
+  rec.flushChain = rec.flushChain.then(run, run);
+  return rec.flushChain;
 }
 
 export function disposeSpikeSession(rec: SpikeSessionRecord): void {
