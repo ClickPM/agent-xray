@@ -65,21 +65,41 @@ export function modeCounts(): Record<EventMode, number> & { total: number } {
 }
 
 // —— 事件脱敏:逐事件字段白名单(docs/security.md §2 强制)——
-// 只有白名单里的顶层字段会被复制,未知字段(含未来 SDK 新增的任何凭据字段)一律丢弃;
-// 富对象字段(payload / headers / preparation / 完整 message 等)不放行,必要信息以
-// 派生摘要替代。放行的值仍经 sanitizeValue 截断 + 凭据键黑名单,作第二层纵深防御。
-const DROP_KEY = /^(authorization|api[-_]?key|apikey|x-api-key|key|token|secret|credential|cookie|headers)$/i;
+// 只有白名单里的顶层字段会被复制,未知字段(含未来 SDK 新增的任何凭据字段)一律丢弃。
+// 富对象字段分两类处理(adversarial review 整改):
+//   - payload / headers / preparation / 完整 message:永不放行,派生摘要替代;
+//   - 工具入参/出参(args/result/input/content/partialResult):不复制结构,压成
+//     单条截断文本预览(previewText),序列化时凭据键置 [redacted]、字符串值过
+//     凭据模式清洗——未知嵌套字段不可能以结构形式存活。
+// 放行的值仍经 sanitizeValue(截断 + 键数上限 + 凭据键/值兜底);单事件序列化超
+// MAX_EVENT_BYTES 整体降级为 {type, oversized}。
+const DROP_KEY =
+  /authorization|api[-_]?key|apikey|token|secret|credential|cookie|passw|private[-_]?key|bearer|headers/i;
+// 字符串值内的凭据形态(sk-/rk-/pk-/sess- 前缀串、Bearer 串)
+const SECRET_VALUE_PATTERNS = [
+  /\b(?:sk|rk|pk|sess)-[A-Za-z0-9_-]{10,}\b/g,
+  /\bbearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,
+];
 const MAX_STRING = 400;
 const MAX_ARRAY = 20;
 const MAX_DEPTH = 4;
+const MAX_PROPS = 30;
+const MAX_EVENT_BYTES = 8_192;
+
+function scrubString(s: string): string {
+  let out = s;
+  for (const p of SECRET_VALUE_PATTERNS) out = out.replace(p, "[redacted]");
+  return out;
+}
+
+function truncate(s: string, max = MAX_STRING): string {
+  return s.length > max ? s.slice(0, max) + `…[+${s.length - max} chars]` : s;
+}
 
 export function sanitizeValue(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
   if (value === null || value === undefined) return value;
   const t = typeof value;
-  if (t === "string") {
-    const s = value as string;
-    return s.length > MAX_STRING ? s.slice(0, MAX_STRING) + `…[+${s.length - MAX_STRING} chars]` : s;
-  }
+  if (t === "string") return truncate(scrubString(value as string));
   if (t === "number" || t === "boolean") return value;
   if (t === "bigint") return String(value);
   if (t === "function") return "[fn]";
@@ -93,16 +113,39 @@ export function sanitizeValue(value: unknown, depth = 0, seen = new WeakSet<obje
       return out;
     }
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    const entries = Object.entries(value as Record<string, unknown>);
+    for (const [k, v] of entries.slice(0, MAX_PROPS)) {
       if (DROP_KEY.test(k)) {
         out[k] = "[redacted]";
         continue;
       }
       out[k] = sanitizeValue(v, depth + 1, seen);
     }
+    if (entries.length > MAX_PROPS) out["…"] = `[+${entries.length - MAX_PROPS} props]`;
     return out;
   }
   return String(value);
+}
+
+/**
+ * 任意值 → 单条截断文本预览:结构在序列化时展平,凭据键在 replacer 层置
+ * [redacted](值根本不进入输出),字符串再过凭据模式清洗后截断。
+ */
+export function previewText(value: unknown, max = MAX_STRING): string {
+  let s: string;
+  if (typeof value === "string") {
+    s = value;
+  } else {
+    try {
+      s =
+        JSON.stringify(value, (k, v) =>
+          k !== "" && DROP_KEY.test(k) ? "[redacted]" : typeof v === "bigint" ? String(v) : v,
+        ) ?? String(value);
+    } catch {
+      s = "[unserializable]";
+    }
+  }
+  return truncate(scrubString(s), max);
 }
 
 /** 每个事件允许透出的顶层字段(值仍经 sanitizeValue)。未列出的事件只透出 type。 */
@@ -130,15 +173,16 @@ const EVENT_FIELD_WHITELIST: Record<string, string[]> = {
   turn_start: ["type", "turnIndex", "timestamp"],
   turn_end: ["type", "turnIndex"],
   message_start: ["type"],
-  message_update: ["type", "assistantMessageEvent"],
+  message_update: ["type"],
   message_end: ["type"],
-  tool_execution_start: ["type", "toolCallId", "toolName", "args"],
-  tool_execution_update: ["type", "toolCallId", "toolName", "partialResult"],
-  tool_execution_end: ["type", "toolCallId", "toolName", "result", "isError"],
+  // 工具入参/出参不放行原对象,一律派生为截断文本预览(见 EVENT_DERIVED)
+  tool_execution_start: ["type", "toolCallId", "toolName"],
+  tool_execution_update: ["type", "toolCallId", "toolName"],
+  tool_execution_end: ["type", "toolCallId", "toolName", "isError"],
   model_select: ["type", "source"],
   thinking_level_select: ["type", "level", "previousLevel"],
-  tool_call: ["type", "toolCallId", "toolName", "input"],
-  tool_result: ["type", "toolCallId", "toolName", "content", "isError"],
+  tool_call: ["type", "toolCallId", "toolName"],
+  tool_result: ["type", "toolCallId", "toolName", "isError"],
   user_bash: ["type", "command", "excludeFromContext", "cwd"],
   input: ["type", "text", "source", "streamingBehavior"],
 };
@@ -167,6 +211,17 @@ function summarizeModel(m: unknown): unknown {
   return { provider: model.provider, id: model.id, name: model.name };
 }
 
+/** 流式增量事件只透出 type/contentIndex/delta(delta 过 previewText)。 */
+function summarizeAssistantEvent(v: unknown): unknown {
+  if (typeof v !== "object" || v === null) return undefined;
+  const a = v as { type?: unknown; contentIndex?: unknown; delta?: unknown };
+  return {
+    type: typeof a.type === "string" ? a.type : undefined,
+    contentIndex: typeof a.contentIndex === "number" ? a.contentIndex : undefined,
+    delta: a.delta === undefined ? undefined : previewText(a.delta),
+  };
+}
+
 /** 富对象字段的派生摘要(替代原值,不复制未知结构)。 */
 const EVENT_DERIVED: Record<string, (e: Record<string, unknown>) => Record<string, unknown>> = {
   context: (e) => ({ messageCount: Array.isArray(e.messages) ? e.messages.length : 0 }),
@@ -177,7 +232,13 @@ const EVENT_DERIVED: Record<string, (e: Record<string, unknown>) => Record<strin
   }),
   message_start: (e) => ({ message: summarizeMessage(e.message) }),
   message_end: (e) => ({ message: summarizeMessage(e.message) }),
+  message_update: (e) => ({ assistantMessageEvent: summarizeAssistantEvent(e.assistantMessageEvent) }),
   model_select: (e) => ({ model: summarizeModel(e.model), previousModel: summarizeModel(e.previousModel) }),
+  tool_execution_start: (e) => ({ argsPreview: previewText(e.args) }),
+  tool_execution_update: (e) => ({ partialResultPreview: previewText(e.partialResult) }),
+  tool_execution_end: (e) => ({ resultPreview: previewText(e.result) }),
+  tool_call: (e) => ({ inputPreview: previewText(e.input) }),
+  tool_result: (e) => ({ contentPreview: previewText(e.content) }),
 };
 
 export function sanitizeEvent(eventType: string, event: unknown): unknown {
@@ -189,5 +250,90 @@ export function sanitizeEvent(eventType: string, event: unknown): unknown {
   }
   const derive = EVENT_DERIVED[eventType];
   if (derive) Object.assign(out, derive(src));
+  // 单事件总量上限:进内存队列 / SSE 前的最终断言(adversarial review 整改)
+  try {
+    if (JSON.stringify(out).length > MAX_EVENT_BYTES) return { type: eventType, oversized: true };
+  } catch {
+    return { type: eventType, unserializable: true };
+  }
   return out;
+}
+
+// —— 脱敏自测 fixtures(/spike/events/audit 暴露结果;正式测试基建是 R2 的事)——
+export interface SanitizeSelfTest {
+  name: string;
+  pass: boolean;
+  detail: string;
+}
+
+export function runSanitizeSelfTests(): SanitizeSelfTest[] {
+  const results: SanitizeSelfTest[] = [];
+  const leakCheck = (name: string, eventType: string, event: unknown, secrets: string[]) => {
+    const s = JSON.stringify(sanitizeEvent(eventType, event));
+    const leaked = secrets.filter((x) => s.includes(x));
+    results.push({
+      name,
+      pass: leaked.length === 0,
+      detail: leaked.length === 0 ? `clean, ${s.length}B` : `LEAKED: ${leaked.join(",")}`,
+    });
+  };
+
+  leakCheck(
+    "tool_result 凭据键变体",
+    "tool_execution_end",
+    {
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "demo",
+      isError: false,
+      result: {
+        access_token: "SECRET-AT-1",
+        refreshToken: "SECRET-RT-2",
+        client_secret: "SECRET-CS-3",
+        password: "SECRET-PW-4",
+        private_key: "SECRET-PK-5",
+      },
+    },
+    ["SECRET-AT-1", "SECRET-RT-2", "SECRET-CS-3", "SECRET-PW-4", "SECRET-PK-5"],
+  );
+  leakCheck(
+    "tool_args 深层嵌套凭据键",
+    "tool_execution_start",
+    { type: "tool_execution_start", toolCallId: "t2", toolName: "demo", args: { cfg: { nested: { apiKey: "SECRET-NESTED-6" } } } },
+    ["SECRET-NESTED-6"],
+  );
+  leakCheck(
+    "字符串值内 Bearer/sk- 串",
+    "tool_execution_start",
+    {
+      type: "tool_execution_start",
+      toolCallId: "t3",
+      toolName: "demo",
+      args: { cmd: "curl -H 'Authorization: Bearer abcdef1234567890' https://x", note: "key=sk-abcdefghij0123456789" },
+    },
+    ["abcdef1234567890", "sk-abcdefghij0123456789"],
+  );
+  leakCheck(
+    "provider headers 不透出",
+    "before_provider_headers",
+    { type: "before_provider_headers", headers: { Authorization: "SECRET-AUTH-7" } },
+    ["SECRET-AUTH-7"],
+  );
+  leakCheck(
+    "未知顶层字段丢弃",
+    "agent_start",
+    { type: "agent_start", futureCredentialField: "SECRET-FUT-8" },
+    ["SECRET-FUT-8"],
+  );
+
+  const big: Record<string, string> = {};
+  for (let i = 0; i < 2000; i++) big[`k${i}`] = "x".repeat(40);
+  const bigOut = JSON.stringify(sanitizeEvent("tool_execution_end", { type: "tool_execution_end", toolCallId: "t4", toolName: "demo", isError: false, result: big }));
+  results.push({
+    name: "超大对象受限于 MAX_EVENT_BYTES",
+    pass: bigOut.length <= MAX_EVENT_BYTES,
+    detail: `${bigOut.length}B (cap ${MAX_EVENT_BYTES}B)`,
+  });
+
+  return results;
 }
