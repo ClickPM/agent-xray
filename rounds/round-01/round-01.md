@@ -59,6 +59,13 @@
   - **[P2] `project_trust` handler 必须返回 `{trusted}`**(runtime.ts)——**采纳**。SDK `emitProjectTrustEvent` 直接读 `handlerResult.trusted`,返回 undefined 会 TypeError;观测者对该事件改返回 `{ trusted: "undecided" }`(不做裁决),其余事件仍返回 undefined。
   - 审查推理中另涉及的 spike 端点无认证/无限额/会话上限竞态等——**不整改**,属已知 spike 范围:限额是 R6、后台认证是 R7 的交付,spike 端点仅本机开发环境存在且 R3/R4 落正式实现后移除(任务卡「禁止」段已声明)。
 - 结论:整改后 PASS
+- **复审**(所有者问询后补做,codex `/codex:adversarial-review --background`,thread 01a0474f-52e5-7892-805f-336398ff0ef5,针对 P1/P2 整改本身):
+  - P2 结论:`{trusted:"undecided"}` 与 0.84.3 SDK 契约一致,其余 33 事件返回 undefined 不改写流程——**通过,无需再改**。
+  - **[high] 白名单富字段(args/result/input/content/partialResult)仍经 sanitizeValue 递归复制未知嵌套结构;DROP_KEY 漏 access_token/client_secret/password/private_key 等变体;字符串值内凭据不检测**——**采纳**:工具入参/出参不再复制结构,派生为 `previewText` 单条截断文本(序列化 replacer 层凭据键置 [redacted] + 字符串值过 sk-/Bearer 模式清洗);`message_update.assistantMessageEvent` 改固定投影 `{type, contentIndex, delta}`;DROP_KEY 放宽为子串匹配并补齐变体。
+  - **[medium] 无单事件总量上限,大对象可放大 SSE/内存**——**采纳**:sanitizeValue 增加对象键数上限(30);`sanitizeEvent` 出口加 `MAX_EVENT_BYTES=8192` 总量断言,超限降级 `{type, oversized}`(内存队列与 SSE 共用该出口)。
+  - 按复审建议新增**脱敏自测 fixtures**(凭据键变体/深层嵌套/字符串值 Bearer·sk-/headers/未知字段/超大对象 6 组),挂 `/spike/events/audit` 的 `sanitizeSelfTests` 字段,整改后 6/6 PASS;转正式 encore test 已记入 `rounds/BACKLOG.md`(R2 测试基建落地后做)。
+  - 复审整改后回归:tsc 干净;真实对话 + 轨迹流正常;SSE 采样泄漏扫描(含 access_token/client_secret 形态)0 命中。
+- 复审结论:整改后 PASS
 
 ## 失败处理
 

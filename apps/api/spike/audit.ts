@@ -1,7 +1,14 @@
 // R1 spike:GET /spike/events/audit — 34 事件订阅核验与四模式计数核对
 // (ROUNDS.md R1 门禁 3/4:与 docs/architecture.md 比对,有出入以实测为准回改文档)。
 import { api } from "encore.dev/api";
-import { ALL_EVENTS, EVENT_MODES, modeCounts, PI_SDK_VERSION } from "./events";
+import {
+  ALL_EVENTS,
+  EVENT_MODES,
+  modeCounts,
+  PI_SDK_VERSION,
+  runSanitizeSelfTests,
+  type SanitizeSelfTest,
+} from "./events";
 import { listSessions } from "./runtime";
 
 interface EventInfo {
@@ -43,6 +50,8 @@ interface AuditResponse {
   /** docs/architecture.md 修订前的记载,留作核对痕迹 */
   architectureDocBefore: ModeCounts;
   matchesArchitectureDocBefore: boolean;
+  /** 脱敏自测(凭据键变体/嵌套/字符串值/headers/未知字段/超大对象),须全 pass */
+  sanitizeSelfTests: SanitizeSelfTest[];
   sessions: SessionAudit[];
 }
 
@@ -82,6 +91,7 @@ export const eventsAudit = api(
         measured.veto === docBefore.veto &&
         measured.chain === docBefore.chain &&
         measured.takeover === docBefore.takeover,
+      sanitizeSelfTests: runSanitizeSelfTests(),
       sessions,
     };
   },
