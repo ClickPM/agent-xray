@@ -43,11 +43,12 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
   → codex 独立审查:默认 /codex:review;质疑设计取舍用 /codex:adversarial-review;
      改动超过 1–2 个文件带 --background,用 /codex:status、/codex:result 跟进
   → findings 逐条处理(采纳整改 / 不采纳写明理由),回填任务卡「代码审查」段
-  → 只要有采纳整改的 findings → 对整改本身再发一轮 /codex:adversarial-review 复审
+  → 只要有采纳整改的 findings → 对整改 diff 再发一轮 /codex:review 复审(缺陷门禁,非设计评审)
   → commit + 更新 ROUNDS.md 进度表
 ```
 
 - **复审收口标准(所有者裁定 2026-08-28)**:审查/复审循环不得带**阻塞性问题或明显 bug/漏洞类 findings**(high 级,或任何会丢数据、漏凭据、泄资源、逻辑错误的问题)收口——继续「整改 → 复审」直到此类 findings 清零才允许合并 `main`;低危改进项可写明理由记 `rounds/BACKLOG.md` 后放行。禁止以「spike 会被替换」「概率低」为由跳过整改(可作为**方案取舍**的理由写进任务卡,但对应风险必须有显式兜底)。
+- **审查边界(所有者裁定 2026-08-28)**:**严禁以审查代替设计**——审查是缺陷门禁,不负责长出方案;findings 若指向设计缺陷,停下回任务卡/所有者层面重定方案,不在「整改 → 复审」循环里逐条堆补丁。**非严重阻塞性 findings 严禁新增机制类修复**(新队列/新协议/新抽象/新配置/新导出面):只允许最小改动(改判断、改文案、删代码)或写明理由记 `rounds/BACKLOG.md`;机制类修复仅限严重阻塞性 bug/漏洞。发起复审时把本条作为审查要求带给审查者:只判定并报告缺陷与严重级别,不展开设计方案。
 - 降级到 Claude Code 自带 `/code-review` 只认硬失败(codex CLI 未安装/未登录/启动失败),降级原因写进任务卡;「等得久」「改动小」不是理由。
 - 同一验收项针对性整改后连续 2 次仍不过 → 写 `rounds/round-NN/BLOCKED.md` 停下呼人,禁止放宽验收(rounds/README.md)。
 - 分支:每轮在 `round-NN` 分支开发,审查通过后合并 `main`;纯文档与微修可直接 `main`。

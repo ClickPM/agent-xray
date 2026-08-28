@@ -282,11 +282,35 @@ export async function createSpikeSession(
 }
 
 /**
+ * 写库失败的在途批退回队首,与失败期间新入队的事件合并后重新施加
+ * PENDING_FLUSH_MAX——在途批不占独立容量,慢失败循环下总内存有界
+ * (收口复审 high:此前 unshift 不限容可无界累加)。用 concat 而非展开参数,
+ * 超大批不会 RangeError。会话已 dispose 则不复活在途批。
+ */
+export function requeueFailedBatch(rec: SpikeSessionRecord, batch: CapturedEvent[]): void {
+  if (rec.disposed) {
+    console.error(
+      `trace flush failed after dispose for session ${rec.id}: dropped in-flight batch of ${batch.length}`,
+    );
+    return;
+  }
+  const merged = batch.concat(rec.pendingFlush);
+  const overflow = merged.length - PENDING_FLUSH_MAX;
+  if (overflow > 0) {
+    console.error(
+      `trace backlog overflow for session ${rec.id}: dropped ${overflow} oldest events ` +
+        `(seq ${merged[0].seq}..${merged[overflow - 1].seq}, cap ${PENDING_FLUSH_MAX})`,
+    );
+  }
+  rec.pendingFlush = overflow > 0 ? merged.slice(overflow) : merged;
+}
+
+/**
  * 排干待落库队列,批量写入 Postgres(R2;事件在采集时已脱敏)。
  * 经 flushChain 串行化:水位触发的增量 flush 与请求收尾的最终 flush 不并发。
- * 写库失败时整批退回队首,由后续 flush 重试——队列是唯一事实来源,不存在
- * 跨缺口推进游标的问题;appendTraceEvents 幂等(ON CONFLICT DO NOTHING),
- * 「提交成功但连接断开」的重试不会产生重复行。
+ * 写库失败时在途批经 requeueFailedBatch 限容合并回队首,由后续 flush 重试——
+ * 队列是唯一事实来源,不存在跨缺口推进游标的问题;appendTraceEvents 幂等
+ * (ON CONFLICT DO NOTHING),「提交成功但连接断开」的重试不会产生重复行。
  */
 export function flushTraceEvents(rec: SpikeSessionRecord): Promise<void> {
   const run = async () => {
@@ -295,7 +319,7 @@ export function flushTraceEvents(rec: SpikeSessionRecord): Promise<void> {
     try {
       await appendTraceEvents(rec.id, batch);
     } catch (err) {
-      rec.pendingFlush.unshift(...batch);
+      requeueFailedBatch(rec, batch);
       throw err;
     }
   };

@@ -7,6 +7,7 @@ import { createSession, listTraceEvents } from "../agent/store";
 import {
   flushTraceEvents,
   queuePendingEvent,
+  requeueFailedBatch,
   PENDING_FLUSH_MAX,
   type CapturedEvent,
   type SpikeSessionRecord,
@@ -73,5 +74,28 @@ describe("轨迹待落库队列(adversarial review 整改)", () => {
     expect(rec.pendingFlush).toHaveLength(PENDING_FLUSH_MAX);
     expect(rec.pendingFlush[0].seq).toBe(overflow); // 最旧的 overflow 条被显式丢弃
     expect(rec.pendingFlush[rec.pendingFlush.length - 1].seq).toBe(PENDING_FLUSH_MAX + overflow - 1);
+  });
+
+  it("失败回退与在途期间新事件共用容量预算:合并后仍有界、有序、丢最旧(收口复审 high)", () => {
+    const rec = fakeRec(randomUUID());
+    // 模拟:在途批 = 满容量的 5000 条(seq 0..4999),失败等待期间又入队 300 条(seq 5000..5299)
+    const batch: CapturedEvent[] = [];
+    for (let i = 0; i < PENDING_FLUSH_MAX; i++) batch.push(ev(i));
+    for (let i = 0; i < 300; i++) queuePendingEvent(rec, ev(PENDING_FLUSH_MAX + i));
+
+    requeueFailedBatch(rec, batch);
+
+    expect(rec.pendingFlush).toHaveLength(PENDING_FLUSH_MAX); // 不是 5300,上限未被绕过
+    expect(rec.pendingFlush[0].seq).toBe(300); // 丢的是最旧的 300 条
+    const seqs = rec.pendingFlush.map((e) => e.seq);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b)); // 顺序保持
+    expect(seqs[seqs.length - 1]).toBe(PENDING_FLUSH_MAX + 299);
+  });
+
+  it("会话已 dispose 时失败回退不复活在途批", () => {
+    const rec = fakeRec(randomUUID());
+    rec.disposed = true;
+    requeueFailedBatch(rec, [ev(0), ev(1)]);
+    expect(rec.pendingFlush).toHaveLength(0);
   });
 });

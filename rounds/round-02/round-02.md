@@ -65,6 +65,13 @@
   - 复审建议的回归测试落地:新增 `apps/api/spike/runtime.test.ts` 3 用例(排干入库 / 失败退回重试不重复 / 硬上限有界丢弃),`vitest.config.ts` 关闭文件级并行(两个 DB 测试文件互扰防护)。
 - 复审整改后回归:`dev.ps1 check` 通过;`dev.ps1 test` 3 文件 14/14 全绿;真实对话一轮 97 条轨迹事件 seq 0–96 连续(SQL 断言 contiguous=true)、消息/标题正常。
 - 复审结论:整改后 PASS
+- **收口复审**(所有者当日新增「复审收口标准」与「审查边界」后执行,CLAUDE.md 开发模式段):
+  - 第 1 轮 `/codex:adversarial-review --base 9e347ac`(thread 01a047a7-4727-7921-8889-5c63db63d38e),2 条 findings:
+    - **[high] 失败批次回退绕过 PENDING_FLUSH_MAX**——unshift 回队首未重新限容,慢失败循环下无界累加;超大批展开参数可 RangeError 且此时批已出队,整批丢失。**采纳**(阻塞级,允许机制内修复):`requeueFailedBatch` 让在途批与失败期间新入队事件共用同一容量预算(concat 合并 + 截断,丢弃必伴集中日志;dispose 后不复活在途批),+2 回归用例。
+    - **[medium] 双失败时 persistError 被 promptError 掩盖**——**按审查边界降为最小改动**:收尾分支就地合并两条错误消息。初版整改曾引入 `buildTurnEndEvent` 导出 + 结构化字段 + 独立测试文件,按「非严重阻塞性 findings 严禁机制类修复」撤除。
+  - 第 2 轮 `/codex:review` 缺陷门禁(thread 01a047b1-8e5c-7901-b998-a445b6143088),1 条 **[P1] persistError 原文拼入公开 SSE**(违反 `docs/security.md` §2)——**采纳**(最小改动):SSE 只给固定提示 `assistant reply NOT persisted`,原文留服务端日志;promptError 原文透出为 R1 既有行为,记 BACKLOG 由 R3 统一脱敏口径。
+  - 第 3 轮 `/codex:review`(thread 01a047b6-2120-7a11-9648-dd07a145b7fe):**未发现可操作缺陷**。
+- 收口结论:PASS——阻塞性/明显 bug findings 清零;`dev.ps1 check` 通过,`dev.ps1 test` 16/16 全绿
 
 ## 失败处理
 
