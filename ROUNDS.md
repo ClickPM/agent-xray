@@ -1,0 +1,122 @@
+# 轮次进度与 Roadmap
+
+> 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
+> 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
+>
+> **功能边界(所有者裁定,2026-08-28)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——功能范围以 [`design/`](design/README.md) 15 块画板 + 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+
+## 进度表
+
+| 轮 | 内容 | 状态 | 完成 |
+|---|---|---|---|
+| **R0** | 工程初始化:CLAUDE.md · rounds 框架 · dev.ps1 · skills · MCP · 依赖安装冒烟 | ✅ 已完成 | 2026-08-28 |
+| **R1** | ⚠️ pi 内核风险门禁 spike(in-process · 34 事件 · SSE ×2 · 内存基线) | ⬜ | — |
+| **R2** | 数据层:迁移 · 会话/消息/轨迹落库 · encore test 基建 · gen client | ⬜ | — |
+| **R3** | Runtime 对话流真实化(/agent/ask SSE + 前端切真实数据源) | ⬜ | — |
+| **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ⬜ | — |
+| **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ⬜ | — |
+| **R6** | 沙箱与配额落地(只读工具组 · agent_ro · tool_config · daily_quota) | ⬜ | — |
+| **R7** | admin 服务 + /admin 五页对接(登录/统计/配置/工具) | ⬜ | — |
+| **R8** | metrics 打点 + About 真实化 | ⬜ | — |
+| **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ⬜ | — |
+| **R10** | 安全加固 + 上线前检查单逐项 | ⬜ | — |
+| **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
+
+## 里程碑
+
+| | 覆盖 | 含义 | 止损 |
+|---|---|---|---|
+| **M0** | R0–R1 | 环境 + 风险门禁 | R1 任一门禁不过 → **停**,重新评估 sidecar 形态并改写本表 |
+| **M1** | R2–R4 | Runtime 核心真实化(站点核心卖点跑通) | — |
+| **M2** | R5–R6 | 内容库 + 安全沙箱(公开可访问的安全底线) | R6 沙箱验收不过 → 不得进入任何公网部署轮 |
+| **M3** | R7–R8 | 管理后台 + 统计(功能完备) | — |
+| **M4** | R9–R11 | 预发 → 生产上线 | `docs/security.md` 上线检查单不全绿不上生产 |
+
+## 各轮拆解
+
+### R1 — pi 内核风险门禁 spike(⚠️ 全项目最大风险,先做)
+
+架构决策「pi SDK in-process 嵌入 Encore 进程」此前只做过三层冒烟(import / session / Encore 请求内执行),本轮把它验证到可承诺的程度:
+
+- 钉定 pi SDK 的 npm 包名与版本,写入 CLAUDE.md「钉版本」段;lockfile 固定
+- Encore 请求内 `createAgentSession({ noTools: 'all' })` 跑通一轮**真实 LLM 对话**(经海外中转端点,key 走本地 secret)
+- 观测者扩展订阅全部 **34 种事件**并采集 `{eventType, mode, timestamp, data}`,逐一核对四模式计数(notify 18 / veto 6 / chain 7 / takeover 2)与 `docs/architecture.md` 一致;有出入以实测为准回改文档
+- `api.raw` SSE ×2 原型(对话流 + 轨迹流),Next dev proxy 与直连 :4000 两条路径都不缓冲、不断流
+- 内存基线实测:import 增量、单活跃会话增量、`dispose()` 后回收,数字回填任务卡(部署规格依据)
+- **止损**:任一门禁不过且无法当轮解决 → 写 BLOCKED.md 停下,与所有者重新评估 sidecar 方案
+
+产出物是 spike 代码 + 实测数据,允许粗糙,但事件清单与内存数字必须真实。
+
+### R2 — 数据层与会话持久化
+
+- `SQLDatabase` + 迁移 001:`sessions` / `messages` / `trace_events`(含回放所需索引);JSONB 写入遵守 CLAUDE.md 规则 4
+- agent 服务:会话创建/续接/列表端点;对话消息与轨迹事件落库(重启不丢,`docs/architecture.md` 既定决策)
+- `encore test` 基建(vitest,`dev.ps1 test` 可跑),对库读写路径出首批测试
+- `encore gen client` 产出接入 `apps/web/lib/`(仅类型与数据层,不动 UI)
+
+### R3 — Runtime 对话流真实化
+
+- `POST /agent/ask` 正式实现:`api.raw` SSE ← `session.subscribe()`;并发 session 上限、空闲回收、`dispose()` 及时
+- 前端对话区 + 会话列表从 `demo-data.ts` 切到真实 API/SSE;**样式零改动**(CLAUDE.md 规则 7)
+- 验收:新访客建会话 → 对话流式渲染 → 刷新后会话与历史可恢复
+
+### R4 — 轨迹流与三视图真实化
+
+- `GET /trace/stream?sessionId=…` SSE:观测者扩展内存队列 → 推送;推送前按**白名单字段** sanitize(`docs/security.md` §2:provider 凭据字段永不出服务端;入参/出参截断)
+- 前端 Timeline / Chain View / Lifecycle Map 三视图消费真实事件流;历史会话轨迹从库回放
+- 验收:对话进行中右栏实时出事件;抽查 SSE 原始流无 Authorization/api-key 字段
+
+### R5 — notes 服务与内容摄入
+
+- 迁移:`notes_series` / `notes_chapters`;vault `学习分享/` → 编译摄入脚本(本地执行,幂等可重跑)
+- 查询端点(系列/章节/正文)+ RSS 生成(全站 + 四分类)
+- Notes 三级页面 + RSS 弹层对接真实数据
+- 验收:RSS 通过校验器;摄入脚本重跑不产生重复数据
+
+### R6 — 沙箱与配额落地(`docs/security.md` §1 第 1/2/4 层)
+
+- `defineTool` 只读工具组:`notes_list_series` / `notes_get_chapter` / `notes_search`——纯函数,连接串用 `AGENT_RO_DATABASE_URL`
+- 迁移:`agent_ro` 角色(仅 SELECT notes 表)+ `tool_config` 表;注册集合按启停配置决定
+- `daily_quota`:每日 token/费用计数,超限拒新会话;单会话 turn 上限
+- prompt injection 自测清单过一遍(诱导执行/读配置/改数据),结果回填任务卡
+- 验收:以 agent_ro 连接尝试写库必须失败;超限路径有明确拒绝行为
+
+### R7 — admin 服务与后台对接
+
+- 迁移:`admin_*`(账户/会话/审计)+ `llm_config`
+- `POST /admin/login`:argon2id + HttpOnly/Secure/SameSite=Strict cookie;登录限速 + 连续失败锁定;写操作 CSRF 校验
+- stats / config(LLM key 加密存储,读返回掩码)/ tools 启停 + 审计日志;高危工具双闸(`XRAY_UNLOCK_DANGEROUS_TOOLS` + 后台开关)
+- `/admin` 五页(login / Overview / Traffic / Settings / Tools)对接真实数据
+- 验收:错误密码限速生效;key 任何读接口只见掩码;启停操作在审计日志可查
+
+### R8 — metrics 与 About 真实化
+
+- `POST /t` pageview beacon:date / path / **加盐 IP 哈希** / UA 摘要,不存原始 IP(`docs/security.md` §6);web 端打点接入
+- 聚合查询供 /admin Traffic 页(PV/UV/路径分布/近 30 天趋势)
+- About 页 GitHub 公开数据(构建时拉取或后端缓存代理,二选一在任务卡定);footer 备案号占位
+- 验收:库中无原始 IP;Traffic 页数字与打点一致
+
+### R9 — 容器化与 130 预发部署
+
+- api 镜像:`encore build docker`;web 镜像:Next standalone;`deploy/docker-compose.yml` 从框架版定稿(含 `agent_ro` 初始化、`.env` 装配)
+- 130 部署流程文档 + 脚本:本机构建镜像 → 传输(save/load 或 registry)→ 130 `docker compose up -d`
+- 预发全链路验证:三 Tab + /admin + SSE ×2 + 限额;安全约束核验(非 root / read_only / mem_limit / SSE 脱敏抽查)
+- 验收:130 上从干净环境按文档一次部署成功
+
+### R10 — 安全加固与上线检查单
+
+- `docs/security.md` §「上线前检查单」逐项过并留证:gitleaks / .env 权限 / 容器约束 / admin 强认证 / SSE 抽查 / 限额演练
+- 备份:Postgres 每日 pg_dump(本机 + 异地)脚本与恢复演练
+- 可选:/admin IP 白名单(Caddy 层)
+- 验收:检查单全绿,证据回填任务卡
+
+### R11 — 生产部署上线
+
+- 前置:生产服务器采购完成,所有者提供 SSH 入口与密钥
+- 服务器初始化(`docs/security.md` §5 基线:仅密钥登录 / 防火墙 / fail2ban / 自动安全更新)
+- docker compose 部署;域名解析 + ICP 备案流程(`docs/deploy-cn-lightweight.md` §1)+ Caddy 自动 TLS;备案号挂 footer
+- 上线冒烟 + 首日观察(限额、内存、日志)
+
+## 轮次外事项
+
+跨轮次发现的问题进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md),不当场顺手改(CLAUDE.md 开发约定)。

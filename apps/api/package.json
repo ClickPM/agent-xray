@@ -9,7 +9,7 @@
     "gen-client": "encore gen client --output ../web/lib/api-client.ts --env local"
   },
   "dependencies": {
-    "encore.dev": "^1.49.0"
+    "encore.dev": "1.57.13"
   },
   "devDependencies": {
     "typescript": "^5.8.0"

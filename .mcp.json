@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "encore": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".claude/mcp-encore.ps1"
+      ]
+    }
+  }
+}
