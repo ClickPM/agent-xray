@@ -20,6 +20,11 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(localStorage.getItem("xray-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}})();`,
+          }}
+        />
       </head>
       <body>{children}</body>
     </html>

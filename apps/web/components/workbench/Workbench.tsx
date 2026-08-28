@@ -1,0 +1,284 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { chatScript, sessions, statsBar, suggestions, traceTurns } from "@/lib/demo-data";
+import { GhostButton } from "@/components/ui";
+import { mono } from "@/lib/styles";
+import { TimelineView } from "./TimelineView";
+import { ChainView } from "./ChainView";
+import { LifecycleMap } from "./LifecycleMap";
+
+type Panel = "timeline" | "chain" | "lifecycle";
+
+const TOTAL_TRACE_ROWS = traceTurns.reduce((n, t) => n + t.rows.length, 0);
+
+/** 演示回放:对话与轨迹按真实节奏逐条出现(chat 条数, trace 行数)。
+ *  下一轮由 SSE(/api/trace/stream)驱动同一组视图。 */
+const PLAYBACK: Array<{ chat: number; trace: number; delay: number }> = [
+  { chat: 1, trace: 0, delay: 300 },   // 用户消息
+  { chat: 1, trace: 2, delay: 500 },   // context + before_provider_request
+  { chat: 2, trace: 3, delay: 600 },   // assistant 思考回复 + after_provider_response
+  { chat: 3, trace: 4, delay: 400 },   // tool_call read_file
+  { chat: 3, trace: 6, delay: 700 },   // 执行中
+  { chat: 3, trace: 7, delay: 400 },   // tool_result
+  { chat: 3, trace: 9, delay: 500 },   // Turn2 context + before_provider_request
+  { chat: 4, trace: 10, delay: 600 },  // bash 被拦截(blocked)
+  { chat: 4, trace: 11, delay: 400 },  // tool_result(错误回传)
+  { chat: 5, trace: 13, delay: 500 },  // assistant 自我修正 + message streaming
+];
+
+function usePlayback(active: boolean) {
+  const [step, setStep] = useState(active ? PLAYBACK.length : 0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!active) {
+      setStep(0);
+      return;
+    }
+    setStep(0);
+    let i = 0;
+    const tick = () => {
+      if (i >= PLAYBACK.length) return;
+      timer.current = setTimeout(() => {
+        i += 1;
+        setStep(i);
+        tick();
+      }, PLAYBACK[Math.min(i, PLAYBACK.length - 1)].delay);
+    };
+    tick();
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [active]);
+  if (!active) return { chat: 0, trace: 0, done: false };
+  if (step === 0) return { chat: 0, trace: 0, done: false };
+  const s = PLAYBACK[step - 1];
+  return { chat: s.chat, trace: s.trace, done: step >= PLAYBACK.length };
+}
+
+function SessionSidebar({ selected, onSelect }: { selected: number | null; onSelect: (i: number) => void }) {
+  return (
+    <div style={{ width: 260, flex: "none", background: "var(--bg-panel)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 10px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", flex: 1 }}>Sessions</div>
+        <GhostButton height={28} onClick={() => onSelect(0)}>+ New</GhostButton>
+        <GhostButton height={28} style={{ width: 28, padding: 0 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M23 4v6h-6" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+        </GhostButton>
+      </div>
+      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 2, overflow: "auto" }}>
+        {sessions.map((s, i) => (
+          <div
+            key={s.title}
+            onClick={() => onSelect(i)}
+            style={{ padding: "7px 10px", borderRadius: 6, background: selected === i ? "var(--bg-selected)" : "transparent", cursor: "pointer" }}
+            onMouseEnter={(e) => { if (selected !== i) e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { if (selected !== i) e.currentTarget.style.background = "transparent"; }}
+          >
+            <div style={{ fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.title}</div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{s.time}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ToolChip({ name, preview, dur, error }: { name: string; preview: string; dur: string; error: boolean }) {
+  return (
+    <div
+      style={{
+        background: error ? "var(--err-bg)" : "var(--ok-bg)",
+        border: `1px solid ${error ? "var(--err-border)" : "var(--ok-border)"}`,
+        borderRadius: 7, padding: "7px 10px", display: "flex", alignItems: "center", gap: 8,
+      }}
+    >
+      <span style={{ ...mono(12, 600), color: error ? "var(--err-text)" : "var(--ok-text)" }}>{name}</span>
+      <span style={{ ...mono(11), color: "var(--text-dim)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{preview}</span>
+      <span style={{ fontSize: 11, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{dur}</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
+  );
+}
+
+function renderInline(text: string) {
+  // `code` 片段 → 行内代码样式
+  const parts = text.split(/`([^`]+)`/g);
+  return parts.map((p, i) =>
+    i % 2 === 1 ? (
+      <span key={i} style={{ ...mono(12), background: "var(--bg-subtle)", borderRadius: 4, padding: "1px 5px" }}>{p}</span>
+    ) : (
+      <span key={i}>{p}</span>
+    ),
+  );
+}
+
+function ChatPane({ visible }: { visible: number }) {
+  const items = chatScript.slice(0, visible);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [visible]);
+  return (
+    <div ref={scrollRef} style={{ flex: 1, overflow: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+      {items.map((item, i) => {
+        if (item.kind === "user") {
+          return (
+            <div key={i} style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ maxWidth: "85%", background: "var(--user-bg)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 12, padding: "8px 12px", fontSize: 14, lineHeight: 1.7 }}>
+                {item.text}
+              </div>
+            </div>
+          );
+        }
+        if (item.kind === "tool" && item.tool) {
+          return <ToolChip key={i} {...item.tool} />;
+        }
+        return (
+          <div key={i} style={{ fontSize: 14, lineHeight: 1.7 }}>
+            {renderInline(item.text ?? "")}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function EmptyState({ onSuggest }: { onSuggest: () => void }) {
+  const ICONS: Record<string, React.ReactNode> = {
+    shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+    chat: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />,
+    slash: (
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+      </>
+    ),
+  };
+  return (
+    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, width: 360 }}>
+        <div style={{ fontSize: 18, fontWeight: 600 }}>Agent X-Ray</div>
+        <div style={{ fontSize: 14, color: "var(--text-muted)", textAlign: "center", marginBottom: 8 }}>
+          和 agent 说点什么 — 右侧实时显示它的内核如何运转
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, width: 340 }}>
+          {suggestions.map((s) => (
+            <GhostButton key={s.text} height={36} onClick={onSuggest} style={{ fontSize: 13, justifyContent: "flex-start" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                {ICONS[s.icon]}
+              </svg>
+              {s.text}
+            </GhostButton>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InputBar({ onSend }: { onSend: () => void }) {
+  const [value, setValue] = useState("");
+  return (
+    <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "center" }}>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") { setValue(""); onSend(); } }}
+        placeholder="和 agent 说点什么…(右侧实时显示内核轨迹)"
+        style={{
+          flex: 1, border: "1px solid var(--border)", borderRadius: 7, padding: "8px 12px",
+          fontSize: 14, color: "var(--text)", background: "var(--bg)", outline: "none", font: "inherit",
+        }}
+      />
+      <GhostButton height={32} style={{ width: 32, padding: 0 }} onClick={onSend}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13" />
+          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+        </svg>
+      </GhostButton>
+    </div>
+  );
+}
+
+export function Workbench() {
+  const [selected, setSelected] = useState<number | null>(null);
+  const [panel, setPanel] = useState<Panel>("timeline");
+  const active = selected !== null;
+  const { chat, trace } = usePlayback(active);
+
+  const start = () => {
+    setSelected(0);
+    setPanel("timeline");
+  };
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+      <SessionSidebar selected={selected} onSelect={() => start()} />
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        {/* 会话顶栏 */}
+        <div style={{ height: 40, flex: "none", display: "flex", alignItems: "center", gap: 12, padding: "0 14px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? "var(--text)" : "var(--text-dim)", flex: 1 }}>
+            {active ? sessions[0].title : "未选择会话"}
+          </div>
+          {active && (
+            <div style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", display: "flex", alignItems: "center", gap: 6 }}>
+              <span>{statsBar.tokens}</span><span>·</span><span>{statsBar.cost}</span><span>·</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
+                {statsBar.ctx}
+              </span>
+              <span>·</span><span>{statsBar.events}</span>
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+          {/* 中栏:对话 */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
+            {active ? <ChatPane visible={chat} /> : <EmptyState onSuggest={start} />}
+            <InputBar onSend={start} />
+          </div>
+          {/* 右栏:运行时面板 */}
+          <div className="runtime-panel" style={{ width: "42%", minWidth: 300, maxWidth: 500, flex: "none", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", background: "var(--bg-panel)", borderBottom: "1px solid var(--border)" }}>
+              {([["timeline", "Timeline"], ["chain", "Chain View"], ["lifecycle", "Lifecycle Map"]] as const).map(([key, label]) => {
+                // 空状态右栏展示 Lifecycle 待命图,tab 高亮随之(画板 1e)
+                const highlighted = active ? panel === key : key === "lifecycle";
+                return (
+                  <div
+                    key={key}
+                    onClick={() => setPanel(key)}
+                    style={{
+                      fontSize: 12, fontWeight: highlighted ? 600 : 400, padding: "8px 14px",
+                      background: highlighted ? "var(--bg)" : "transparent",
+                      color: highlighted ? "var(--text)" : "var(--text-muted)",
+                      borderRight: "1px solid var(--border)", cursor: "pointer",
+                    }}
+                  >
+                    {label}
+                  </div>
+                );
+              })}
+            </div>
+            {active ? (
+              panel === "timeline" ? (
+                <TimelineView visibleRows={trace} />
+              ) : panel === "chain" ? (
+                <ChainView />
+              ) : (
+                <LifecycleMap />
+              )
+            ) : (
+              <LifecycleMap idle />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
