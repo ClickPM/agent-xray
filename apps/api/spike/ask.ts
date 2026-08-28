@@ -111,11 +111,13 @@ export const ask = api.raw(
           console.error("persist assistant message failed:", err);
         }
       }
-      // 任一失败都以 error 收尾;双失败合并进同一条消息,持久化失败不被掩盖
+      // 任一失败都以 error 收尾;双失败合并进同一条消息,持久化失败不被掩盖。
+      // persistError 原文只进服务端日志(上方 console.error),SSE 只给固定提示
+      // (docs/security.md §2,收口复审 P1)
       if (promptError || persistError) {
         const parts: string[] = [];
         if (promptError) parts.push(String(promptError));
-        if (persistError) parts.push(`assistant reply NOT persisted: ${String(persistError)}`);
+        if (persistError) parts.push("assistant reply NOT persisted");
         sse(resp, "error", { message: parts.join("; ") });
       } else {
         sse(resp, "done", {
