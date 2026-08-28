@@ -4,8 +4,8 @@
 
 | 文件 | 角色 |
 |---|---|
-| `Agent Runtime Workbench.dc.html` | **静态画板集**:10 块 1440×900/1020 画板(1–5 Runtime 工作台、F–J Notes/About),实现时逐画板对照 |
-| `Agent X-Ray Prototype.dc.html` | **可交互原型**:单页状态机(Runtime/Notes/Series/Article/About 五屏 + RSS 弹层 + 运行时面板三 tab 切换),`data-dc-script` 里含全部演示数据与交互逻辑——**实现时的首要参照** |
+| `Agent Runtime Workbench.dc.html` | **静态画板集(终稿,15 块)**:1a–1e Runtime 工作台(主屏 Timeline / 事件详情 / Chain View / Lifecycle Map / 空状态)、2a–2e Notes/About(教程库首页 / 系列目录 / 文章阅读 / RSS 弹层 / 关于页)、**3a–3e 管理后台 /admin**(登录 / Overview / Traffic / Settings / Tools 工具管理),实现时逐画板对照 |
+| `Agent X-Ray Prototype.dc.html` | **可交互原型**:单页状态机(Runtime/Notes/Series/Article/About 五屏 + RSS 弹层 + 运行时面板三 tab 切换),`data-dc-script` 里含全部演示数据与交互逻辑——**主站实现的首要参照**(不含 /admin,后台以画板 3a–3e 为准) |
 | `support.js` | Claude Design 画布运行时(解析 `<x-dc>` 模板、挂载 React)。仅本地打开 .dc.html 预览时需要,实现不依赖它 |
 
 本地预览:直接用浏览器打开任一 `.dc.html`(同目录需有 `support.js`;需联网加载 React CDN 与 Google Fonts)。
