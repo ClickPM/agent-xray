@@ -38,13 +38,33 @@
    docker compose up -d
    ```
 
-4. **数据库迁移 —— 必须带外执行,不会自动跑**(实测 2026-08-29):
+4. **数据库迁移 —— 必须显式执行一次,不会自动跑**:
 
-   Encore 的自托管镜像**不含迁移执行逻辑**。迁移是本机 encore CLI(`encore run` / `encore check` 日志里的 "Running database migrations")或 Encore Cloud 控制面施加的;镜像里虽然打包了 `agent/migrations/*.up.sql`,但容器启动时不会应用。空库直接起服务的表现是:`/health` 200 正常,但任何触库端点 500 —— `relation "sessions" does not exist`。
+   ```bash
+   ./migrate.sh --status   # 只读:看当前版本与待执行清单
+   ./migrate.sh            # 应用待执行迁移
+   ```
 
-   > **本项落地方案尚未定稿,是 R9 的阻塞项**(候选:一次性 migrate 容器 / 部署脚本用 psql 施加镜像内 SQL / 从构建机经隧道施加)。定稿前不得宣告预发部署成功。已验证的事实是:**迁移一旦带外应用,全链路即正常**(纯 bun 镜像 + 标准 `postgres:16-alpine`,会话创建/列表/落库/重启恢复全部通过)。
+   **为什么需要这一步**(实测 2026-08-29):Encore 的自托管镜像**不含迁移执行逻辑**。本地 `encore run` 时是 encore CLI 把 SQL 灌进库的(日志里的 "Running database migrations"),而生产镜像里没有 CLI,Encore 运行时本身也没有迁移代码。镜像虽打包了 `agent/migrations/*.up.sql`,但容器启动不会应用。**空库直起的表现极具迷惑性**:
 
-5. **验证**:`/health` + 三 Tab + `/admin` + SSE ×2 冒烟;并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
+   ```
+   /health          → 200        ← 健康检查全绿,容器 healthy
+   /agent/sessions  → 500        relation "sessions" does not exist
+   ```
+
+   `deploy/migrate.sh`(所有者裁定 2026-08-29 方案一)的设计:
+
+   - **SQL 来自正在部署的那个镜像**(按 `.env` 的 `IMAGE_TAG` 定位),不从 git 工作区读——服务器上没有仓库,因此不存在「镜像是 A 版、SQL 是 B 版」的漂移
+   - **版本记录沿用 Encore/golang-migrate 的 `schema_migrations(version, dirty)` 单行语义**,与 `encore run` 的本地库完全同构;将来若用 encore CLI 连这个库,它读到的版本是对的,不会重跑
+   - **单事务应用**:SQL 与版本推进同生共死,失败整体回滚、版本号不动、可直接重跑(已实测:中途报错后版本停在原值,半途建的表不残留)
+   - **幂等**:只应用 `version >` 当前版本的文件,重复执行是空操作
+   - 遇到含 `CONCURRENTLY` 的语句会**拒绝执行**并提示人工处理——这类语句不能在事务内跑,宁可停下也不绕过事务保护
+
+   升级时若带了新迁移,顺序是:`docker compose up -d`(新镜像)→ `./migrate.sh`。若新迁移与旧代码不兼容,按停机窗口处理。
+
+5. **验证**:`/health` + 三 Tab + `/admin` 冒烟;并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
+
+   > SSE ×2 的冒烟**要等 R3/R4**:两条 SSE 目前只存在于 spike 里,而 spike 已被排除出镜像;正式的 `/agent/ask` 与 `/trace/stream` 分别在 R3、R4 落地。在那之前生产镜像里没有任何 SSE 端点,这一项无法演练。
 
 6. **回滚**:镜像即回滚单元。把 `.env` 的 `IMAGE_TAG` 换回上一个 SHA,`docker compose up -d`。涉及不可逆迁移时先恢复备份(R10 衔接)。
 

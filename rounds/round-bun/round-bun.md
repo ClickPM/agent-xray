@@ -77,7 +77,7 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 
 同一验收项针对性整改后连续 2 次验证仍不过 → 写 `rounds/round-bun/BLOCKED.md`,停下呼人。禁止放宽验收标准自我通过。
 
-**本轮已触发一次「停下呼人」**:验收项之外发现自托管镜像不执行数据库迁移(见下),该问题指向部署方案设计而非缺陷,按 CLAUDE.md「审查边界」不在本轮自行发明机制,交所有者裁定。
+**本轮触发过一次「停下呼人」并已收口**:验收项之外发现自托管镜像不执行数据库迁移(见「踩坑」第 4 条),该问题指向部署方案设计而非缺陷,按 CLAUDE.md「审查边界」未在本轮自行发明机制,而是列出三个候选交所有者裁定。**所有者 2026-08-29 裁定采用方案一**(部署脚本用 psql 施加镜像内 SQL),已实现为 `deploy/migrate.sh` 并实测通过。
 
 ## 本轮实测
 
@@ -132,13 +132,14 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 
 3. **`bun run` 默认尊重 shebang 会回落到 node。** 见上「测试真跑在 bun 上」。判据只能是 `process.versions.bun`,不能看输出格式。
 
-4. **自托管镜像不执行数据库迁移 —— R9 阻塞项,需所有者裁定。** Encore 运行时里**没有迁移逻辑**(runtimes 全树无相关代码;`encore db` 也没有 `migrate` 子命令);迁移是本机 CLI(`encore run`/`check` 日志里的 "Running database migrations")或 Encore Cloud 控制面施加的。镜像里虽打包了 `agent/migrations/001_init.up.sql`,但容器启动不会应用。空库直起的表现:
+4. **自托管镜像不执行数据库迁移 —— 已裁定并落地。** Encore 运行时里**没有迁移逻辑**(runtimes 全树无相关代码;`encore db` 也没有 `migrate` 子命令);迁移是本机 CLI(`encore run`/`check` 日志里的 "Running database migrations")或 Encore Cloud 控制面施加的。镜像里虽打包了 `agent/migrations/001_init.up.sql`,但容器启动不会应用。空库直起的表现极具迷惑性:
    ```
-   /health          → 200
-   /agent/sessions  → 500  relation "sessions" does not exist
+   /health          → 200        ← 健康检查全绿、容器 healthy
+   /agent/sessions  → 500        relation "sessions" does not exist
    ```
-   **已验证:迁移一旦带外应用,全链路即正常**(纯 bun 镜像 + 标准 `postgres:16-alpine`,POST/GET 会话均 200)。
-   候选方案(按 CLAUDE.md「审查边界」不在本轮自行选定):① 一次性 migrate 容器;② 部署脚本用 psql 施加镜像内 SQL(SQL 来自被部署的那个镜像,不会漂移,但需自行记录版本);③ 从构建机经隧道施加。**定稿前 R9 不得宣告部署成功。**
+   **所有者 2026-08-29 裁定:方案一(部署脚本用 psql 施加镜像内 SQL)**,实现为 `deploy/migrate.sh`。选它的理由是 SQL 直接取自正在部署的那个镜像,不存在「镜像 A 版、SQL B 版」的漂移,且服务器上不需要多维护一个镜像。
+
+   关键设计与实测(见下「migrate.sh 验证」):版本记录沿用 Encore/golang-migrate 的 `schema_migrations(version, dirty)` 单行语义,与 `encore run` 本地库同构(实测两边都是 `1|f`),将来 encore CLI 连这个库读到的版本是对的;单事务应用,失败整体回滚;幂等;含 `CONCURRENTLY` 的迁移主动拒绝而非绕过事务保护。
 
 5. **`hosted_services` 不能用来裁剪端点。** infra-config 里去掉 `spike` 后 `/spike/mem` 仍 200;schema 也写明该字段 *"should not be set by the user, computed during build"*。真正生效的是构建期 `--services agent,system`,实测让 `/spike/*` 全部 404 而 `/health` 正常——评审的 P1-6 由此从「计划保证」变成构建期硬门禁。
 
@@ -149,6 +150,31 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 8. **`encore build docker` 不消费 `DATABASE_URL` 等普通环境变量**,不给 `--config` 直接硬失败(`Your infra configuration is incomplete: Secrets DeepSeekApiKey / Databases agent`)——评审 P1-1 属实,且是硬失败不是软警告。
 
 9. **Next standalone 可跑在 bun 上**:`bun --bun server.js` Ready 89ms、首页 200。但仅验证了 standalone **运行**;`next build` 本身仍以 node 执行(Dockerfile builder 阶段装了 node/npm),未验证用 bun 执行 Next 构建器。
+
+### 完整 compose 部署实测(130,提前跑通了 R9 的大部分链路)
+
+按真实部署形态在 130 上跑了一遍完整四容器(`docker compose up -d`,含 caddy 占 80/443):
+
+| 检查 | 结果 |
+|---|---|
+| 四容器启动 | api / caddy / web 全 Up;postgres **healthy**,`depends_on: service_healthy` 生效(api 确实等到 postgres healthy 才启动) |
+| 前端经 Caddy | `http://127.0.0.1/` → 200,22757 字节 |
+| API 经 Caddy | `/api/health` → 200 |
+| spike 隔离 | `/api/spike/mem` → **404**(`--services` 构建期白名单生效) |
+| **迁移前故障形态复现** | `/api/health` 200 + 前端 200 + `/api/agent/sessions` **500** —— 与文档描述完全一致 |
+| 迁移后 | `/api/agent/sessions` GET 200、POST 建会话 200,数据落库 |
+
+**migrate.sh 验证**:
+
+| # | 场景 | 结果 |
+|---|---|---|
+| 1 | `--status` 在空库上(表都不存在) | 正确报告 `当前版本: 0` + 1 个待执行;**执行前后库中表数均为 0**(真只读,不建跟踪表) |
+| 2 | 首次执行 | 应用 v1,`/api/agent/sessions` 从 500 变 200 |
+| 3 | 幂等复跑 | `无待执行迁移(已是最新)`,空操作 |
+| 4 | `schema_migrations` 内容 | `1|f` —— 与 `encore run` 本地库**逐字段同构** |
+| 5 | **事务回滚**(故意在迁移中途 `SELECT 1/0`) | 版本停在原值不动;半途 `CREATE TABLE` 的表**不残留**(`to_regclass` 为 f) |
+
+> 首版脚本有两处瑕疵已修:`--status` 会建出跟踪表(与「未改库」的声明矛盾)、`CREATE TABLE IF NOT EXISTS` 的 NOTICE 噪音。修后从干净库重跑,上表 1–5 全部通过。
 
 ### 与计划的偏离
 
@@ -161,4 +187,7 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 - **活跃会话真实内存增量**:只测了空闲会话。长上下文、大量 Tool Output、高频事件队列的增量未知,`S_active_p95` / `S_stream_p95` 仍是空值,须等 R3/R4 后用真实使用数据采。
 - **长时间运行**:最长连续运行约 20 分钟,长期泄漏口径未验。
 - **`next build` 在 bun 下执行**:未验证(当前构建期仍用 node)。
+- **生产镜像的 SSE 冒烟**:**当前无法演练**。两条 SSE 只存在于 spike 里,而 spike 已被 `--services` 排除出镜像;正式的 `/agent/ask`、`/trace/stream` 分别在 R3、R4 落地。本轮的 SSE 门禁是在 `encore run`(开发形态)下验的,**生产镜像形态下的 SSE 行为要等 R3/R4 才能验**。
+- **含 `CONCURRENTLY` 的迁移**:`migrate.sh` 会主动拒绝,但该路径未实测(当前只有一个迁移文件,不含该语句)。
+- **多数据库**:`migrate.sh` 目前硬编码只认 `agent` 库,遇到别的库名会报错停下而不是猜。R5 建 notes 表若沿用同一个库则无影响;若新增数据库需要扩这个脚本。
 - **bun `smol` 模式**:未测。Encore 曾在 bun 实验发布说明里提示 bun 内存占用偏高并建议 `smol`,但本轮实测 bun 反而比 node 低 29%,该建议是否仍适用未知。

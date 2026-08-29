@@ -7,10 +7,10 @@
 #   cp .env.example .env && chmod 600 .env    # 首次,填好后
 #   IMAGE_TAG=<git-sha> docker compose up -d  # 或把 IMAGE_TAG 写进 .env
 #
-# ⚠️ 迁移不会自动执行。Encore 自托管镜像**不含迁移执行逻辑**(实测 2026-08-29:
-#    库为空时 /agent/sessions 报 relation "sessions" does not exist);迁移由本机
-#    encore CLI 或 Encore Cloud 施加,自托管必须带外执行。步骤见
-#    docs/deploy-environments.md「数据库迁移」;方案定稿前 R9 不得宣告部署成功。
+# ⚠️ `up -d` 之后必须跑一次 `./migrate.sh`。Encore 自托管镜像**不含迁移执行逻辑**
+#    (实测 2026-08-29:库为空时 /health 仍 200,但 /agent/sessions 报
+#    relation "sessions" does not exist —— 健康检查不会报警)。migrate.sh 幂等,
+#    可安全重复执行;设计说明见 docs/deploy-environments.md「数据库迁移」。
 services:
   caddy:
     image: caddy:2-alpine

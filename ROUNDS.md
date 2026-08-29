@@ -65,7 +65,7 @@
 - 验收:R1/R2 的全部门禁在 bun 下复刻通过(34 事件 / SSE ×2 / 落库与重启 / 脱敏 / 内存基线重新建档)
 - **止损**:任一门禁在 bun 下不过且当轮无法解决 → 回退成本为零(实验位 + 基座参数各一行,npm lockfile 全程未动),弃分支即可
 
-> ⚠️ 本轮暴露一个 **R9 阻塞项**:Encore 自托管镜像**不执行数据库迁移**(实测,空库直起则触库端点 500)。方案候选已列在任务卡,需所有者裁定后才能宣告预发部署成功。
+> 本轮暴露并解决了一个原本会卡死 R9 的问题:Encore 自托管镜像**不执行数据库迁移**(实测,空库直起则 `/health` 200 但触库端点 500)。所有者 2026-08-29 裁定采用「部署脚本用 psql 施加镜像内 SQL」,已落地为 `deploy/migrate.sh`(版本记录与 Encore 的 `schema_migrations` 同构、单事务、幂等),并在 130 上按完整 compose 形态实测通过。
 
 ### R3 — Runtime 对话流真实化
 
@@ -113,11 +113,11 @@
 
 > R-BUN 已把镜像构建、compose 定稿、安全参数、文档四块前移完成(bun 基座、不可变镜像、`infra-config.json`、`cap_drop`/`pids_limit`/网络分段/healthcheck)。R9 只剩「在 130 上真跑一遍 + 补齐尚未落地的部分」。
 
-- **先解掉阻塞项:数据库迁移方案定稿**(R-BUN 实测:自托管镜像不执行迁移,空库直起触库端点 500)。候选见 `rounds/round-bun/round-bun.md`,需所有者裁定后落成脚本 + 文档
+- 数据库迁移已由 R-BUN 的 `deploy/migrate.sh` 解决(所有者裁定方案一);R9 只需把它纳入部署流程文档与冒烟清单
 - `agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色 + 仅 SELECT `notes_*` 授权(R6 建表后补授权的顺序写进文档)
 - 130 部署流程文档 + 脚本:`dev.ps1 build` → `docker save | ssh | docker load` → 130 `docker compose up -d`
-- 预发全链路验证:三 Tab + /admin + SSE ×2 + 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / 镜像内无 node / `/spike/*` 404 / postgres 仅 `back` 网段可达 / SSE 脱敏抽查)
-- SSE 运维口径:心跳 15s、断线重连(trace `afterSeq` 回放)、`docker compose stop api` 时客户端收到明确断流而非静默挂起
+- 预发全链路验证:三 Tab + /admin + 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / 镜像内无 node / `/spike/*` 404 / postgres 仅 `back` 网段可达)
+- **SSE 冒烟需等 R3/R4**:两条 SSE 目前只在 spike 里,而 spike 已被 `--services` 排除出镜像;正式端点落地后再补「心跳 15s、断线重连 `afterSeq` 回放、`docker compose stop api` 时客户端收到明确断流而非静默挂起、SSE 脱敏抽查」这组验证
 - 回滚演练:`IMAGE_TAG` 换回上一 SHA + `up -d` 真跑一次
 - 验收:130 上从干净环境按文档一次部署成功,且回滚演练通过
 

@@ -88,12 +88,13 @@ docker save local/xray-api:<sha> local/xray-web:<sha> | ssh <host> docker load
 cd deploy && cp .env.example .env && chmod 600 .env    # 首次
 # 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / DEEPSEEK_API_KEY
 docker compose up -d
+./migrate.sh                             # 必做:镜像不会自跑迁移
 ```
 
-- **升级** = 构建新 SHA → 传输 → 改 `.env` 的 `IMAGE_TAG` → `docker compose up -d`
-- **回滚** = 把 `IMAGE_TAG` 改回上一个 SHA → `docker compose up -d`(镜像即回滚单元)
+- **升级** = 构建新 SHA → 传输 → 改 `.env` 的 `IMAGE_TAG` → `docker compose up -d` → `./migrate.sh`
+- **回滚** = 把 `IMAGE_TAG` 改回上一个 SHA → `docker compose up -d`(镜像即回滚单元;迁移不自动回退,涉及不可逆迁移时先恢复备份)
 - 禁止 `latest`:compose 里 `${IMAGE_TAG:?}` 会拒绝空值启动
-- ⚠️ **迁移不会自动执行**,必须带外施加,详见 [`deploy-environments.md`](deploy-environments.md#数据库迁移)。空库直起的表现是 `/health` 200 但触库端点 500(`relation "sessions" does not exist`)
+- ⚠️ **迁移不会自动执行**,必须跑 `./migrate.sh`(幂等,可安全重复执行)。忘了跑的表现是 `/health` 200 但触库端点 500(`relation "sessions" does not exist`)——健康检查不会报警,详见 [`deploy-environments.md`](deploy-environments.md)
 - `.env` 永不入 Git;LLM key 不进镜像,经 `deploy/infra-config.json` 的 `{"$env": …}` 在运行时注入
 - **LLM 出口**:境内直连 Anthropic/OpenAI 不通或不稳。用**海外中转端点**(自备官方 key + 自建或可信中转);中转基址属于 secrets
 - **未来若在前面加 CDN / 云防护**:必须为两条 SSE 路径(`/api/agent/*`、`/api/trace/stream`)单独关闭响应缓冲与空闲超时,否则轨迹面板会静默卡死
