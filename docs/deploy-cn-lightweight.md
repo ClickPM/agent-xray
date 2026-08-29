@@ -41,10 +41,14 @@ mem_limit  = API_RSS_p95 × 1.3(突发余量)
 |---|---|
 | OS + systemd + sshd + fail2ban + dockerd | ~450–550 MB |
 | postgres(`shared_buffers=256MB`,`mem_limit 768m`) | ~300–500 MB |
-| api(`mem_limit 1g`,常态预期 200–400MB) | 1 GiB 上限 |
+| api(`mem_limit 1g`) | 1 GiB 上限 |
 | web(`mem_limit 384m`,常态 ~100–150MB) | 384 MB 上限 |
 | caddy(`mem_limit 128m`) | ~30–50 MB |
 | filesystem cache 与余量 | 剩余 ~600 MB–1 GiB |
+
+> **关于 api 的 1g**:这是**初始生产上限**,依据是「Bun 口径实测基座 162.5MB + 事件缓冲的结构性上限 + 3.6GiB 主机的总预算」三者取平衡。**它不代表「已证明 1GB 足够所有真实负载」**——`S_active_p95` 目前是空值,任何容量结论都还缺这一项。
+>
+> 同样地,**不要用空闲会话的 0.04MB 去推真实活跃会话的容量**。空闲会话不持有上下文、消息历史、在途 provider 响应与流式写缓冲,两者不是一个量级的东西。
 
 **什么时候提高 limit / 升配**:容器 RSS p95 持续一周超 `mem_limit` 的 60%,或出现首次 OOM kill → 先查泄漏,确认是真实负载后按上式重算。若推出 api 常态 >700MB,**先做「把 PostgreSQL 拆到云托管」再考虑升配**——拆库比升配便宜,且顺路解锁多实例前置。
 
@@ -87,14 +91,16 @@ docker save local/xray-api:<sha> local/xray-web:<sha> | ssh <host> docker load
 # —— 服务器 ——
 cd deploy && cp .env.example .env && chmod 600 .env    # 首次
 # 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / DEEPSEEK_API_KEY
-docker compose up -d
-./migrate.sh                             # 必做:镜像不会自跑迁移
+
+docker compose up -d --wait postgres   # 1) 只起库,等到 healthy
+./migrate.sh                           # 2) schema 就位(镜像不会自跑迁移)
+docker compose up -d                   # 3) 再起 api / web / caddy
 ```
 
-- **升级** = 构建新 SHA → 传输 → 改 `.env` 的 `IMAGE_TAG` → `docker compose up -d` → `./migrate.sh`
+- **升级** = 构建新 SHA → 传输 → 改 `.env` 的 `IMAGE_TAG` → `up -d --wait postgres` → `./migrate.sh` → `docker compose up -d`
 - **回滚** = 把 `IMAGE_TAG` 改回上一个 SHA → `docker compose up -d`(镜像即回滚单元;迁移不自动回退,涉及不可逆迁移时先恢复备份)
 - 禁止 `latest`:compose 里 `${IMAGE_TAG:?}` 会拒绝空值启动
-- ⚠️ **迁移不会自动执行**,必须跑 `./migrate.sh`(幂等,可安全重复执行)。忘了跑的表现是 `/health` 200 但触库端点 500(`relation "sessions" does not exist`)——健康检查不会报警,详见 [`deploy-environments.md`](deploy-environments.md)
+- ⚠️ **迁移不会自动执行,且必须在 api/web/caddy 起来之前完成**。忘了跑或顺序颠倒的表现是:健康检查全绿、Caddy 已放流量,而业务接口 500(`relation "sessions" does not exist`)——监控发现不了,只能靠部署顺序消除。`migrate.sh` 幂等,可安全重复执行;详见 [`deploy-environments.md`](deploy-environments.md)
 - `.env` 永不入 Git;LLM key 不进镜像,经 `deploy/infra-config.json` 的 `{"$env": …}` 在运行时注入
 - **LLM 出口**:境内直连 Anthropic/OpenAI 不通或不稳。用**海外中转端点**(自备官方 key + 自建或可信中转);中转基址属于 secrets
 - **未来若在前面加 CDN / 云防护**:必须为两条 SSE 路径(`/api/agent/*`、`/api/trace/stream`)单独关闭响应缓冲与空闲超时,否则轨迹面板会静默卡死
@@ -113,7 +119,7 @@ docker compose up -d
 - [ ] gitleaks 扫描仓库无密钥
 - [ ] `.env` 权限 600;`docker compose config` 无明文 key 泄漏到镜像
 - [ ] api 容器:非 root、read_only、无 docker.sock、`cap_drop ALL`、`pids_limit`、mem_limit 生效(`docker inspect` 逐项核)
-- [ ] 镜像内**无 node**、只有 bun(`docker run --rm --entrypoint sh <img> -c 'node --version'` 应失败)
+- [ ] **最终运行镜像**内无 node、只有 bun(`docker run --rm --entrypoint sh <img> -c 'node --version'` 应失败)。注:web 镜像的 builder 阶段本来就有 node/npm,这里查的是 runner 阶段产物
 - [ ] `/spike/*` 全部 404(R1 验证脚手架不得进公网镜像;`--services` 白名单已在构建期挡住)
 - [ ] `IMAGE_TAG` 是 git SHA 而非 latest;该 SHA 与预发验过的完全一致
 - [ ] 迁移已带外施加且版本可追溯;空库直起会 500 的坑已规避

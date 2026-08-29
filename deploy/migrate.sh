@@ -18,9 +18,16 @@
 #      失败即整体回滚,版本号不动,可直接重试。因此 dirty 恒为 false。
 #   4. 幂等:只应用 version > 当前版本的文件。重复执行是空操作。
 #
-# 用法(在 deploy/ 目录下,`docker compose up -d` 之后):
-#   ./migrate.sh            应用所有待执行迁移
-#   ./migrate.sh --status   只看当前版本与待执行清单,不改库
+# 用法(在 deploy/ 目录下)。**本脚本要在 api/web/caddy 起来之前跑**:
+#   docker compose up -d --wait postgres   # 1) 只起库,等到 healthy
+#   ./migrate.sh                           # 2) 本脚本
+#   docker compose up -d                   # 3) 再起 api / web / caddy
+#
+#   ./migrate.sh --status   只看当前版本与待执行清单,纯只读、不改库
+#
+# 为什么要卡在服务启动之前:/health 不触库,先起 api 再迁移会出现一段
+# 「Caddy 已对外放流量 + 健康检查全绿 + 业务接口 500」的中间状态,监控发现不了。
+# 本脚本只需要 postgres 在跑,不需要 api 在跑。
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -42,9 +49,9 @@ docker image inspect "$API_IMAGE" >/dev/null 2>&1 \
 
 # —— postgres 必须已就绪 —— #
 docker compose ps --status running postgres >/dev/null 2>&1 \
-  || die "postgres 容器未运行;先 docker compose up -d"
+  || die "postgres 容器未运行;先 docker compose up -d --wait postgres"
 docker compose exec -T postgres pg_isready -U app -d agent >/dev/null 2>&1 \
-  || die "postgres 尚未 ready;等 healthcheck 通过后重试"
+  || die "postgres 尚未 ready;用 docker compose up -d --wait postgres 等到 healthy 再重试"
 
 psql_q() {
   docker compose exec -T postgres psql -U app -d agent -Atq \

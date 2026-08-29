@@ -3,14 +3,17 @@
 # 镜像是**不可变制品**:本机构建 → 传输 → 服务器只 pull/load + up,服务器上不构建、
 # 不保留任何构建工具链(CLAUDE.md 规则 10)。构建命令见 `dev.ps1 build`。
 #
-# 用法:
-#   cp .env.example .env && chmod 600 .env    # 首次,填好后
-#   IMAGE_TAG=<git-sha> docker compose up -d  # 或把 IMAGE_TAG 写进 .env
+# 用法(首次与每次升级都按这个顺序,不要一把 `up -d` 起全部):
+#   cp .env.example .env && chmod 600 .env   # 首次;IMAGE_TAG 写进 .env
+#   docker compose up -d --wait postgres     # 1) 只起库,等到 healthy
+#   ./migrate.sh                             # 2) schema 就位
+#   docker compose up -d                     # 3) 再起 api / web / caddy
 #
-# ⚠️ `up -d` 之后必须跑一次 `./migrate.sh`。Encore 自托管镜像**不含迁移执行逻辑**
-#    (实测 2026-08-29:库为空时 /health 仍 200,但 /agent/sessions 报
-#    relation "sessions" does not exist —— 健康检查不会报警)。migrate.sh 幂等,
-#    可安全重复执行;设计说明见 docs/deploy-environments.md「数据库迁移」。
+# ⚠️ 顺序不能颠倒。Encore 自托管镜像**不含迁移执行逻辑**,而 /health 不触库——
+#    先起 api 再迁移会出现一段「Caddy 已对外放流量 + 健康检查全绿 + 业务接口 500
+#    (relation "sessions" does not exist)」的中间状态,监控发现不了。
+#    先迁移后起服务可以整段消除这个窗口。migrate.sh 幂等,重复执行是空操作;
+#    设计说明见 docs/deploy-environments.md「数据库迁移」。
 services:
   caddy:
     image: caddy:2-alpine
@@ -67,9 +70,12 @@ services:
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
-    # R1 实测(Bun 口径):基座 ~162MB;事件缓冲结构性上限每会话最坏 ~56MB × 8 并发。
-    # 1g 覆盖对抗性最坏仍有余量,同时把主机总预算压在 3.6GiB 物理内存内。
-    # 上调依据见 docs/deploy-cn-lightweight.md §0 的容量公式,不要拍脑袋改。
+    # 1g 是**初始生产上限**,不是「已证明足够所有真实负载」的结论。
+    # 选它的三个依据:Bun 口径实测基座 ~162MB、事件缓冲的结构性上限
+    # (每会话最坏 ~56MB,见 events.ts/runtime.ts 的常数)、以及 3.6GiB 主机的
+    # 总内存预算。**真实活跃会话的内存增量目前没有数据**(R1/R-BUN 只测了空闲
+    # 会话,不能用它推容量),要等 R3/R4 后用真实使用数据重新标定。
+    # 调整依据见 docs/deploy-cn-lightweight.md §0 的容量公式,不要拍脑袋改。
     mem_limit: 1g
     pids_limit: 256
     environment:

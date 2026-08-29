@@ -4,9 +4,27 @@
 
 ## 目标
 
-在一套代码、零 `isBun` 分支的前提下,把**开发 / 测试 / 预发 / 生产**四个环境的 JS 运行时统一为 bun 1.4.0,任何镜像里不再存在 node;R1/R2 的全部门禁在 bun 下复刻通过。
+在一套代码、零 `isBun` 分支的前提下,把**开发 / 测试 / 预发 / 生产**四个环境的 JS **运行时**统一为 bun 1.4.0,**最终运行镜像(final runtime image)中不含 node**;R1/R2 的全部门禁在 bun 下复刻通过。
+
+**范围边界(勿扩大解读)**:本轮改的是**运行时**,不是「项目不再依赖 Node/npm」。node/npm 仍保留在构建工具链(`apps/web/Dockerfile` builder 阶段)与依赖解析(`npm ci` + `package-lock.json`)中,只是都不进 runner 阶段。
 
 **与原评审建议的偏离(所有者裁定 2026-08-29)**:2026-08-29 的架构评审给的结论是 **B —— Bun 作为实验轨、生产保持 Node**,理由是「Encore 把 bun-runtime 标为 experimental,生产路径不可用」。当日在 130 上的实测把这条理由证伪了:开发与生产两条路径都能跑通,生产路径只差一个 `--base` 参数(详见「本轮实测」)。所有者据此裁定直接统一切换,不走实验轨。**残留风险不是「能不能跑」,而是「上游把它标为 experimental,升级可能回归」** —— 由本卡的钉版本 + 回归门禁兜住。
+
+## 收口状态(所有者 2026-08-29 确认)
+
+| 维度 | 结论 |
+|---|---|
+| 生产 runtime | api → **bun**;web runner → **bun**;最终运行镜像不含 node |
+| 构建工具链 | **仍允许 node/npm**(`apps/web/Dockerfile` builder 阶段),不进 runner |
+| 依赖安装 | **`npm ci` + `package-lock.json`**,不切 bun install / bun.lock |
+| pi | **继续 in-process**,不拆 sidecar/worker |
+| 部署 | Docker Compose + **不可变镜像**(git SHA,禁 latest);本机构建后传输 |
+| 数据库 | Postgres 单机容器;**部署时先完成迁移,再起 api/web/caddy** |
+| 安全 | 保持当前 compose 加固(`cap_drop ALL`/`pids_limit`/`read_only`/tmpfs 限容/`front`-`back` 网络分段/healthcheck/`stop_grace_period`) |
+| SSE | 生产镜像形态的验证**顺延到 R3/R4 后在 R9 补**;不为此保留 spike 或加临时端点 |
+| 内存 | api 初始 `mem_limit = 1g`;结论保持中性,不做单向外推 |
+
+本轮**不再扩大范围**:不讨论 K8s / worker / sidecar,不追求包管理器全面 bun 化,不新增 CI/CD 或安全组件。
 
 ## 前置
 
@@ -41,7 +59,7 @@
 | 3 | 测试**真正跑在 bun 上** | `dev.ps1 test` 16/16 全绿;且临时加一条 `expect(process.versions.bun).toBeDefined()` 必须通过(判据不是「输出里有 bun 字样」) |
 | 4 | 真实 LLM 对话 | Encore handler 内 `createAgentSession({noTools:'all'})` → `prompt()` 全程跑通,流式返回 |
 | 5 | 34 事件订阅 | `subscribedCount 34/34`、`subscribeErrors []`;四模式计数 notify 19 / veto 6 / chain 7 / takeover 2 |
-| 6 | SSE ×2 不缓冲 | 直连与经 Next dev proxy 两条路径,对话流与轨迹流均逐事件到达;轨迹流回放 + live tail 正常 |
+| 6 | SSE ×2 不缓冲(**仅开发形态**) | `encore run` 下,直连与经 Next dev proxy 两条路径,对话流与轨迹流均逐事件到达;轨迹流回放 + live tail 正常。**生产镜像形态未验、也无法验**——两条 SSE 只在 spike 里而 spike 已被 `--services` 排除,正式端点在 R3/R4;顺延到那时在 R9 补 |
 | 7 | 落库与重启不丢 | 会话/消息/轨迹落库,seq 连续、JSONB 类型为 object;进程 kill 后重启数据完整恢复 |
 | 8 | 凭据不泄漏 | SSE 原始采样 + `trace_events` 全表凭据扫描 0 命中;脱敏自测 6/6 |
 | 9 | 内存基线(bun 口径**单独建档**) | 基座 RSS、import 增量、单会话增量、churn 残留全部回填本卡;**不与 node 数字混表** |
@@ -71,7 +89,9 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 - findings 处理:待回填
 - 结论:待回填
 
-**建议审查者重点看**:① `dev.ps1 build` 的 `--services` 白名单是维护热点——R4/R5/R7/R8 新增服务时漏改会静默 404;② `stop_grace_period 40s` 与 `graceful_shutdown.total 30s` 的配比在 SSE 长连接下是否够;③ compose 里 `${IMAGE_TAG:?}` 的强制是否会卡住某些正常运维路径;④ web Dockerfile 的 builder 阶段仍装 node/npm(仅构建期),是否与「任何镜像里不得有 node」的表述冲突——runner 阶段确实无 node,但表述边界要审。
+**建议审查者重点看**:① `dev.ps1 build` 的 `--services` 白名单是维护热点——R4/R5/R7/R8 新增服务时漏改会静默 404;② `stop_grace_period 40s` 与 `graceful_shutdown.total 30s` 的配比在 SSE 长连接下是否够;③ compose 里 `${IMAGE_TAG:?}` 的强制是否会卡住某些正常运维路径;④ 「先迁移后起服务」的顺序在文档/compose/脚本三处是否已完全一致。
+
+> ④ 原为「node 表述边界」问题(builder 阶段仍装 node/npm 与『任何镜像里不得有 node』冲突)。**所有者 2026-08-29 收口时已确认并统一改为「Node 已从生产 runtime 与最终运行镜像中移除;构建阶段与依赖解析仍用 Node/npm」**,该条已闭环,不必再审。
 
 ## 失败处理
 
@@ -89,7 +109,8 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 
 - **实验位可从 `encore.app` 生效**,不需要 `ENCORE_EXPERIMENT` 环境变量;app 进程实证为 `/…/bun/bin/bun run …/main.mjs`。
 - **34/34 订阅、0 错误**;纯对话场景实际触发 **16 种**事件,与 R1 在 Windows/Node 上记录的 16 种**逐一对应、顺序一致**。四模式计数 19/6/7/2 = 34,与 R1 一致。
-- **SSE ×2 均逐事件到达**:对话流跨 4.3s 逐 delta;轨迹流先回放 74 条缓冲(seq 0–73)再 live tail,第二轮对话事件实时到达。经 Next dev proxy 同样不缓冲(每秒 6 / 42 / 21 行)。
+- **SSE ×2 均逐事件到达(开发形态 `encore run`)**:对话流跨 4.3s 逐 delta;轨迹流先回放 74 条缓冲(seq 0–73)再 live tail,第二轮对话事件实时到达。经 Next dev proxy 同样不缓冲(每秒 6 / 42 / 21 行)。
+  > ⚠️ 这组结果**不能读作「生产镜像的 SSE 已验证」**。生产镜像里当前没有任何 SSE 端点(spike 被 `--services` 排除,正式端点在 R3/R4),该项顺延。
 - **落库**:239 条轨迹事件 seq 0–238 连续无缺口,`bool_and(jsonb_typeof(data)='object') = t`;进程 kill 后重启,会话标题与 4 条消息完整恢复。
 - **凭据扫描**:SSE 原始采样 + `trace_events` 全表,`authorization|x-api-key|bearer|sk-|access_token|client_secret` **0 命中**;脱敏自测 6/6。
 - **测试真跑在 bun 上**:`packageManager` 字段能让 `encore test` 从 npm 切到 bun,但**光有它不够**——`bun run` 会尊重 `node_modules/.bin/vitest` 的 `#!/usr/bin/env node` shebang 静默回落到 node,三种 vitest pool(threads/vmThreads/forks)都一样。加 `--bun` 强制后 `process.versions.bun` 断言才通过,16 个原有用例同时全绿。
@@ -108,8 +129,12 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 | 3 会话 dispose 后回落 | +0.12 MB | +1.12 MB |
 | 10 轮 create/dispose 残留 | +1.75 MB | +0.38 MB |
 
-- bun 侧常驻内存比 node 低约 **65MB(29%)**,`deploy/docker-compose.yml` 的 `mem_limit: 1g` 据此设定(替换原先的 2g)。
-- churn 残留 bun(1.75MB)略高于 node(0.38MB),两者均**无单调增长**,量级在噪声范围,不构成泄漏证据。
+**这些数字支持什么、不支持什么(刻意保持中性):**
+
+- ✅ 支持:**在当前 Linux + 当前代码 + 当前 pi 版本下,bun 的基础 RSS 更低**(基座低约 65MB / 29%)。`deploy/docker-compose.yml` 的 `mem_limit: 1g` 据此设为初始上限(替换原先的 2g)。
+- ❌ **不支持**写成「bun 的内存表现全面优于 node」。同一组数据里 **10 轮 churn 残留 bun(1.75MB)反而高于 node(0.38MB)**;两者都无单调增长、量级也都在噪声范围,不构成泄漏证据,但足以说明现阶段不该做单向结论。
+- ❌ **不支持**用空闲会话增量(0.04MB)推真实活跃会话容量。空闲会话不持有上下文、消息历史、在途 provider 响应与流式写缓冲。
+- ❌ **不支持**「1g 已证明够用」。1g 是基于基座 + 事件缓冲结构性上限 + 主机总预算选出的**初始上限**,`S_active_p95` 仍是空值。
 - **顺带纠正 R1 任务卡一个数字**:R1 记的「import 约 16s」是 Windows 平台开销,不是运行时特性——同代码在 Linux/Node 上仅 512ms。该数字不应作为运行时结论引用。
 
 ### 镜像
@@ -153,7 +178,17 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 
 ### 完整 compose 部署实测(130,提前跑通了 R9 的大部分链路)
 
-按真实部署形态在 130 上跑了一遍完整四容器(`docker compose up -d`,含 caddy 占 80/443):
+按真实部署形态在 130 上跑了完整四容器(含 caddy 占 80/443)。**收口时按「先迁移、后起服务」的最终顺序重跑了一遍**:
+
+| 步骤 | 命令 | 实测 |
+|---|---|---|
+| 1 | `docker compose up -d --wait postgres` | 只起 postgres,`--wait` 阻塞到 healthy(5.97s);**此刻 80 端口无人监听**(curl → 000),对外零暴露 |
+| 2 | `./migrate.sh` | api 尚未启动即完成迁移 v1(脚本只依赖 postgres) |
+| 3 | `docker compose up -d` | api/web/caddy 拉起;**服务一上线业务接口就是 200,不存在 500 窗口** |
+
+上线后端点:`/api/health` 200 · `/api/agent/sessions` 200(GET/POST 均可) · 前端 `/` 200 · `/api/spike/mem` 404。
+
+初次探索时用的是「一把 `up -d` 起全部再迁移」的顺序,结果如下(正是这个中间状态促成了顺序调整):
 
 | 检查 | 结果 |
 |---|---|

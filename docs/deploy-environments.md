@@ -3,7 +3,15 @@
 > 所有者裁定(2026-08-28):本机开发用 encore cli;**预发(130)与生产都用 docker 方式部署**。方式不混用(CLAUDE.md 规则 10)。
 > 注意与同机的 ticketBookingB2B 项目区分:那边 130 走 encore run + systemd,本项目 130 走 docker。
 >
-> 所有者裁定(2026-08-29,R-BUN):**开发 / 测试 / 预发 / 生产的 JS 运行时统一为 bun**。Node 不再出现在任何运行路径与任何镜像里(依赖安装仍用 npm,见下)。
+> 所有者裁定(2026-08-29,R-BUN):**开发 / 测试 / 预发 / 生产的 JS 运行时统一为 bun**;**Node 已从生产 runtime 与最终运行镜像中移除**。
+>
+> ⚠️ 这不等于「项目不再依赖 Node/npm」。准确的边界是:
+>
+> | 层面 | 用什么 |
+> |---|---|
+> | 生产运行时(api / web runner) | **bun**,最终运行镜像内无 node |
+> | 构建工具链 | 仍用 **node + npm**(`apps/web/Dockerfile` 的 builder 阶段装 `nodejs`/`npm`,跑 `npx next build`);这些不进 runner 阶段 |
+> | 依赖安装与锁定 | 仍用 **`npm ci` + `package-lock.json`**(理由见下) |
 
 | 环境 | 位置 | 方式 | 运行时 | 状态 |
 |---|---|---|---|---|
@@ -30,13 +38,18 @@
 
 2. **镜像传输**:130 内网用 `docker save … | ssh … docker load`;生产按网络情况用同法或私有 registry。**任何环境都不用 `latest` tag**,compose 里 `${IMAGE_TAG:?}` 会拒绝空值。
 
-3. **服务器部署**:
+3. **服务器部署 —— 先迁移,后起服务**:
 
    ```bash
    cd deploy && cp .env.example .env && chmod 600 .env   # 首次
    # 填 IMAGE_TAG=<git-sha> / POSTGRES_PASSWORD / DEEPSEEK_API_KEY
-   docker compose up -d
+
+   docker compose up -d --wait postgres   # 1) 只起库,--wait 会阻塞到 healthy
+   ./migrate.sh                           # 2) schema 就位(详见下一节)
+   docker compose up -d                   # 3) 再起 api / web / caddy
    ```
+
+   > **顺序不能颠倒。** `/health` 不触库,所以「先 `up -d` 起全部、再迁移」会留下一段中间状态:Caddy 已经对外放流量、容器 healthy、健康检查全绿,而真实业务接口全部 500。这段窗口靠监控发现不了,只能靠部署顺序消除。升级时同理:新镜像若带了新迁移,也要先停在这个顺序上。
 
 4. **数据库迁移 —— 必须显式执行一次,不会自动跑**:
 
@@ -60,11 +73,15 @@
    - **幂等**:只应用 `version >` 当前版本的文件,重复执行是空操作
    - 遇到含 `CONCURRENTLY` 的语句会**拒绝执行**并提示人工处理——这类语句不能在事务内跑,宁可停下也不绕过事务保护
 
-   升级时若带了新迁移,顺序是:`docker compose up -d`(新镜像)→ `./migrate.sh`。若新迁移与旧代码不兼容,按停机窗口处理。
+   **升级顺序同样是「先迁移、后起服务」**:改 `.env` 的 `IMAGE_TAG` → `docker compose up -d --wait postgres`(库通常已在跑,此步是确认 healthy)→ `./migrate.sh` → `docker compose up -d`(拉起新版 api/web)。若新迁移与旧代码不兼容,按停机窗口处理。
 
 5. **验证**:`/health` + 三 Tab + `/admin` 冒烟;并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
 
-   > SSE ×2 的冒烟**要等 R3/R4**:两条 SSE 目前只存在于 spike 里,而 spike 已被排除出镜像;正式的 `/agent/ask` 与 `/trace/stream` 分别在 R3、R4 落地。在那之前生产镜像里没有任何 SSE 端点,这一项无法演练。
+   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,system`)白名单决定。R4/R5/R7/R8 落地 `trace` / `notes` / `admin` / `metrics` 时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
+   >
+   > 因此冒烟不能只看 `/health`,要**逐个确认当前已落地的正式 service 端点都可达**。本 PR 不引入自动服务发现,这条靠清单与冒烟兜住。
+
+   > **SSE ×2 的冒烟要等 R3/R4**:两条 SSE 目前只存在于 spike 里,而 spike 已被正确地排除出镜像;正式的 `/agent/ask` 与 `/trace/stream` 分别在 R3、R4 落地。在那之前**生产镜像里没有任何 SSE 端点**,这一项无法演练——R-BUN 记录的 SSE 通过结果是在 `encore run` 开发形态下取得的,不代表生产镜像形态已验证。不为此人为保留 spike 或新增临时 SSE 端点。
 
 6. **回滚**:镜像即回滚单元。把 `.env` 的 `IMAGE_TAG` 换回上一个 SHA,`docker compose up -d`。涉及不可逆迁移时先恢复备份(R10 衔接)。
 
