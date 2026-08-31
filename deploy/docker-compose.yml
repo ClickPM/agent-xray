@@ -1,6 +1,23 @@
-# Agent X-Ray 单机部署(境内轻量服务器)
-# 用法:cp .env.example .env && chmod 600 .env && docker compose up -d
-# 注意:web/api 的 Dockerfile 在实现阶段补齐;本文件为框架版,结构与安全约束已定稿。
+# Agent X-Ray 单机部署(预发 130 / 生产境内轻量服务器共用)
+#
+# 镜像是**不可变制品**:本机构建 → 传输 → 服务器只 pull/load + up,服务器上不构建、
+# 不保留任何构建工具链(CLAUDE.md 规则 10)。构建命令见 `dev.ps1 build`。
+#
+# 用法(首次部署按这个顺序,不要一把 `up -d` 起全部):
+#   cp .env.example .env && chmod 600 .env   # 首次;IMAGE_TAG 写进 .env
+#   docker compose up -d --wait postgres     # 1) 只起库,等到 healthy
+#   ./migrate.sh                             # 2) schema 就位
+#   docker compose up -d                     # 3) 再起 api / web / caddy
+#
+# 升级时在最前面多一步 `docker compose stop api web`:旧版 api 在迁移期间继续
+# 对外服务会形成「旧二进制 × 新 schema」的混版本窗口;V1 用短暂停机换确定性
+# (详见 docs/deploy-environments.md「升级顺序」)。
+#
+# ⚠️ 顺序不能颠倒。Encore 自托管镜像**不含迁移执行逻辑**,而 /health 不触库——
+#    先起 api 再迁移会出现一段「Caddy 已对外放流量 + 健康检查全绿 + 业务接口 500
+#    (relation "sessions" does not exist)」的中间状态,监控发现不了。
+#    先迁移后起服务可以整段消除这个窗口。migrate.sh 幂等,重复执行是空操作;
+#    设计说明见 docs/deploy-environments.md「数据库迁移」。
 services:
   caddy:
     image: caddy:2-alpine
@@ -12,57 +29,111 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks: [front]
     depends_on:
       - web
       - api
+    mem_limit: 128m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    # 仅保留绑定 80/443 所需的一项能力
+    cap_add: [NET_BIND_SERVICE]
 
   web:
-    build:
-      context: ../apps/web
+    # Next.js standalone + bun 运行时(apps/web/Dockerfile)
+    image: ${IMAGE_REGISTRY:-local}/xray-web:${IMAGE_TAG:?IMAGE_TAG 必须显式指定(git SHA),禁止 latest}
     restart: unless-stopped
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:rw,noexec,nosuid,size=32m
     environment:
       - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
     expose:
       - "3000"
-
-  api:
-    build:
-      context: ../apps/api
-    restart: unless-stopped
-    # 安全约束(docs/security.md 第 3 层):非 root、只读根 FS、无特权、限内存
-    read_only: true
-    tmpfs:
-      - /tmp
+    networks: [front]
+    mem_limit: 384m
+    pids_limit: 128
     user: "10001:10001"
     security_opt:
       - no-new-privileges:true
-    mem_limit: 2g
+    cap_drop: [ALL]
+
+  api:
+    # Encore.ts + pi SDK in-process,bun 运行时(encore build docker --base oven/bun:…)
+    image: ${IMAGE_REGISTRY:-local}/xray-api:${IMAGE_TAG:?IMAGE_TAG 必须显式指定(git SHA),禁止 latest}
+    restart: unless-stopped
+    # 安全约束(docs/security.md 第 3 层):非 root、只读根 FS、无特权、无能力、限内存/进程数
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    user: "10001:10001"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    # 1g 是**初始生产上限**,不是「已证明足够所有真实负载」的结论。
+    # 选它的三个依据:Bun 口径实测基座 ~162MB、事件缓冲的结构性上限
+    # (每会话最坏 ~56MB,见 events.ts/runtime.ts 的常数)、以及 3.6GiB 主机的
+    # 总内存预算。**真实活跃会话的内存增量目前没有数据**(R1/R-BUN 只测了空闲
+    # 会话,不能用它推容量),要等 R3/R4 后用真实使用数据重新标定。
+    # 调整依据见 docs/deploy-cn-lightweight.md §0 的容量公式,不要拍脑袋改。
+    mem_limit: 1g
+    pids_limit: 256
     environment:
-      - DATABASE_URL=postgresql://app:${POSTGRES_PASSWORD}@postgres:5432/xray
-      # pi 只读工具专用连接(SELECT-only 角色,初始化见迁移脚本)
-      - AGENT_RO_DATABASE_URL=postgresql://agent_ro:${AGENT_RO_PASSWORD}@postgres:5432/xray
-      - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
-      - LLM_PROXY_BASE=${LLM_PROXY_BASE}
+      # 镜像默认监听 8080;这里显式对齐 Caddyfile 的 api:4000(二选一,已写死)
+      - PORT=4000
+      # 下列变量由 deploy/infra-config.json 以 {"$env": …} 引用,构建时已绑定
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?}
+      # R6 落地 agent_ro 只读工具连接、R7 落地 admin/LLM 配置时,
+      # 在 infra-config.json 的 secrets 段增声明后再在此处补对应变量。
       # 高危工具双闸之一(默认不设):XRAY_UNLOCK_DANGEROUS_TOOLS
     expose:
       - "4000"
+    networks: [front, back]
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    # 必须 ≥ infra-config.json 的 graceful_shutdown.total(30s)+ 余量,
+    # 否则 SSE 长连接会被 SIGKILL 硬断而不是走优雅关闭
+    stop_grace_period: 40s
 
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=xray
+      # 库名必须是 agent:Encore infra-config 的 databases key 即物理库名
+      - POSTGRES_DB=agent
       - POSTGRES_USER=app
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
     volumes:
       - pg_data:/var/lib/postgresql/data
     expose:
       - "5432"
+    networks: [back]
+    mem_limit: 768m
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d agent"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+networks:
+  front:
+  back:
+    # 数据库只在内部网段可达:caddy/web 无法直接连 postgres
+    internal: true
 
 volumes:
   caddy_data:

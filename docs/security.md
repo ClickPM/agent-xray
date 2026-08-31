@@ -48,6 +48,7 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 ## 3. 凭据管理
 
 - LLM key:管理后台写入 → 服务端加密存储(Postgres);任何读接口只返回掩码(`sk-…abcd`)
+  - **引导凭据例外**(R-BUN 部署形态,所有者裁定 2026-08-29,文档补记 2026-08-31):`DeepSeekApiKey` 是 R1 起的 Encore secret,自托管镜像没有管理后台之前只能经 `deploy/.env`(600、不入 Git)→ infra-config `{"$env"}` 注入进程环境——与 §5「中转地址作为 secrets 管理」同一路径。不入镜像、不入日志、不经任何读接口暴露。R7 管理后台加密入库落地后,运行期 LLM key 以库内为准,该 `.env` 引导键的去留交所有者裁定(已记 `rounds/BACKLOG.md`)
 - `.env` 不入 Git;仓库推送前跑 gitleaks;`.gitignore` 已覆盖 `.env*` / `*.key` / `*.pem`
 - 服务器上 `.env` 权限 600
 

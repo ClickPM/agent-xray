@@ -67,22 +67,30 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 7. **非必要不得修改前端页面样式,不做视觉 review**。15 块画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。
 8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28)。功能范围 = `design/` 15 画板 + 可交互原型;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、业务工具必须纯函数、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**;SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
-10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。
+10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。**镜像一律本机构建后传输,服务器不构建、不留仓库与工具链**;tag 必须是 git SHA,禁止 `latest`。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。
+11. **生产 JS 运行时统一为 bun,且「开实验位」与「换基座」必须成对出现**(所有者裁定 2026-08-29,R-BUN)。开发/测试/预发/生产四个环境的**运行时**都是 bun,**最终运行镜像(final runtime image)里不含 node**。三处配置缺一不可:`apps/api/encore.app` 的 `"experiments": ["bun-runtime"]`、构建时的 `--base oven/bun:<钉住版本>-slim`、`apps/web/Dockerfile` 的 bun 基座。
+    - **边界要说清,别理解成「项目已经不依赖 node/npm」**:node 与 npm 仍保留在**构建工具链**里——`apps/web/Dockerfile` 的 builder 阶段装 `nodejs`/`npm` 并用 `npm ci` + `npx next build`,只是这些都不进 runner 阶段。准确表述是「**Node 已从生产 runtime 与最终运行镜像中移除;构建阶段与依赖解析仍用 Node/npm**」。
+    - **只开实验位不换基座 = 产出一个必然启动失败的镜像**:Encore 会把 ENTRYPOINT 改成 `bun run …` 却仍用默认基座 `node:slim` 打包,`docker run` 报 `exec: "bun": executable file not found in $PATH`。`encore.app` 的 `build.docker.base_image` **对本地 `encore build docker` 无效**(仅作用于 Encore 自家 CI/CD),别往那里加。构建一律走 `dev.ps1 build`,不要手敲 encore 命令。
+    - **调用 JS 可执行文件时必须 `bun --bun`**:不加时 bun 尊重脚本 shebang(`#!/usr/bin/env node`)而静默回落到 node。`apps/api` 的 test 脚本与 `apps/web` 的 CMD 都因此必须带 `--bun`;判据是 `process.versions.bun` 是否有值。
+    - **运行时 ≠ 包管理器**:依赖安装仍走 `npm ci` + `package-lock.json`。pi SDK 自带 `npm-shrinkwrap.json` 锁定传递依赖而 bun 不读它,切 `bun install` 会丢掉这层供应链锁定且收益为零。`packageManager: "bun@…"` 字段只用于让 `encore test` 以 bun 执行脚本,不代表依赖由 bun 解析。
 
 ## 钉版本
 
 | 依赖 | 版本 | 说明 |
 |---|---|---|
 | `@earendil-works/pi-coding-agent` | **0.84.3**(exact,lockfile 固定) | pi SDK 本体(`createAgentSession`/`defineTool`/扩展系统都在这个包);R1 实测通过。升级前先在本地过一遍 34 事件兼容性(`docs/security.md` §7) |
+| **bun** | **1.4.0** | 唯一 JS 运行时(规则 11)。三处必须同版本:`apps/web/Dockerfile` 的两个 `FROM oven/bun:1.4.0-slim`、`dev.ps1` 的 `$bunBase`、`apps/api/package.json` 的 `packageManager`。升级时四处一起改,并重跑 R-BUN 验收(尤其内存基线——bun 用 JSC 堆,RSS 语义与 V8 不同)。**本机 bun 解释器也要对齐**(`packageManager` 只选运行时不校验版本,`dev.ps1 test` 对漂移会告警;对齐:`npm i -g bun@1.4.0`) |
+| **encore CLI** | **1.57.13** | `bun-runtime` 实验位在该版本已可用(二进制内含 `bun-runtime` 字面量,实测)。升级前确认实验位未改名/未移除,且同机共用 daemon 的 ticketBookingB2B 不受影响 |
 
 ## 本地开发
 
 ```powershell
 .\dev.ps1            # 后端 encore run :4000(需 Docker Desktop 已启动,本地 Postgres 走容器)
-.\dev.ps1 test       # encore test
+.\dev.ps1 test       # encore test(经 bun --bun 跑 vitest)
 .\dev.ps1 check      # encore check(编译校验)
 .\dev.ps1 gen        # encore gen client → apps/web/lib/api-client.ts
 .\dev.ps1 db <名>    # encore db shell <数据库名>
+.\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```
 
@@ -92,10 +100,13 @@ cd apps\web; npm run dev   # 前端 next dev :3000
 
 ## 部署环境矩阵
 
-| 环境 | 位置 | 方式 | 状态 |
-|---|---|---|---|
-| 开发 | 本机 Windows | `dev.ps1` → encore run | 可用 |
-| 预发 | 130 服务器 | docker compose(镜像本机构建后传输) | R9 落地 |
-| 生产 | 境内轻量服务器(待采购) | docker compose,同预发 | R11;所有者提供 SSH 后开工 |
+四个环境的 JS **运行时**统一为 **bun**(规则 11),最终运行镜像不含 node;node/npm 仅存在于构建工具链与依赖安装。
+
+| 环境 | 位置 | 方式 | 运行时 | 状态 |
+|---|---|---|---|---|
+| 开发 | 本机 Windows | `dev.ps1` → encore run | bun | 可用 |
+| 测试 | 本机 Windows | `dev.ps1 test` → `bun --bun vitest run` | bun | 可用(R-BUN) |
+| 预发 | 130 服务器 | docker compose(`dev.ps1 build` 本机构建后传输) | bun | R9 落地 |
+| 生产 | 境内轻量服务器 | docker compose,**与预发同一个 SHA 镜像**,不重建 | bun | R11 |
 
 细节:[`docs/deploy-environments.md`](docs/deploy-environments.md);生产服务器初始化与 ICP 备案:[`docs/deploy-cn-lightweight.md`](docs/deploy-cn-lightweight.md)。

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://encore.dev/schemas/infra.schema.json",
+
+  "metadata": {
+    "app_id": "agent-xray",
+    "env_name": "selfhost",
+    "env_type": "production",
+    "cloud": "local"
+  },
+
+  "graceful_shutdown": {
+    "total": 30,
+    "shutdown_hooks": 10,
+    "handlers": 20
+  },
+
+  "sql_servers": [
+    {
+      "host": "postgres:5432",
+      "tls_config": { "disabled": true },
+      "databases": {
+        "agent": {
+          "username": "app",
+          "password": { "$env": "POSTGRES_PASSWORD" },
+          "min_connections": 2,
+          "max_connections": 20
+        }
+      }
+    }
+  ],
+
+  "secrets": {
+    "DeepSeekApiKey": { "$env": "DEEPSEEK_API_KEY" }
+  }
+}
