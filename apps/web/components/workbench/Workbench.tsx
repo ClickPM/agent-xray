@@ -250,6 +250,10 @@ export function Workbench() {
   const [streaming, setStreaming] = useState(false);
   const [panel, setPanel] = useState<Panel>("timeline");
 
+  // 会话切换的请求序号:连点两个会话时,先发后到的历史加载必须被丢弃,
+  // 否则 UI 会被旧会话的消息覆盖(codex review P2)
+  const loadSeq = useRef(0);
+
   const active = sessionId !== null || items.length > 0;
   const { trace } = usePlayback(active);
   const title = sessions.find((s) => s.id === sessionId)?.title || "";
@@ -265,10 +269,14 @@ export function Workbench() {
   const openSession = useCallback(
     (id: string) => {
       if (streaming) return;
+      const seq = ++loadSeq.current;
       setPanel("timeline");
+      // 目标会话立刻生效:历史还在加载时发消息也会写进**这个**会话,而不是上一个
+      setSessionId(id);
+      setItems([]);
       getSession(id)
         .then(({ messages }) => {
-          setSessionId(id);
+          if (loadSeq.current !== seq) return; // 已被更晚的选择/新建/发送取代
           setItems(messages.map((m) => ({ kind: m.role, text: m.content })));
         })
         .catch((err) => console.error("load session failed:", err));
@@ -278,6 +286,7 @@ export function Workbench() {
 
   const startNew = useCallback(() => {
     if (streaming) return;
+    loadSeq.current++; // 作废在途的历史加载
     setSessionId(null);
     setItems([]);
     setDraft("");
@@ -287,6 +296,7 @@ export function Workbench() {
   const send = useCallback(() => {
     const prompt = draft.trim();
     if (!prompt || streaming) return;
+    loadSeq.current++; // 作废在途的历史加载,别让它冲掉本轮消息
     setDraft("");
     setPanel("timeline");
     setItems((prev) => [...prev, { kind: "user", text: prompt }]);

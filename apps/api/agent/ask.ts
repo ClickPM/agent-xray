@@ -17,10 +17,11 @@ import {
   acquireSession,
   disposeSession,
   flushTraceEvents,
+  SessionBusyError,
   SessionCapacityError,
   type RuntimeSession,
 } from "./runtime";
-import { previewText } from "./events";
+import { previewText, safeErrorText } from "./events";
 import { sse, sseComment, SSE_HEADERS } from "./sse";
 import {
   appendMessage,
@@ -110,8 +111,8 @@ async function persistAssistant(
       return false;
     } catch (err) {
       console.error(
-        `persist assistant message failed (attempt ${attempt + 1}/${PERSIST_ATTEMPTS}):`,
-        err,
+        `persist assistant message failed (attempt ${attempt + 1}/${PERSIST_ATTEMPTS}): ` +
+          safeErrorText(err),
       );
       if (attempt < PERSIST_ATTEMPTS - 1) await sleep(PERSIST_BACKOFF_MS[attempt]);
     }
@@ -122,11 +123,25 @@ async function persistAssistant(
 export const ask = api.raw(
   { expose: true, method: "POST", path: "/agent/ask" },
   async (req, resp) => {
+    // 【客户端断开检测:本环境下拿不到信号,已放弃,勿再按常规写法“修复”】
+    //
+    // codex review P2 指出原实现监听 `req` 的 close 是错的,属实——实测它在**请求体读完
+    // 后 2ms** 就触发,若据此 abort 会把每一轮对话当场掐掉。但改成常规正解
+    // `resp.on("close")` + `writableFinished` 之后仍然无效:实测 4 秒掐断客户端,
+    // resp 的 close 直到 **t=+9763ms**(即本端 `resp.end()` 之后)才触发,且
+    // `writableFinished=true`;`req.socket` / `resp.socket` 全程既不触发 close/error,
+    // `destroyed` 也一直是 false。
+    //
+    // 原因是 Encore 的网关代理:浏览器连的是网关,网关再转发给 JS 运行时,
+    // 外部连接断开不会传导到这里拿到的 req/res/socket 上(encore 1.57.13 + bun)。
+    // 结论:进程内没有可靠的断开信号,本轮不做 abort——访客关页面后本轮会跑完
+    //(数秒的 token),会话随即释放,影响有限。已记 rounds/BACKLOG.md,
+    // 待 R9 在 Caddy + 自托管镜像的真实拓扑下复测。
     let raw: unknown;
     try {
       raw = await readJsonBody(req);
     } catch (err) {
-      console.error("read /agent/ask body failed:", err);
+      console.error(`read /agent/ask body failed: ${safeErrorText(err)}`);
       fail(resp, 400, "invalid request body");
       return;
     }
@@ -146,7 +161,7 @@ export const ask = api.raw(
           return;
         }
       } catch (err) {
-        console.error("lookup session failed:", err);
+        console.error(`lookup session failed: ${safeErrorText(err)}`);
         fail(resp, 500, "internal error");
         return;
       }
@@ -155,26 +170,25 @@ export const ask = api.raw(
     const isNew = !sessionId;
     const id = sessionId ?? randomUUID();
 
+    // acquireSession 返回即代表本请求**已持有**该会话(busy 在其内部同步置位),
+    // 从这里往下的每条路径都必须释放。同会话并发与容量耗尽在其内部判定后抛出。
     let rec: RuntimeSession;
     try {
       rec = await acquireSession(id);
     } catch (err) {
+      if (err instanceof SessionBusyError) {
+        fail(resp, 409, "session is already streaming");
+        return;
+      }
       if (err instanceof SessionCapacityError) {
         console.warn(err.message);
         fail(resp, 429, "server is at capacity, try again shortly");
         return;
       }
-      console.error("acquire agent session failed:", err);
+      console.error(`acquire agent session failed: ${safeErrorText(err)}`);
       fail(resp, 500, "internal error");
       return;
     }
-
-    // 同会话串行闸。check 与置位之间不得有 await,否则并发请求会双双通过。
-    if (rec.busy || rec.session.isStreaming) {
-      fail(resp, 409, "session is already streaming");
-      return;
-    }
-    rec.busy = true;
 
     let userSeq: number;
     try {
@@ -185,9 +199,10 @@ export const ask = api.raw(
       }
       userSeq = (await appendMessage(id, "user", prompt)).seq;
     } catch (err) {
-      console.error("persist user message failed:", err);
-      rec.busy = false;
+      console.error(`persist user message failed: ${safeErrorText(err)}`);
+      // 先 dispose 再释放 busy:持有期间不会被 sweeper / 逐出并发触碰
       if (isNew) await disposeSession(rec);
+      rec.busy = false;
       fail(resp, 500, "internal error");
       return;
     }
@@ -221,14 +236,6 @@ export const ask = api.raw(
     });
 
     const heartbeat = setInterval(() => sseComment(resp, "hb"), HEARTBEAT_MS);
-    // 客户端断开就中止本轮:继续跑只会白烧 token。已流出的文本仍会落库,
-    // 库内历史与访客所见保持一致。
-    let clientGone = false;
-    req.on("close", () => {
-      if (resp.writableEnded) return;
-      clientGone = true;
-      void rec.session.abort().catch((err) => console.error("abort after client close:", err));
-    });
 
     try {
       let promptFailed = false;
@@ -236,7 +243,9 @@ export const ask = api.raw(
         await rec.session.prompt(prompt);
       } catch (err) {
         promptFailed = true;
-        console.error(`prompt failed for session ${id}:`, err);
+        // provider SDK 的异常常挂着响应体/请求配置(可能含 Authorization),
+        // 只记脱敏摘要(docs/security.md §2、CLAUDE.md 规则 9)
+        console.error(`prompt failed for session ${id}: ${safeErrorText(err)}`);
       }
       if (turnErrorDetail !== undefined) {
         promptFailed = true;
@@ -250,9 +259,7 @@ export const ask = api.raw(
         persistFailed = !(await persistAssistant(id, userSeq + 1, assistantText));
       }
 
-      if (clientGone) {
-        // 无人收听,不再写帧;落库与 flush 已在上面完成
-      } else if (promptFailed || persistFailed) {
+      if (promptFailed || persistFailed) {
         const parts: string[] = [];
         if (promptFailed) parts.push(ERR_PROVIDER);
         if (persistFailed) parts.push(ERR_NOT_PERSISTED);
@@ -262,7 +269,7 @@ export const ask = api.raw(
       }
     } finally {
       await flushTraceEvents(rec).catch((err) =>
-        console.error(`flushTraceEvents failed for session ${id}:`, err),
+        console.error(`flushTraceEvents failed for session ${id}: ${safeErrorText(err)}`),
       );
       clearInterval(heartbeat);
       unsubscribe();

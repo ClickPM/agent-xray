@@ -1,6 +1,6 @@
 # Round 03 — Runtime 对话流真实化
 
-> 状态:进行中(实现与验收完成,待 codex 审查)
+> 状态:进行中(初审 5 条 findings 全部整改完成,待复审)
 
 ## 目标
 
@@ -57,7 +57,44 @@
 
 ## 代码审查
 
-<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」。 -->
+- 审查方式:codex `/codex:review --background --base fd0f09a`(thread 01a05600-b2ba-7413-9eca-7f8116a6946e)
+- 初审 findings 5 条(3×P1 + 2×P2),**全部采纳**:
+
+  - **[P1] 并发冷启动绕过 `MAX_ACTIVE_SESSIONS`**(runtime.ts)——多个冷请求会在任何会话注册进
+    `registry` 之前同时通过容量检查,上限形同虚设。
+  - **[P1] 同一会话的并发冷启动各建一个 `AgentSession`**(runtime.ts)——`busy` 闸作用在不同对象上
+    拦不住并发 prompt,后一次 `registry.set` 覆盖前一条记录,被覆盖的会话回收不掉,并造成消息
+    seq 冲突与上下文分叉。
+  - **整改(两条 P1 共用一个机制)**:新增冷启动串行链 `serializeColdStart`,把「容量判定 → 逐出 →
+    建 pi 会话 → 注入历史 → 注册」整段互斥;串行段内先复查 `getRuntimeSession`(排队期间别人
+    可能已建好同一会话)。另把认领动作下沉进 `acquireSession`(新增 `claim()` + `SessionBusyError`):
+    返回即代表调用方持有会话,「拿到会话」与「占住会话」之间不再有 await——否则会话可能在这个
+    窗口里被并发冷启动逐出,调用方随后 prompt 的是已 dispose 的 pi 会话(自查发现的同源问题)。
+    `disposeSession` 同步退出注册表并置 `disposed`,逐出目标在排干队列的 await 期间不会被认领。
+  - **[P1] provider 异常原文进日志**(ask.ts)——`console.error(msg, err)` 把整个异常对象打进日志,
+    绕过 `previewText`,可能带出 Authorization/API key,违反 `docs/security.md` §3 与规则 9。
+    **整改**:新增 `events.ts` 的 `safeErrorText()`(Error 的 name/message 不是可枚举属性,先取出
+    再过 previewText 的凭据键屏蔽 + 凭据串清洗 + 截断;**堆栈不进日志**),ask.ts / runtime.ts 里
+    每一处 catch 日志统一改走它。
+  - **[P2] 客户端断开检测无效**(ask.ts)——监听 `req` 的 close,而请求体读完后它就已触发。
+    **采纳并实测,但结论是本环境无法修**:改成 `resp.on("close")` + `writableFinished` 后仍抓不到
+    (4 秒掐断,resp close 直到 t=+9763ms 本端 `resp.end()` 后才触发;`req.socket`/`resp.socket`
+    全程无 close/error,`destroyed` 恒 false)。原因是 Encore 网关代理不把外部断开传导给 JS 运行时。
+    **最终处理**:删掉这段拿不到信号的 abort 代码(留一段实测记录的注释,防止后人按常规写法“再修
+    一次”),不留假保护;限制与复测计划记 `rounds/BACKLOG.md`(R9 在 Caddy + 自托管镜像拓扑下复测)。
+  - **[P2] 前端会话切换竞态**(Workbench.tsx)——连点两个会话时先发后到的历史加载会覆盖 UI;
+    加载未完成时发消息还会写进旧会话。**整改**:`loadSeq` 请求序号,过期结果直接丢弃;
+    `openSession` 立刻 `setSessionId(id)`(加载期间发消息也落在正确会话);`startNew` 与 `send`
+    同样递增序号作废在途加载。
+
+- 整改后回归:`dev.ps1 check` 通过;`dev.ps1 test` 5 文件 **45/45** 全绿(新增 5 条并发回归用例:
+  claim 同步占位、pi 流式时拒绝认领、已认领会话不进逐出/回收候选、冷启动串行链临界区不重叠且
+  保序、单次失败不掐断链)。
+  真机复测:12 路并发新会话 → 8×200 + 4×429(上限精确);同一冷会话 3 路并发 → 1×200 + 2×409,
+  库内只有 1 轮消息(user seq 0 / assistant seq 1)、轨迹 122 条 seq 0–121 连续,无重复会话与 seq 冲突;
+  两轮正常对话上下文正常(「青花瓷」)。
+- 初审结论:整改后待复审
+- 复审:<待回填>
 
 ## 失败处理
 
@@ -92,6 +129,10 @@
 - **客户端断开即 `abort()`**:继续生成只会白烧 token;已流出的文本照常落库,库内历史与访客所见一致。
 - **右栏三视图本轮仍是 demo 数据**(R4 接 `/trace/stream`),`usePlayback` 的 chat 字段已删除、只留 trace 行数。
 - 测试环境坑:Git Bash 下 `curl -d '中文'` 会按 GBK 编码发出,库里存成乱码——不是服务端问题,验证中文一律 `printf` 写 UTF-8 文件后 `--data-binary @file`。浏览器自动 UTF-8 编码,无此问题。
+- **Encore 网关不传导客户端断开**(整改期实测):`req`/`resp`/`socket` 三条路都拿不到 SSE 客户端
+  离开的信号,详见「代码审查」P2 一条与 `rounds/BACKLOG.md`。这也解释了一个观察假象——raw 端点
+  的 Encore 访问日志 `request completed duration=23.75` 记的是处理器入口耗时,不是流的生命周期,
+  别据此判断请求“卡住了”。
 - 浏览器自动化的 `key Return` 发出的 keydown `event.key` 为空串,不会触发 `onKeyDown` 里的 `key === "Enter"` 判断;用 `dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))` 验证通过(输入框清空、消息发出、助手答「收到」)。是工具限制,不是应用缺陷。
 
 与计划的偏离:

@@ -18,7 +18,7 @@ import type {
   InlineExtension,
   ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
-import { ALL_EVENTS, EVENT_MODES, sanitizeEvent, type EventMode } from "./events";
+import { ALL_EVENTS, EVENT_MODES, safeErrorText, sanitizeEvent, type EventMode } from "./events";
 import { appendTraceEvents, listMessages, maxTraceSeq, type MessageRow } from "./store";
 
 const deepSeekApiKey = secret("DeepSeekApiKey");
@@ -187,7 +187,7 @@ function maybeScheduleFlush(rec: RuntimeSession): void {
   if (rec.pendingFlush.length < FLUSH_THRESHOLD) return;
   rec.flushQueued = true;
   void flushTraceEvents(rec)
-    .catch((err) => console.error("incremental trace flush failed:", err))
+    .catch((err) => console.error(`incremental trace flush failed: ${safeErrorText(err)}`))
     .finally(() => {
       rec.flushQueued = false;
     });
@@ -219,7 +219,7 @@ function makeObserver(rec: RuntimeSession): InlineExtension {
             return name === "project_trust" ? { trusted: "undecided" } : undefined;
           });
         } catch (err) {
-          console.error(`xray-observer failed to subscribe ${name}:`, err);
+          console.error(`xray-observer failed to subscribe ${name}: ${safeErrorText(err)}`);
         }
       }
     },
@@ -278,26 +278,30 @@ export function selectEvictable(recs: RuntimeSession[]): RuntimeSession | undefi
 }
 
 /**
- * 释放运行时会话。**先排干待落库队列再 dispose**:回收/逐出不得吞掉已采集的轨迹;
- * 排干失败只能显式记日志(库不可用时无处可写),不静默。
+ * 释放运行时会话。
+ *
+ * **退出注册表与置位 disposed 必须同步完成**(codex review P1 整改):此后
+ * `getRuntimeSession` / `selectEvictable` / sweeper 都看不到它——否则逐出目标在
+ * `await` 排干队列期间仍可被并发请求认领,认领方拿到的是一个马上要 dispose 的会话。
+ * 之后才排干待落库队列:回收/逐出不吞掉已采集的轨迹,排干失败只能显式记日志。
  */
 export async function disposeSession(rec: RuntimeSession): Promise<void> {
   if (rec.disposed) return;
+  rec.disposed = true;
+  registry.delete(rec.id);
   try {
     await flushTraceEvents(rec);
   } catch (err) {
     console.error(
-      `flush before dispose failed for session ${rec.id}: dropping ${rec.pendingFlush.length} pending events —`,
-      err,
+      `flush before dispose failed for session ${rec.id}: dropping ${rec.pendingFlush.length} ` +
+        `pending events — ${safeErrorText(err)}`,
     );
   }
-  rec.disposed = true;
   rec.pendingFlush.length = 0;
-  registry.delete(rec.id);
   try {
     rec.session.dispose();
   } catch (err) {
-    console.error(`pi session dispose failed for session ${rec.id}:`, err);
+    console.error(`pi session dispose failed for session ${rec.id}: ${safeErrorText(err)}`);
   }
 }
 
@@ -318,7 +322,7 @@ let sweeper: ReturnType<typeof setInterval> | undefined;
 function ensureSweeper(): void {
   if (sweeper) return;
   sweeper = setInterval(() => {
-    void sweepIdleSessions().catch((err) => console.error("idle sweep failed:", err));
+    void sweepIdleSessions().catch((err) => console.error(`idle sweep failed: ${safeErrorText(err)}`));
   }, SWEEP_INTERVAL_MS);
   sweeper.unref?.();
 }
@@ -331,6 +335,49 @@ export class SessionCapacityError extends Error {
     super(`active agent session limit (${limit}) reached`);
     this.name = "SessionCapacityError";
   }
+}
+
+/** 会话已被另一请求持有(或 pi 侧仍在流式)时抛出;ask.ts 据此回 409。 */
+export class SessionBusyError extends Error {
+  constructor(sessionId: string) {
+    super(`session ${sessionId} is already streaming`);
+    this.name = "SessionBusyError";
+  }
+}
+
+/**
+ * 同步认领会话:**检查与置位之间不得有 await**,否则并发请求会双双通过。
+ * 认领成功后该会话对逐出与空闲回收都不可见,调用方负责在收尾时 `busy = false`。
+ */
+export function claim(rec: RuntimeSession): RuntimeSession {
+  if (rec.busy || rec.session.isStreaming) throw new SessionBusyError(rec.id);
+  rec.busy = true;
+  return rec;
+}
+
+/**
+ * 冷启动串行链(codex review 两条 P1 的共同整改)。
+ *
+ * 「容量判定 → 逐出 → 建 pi 会话 → 注入历史 → 注册」这一整段必须互斥:
+ *   - 不串行时,多个冷请求会**在任何会话注册进 registry 之前**同时通过容量检查,
+ *     `MAX_ACTIVE_SESSIONS` 形同虚设;
+ *   - 同一 sessionId 的两个冷请求会各建一个 `AgentSession`,`busy` 闸作用在不同
+ *     对象上拦不住并发 prompt,后一次 `registry.set` 还会覆盖前一条记录——被覆盖的
+ *     会话既回收不掉,又会造成消息 seq 冲突与上下文分叉。
+ *
+ * 代价是冷启动全局排队(单次约几百毫秒)。热路径(会话已在注册表)不进这条链,
+ * 正常对话不受影响;并发冷启动本来就该限速——它同时是 pi 会话构造的闸。
+ */
+let coldStartChain: Promise<unknown> = Promise.resolve();
+
+export function serializeColdStart<T>(fn: () => Promise<T>): Promise<T> {
+  const run = coldStartChain.then(fn, fn);
+  // 链本身不得因为某次失败而断掉
+  coldStartChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> {
@@ -382,40 +429,54 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
   return rec;
 }
 
+/** 库内历史压成一条 `role:"custom"` 消息注入(display:false,进 LLM 上下文不进 UI)。 */
+async function injectHistory(rec: RuntimeSession): Promise<void> {
+  const history = buildHistoryTranscript(await listMessages(rec.id));
+  if (!history) return;
+  try {
+    await rec.session.sendCustomMessage(
+      { customType: "xray_history", content: history, display: false },
+      { triggerTurn: false },
+    );
+  } catch (err) {
+    // 上下文注入失败不阻断提问:访客宁可少上下文,也好过整轮拒绝
+    console.error(`history injection failed for session ${rec.id}: ${safeErrorText(err)}`);
+  }
+}
+
 /**
- * 取回(或按库内历史重建)会话的运行时实例。
+ * 取回(或按库内历史重建)会话的运行时实例,**并原子地认领它**。
  *
- * 调用方保证 `sessionId` 对应的 DB 行已存在。重建路径会把历史消息压成一条
- * `role:"custom"` 消息注入(display:false,只进 LLM 上下文不进 UI),让空闲回收
- * 与进程重启对访客表现为「续接得上」,而不是失忆。
+ * 返回即代表调用方持有该会话(`busy === true`),必须在收尾时释放;已被他人持有抛
+ * `SessionBusyError`(409),容量耗尽抛 `SessionCapacityError`(429)。认领放在这里
+ * 而不是调用方,是因为「拿到会话」与「占住会话」之间一旦有 await,会话就可能被
+ * 并发冷启动逐出,调用方随后 prompt 的是一个已 dispose 的 pi 会话。
+ *
+ * 调用方保证 `sessionId` 对应的 DB 行已存在(新会话由调用方在此之后建行)。
  */
 export async function acquireSession(sessionId: string): Promise<RuntimeSession> {
+  // 热路径:会话已在注册表 → 同步认领,不进冷启动串行链
   const existing = getRuntimeSession(sessionId);
-  if (existing) return existing;
+  if (existing) return claim(existing);
 
-  if (activeSessions().length >= MAX_ACTIVE_SESSIONS) {
-    const victim = selectEvictable(activeSessions());
-    if (!victim) throw new SessionCapacityError(MAX_ACTIVE_SESSIONS);
-    console.log(`evicting idle agent session ${victim.id} to make room for ${sessionId}`);
-    await disposeSession(victim);
-  }
+  return serializeColdStart(async () => {
+    // 排队期间别的请求可能已经把同一会话建好了
+    const again = getRuntimeSession(sessionId);
+    if (again) return claim(again);
 
-  const rec = await createRuntimeSession(sessionId);
-
-  const history = buildHistoryTranscript(await listMessages(sessionId));
-  if (history) {
-    try {
-      await rec.session.sendCustomMessage(
-        { customType: "xray_history", content: history, display: false },
-        { triggerTurn: false },
-      );
-    } catch (err) {
-      // 上下文注入失败不阻断提问:访客宁可少上下文,也好过整轮拒绝
-      console.error(`history injection failed for session ${sessionId}:`, err);
+    if (activeSessions().length >= MAX_ACTIVE_SESSIONS) {
+      const victim = selectEvictable(activeSessions());
+      if (!victim) throw new SessionCapacityError(MAX_ACTIVE_SESSIONS);
+      console.log(`evicting idle agent session ${victim.id} to make room for ${sessionId}`);
+      await disposeSession(victim);
     }
-  }
 
-  registry.set(rec.id, rec);
-  ensureSweeper();
-  return rec;
+    const rec = await createRuntimeSession(sessionId);
+    await injectHistory(rec);
+    // 注册与认领同步完成:新会话不会在调用方用它之前落入逐出候选
+    registry.set(rec.id, rec);
+    rec.busy = true;
+    ensureSweeper();
+    return rec;
+  });
 }

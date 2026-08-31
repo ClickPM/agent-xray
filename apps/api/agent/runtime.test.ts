@@ -6,14 +6,17 @@ import { describe, expect, it, vi } from "vitest";
 import { createSession, listTraceEvents } from "./store";
 import {
   buildHistoryTranscript,
+  claim,
   disposeSession,
   flushTraceEvents,
   queuePendingEvent,
   requeueFailedBatch,
   selectEvictable,
   selectIdleSessions,
+  serializeColdStart,
   IDLE_TIMEOUT_MS,
   PENDING_FLUSH_MAX,
+  SessionBusyError,
   type CapturedEvent,
   type RuntimeSession,
 } from "./runtime";
@@ -23,7 +26,7 @@ function fakeRec(id: string, over: Partial<RuntimeSession> = {}): RuntimeSession
   const now = Date.now();
   return {
     id,
-    session: { dispose: () => {} } as unknown as RuntimeSession["session"],
+    session: { dispose: () => {}, isStreaming: false } as unknown as RuntimeSession["session"],
     createdAt: now,
     lastActiveAt: now,
     busy: false,
@@ -183,5 +186,57 @@ describe("历史上下文转写", () => {
 
   it("单条消息就超预算时返回空串,不产出只有表头的转写", () => {
     expect(buildHistoryTranscript([msg(0, "user", "X".repeat(100))], 10)).toBe("");
+  });
+});
+
+describe("并发认领与冷启动串行(codex review P1 整改)", () => {
+  it("claim 同步占位:第二次认领抛 SessionBusyError", () => {
+    const rec = fakeRec("a");
+    expect(claim(rec)).toBe(rec);
+    expect(rec.busy).toBe(true);
+    expect(() => claim(rec)).toThrow(SessionBusyError);
+  });
+
+  it("pi 侧仍在流式时也拒绝认领", () => {
+    const rec = fakeRec("b", {
+      session: { dispose: () => {}, isStreaming: true } as unknown as RuntimeSession["session"],
+    });
+    expect(() => claim(rec)).toThrow(SessionBusyError);
+    expect(rec.busy).toBe(false);
+  });
+
+  it("已认领的会话不进逐出候选,也不被空闲回收", () => {
+    const now = Date.now();
+    const held = fakeRec("held", { lastActiveAt: now - IDLE_TIMEOUT_MS - 1 });
+    claim(held);
+    expect(selectEvictable([held])).toBeUndefined();
+    expect(selectIdleSessions([held], now)).toEqual([]);
+  });
+
+  it("冷启动串行链:并发进入的临界区不重叠(容量判定与建会话不再交错)", async () => {
+    let live = 0;
+    let peak = 0;
+    const order: number[] = [];
+    const task = (i: number) =>
+      serializeColdStart(async () => {
+        live++;
+        peak = Math.max(peak, live);
+        await new Promise((r) => setTimeout(r, 5));
+        order.push(i);
+        live--;
+        return i;
+      });
+
+    expect(await Promise.all([task(0), task(1), task(2)])).toEqual([0, 1, 2]);
+    expect(peak).toBe(1); // 任意时刻只有一个冷启动在跑
+    expect(order).toEqual([0, 1, 2]); // 且按进入顺序
+  });
+
+  it("某次冷启动失败不会掐断串行链", async () => {
+    const boom = serializeColdStart(async () => {
+      throw new Error("cold start failed");
+    });
+    await expect(boom).rejects.toThrow("cold start failed");
+    await expect(serializeColdStart(async () => "next")).resolves.toBe("next");
   });
 });
