@@ -33,8 +33,16 @@ const slug = z.string().regex(SLUG_RE, "slug 需匹配 ^[a-z0-9][a-z0-9-]{0,63}$
 /** 分类圆点色:design token 里的 6 位 hex,不接受任意 CSS 颜色(规则 7 的边界)。 */
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "dot 需为 #RRGGBB");
 
-/** 附件文件名:`<内容哈希>.<ext>`,不含路径分隔符 —— 它直接进 URL。 */
-const ASSET_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,95}$/i;
+/**
+ * 附件文件名:`<内容哈希>.<ext>`,不含路径分隔符 —— 它直接进 URL。
+ *
+ * **刻意只收小写**(codex 复审 P2,已用真 Caddy 实测复现):原先带 `i` 标志,
+ * 于是 `photo.JPG` 能上传成功、回一个 `/notes/…/photo.JPG` 的地址,
+ * 而生产的 Caddy matcher 与 next dev 的 rewrite 都只认小写扩展名 ——
+ * 那张图在线上会绕过供图路由、落到前端的 404。收紧输入比让两处 matcher
+ * 变大小写不敏感更省:文件名本来就约定是小写十六进制哈希。
+ */
+const ASSET_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,95}$/;
 
 /**
  * 允许的附件类型白名单。
@@ -50,8 +58,14 @@ const ASSET_TYPES: Record<string, string[]> = {
   "image/gif": ["gif"],
 };
 
-/** 单个附件上限。base64 传输会膨胀 4/3,10MB 原文对应约 13.3MB 请求体。 */
-const MAX_ASSET_BYTES = 10 * 1024 * 1024;
+/**
+ * 单个附件上限。base64 传输膨胀 4/3,所以它必须和 `endpoint.ts` 的 `BODY_LIMIT`
+ * 配套(4 MiB 原文 ≈ 5.4 MiB 请求体,额度 8 MiB 留足余量)。改一处要改两处。
+ *
+ * 4 MiB 不是拍脑袋:R5 的图片管线把宽度压到 1600px,存量 56 张里最大的一张
+ * 205 KB。定得比「够用」高一个数量级就行,再高只是白送攻击面。
+ */
+const MAX_ASSET_BYTES = 4 * 1024 * 1024;
 
 /** 单篇正文上限:vault 里最长的一篇约 12 万字符,1MB 留足余量。 */
 const MAX_CONTENT_BYTES = 1024 * 1024;
@@ -343,8 +357,8 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         seriesSlug: slug,
         name: z
           .string()
-          .regex(ASSET_NAME_RE, "name 需为不含路径分隔符的文件名")
-          .describe("形如 <内容哈希>.webp;直接进 URL"),
+          .regex(ASSET_NAME_RE, "name 需为**全小写**、不含路径分隔符的文件名")
+          .describe("形如 <内容哈希>.webp;直接进 URL,只收小写(线上按小写扩展名分流)"),
         contentType: z.enum(Object.keys(ASSET_TYPES) as [string, ...string[]]),
         dataBase64: z.string().min(1),
       },
@@ -376,7 +390,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "删除正文配图",
       description: "不检查是否仍被正文引用;删错了会变破图。",
-      inputSchema: { seriesSlug: slug, name: z.string().regex(ASSET_NAME_RE) },
+      inputSchema: { seriesSlug: slug, name: z.string().regex(ASSET_NAME_RE, "name 需为全小写文件名") },
     },
     async (args) =>
       write(ctx, "notes_asset_delete", `删附件 ${args.seriesSlug}/${args.name}`, async () => {
@@ -439,8 +453,9 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         "provider 是 pi-ai 的 provider id(如 deepseek)。apiKey 加密入库,读回只给掩码。" +
         "**部分更新:省略的字段一律保留库内原值**(baseUrl / models 传 null 才是清空)——" +
         "只想改个 baseUrl 时不必、也不该重报 key 与限额。首次配置必须给出 apiKey 与 modelId。" +
-        "baseUrl 用于海外中转端点。**换模型只影响新会话**;换 key 或换 baseUrl 是进程级的," +
-        "会作用到所有会话的下一轮(pi 每次请求重新解析凭据与 provider 组合)。" +
+        "baseUrl 用于海外中转端点。**生效面分两半**:换 key 与删 provider 是进程级的," +
+        "所有会话(含进行中)的下一轮立即生效 —— 凭据撤销靠它;而换 baseUrl 与换模型" +
+        "只对**新会话**生效,已在内存里的会话要等空闲回收后重建。" +
         "第一个配好的 provider 自动成为默认。",
       inputSchema: {
         provider: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/, "provider 需为 pi-ai 的 provider id"),

@@ -493,11 +493,25 @@ export interface UpsertProviderInput {
  *
  * `encryptionKeyB64` 由 tools 层从 secret 取好传入(CLAUDE.md 规则 5)。
  */
+/**
+ * 把 `llm_config` 的既有行锁住,再做任何「唯一默认」相关的读改写。
+ *
+ * 【为什么事务本身不够】(codex 复审 P2)两个并发的 `makeDefault=true` 在
+ * READ COMMITTED 下各自看到对方提交前的快照:双双把旧默认清掉、再各自置位,
+ * 后提交的那个撞上 `idx_llm_config_single_default` 报约束冲突 —— 对调用方是一句
+ * 无从解释的 internal error。而 MCP 客户端是可以并发发 tool call 的。
+ * `FOR UPDATE` 让第二个事务阻塞到第一个提交、然后**重新求值**,变成串行。
+ */
+async function lockProviders(tx: Transaction): Promise<void> {
+  await tx.rawExec(`SELECT provider FROM llm_config FOR UPDATE`);
+}
+
 export async function upsertProvider(
   input: UpsertProviderInput,
   encryptionKeyB64: string,
 ): Promise<{ created: boolean; apiKeyHint: string; isDefault: boolean }> {
   return inTransaction(async (tx) => {
+    await lockProviders(tx);
     const existing = await tx.rawQueryRow<{ provider: string; apiKeyHint: string }>(
       `SELECT provider, api_key_hint AS "apiKeyHint" FROM llm_config WHERE provider = $1`,
       input.provider,
@@ -589,6 +603,7 @@ export async function upsertProvider(
 
 export async function setDefaultProvider(provider: string): Promise<void> {
   await inTransaction(async (tx) => {
+    await lockProviders(tx);
     const exists = await tx.rawQueryRow<{ provider: string }>(
       `SELECT provider FROM llm_config WHERE provider = $1`,
       provider,

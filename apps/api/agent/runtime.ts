@@ -90,15 +90,20 @@ let appliedFingerprint: string | undefined;
 /**
  * 把库里的当前配置施加到 ModelRuntime 上,返回可用的模型句柄。
  *
- * 每次**冷启动会话**都会调(热路径不调),所以「改了配置何时生效」有确定答案。
- * 但要分清生效面(codex review P1 ×2 之后校准的口径):
+ * 冷启动与热路径都会调,所以「改了配置何时生效」有确定答案。
+ * 但生效面分两半,**别把它们当成一件事**(两轮 codex review + 桩中转实测校准):
  *
- *   - **模型选择**是每个会话自己的:会话创建时拿到的 `model` 句柄不会被改动,
- *     换默认模型只影响新会话。
- *   - **凭据与 provider 组合(baseUrl/模型目录)是进程级的**:`ModelRuntime` 是单例,
- *     而 pi 每次请求都经 `prepareRequest → getAuth` 重新解析(实测源码),
- *     所以改 key 或改中转端点会作用到**所有会话的下一轮**,包括进行中的。
- *     单例是既定架构(内存基线按它标定),这里只把事实说准,不为此改架构。
+ *   - **凭据是进程级的,当轮生效**:`ModelRuntime` 是单例,pi 每次请求都经
+ *     `prepareRequest → getAuth` 重新解析(源码核实)。所以轮换 key、删掉 provider
+ *     会作用到**所有会话的下一轮**,包括还在内存里的。实测:删 provider 之后
+ *     同一个热会话的下一轮直接 503。凭据撤销要的就是这个。
+ *   - **端点与模型定格在会话创建时**:`getModel()` 返回的 `Model` 对象自带 `baseUrl`,
+ *     `AgentSession` 一直拿着它;重新注册 provider 只换 `ModelRuntime` 里的那份,
+ *     换不掉会话手里的这份(实测:热会话第 2 轮仍打到已清空的旧中转)。
+ *     于是改 baseUrl / 换模型只对**新会话**生效,已在内存的会话要等空闲回收
+ *     (`IDLE_TIMEOUT_MS`)或被逐出后重建。
+ *     要不要让进行中的对话中途换端点/模型是**产品取舍**不是缺陷修复
+ *     (pi 有 `AgentSession.setModel` 这个杠杆),已记 rounds/BACKLOG.md 待裁定。
  *
  * 【别再加 `removeRuntimeApiKey`】(codex review P1)曾以「进程里不留用不上的凭据」
  * 为由,在切 provider 时撤掉上一个的 key。后果是:A 的既有会话下一轮解析不到凭据、
@@ -560,7 +565,23 @@ async function injectHistory(rec: RuntimeSession): Promise<void> {
 export async function acquireSession(sessionId: string): Promise<RuntimeSession> {
   // 热路径:会话已在注册表 → 同步认领,不进冷启动串行链
   const existing = getRuntimeSession(sessionId);
-  if (existing) return claim(existing);
+  if (existing) {
+    const rec = claim(existing);
+    // 【热路径也要施加配置】(codex 复审 P1)配置只在冷启动读的话,
+    // 一个一直活着的会话会**一直**用着旧凭据与旧端点:所有者轮换了泄漏的 key、
+    // 甚至删掉了整个 provider,只要没有别的会话恰好冷启动,就什么都不会发生。
+    // `applyLlmConfig` 在指纹没变时是空操作,代价只有这一次单行索引查询 ——
+    // 与一次 LLM 调用相比可以忽略。指纹变了则连凭据一起换掉,撤销当轮生效。
+    // 认领之后到这里之间必须保证释放:否则一次库故障会把会话永久锁死。
+    try {
+      const { modelRuntime } = await getPiRuntime();
+      await applyLlmConfig(modelRuntime, await loadActiveLlmConfig());
+    } catch (err) {
+      rec.busy = false;
+      throw err;
+    }
+    return rec;
+  }
 
   return serializeColdStart(async () => {
     // 排队期间别的请求可能已经把同一会话建好了

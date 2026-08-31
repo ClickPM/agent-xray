@@ -41,7 +41,25 @@ function deny(resp: ServerResponse, status: number, body: string): void {
 }
 
 export const mcp = api.raw(
-  { expose: true, method: ["POST", "GET", "DELETE"], path: "/mcp" },
+  {
+    expose: true,
+    method: ["POST", "GET", "DELETE"],
+    path: "/mcp",
+    // 附件上传的请求体额度:8 MiB。
+    //
+    // Encore 默认 2 MiB,而附件走 base64、膨胀 4/3 —— 不抬高的话一张 1.6 MB 的图
+    // 会在**进 MCP handler 之前**被框架拒掉,报的还是与工具无关的错(codex 复审 P2)。
+    // 必须与 `tools.ts` 的 `MAX_ASSET_BYTES`(4 MiB)配套,改一处要改两处。
+    //
+    // 【只能写字面量】Encore 在编译期静态解析这个字段:写成常量或 `8 * 1024 * 1024`
+    // 都会报 `expected integer literal`(实测)。8388608 = 8 MiB。
+    bodyLimit: 8388608,
+    // 【必须有】(codex 复审 P1)不设的话 Encore 会把请求头原样写进 trace ——
+    // 实测在本地 trace 里读到了 `authorization: Bearer <明文管理 token>`。
+    // 服务端只存哈希这件事,会被一份带着原 token 的 trace 整个抵消
+    // (docs/security.md §3「明文凭据不进日志」)。
+    sensitive: true,
+  },
   async (req, resp) => {
     const remote = remoteOf(req.headers);
 

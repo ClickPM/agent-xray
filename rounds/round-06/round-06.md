@@ -73,7 +73,18 @@
 | 4 | P2 | 可覆盖的附件 URL 不该标 `immutable` | 属实。`notes_asset_put` 明确支持同名覆盖,而 `immutable` 让浏览器一年内不复验 | `Cache-Control` 从 `max-age=31536000, immutable` 改为 `max-age=86400`,保留强 ETag。**没有**改成「强制文件名 = 内容哈希」:存量 56 张的名字是 R5 按源文件算的哈希,与上传字节的哈希对不上,强制等于废掉存量 URL |
 | 5 | P2 | `SHA256::HashData` 在 PS 5.1 不存在,文档命令跑不通 | 属实,**当场复现**:`Method invocation failed because [System.Security.Cryptography.SHA256] does not contain a method named 'HashData'` | 换成 `SHA256::Create().ComputeHash(...)`,并在本机 PS 5.1 实跑确认两条命令都出正确结果 |
 
-- 结论:待复审
+### 第 2 轮 — 6 条 findings(3×P1 + 3×P2),**5 条采纳整改、1 条不采纳(误报)**
+
+| # | 级别 | findings | 核实 | 处置 |
+|---|---|---|---|---|
+| 1 | P1 | Caddy 的 `path_regexp` 用 RE2,不支持非捕获组 `(?:…)`,生产会拒绝启动 | **误报**。RE2 支持 `(?:re)`(它不支持的是反向引用与 lookaround)。用真 Caddy 验:`caddy validate` 回 `Valid configuration`;再起容器实跑六条路径,`/notes/pi/abc123.webp → /assets/notes/pi/abc123.webp`、`/notes/pi/01 → WEB`、`/api/mcp → /mcp` 全部正确 | **不采纳**,并把这次实跑当作 Caddy 配置的验收证据留档 |
+| 2 | P1 | `/mcp` 端点未标 `sensitive`,凭据会进 Encore trace | **属实,且实测比描述更严重**。本地 trace 里直接读到 `authorization: Bearer <明文管理 token>` —— 服务端只存哈希这件事会被一份 trace 整个抵消。(body 那半条不成立:raw 端点的 `request_payload` 是 `e30=`,即 `{}`,LLM key 没被记) | 加 `sensitive: true`。修后复查同一端点的 trace:`request_headers` 整段消失,payload 变 `<redacted>` |
+| 3 | P1 | 热会话不重读 LLM 配置,凭据撤销不可靠 | **属实,但只对了一半**(实测拆开的) | 热路径补上 `applyLlmConfig`。**凭据这一半修好了**:删 provider 后同一个热会话下一轮立即 503(实测)。**端点/模型那一半修不掉**:pi 的 `Model` 对象自带 `baseUrl` 且被 `AgentSession` 从创建起持有,重注册 provider 换不掉它(实测:热会话第 2 轮仍打到已清空的旧中转)。要不要让进行中的对话中途换端点/模型是**产品取舍**,按 CLAUDE.md「审查不负责长出方案」记 BACKLOG 待裁定 |
+| 4 | P2 | Encore `bodyLimit` 默认 2 MiB,与工具声明的 10 MiB 上限矛盾 | 属实(类型注释写明默认 2 MiB)。存量最大附件 205 KB,所以回填没暴露它 | 反过来收:`MAX_ASSET_BYTES` 10 MiB → 4 MiB(R5 管线压到 1600px,4 MiB 已是最大存量的 20 倍),`bodyLimit` 显式设 8 MiB。**顺带踩到**:该字段只能写字面量整数,写常量或 `8 * 1024 * 1024` 都报 `expected integer literal` |
+| 5 | P2 | 并发 `makeDefault=true` 会撞唯一索引回 500 | 属实。READ COMMITTED 下两个事务各自从自己的快照清旧默认再置位,后提交者撞 `idx_llm_config_single_default`;而 MCP 客户端可以并发发 tool call | 两个相关事务开头加一句 `SELECT provider FROM llm_config FOR UPDATE`,让第二个事务阻塞到第一个提交后**重新求值**。一条语句,不引入锁表/重试机制 |
+| 6 | P2 | 大写扩展名的附件能传上去,但生产 Caddy matcher 只认小写 | **属实,同一次 Caddy 实跑复现**:`/notes/pi/abc.PNG` 落到了 WEB 而不是 ASSET | `ASSET_NAME_RE` 去掉 `i` 标志,只收小写。收紧输入比让两处 matcher 变大小写不敏感更省 —— 文件名本来就约定是小写十六进制哈希 |
+
+- 结论:待第 3 轮复审(范围按 CLAUDE.md「第 3 轮起只审整改 diff」)
 
 ## 失败处理
 
@@ -90,7 +101,7 @@
 | 3 | 发布全链路 | ✅ 新建系列 → 上传 1×1 webp → 发文章引用它 → `/notes/r6-smoke/01` 渲染出图(`naturalWidth=1`,来自 Postgres)→ `/rss.xml` 与 `/rss/engineering.xml` 出现该条 |
 | 4 | 存量零回归 | ✅ 56 张存量图经 `notes_asset_put` 回填(6.47 MB),`apps/web/public/notes/` 已删除;`/notes/pi/0b60f550dd19.webp` 仍 200,带强 ETag,`If-None-Match` → 304。文章页(无扩展名)不受 rewrite 影响,仍 200 |
 | 5 | key 只见掩码 | ✅ `llm_providers_list` 只回 `sk-…3f9a`;库内 `api_key_enc` 61 字节密文、不含明文;`mcp_audit` 全表搜不到 key 片段 |
-| 6 | 模型热生效 | ✅ 切到不存在的模型 → 下一个**新会话** 503;切回 → 新会话建起(服务端日志逐次打 `llm config applied`)。**生效面**见下方审查段:换模型只影响新会话,换 key / baseUrl 是进程级的 |
+| 6 | 模型热生效 | ✅ 切到不存在的模型 → 下一个**新会话** 503;切回 → 新会话建起(服务端日志逐次打 `llm config applied`)。**生效面**见审查段第 2 轮 #3:换 key / 删 provider 对所有会话下一轮生效(实测),换 baseUrl / 换模型只对新会话生效 |
 | 7 | 向下协商 | ✅ 2025-11-25 的 `initialize` 握手 200 且 `tools/list` 拿到 21 个工具;`GET`/`DELETE` → 405;不支持的版本 → 400 `UnsupportedProtocolVersionError`;头体不一致 → 400 `-32020 HeaderMismatch` |
 | 8 | 退役干净 | ✅ `/admin` 404、`next build` 5 条路由无 admin;`tools/notes-sync`、`dev.ps1 notes`、`sync-notes` skill 已删,`.agents/skills` 重同步为 8 个 |
 | 9 | 构建门禁 | ✅ `dev.ps1 check` 通过;`dev.ps1 test` 8 文件 111 用例全过(R6 新增 32 个);`tsc --noEmit` api 与 web 均干净;`--services` 已含 `mcp` |

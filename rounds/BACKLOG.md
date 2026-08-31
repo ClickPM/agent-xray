@@ -56,6 +56,20 @@
       Turn 1 会从中间截断。长会话尚无「按 turn 分页往回翻」的设计,设计稿也没有这个功能;
       需要时进功能提案 (2026-08-31)
 
+- [ ] R6 **改 baseUrl / 换默认模型不会到达「已在内存里」的会话**(codex 复审 P1 的残留一半,桩中转实测确认)。
+      原因是 pi 的 `getModel()` 返回的 `Model` 对象自带 `baseUrl`,`AgentSession` 从创建起一直拿着它;
+      重新注册 provider 只换 `ModelRuntime` 里的那份。**凭据这一半已修**(删 provider 后热会话下一轮
+      立即 503,实测),所以撤销没有缺口;剩下的是「所有者换了中转端点后,进行中的对话还会往旧端点
+      发几轮,直到空闲回收(15 分钟)或被逐出」。
+      能修:`AgentSession.setModel(freshModel)` 是 pi 的一等 API。但**要不要让进行中的对话中途换端点
+      甚至换模型是产品取舍**——换模型意味着同一轮对话前后半段出自不同模型,还会往访客的轨迹面板里
+      插一条 model_change。按 CLAUDE.md「审查不负责长出方案」,交所有者裁定,不在整改循环里定 (2026-08-31)
+- [ ] R6 `apps/web/lib/api-client.ts` 里的 Encore 应用 slug(如 `gbf6c` / `k2yas`)随**生成它的 checkout**
+      变化:`encore.app` 的 `id` 为空,本地 app 由 cwd 定位并分配随机 slug。只出现在 `Environment()` /
+      `PreviewEnv()` / User-Agent 三处,本项目自托管不用 Encore Cloud,功能无影响,但每次换 worktree
+      重新 `dev.ps1 gen` 都产生噪音 diff。给 `encore.app` 定一个固定 `id` 能消掉,但那会影响 daemon 的
+      本地 app 登记(与规则 1 的同机共用 daemon 有关),不顺手改 (2026-08-31)
+
 ## 功能提案(需所有者裁定)
 
 (空)
