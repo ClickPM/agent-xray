@@ -128,7 +128,23 @@
   唯一擦边项是**跨服务 import**:`spike/*` 编译期 import `agent/store`、`agent/events`——这条规则
   针对的是「调另一服务的端点」,此处是共享普通库模块;方向 `spike → agent` 是本轮特意调正的
   (agent 不反向依赖 spike,生产构建 `--services agent,system` 排除 spike 时不会漏带),spike 于 R4 删除。
-  为免后续轮次重蹈,已在 `AGENTS.md` 增加指向该 skill 的指针(AGENTS.md 本就是给审查者的指针文件)。
+  为免后续轮次重蹈,起初在 `AGENTS.md` 加了一行指向该 skill 的指针;**所有者否掉了这个做法**
+  (指针只是「请你去读」,不保证审查者真去读),改为**把 skill 目录镜像给 codex**。据此实测了
+  codex 的 skill 发现规则(仓库根放四个探针 skill,`codex exec` 让它枚举可用 skill 与加载路径):
+
+  | 候选目录 | codex 是否加载 |
+  |---|---|
+  | `.agents/skills/` | ✅ |
+  | `.codex/skills/` | ✅ |
+  | `.agent/skills/`(单数) | ❌ |
+  | `skills/`(裸) | ❌ |
+  | `.claude/skills/` | ❌(仓库里本来就有 8 个,一个都没进 codex) |
+
+  取 `.agents/skills/`(与 `AGENTS.md` 同一套厂商中立约定)。落地:`dev.ps1 skills` 子命令把
+  `.claude/skills` 镜像过去;权威副本仍是 `.claude/skills`(`skills-lock.json` 锁版本、
+  `npx -y skills update` 升级),**升级后必须重跑同步**,漏同步的表现是审查悄悄退回旧版清单、
+  不报错只少查东西——这条已写进 CLAUDE.md「本地开发」段。验证:同步后 `codex exec` 枚举,
+  8 个 encore skill 全部从 `.agents/skills/` 加载。
 - 复审第 3 轮(带 skill 指针,针对全轮次 diff):<待回填>
 
 ## 失败处理
