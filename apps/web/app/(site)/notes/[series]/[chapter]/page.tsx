@@ -1,9 +1,7 @@
 // 文章阅读页(设计稿画板 2c)。正文以标准 markdown 从 notes 服务取回,
 // 由 components/notes/Markdown 映射到画板既有的排版(规则 7)。
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { api } from "@/lib/api";
-import { ErrCode, isAPIError } from "@/lib/api-client";
+import { api, notFoundOnBadRoute } from "@/lib/api";
 import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
 import { isoDate, readingMinutes } from "@/lib/time";
@@ -31,10 +29,8 @@ export default async function ArticlePage({
 }) {
   const { series, chapter } = await params;
 
-  const data = await api.notes.getChapter(series, chapter).catch((err: unknown) => {
-    if (isAPIError(err) && err.code === ErrCode.NotFound) notFound();
-    throw err;
-  });
+  // 路由参数是访客可控的:认不出与形状不合法都渲染 404,真故障原样抛出。
+  const data = await api.notes.getChapter(series, chapter).catch(notFoundOnBadRoute);
 
   const toc = extractToc(data.contentMd);
   const pinned = data.label.toUpperCase() === "README";

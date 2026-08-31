@@ -1,8 +1,6 @@
 // 系列目录(设计稿画板 2b)。数据来自 notes 服务;样式与拆分前一致(规则 7)。
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { api } from "@/lib/api";
-import { ErrCode, isAPIError } from "@/lib/api-client";
+import { api, notFoundOnBadRoute } from "@/lib/api";
 import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
 import { relTime, tenThousand } from "@/lib/time";
@@ -14,12 +12,8 @@ export const dynamic = "force-dynamic";
 export default async function SeriesPage({ params }: { params: Promise<{ series: string }> }) {
   const { series } = await params;
 
-  // 只有后端明确回 not_found 才渲染 404;网络/后端故障必须原样抛出,
-  // 否则一次 api 挂掉会被整站伪装成"这些系列不存在"。
-  const data = await api.notes.getSeries(series).catch((err: unknown) => {
-    if (isAPIError(err) && err.code === ErrCode.NotFound) notFound();
-    throw err;
-  });
+  // 路由参数是访客可控的:认不出与形状不合法都渲染 404,真故障原样抛出。
+  const data = await api.notes.getSeries(series).catch(notFoundOnBadRoute);
 
   const now = Date.now();
   const pinned = data.chapters.find((c) => c.pinned);
