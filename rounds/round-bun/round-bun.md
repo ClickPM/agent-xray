@@ -101,7 +101,17 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 
 整改验证:`bash -n` ✅;migrate.sh 六条失败路径行为测试全过(未知参数/多余参数/无 .env/latest/命令注入不执行/引号值解析);dev.ps1 BOM 完好且带参实跑 ✅;`docker compose config -q` ✅;`dev.ps1 check` ✅、`dev.ps1 test` 16/16 ✅。
 
-- 复审(缺陷门禁):待整改 commit 后执行,结果回填于下。
+### 复审(缺陷门禁)
+
+**复审第 1 轮**(2026-08-31,整改 commit `1047b70` 后,`/codex:review` 前台):**上一轮 4 P1 + 4 P2 全部未再出现,阻塞级 findings 清零**;新报 3 条 P2,全部采纳(仍为最小改动):
+
+| # | 级别 | finding | 处理 |
+|---|---|---|---|
+| 1 | P2 | migrate.sh 并发执行竞态:两个执行者可同读旧版本、重复应用迁移(DML 类会重复/损坏数据) | **采纳(改判断)**:事务内加 `pg_advisory_xact_lock` 串行化 + 锁下版本复核(不符即 RAISE 中止);循环内 `current` 随应用推进。在真实 postgres 上实测:首次应用成功,携带过期预期的第二执行者被中止且完整回滚 |
+| 2 | P2 | 本机 bun 版本(1.3.14)≠ 钉版本(1.4.0),`packageManager` 只选运行时不校验版本,测试门禁可能跑在非钉版运行时上 | **采纳(改判断+改文案)**:`dev.ps1 test` 检测漂移并告警(不阻断);CLAUDE.md 钉版本表补「本机解释器也要对齐」。环境侧待办:本机 `npm i -g bun@1.4.0` |
+| 3 | P2 | ROUNDS.md R9 拆解残留一处 `docker save \| ssh \| docker load` 管道写法(与本轮已修正的 P1-3 同因) | **采纳(改文案)**:改为文件流并注明原因;全仓 grep 确认无其余残留 |
+
+**复审第 2 轮**:待第 1 轮整改 commit 后执行,结果回填于下。
 
 **建议审查者重点看**:① `dev.ps1 build` 的 `--services` 白名单是维护热点——R4/R5/R7/R8 新增服务时漏改会静默 404;② `stop_grace_period 40s` 与 `graceful_shutdown.total 30s` 的配比在 SSE 长连接下是否够;③ compose 里 `${IMAGE_TAG:?}` 的强制是否会卡住某些正常运维路径;④ 「先迁移后起服务」的顺序在文档/compose/脚本三处是否已完全一致。
 

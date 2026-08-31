@@ -79,7 +79,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 | 依赖 | 版本 | 说明 |
 |---|---|---|
 | `@earendil-works/pi-coding-agent` | **0.84.3**(exact,lockfile 固定) | pi SDK 本体(`createAgentSession`/`defineTool`/扩展系统都在这个包);R1 实测通过。升级前先在本地过一遍 34 事件兼容性(`docs/security.md` §7) |
-| **bun** | **1.4.0** | 唯一 JS 运行时(规则 11)。三处必须同版本:`apps/web/Dockerfile` 的两个 `FROM oven/bun:1.4.0-slim`、`dev.ps1` 的 `$bunBase`、`apps/api/package.json` 的 `packageManager`。升级时四处一起改,并重跑 R-BUN 验收(尤其内存基线——bun 用 JSC 堆,RSS 语义与 V8 不同) |
+| **bun** | **1.4.0** | 唯一 JS 运行时(规则 11)。三处必须同版本:`apps/web/Dockerfile` 的两个 `FROM oven/bun:1.4.0-slim`、`dev.ps1` 的 `$bunBase`、`apps/api/package.json` 的 `packageManager`。升级时四处一起改,并重跑 R-BUN 验收(尤其内存基线——bun 用 JSC 堆,RSS 语义与 V8 不同)。**本机 bun 解释器也要对齐**(`packageManager` 只选运行时不校验版本,`dev.ps1 test` 对漂移会告警;对齐:`npm i -g bun@1.4.0`) |
 | **encore CLI** | **1.57.13** | `bun-runtime` 实验位在该版本已可用(二进制内含 `bun-runtime` 字面量,实测)。升级前确认实验位未改名/未移除,且同机共用 daemon 的 ticketBookingB2B 不受影响 |
 
 ## 本地开发

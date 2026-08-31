@@ -36,6 +36,17 @@ $encore = "$HOME\.encore\bin\encore.exe"
 # 版本与 CLAUDE.md「钉版本」表保持一致。
 $bunBase = "oven/bun:1.4.0-slim"
 
+# 本机 bun 解释器也应与钉版本一致:packageManager 字段只让 encore test 选中 bun,
+# **不校验版本**——本机装了别的版本,测试门禁就跑在与生产镜像不同的运行时上。
+# 这里只告警不阻断(codex 复审 2026-08-31 P2);对齐方式:npm i -g bun@<钉版本>。
+$bunPinned = ($bunBase -split ':')[1] -replace '-slim$', ''
+function Warn-BunDrift {
+    $localBun = (& bun --version 2>$null)
+    if ($localBun -and $localBun.Trim() -ne $bunPinned) {
+        Write-Warning "本机 bun $($localBun.Trim()) ≠ 钉版本 $bunPinned(CLAUDE.md 钉版本表)——测试/运行将使用非钉版运行时。对齐:npm i -g bun@$bunPinned"
+    }
+}
+
 # 打进公网镜像的服务白名单。spike 是 R1 验证脚手架(无认证、无限额、真实 LLM 端点),
 # 绝不能进预发/生产镜像;--services 是构建期硬门禁,实测可让 /spike/* 返回 404。
 # ⚠️ R4/R5/R7/R8 新增 trace / notes / admin / metrics 服务时必须在这里补名字,
@@ -43,7 +54,7 @@ $bunBase = "oven/bun:1.4.0-slim"
 $hostedServices = "agent,system"
 
 switch ($Cmd) {
-    "test"  { & $encore test @args }
+    "test"  { Warn-BunDrift; & $encore test @args }
     "check" { & $encore check }
     "gen"   { & $encore gen client --output ../web/lib/api-client.ts --env local }
     "db"    { & $encore db shell @args }

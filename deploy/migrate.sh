@@ -136,14 +136,24 @@ for dir in "${MIG_DIRS[@]}"; do
 
     echo "  应用 v$ver  $base"
     # 单事务:SQL 与版本推进同生共死。失败则整体回滚,版本号不动,可直接重跑。
+    # 并发保护(codex 复审 2026-08-31 P2):advisory 事务锁串行化所有执行者,
+    # 锁下复核版本——若另一执行者已推进版本,RAISE 中止本事务而不是重复应用。
+    # 锁 key 为任取的项目常数,随事务结束自动释放,不需要手动解锁。
     {
       echo "BEGIN;"
+      echo "SELECT pg_advisory_xact_lock(823567001);"
+      echo 'DO $mig$ BEGIN'
+      echo "  IF (SELECT COALESCE(MAX(version), 0) FROM schema_migrations) <> $current THEN"
+      echo "    RAISE EXCEPTION '并发迁移: schema_migrations 当前版本与预期 $current 不符,另一执行者可能正在迁移';"
+      echo "  END IF;"
+      echo 'END $mig$;'
       printf '%s\n' "$sql"
       echo "DELETE FROM schema_migrations;"
       echo "INSERT INTO schema_migrations (version, dirty) VALUES ($ver, false);"
       echo "COMMIT;"
     } | docker compose exec -T postgres psql -U app -d agent -v ON_ERROR_STOP=1 -q \
       || die "v$ver 应用失败,已回滚(版本号仍为 $current)。修好后重跑本脚本。"
+    current="$ver"
   done
 
   if (( pending == 0 )); then

@@ -115,7 +115,7 @@
 
 - 数据库迁移已由 R-BUN 的 `deploy/migrate.sh` 解决(所有者裁定方案一);R9 只需把它纳入部署流程文档与冒烟清单
 - `agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色 + 仅 SELECT `notes_*` 授权(R6 建表后补授权的顺序写进文档)
-- 130 部署流程文档 + 脚本:`dev.ps1 build` → `docker save | ssh | docker load` → 130 上按**先迁移后起服务**的顺序(`up -d --wait postgres` → `./migrate.sh` → `up -d`),避免「健康检查全绿但业务接口 500」的中间状态
+- 130 部署流程文档 + 脚本:`dev.ps1 build` → 文件方式传输(`docker save -o` → `scp` → `docker load -i`;**勿在 PowerShell 用管道直传,二进制会被文本重编码破坏**)→ 130 上按**先迁移后起服务**的顺序(`up -d --wait postgres` → `./migrate.sh` → `up -d`),避免「健康检查全绿但业务接口 500」的中间状态;升级另需先 `docker compose stop api web`(见 docs/deploy-environments.md「升级顺序」)
 - 预发全链路验证:三 Tab + /admin + 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / **最终运行镜像**内无 node / `/spike/*` 404 / postgres 仅 `back` 网段可达)
 - **服务白名单核验**:`dev.ps1 build` 的 `--services` 是维护热点——冒烟时必须逐个确认**当前已落地的正式 service 端点都可达**(不只是 `/health`),漏改的表现是镜像构建正常、健康检查正常、而该服务端点静默 404
 - **SSE 冒烟需等 R3/R4**:两条 SSE 目前只在 spike 里,而 spike 已被 `--services` 排除出镜像;正式端点落地后再补「心跳 15s、断线重连 `afterSeq` 回放、`docker compose stop api` 时客户端收到明确断流而非静默挂起、SSE 脱敏抽查」这组验证
