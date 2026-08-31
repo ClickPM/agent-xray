@@ -84,7 +84,7 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 ## 代码审查
 
 - 审查方式:`/codex:review`(branch diff vs `main`),2026-08-31。`--background` 模式两次因宿主进程中断/companion 提前退出而失败,改前台 `--wait` 完成(job `review-mtglxzwh-d1o97v`);非 codex 硬失败,未降级。
-- 本机 Windows 复核(PR 存档注明 dev.ps1 未在 Windows 实跑):`dev.ps1 check` ✅;`dev.ps1 test` 16/16 ✅(实证经 `bun --bun vitest` 执行);`dev.ps1 build` 冒烟见收口记录。本机 bun 1.3.14 与钉版本 1.4.0 不一致——不影响镜像(基座由 `--base` 钉死),仅本机脚本执行器版本,建议 `bun upgrade` 对齐。
+- 本机 Windows 复核(PR 存档注明 dev.ps1 未在 Windows 实跑):`dev.ps1 check` ✅;`dev.ps1 test` 16/16 ✅(实证经 `bun --bun vitest` 执行)。`dev.ps1 build` 跑到「api 编译完成、镜像写入 daemon 中」被所有者叫停(2026-08-31:等真部署时再构建)——脚本侧已验证的部分:脏工作区拒绝、git SHA tag、`encore build docker --config/--base/--services` 正确发起、linux/amd64 交叉编译成功、基座从本地 daemon 解析;**镜像落地与 web 构建顺延到首次真实部署(R9 前置步骤)**。另:encore 拉基座**不走 docker daemon 的 registry mirror**,国内网络下要先 `docker pull oven/bun:1.4.0-slim` 再 `dev.ps1 build`,已实测。本机 bun 1.3.14 与钉版本 1.4.0 不一致——不影响镜像(基座由 `--base` 钉死),仅本机脚本执行器,`dev.ps1 test` 已加漂移告警,对齐:`npm i -g bun@1.4.0`。
 
 ### findings 处理(4 P1 + 4 P2,全部采纳,均为最小改动,无新增机制)
 

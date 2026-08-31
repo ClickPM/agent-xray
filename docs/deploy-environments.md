@@ -35,6 +35,8 @@
    该命令做三件事:拒绝在脏工作区构建 → `encore build docker --config deploy/infra-config.json --base oven/bun:1.4.0-slim --services agent,system` 出 api 镜像 → `docker build apps/web` 出 web 镜像。两个 tag 都是 git 短 SHA。
 
    > ⚠️ `--base` 不能省。Encore 开启 `bun-runtime` 后会把镜像 ENTRYPOINT 改成 `bun run …`,却仍按默认基座 `node:slim` 打包,产出的镜像里没有 bun,`docker run` 直接报 `exec: "bun": executable file not found in $PATH`。`encore.app` 里的 `build.docker.base_image` 对本地构建**无效**(只对 Encore 自家 CI/CD 生效)。已固化进 `dev.ps1 build`,不要手敲 `encore build docker`。
+   >
+   > ⚠️ 构建前先 `docker pull oven/bun:1.4.0-slim`。encore 发现本地没有基座时会**自己直连 Docker Hub 拉取,不走 docker daemon 的 registry mirror**——境内网络下会卡住几十分钟(实测 2026-08-31);daemon 侧 `docker pull` 正常,拉好后 encore 直接用本地镜像。
 
 2. **镜像传输**:走文件,不走管道——**Windows PowerShell 5.1 的管道按文本重编码,`docker save … | ssh … docker load` 会把二进制 tar 破坏掉**(远端 load 报 unexpected EOF 之类):
 
