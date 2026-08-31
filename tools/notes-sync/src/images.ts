@@ -107,7 +107,11 @@ export class ImagePipeline {
     return `/notes/${key}`;
   }
 
-  /** 全部改写完成后统一落盘;顺带清掉本轮不再被引用的旧文件(幂等的另一半) */
+  /**
+   * 全部改写完成后统一落盘。**只写不删**:清理孤儿要等持久化成功
+   * (codex review 2026-08-31 第 2 轮 P2)。先删后写库的话,一旦入库或产 SQL 失败,
+   * 图片已经没了而库里的正文还指着它们,页面直接变破图,得等下次成功同步才恢复。
+   */
   async flush(): Promise<ImageReport> {
     const report: ImageReport = {
       referenced: this.referenced,
@@ -145,8 +149,12 @@ export class ImagePipeline {
       report.bytesOut += statSync(outPath).size;
     }
 
-    report.removedOrphans = this.removeOrphans();
     return report;
+  }
+
+  /** 持久化成功之后再调:删掉本轮没有被任何正文引用的旧文件 */
+  cleanupOrphans(): number {
+    return this.removeOrphans();
   }
 
   /** 删除 public/notes/ 下本轮没有被引用的文件与空目录 */

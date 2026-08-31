@@ -3,7 +3,10 @@
 // 幂等靠三件事(ROUNDS.md R5 验收 1「重跑不产生重复数据」):
 //   1. 业务键 (series_slug, slug) 唯一,插入走 ON CONFLICT;
 //   2. content_hash 覆盖正文 + 参与展示的全部元数据,一致就不写(报告里才能出「更新 0」);
-//   3. 本轮没出现的章节按系列 DELETE —— vault 删了文件,站点跟着下线,不留幽灵页。
+//   3. 本轮没出现的章节按系列 DELETE —— vault 删了文件,站点跟着下线,不留幽灵页;
+//      **系列与分类同理**:只删章节的话,manifest 里去掉或改名的系列会以一张空卡片
+//      继续挂在首页上(改名还会新旧两张并存),因为 /notes/series 直接读 notes_series
+//      (codex review 2026-08-31 第 2 轮 P2)。
 
 import { Client } from "pg";
 import type { CategorySpec } from "./manifest.ts";
@@ -44,6 +47,9 @@ export interface WriteReport {
   updated: number;
   deleted: number;
   unchanged: number;
+  /** manifest 里已移除、本次一并下线的系列 / 分类 */
+  seriesRemoved: number;
+  categoriesRemoved: number;
 }
 
 // ───────────────────── 直连目标库 ─────────────────────
@@ -51,7 +57,10 @@ export interface WriteReport {
 export async function applyToDatabase(dsn: string, desired: Desired): Promise<WriteReport> {
   const client = new Client({ connectionString: dsn });
   await client.connect();
-  const report: WriteReport = { inserted: 0, updated: 0, deleted: 0, unchanged: 0 };
+  const report: WriteReport = {
+    inserted: 0, updated: 0, deleted: 0, unchanged: 0,
+    seriesRemoved: 0, categoriesRemoved: 0,
+  };
   try {
     await client.query("BEGIN");
 
@@ -115,6 +124,18 @@ export async function applyToDatabase(dsn: string, desired: Desired): Promise<Wr
       report.deleted++;
     }
 
+    // 章节删干净之后再收元数据(外键方向 chapters -> series -> categories)
+    const goneSeries = await client.query(
+      "DELETE FROM notes_series WHERE NOT (slug = ANY($1::text[]))",
+      [desired.series.map((x) => x.slug)],
+    );
+    report.seriesRemoved = goneSeries.rowCount ?? 0;
+    const goneCats = await client.query(
+      "DELETE FROM notes_categories WHERE NOT (slug = ANY($1::text[]))",
+      [desired.categories.map((c) => c.slug)],
+    );
+    report.categoriesRemoved = goneCats.rowCount ?? 0;
+
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -169,6 +190,13 @@ export function emitSql(desired: Desired): string {
     keys.length > 0
       ? `DELETE FROM notes_chapters WHERE (series_slug, slug) NOT IN (${keys.join(", ")});`
       : "DELETE FROM notes_chapters;",
+  );
+  // 与 applyToDatabase 同口径:章节之后收元数据,否则被移除的系列会留一张空卡片
+  out.push(
+    `DELETE FROM notes_series WHERE slug NOT IN (${desired.series.map((x) => lit(x.slug)).join(", ")});`,
+  );
+  out.push(
+    `DELETE FROM notes_categories WHERE slug NOT IN (${desired.categories.map((c) => lit(c.slug)).join(", ")});`,
   );
   out.push("COMMIT;", "");
   return out.join("\n");

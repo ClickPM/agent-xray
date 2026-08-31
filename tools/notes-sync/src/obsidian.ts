@@ -30,6 +30,8 @@ export interface RewriteReport {
   unresolvedLinks: Map<string, number>;
   /** 丢弃的图片引用 */
   droppedImages: string[];
+  /** 降级成链接的远程图片(不内嵌,见 renderImage) */
+  remoteImages: string[];
   /** 改写后仍残留、渲染时会被转义成字面量的裸 HTML 标签 */
   residualHtml: string[];
   resolvedLinks: number;
@@ -41,6 +43,7 @@ export function emptyReport(): RewriteReport {
   return {
     unresolvedLinks: new Map(),
     droppedImages: [],
+    remoteImages: [],
     residualHtml: [],
     resolvedLinks: 0,
     callouts: 0,
@@ -204,10 +207,80 @@ function rewriteInline(text: string, ctx: RewriteContext, report: RewriteReport)
   let s = text;
   s = rewriteImages(s, ctx, report);
   s = rewriteWikiLinks(s, ctx, report);
+  s = rewriteRelativeLinks(s, ctx, report);
   s = rewriteHighlights(s, report);
   s = rewriteRawHtml(s, report);
   s = stripInlineTags(s);
   return s;
+}
+
+/**
+ * 普通 markdown 链接里的**相对目的地**,套用与 wikilink 完全相同的策略:
+ * 能解析到站内章节就改写成 `/notes/…`,解析不了就降级成纯文本。
+ *
+ * 为什么必须管:实测库里有 66 处这种链接,其中只有 2 处真指向 vault 内的文章
+ * (`第9章-….md`),其余全是被拆解仓库的源码路径(`repo/packages/…/runner.ts`、
+ * `./docs/typescript/…`)—— 教程正文里它们是"这段代码在哪"的说明,不是站点导航。
+ * 原样渲染出去就是 66 个点了会 404 的链接。
+ *
+ * 不碰的:http(s)、mailto、站内绝对路径 `/…`、纯锚点 `#…`(那是本页跳转)。
+ */
+function rewriteRelativeLinks(text: string, ctx: RewriteContext, report: RewriteReport): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const start = text.indexOf("[", i);
+    // `![` 是图片,前一轮已经处理过;`[[` 是 wikilink,同理
+    if (start < 0 || text[start + 1] === "[") {
+      out += start < 0 ? text.slice(i) : text.slice(i, start + 2);
+      if (start < 0) break;
+      i = start + 2;
+      continue;
+    }
+    if (start > 0 && text[start - 1] === "!") {
+      out += text.slice(i, start + 1);
+      i = start + 1;
+      continue;
+    }
+
+    const textEnd = text.indexOf("]", start + 1);
+    if (textEnd < 0 || text[textEnd + 1] !== "(") {
+      out += text.slice(i, start + 1);
+      i = start + 1;
+      continue;
+    }
+    const destEnd = matchParen(text, textEnd + 1);
+    if (destEnd < 0) {
+      out += text.slice(i, start + 1);
+      i = start + 1;
+      continue;
+    }
+
+    const label = text.slice(start + 1, textEnd);
+    const dest = text.slice(textEnd + 2, destEnd).trim();
+    out += text.slice(i, start);
+    out += renderRelativeLink(label, dest, ctx, report);
+    i = destEnd + 1;
+  }
+  return out;
+}
+
+function renderRelativeLink(
+  label: string,
+  dest: string,
+  ctx: RewriteContext,
+  report: RewriteReport,
+): string {
+  const keep = () => `[${label}](${dest})`;
+  if (!dest || /^(https?:|mailto:|tel:|\/|#)/i.test(dest)) return keep();
+
+  const target = ctx.resolveLink(dest.split("#")[0], ctx);
+  if (target) {
+    report.resolvedLinks++;
+    return `[${label}](/notes/${target.seriesSlug}/${target.chapterSlug})`;
+  }
+  report.unresolvedLinks.set(dest, (report.unresolvedLinks.get(dest) ?? 0) + 1);
+  return label;
 }
 
 /**
@@ -270,7 +343,16 @@ function matchParen(text: string, open: number): number {
 function renderImage(alt: string, dest: string, ctx: RewriteContext, report: RewriteReport): string {
   // 目的地里可能带 CommonMark 的可选 title(`路径 "标题"`),本仓内容没有用到,直接丢
   const url = dest.replace(/\s+"[^"]*"$/, "");
-  if (/^https?:\/\//i.test(url)) return `![${alt}](${url})`;
+
+  // 远程图原样内嵌。codex 第 2 轮把它报成 P1(内嵌会把访客请求暴露给第三方,
+  // 且 twimg 防盗链、知识星球要鉴权,图本身多半加载不出来),实测 53 张 / 14 章。
+  // **所有者 2026-08-31 裁定不在管线上处理**:根因是 vault 里引用了远程图,
+  // 以后写文章一律把 PNG 存进 vault,远程引用会从源头消失 —— 不为此新增
+  // 「降级成链接」或「构建期镜像」的机制。存量的 53 张随内容更新自然收敛。
+  if (/^https?:\/\//i.test(url)) {
+    report.remoteImages.push(url);
+    return `![${alt}](${url})`;
+  }
   const mapped = ctx.resolveImage(safeDecode(url), ctx);
   if (!mapped) {
     report.droppedImages.push(`${ctx.dir}/${url}`);
@@ -351,9 +433,16 @@ function rewriteRawHtml(text: string, report: RewriteReport): string {
   return s;
 }
 
-/** 行内 `#标签`(实测 4 处)。标题的 `# ` 有空格,不会命中 */
+/**
+ * 行内 `#标签`(实测 4 处)。标题的 `# ` 有空格,不会命中。
+ *
+ * 前缀只认「行首或空白」—— 早先把 `(`、`(` 也算进前缀,结果把
+ * `[控制 subagent 的派生](#控制-subagent-的派生)` 里的锚点吃成了相对路径,
+ * 站内跳转直接跳走(codex review 2026-08-31 第 2 轮 P2)。真正的行内标签前面
+ * 不会紧跟左括号,收紧前缀是零代价的。
+ */
 function stripInlineTags(text: string): string {
-  return text.replace(/(^|[\s(（])#([一-龥A-Za-z][一-龥\w/-]*)/g, "$1$2");
+  return text.replace(/(^|\s)#([一-龥A-Za-z][一-龥\w/-]*)/g, "$1$2");
 }
 
 /** 改写会留下空行(丢弃的图片、注释),压成最多一个空行 */

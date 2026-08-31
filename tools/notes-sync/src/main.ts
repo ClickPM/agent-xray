@@ -403,9 +403,11 @@ ${ch.contentMd}`, "utf8");
   if (args.dryRun) {
     console.log("\n--dry-run:未写库、未写图片");
   } else {
+    // 先写图后写库:库里的正文一旦发布,它引用的图必须已经在磁盘上。
+    // 反方向的清理(删旧图)要等库写成功,见下面的 cleanupOrphans。
     const img = await images.flush();
     console.log(
-      `\n图片   : 引用 ${img.referenced} · 新写 ${img.written} · 复用 ${img.reused} · 清理 ${img.removedOrphans} · ` +
+      `\n图片   : 引用 ${img.referenced} · 新写 ${img.written} · 复用 ${img.reused} · ` +
         `${mb(img.bytesIn)} → ${mb(img.bytesOut)}`,
     );
     if (img.missing.length) {
@@ -421,6 +423,16 @@ ${ch.contentMd}`, "utf8");
     if (args.dsn) {
       const w = await applyToDatabase(args.dsn, desired);
       console.log(`入库   : 新增 ${w.inserted} · 更新 ${w.updated} · 未变 ${w.unchanged} · 删除 ${w.deleted}`);
+      if (w.seriesRemoved || w.categoriesRemoved) {
+        console.log(`         下线系列 ${w.seriesRemoved} · 下线分类 ${w.categoriesRemoved}`);
+      }
+    }
+
+    // 持久化成功之后才清理孤儿图:中途失败时旧图还在,现网页面不会变破图
+    const removed = images.cleanupOrphans();
+    if (removed) console.log(`清理   : 移除不再被引用的图片 ${removed} 张`);
+
+    if (args.dsn) {
       // 入库后立刻自检:改写规则的回归靠它兜,不指望人每次去读长报告
       if (!(await verify(args.dsn))) die("同步已写入,但自检未通过 —— 按 FAIL 行定位后修改写规则再同步");
     }
@@ -503,6 +515,24 @@ function printRewriteReport(report: RewriteReport, chapters: ChapterRow[]): void
     for (const [t, n] of unresolved.slice(0, 12)) console.log(`    ${String(n).padStart(3)}×  ${t}`);
     console.log("  这些多是 vault 里的工作笔记与未收录素材;若其中有该发布的内容,补进 manifest 再同步。");
   }
+  if (report.remoteImages.length) {
+    const hosts = new Map<string, number>();
+    for (const u of report.remoteImages) {
+      let h = "(无法解析)";
+      try {
+        h = new URL(u).host;
+      } catch {
+        // 保持默认
+      }
+      hosts.set(h, (hosts.get(h) ?? 0) + 1);
+    }
+    const brief = [...hosts].sort((a, b) => b[1] - a[1]).map(([h, n]) => `${h}×${n}`).join(" · ");
+    console.log(`
+远程图 : ${report.remoteImages.length} 张仍指向第三方(${brief})`);
+    console.log("  它们不经本地图片管线:依赖第三方可用性,且会把访客请求暴露给对方。");
+    console.log("  所有者裁定 2026-08-31:在 vault 侧改存本地 PNG 从源头消除,管线不做降级。");
+  }
+
   const residual = [...new Set(report.residualHtml)];
   if (residual.length) {
     console.log(`\n⚠ 围栏外残留 ${residual.length} 种裸 HTML(渲染时会被转义成字面量): ${residual.slice(0, 8).join(" ")}`);
