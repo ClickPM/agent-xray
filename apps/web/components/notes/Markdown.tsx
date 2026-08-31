@@ -24,12 +24,49 @@ const inlineCode: CSSProperties = {
 const para: CSSProperties = { fontSize: 14, lineHeight: 1.7, marginTop: 12, marginBottom: 0 };
 
 /**
- * 目录锚点 id。**只按出现序号**,不掺标题文本:目录侧看到的是 markdown 原文
- * (`## [x](y)`),渲染侧看到的是解析后的文本(`x`),掺文本会让两边算出不同的 id,
- * 锚点静默失效。序号两边都是「跳过围栏后的第 n 个 h2」,必然一致。
+ * 标题锚点 id:标题可见文本的 slug(GitHub / Obsidian 那一套)。
+ *
+ * 早先用的是 `h-0`/`h-1` 这种出现序号,好处是目录与渲染器不可能算出不同的值;
+ * 坏处有两个,都被审查抓到了:
+ *  - 正文里**已有的** `[见](#控制-subagent-的派生)` 永远找不到目标,点了没反应;
+ *    这不是 vault 的锅 —— 标准 markdown 就该这么写,是渲染器没给出标题 slug;
+ *  - 序号一旦两边数得不一样(引用块内 H2、Setext H2),后面**所有**锚点一起错位。
+ * 换成文本 slug 后,最坏情况退化成"某一条目录项对不上",不再是整体错位。
  */
-export function headingId(index: number): string {
-  return `h-${index}`;
+function slugify(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** 同名标题按出现次序加后缀,与 GitHub 一致;两侧各自从头计数,结果相同 */
+function uniqueId(seen: Map<string, number>, text: string): string {
+  const base = slugify(text) || "section";
+  const n = seen.get(base) ?? 0;
+  seen.set(base, n + 1);
+  return n === 0 ? base : `${base}-${n}`;
+}
+
+/** 把标题里的行内 markdown 压成可见文本:`## [x](y)` 的目录项该是 `x` 而不是 `[x](y)` */
+function headingText(raw: string): string {
+  return raw
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[\[([^\]|]*)\|?([^\]]*)\]\]/g, (_m, a: string, b: string) => b || a)
+    .replace(/[*_`~]/g, "")
+    .trim();
+}
+
+/** 渲染后的 React 子树 → 纯文本,用于给标题算 id */
+function textOf(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  const el = node as { props?: { children?: ReactNode } };
+  return el.props ? textOf(el.props.children) : "";
 }
 
 /**
@@ -38,8 +75,8 @@ export function headingId(index: number): string {
  */
 export function extractToc(md: string): { id: string; text: string }[] {
   const out: { id: string; text: string }[] = [];
+  const seen = new Map<string, number>();
   let fence: string | null = null;
-  let i = 0;
   for (const line of md.split(/\r?\n/)) {
     const f = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
     if (fence) {
@@ -52,16 +89,16 @@ export function extractToc(md: string): { id: string; text: string }[] {
     }
     const m = /^\s{0,3}##\s+(.+?)\s*$/.exec(line);
     if (m) {
-      const text = m[1].replace(/[*_`]/g, "").trim();
-      out.push({ id: headingId(i++), text });
+      const text = headingText(m[1]);
+      out.push({ id: uniqueId(seen, text), text });
     }
   }
   return out;
 }
 
 export function Markdown({ children }: { children: string }) {
-  // h2 的 id 要和 extractToc 编号一致,这里用同一个计数器按出现顺序发号
-  let h2Index = 0;
+  // 与 extractToc 共用同一套 slug + 同名去重规则,两边各自从头计数即可对齐
+  const seen = new Map<string, number>();
 
   return (
     <ReactMarkdown
@@ -72,7 +109,7 @@ export function Markdown({ children }: { children: string }) {
         ),
         h2: ({ children }) => (
           <h2
-            id={headingId(h2Index++)}
+            id={uniqueId(seen, textOf(children))}
             style={{ fontSize: 16, fontWeight: 650, marginTop: 30, marginBottom: 0, scrollMarginTop: 16 }}
           >
             {children}
