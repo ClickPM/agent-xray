@@ -36,10 +36,9 @@ RUN groupadd -g 10001 app && useradd -u 10001 -g 10001 -m -s /usr/sbin/nologin a
 
 COPY --from=builder --chown=10001:10001 /app/.next/standalone ./
 COPY --from=builder --chown=10001:10001 /app/.next/static ./.next/static
-# 注意:apps/web 当前没有 public/ 目录,故此处不 COPY。
-# 将来引入静态资源(如 P1-4 的自托管字体 woff2)时,必须在这里补一行:
-#   COPY --from=builder --chown=10001:10001 /app/public ./public
-# (经典 docker builder 不支持 `publi[c]` 通配兜底,会直接 "no source files were specified")
+# public/ 自 R5 起有内容:notes 正文里的图片(tools/notes-sync 压缩后的 WebP/SVG,
+# 约 6.5MB)。漏掉这行的表现是页面正常、图片全 404。
+COPY --from=builder --chown=10001:10001 /app/public ./public
 
 USER 10001:10001
 EXPOSE 3000

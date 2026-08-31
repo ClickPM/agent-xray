@@ -4,8 +4,9 @@
 // 右栏三视图(Timeline / Chain View / Lifecycle Map)在 R4 切到 /api/trace/stream,
 // 对应的演示数据已随之删除,投影逻辑见 lib/trace-view.ts。
 // 这里剩下的是尚未接后端的部分:统计条的 tokens/cost/ctx(R7/R8 计量)、
-// 空状态引导语、Notes / About / Admin 三块(R5 / R7 / R8)。
-import type { Chapter, NoteCategory, RepoCard, ToolRow } from "./types";
+// 空状态引导语、About / Admin 两块(R7 / R8)。
+// Notes 三块页面已在 R5 切到 /api/notes/*,演示数据随之删除。
+import type { RepoCard, ToolRow } from "./types";
 
 // 顶栏统计条:events 已由真实轨迹流计数(R4),其余三项等 R7/R8 的计量与限额
 export const statsBar = {
@@ -21,83 +22,8 @@ export const suggestions = [
 ];
 
 // ───────────────────── Notes ─────────────────────
-
-export const noteCats: NoteCategory[] = [
-  {
-    name: "产品经理",
-    slug: "pm",
-    dot: "#2563eb",
-    cards: [
-      { slug: "agent-basics", name: "Agent 基础知识", desc: "从能力盘点到综合项目的 14 阶段学习路线,含术语表与外部权威资料索引", meta: "14 阶段 · 更新于 2d ago" },
-      { slug: "ai-native-swe", name: "AI native 软件工程教程", desc: "为什么 vibe coding 不可以?AI 时代如何快速学习一项技术", meta: "7 讲 · 更新于 5d ago" },
-      { slug: "sharing", name: "内容分享", desc: "四大 Agent Harness 对比、pi 实战、karpathy 的 LLM-wiki 方法论与我们的实践", meta: "5 个专题 · 更新于 1w ago" },
-    ],
-  },
-  {
-    name: "源码拆解",
-    slug: "deep-dive",
-    dot: "#16a34a",
-    cards: [
-      { slug: "claude-code-harness", name: "Claude Code Harness", desc: "从混淆源码逆向一个闭源 harness:上下文预算才是架构主线", meta: "15 章 · 更新于 3d ago" },
-      { slug: "codex-harness", name: "Codex Harness", desc: "102 个 crate 的单二进制:SQEQ 队列、模型判官审批、四套沙箱", meta: "15 章 · 更新于 1w ago" },
-      { slug: "deepseek-harness", name: "DeepSeek Harness", desc: "一切皆插件:cordis 底座、Seam 架构、fail-closed 权限四层防线", meta: "13 章 · 更新于 1w ago" },
-      { slug: "pi", name: "Pi", desc: "最小可懂的 agent 内核:事件驱动、扩展系统、会话分叉", meta: "13 章 · 更新于 2w ago" },
-      { slug: "harness-engineering", name: "Harness Engineering", desc: "横向研究报告:四种 harness 哲学对照", meta: "研究报告 · 更新于 2w ago" },
-    ],
-  },
-  {
-    name: "代码工程",
-    slug: "engineering",
-    dot: "#f9c22e",
-    cards: [
-      { slug: "rust-bible", name: "Rust 语言圣经", desc: "所有权到 Tokio Mini-Redis:写出可靠高性能 Rust 的完整路径", meta: "15 章 · 更新于 1w ago" },
-      { slug: "typescript-deep", name: "TypeScript 深度教程", desc: "类型建模、infer、Monorepo 到发布策略的 18 章深潜", meta: "18 章 · 更新于 2w ago" },
-      { slug: "encore", name: "Encore", desc: "Encore.ts 研究摘要:声明式后端与自动 infra", meta: "研究摘要 · 更新于 3w ago" },
-    ],
-  },
-  {
-    name: "AI 前沿",
-    slug: "frontier",
-    dot: "#8b5cf6",
-    cards: [
-      { slug: "ai-blog-archive", name: "大厂技术博客档案", desc: "Anthropic / OpenAI / DeepMind / LangChain 精选文章中译 + takeaways", meta: "120+ 篇 · 更新于 1d ago" },
-      { slug: "ai-blog-index", name: "AI 技术博客索引", desc: "按公司与日期组织的全量索引,持续增量抓取", meta: "索引 · 每周更新" },
-    ],
-  },
-];
-
-export const latestLine =
-  "最新 · Improving Deep Agents With Harness Engineering · Designing Agents to Resist Prompt Injection · How We Monitor Internal Coding Agents for Misalignment";
-
-const chTitles = [
-  "开篇 — Claude Code Harness 总览", "工程骨架 — 一个 npm 包里的 AgentOS", "Agent Loop — query 这一个循环",
-  "模型调用与缓存经济学", "系统提示词 — 一个可编排的装配架构", "附件与 system-reminder — 第二条注入通道",
-  "上下文压缩 — 五层防线", "工具系统 — 47 个成员的接口与延迟加载", "工具执行链 — 一次调用要过多少道关",
-  "权限模型 — 六种模式与被外包的沙箱", "钩子系统 — 27 个事件的治理层", "Agent 调度 — fork 与 fresh 两条路",
-  "内建 Agent — 专业化分工与对抗式验证", "扩展面 — Skills / Plugins / MCP / Commands", "设计精华 — 四种 harness 哲学对照",
-];
-const chTimes = ["2w ago", "2w ago", "2w ago", "2w ago", "1w ago", "1w ago", "1w ago", "1w ago", "1w ago", "5d ago", "5d ago", "5d ago", "4d ago", "3d ago", "3d ago"];
-
-export const cchChapters: Chapter[] = chTitles.map((t, i) => ({
-  num: String(i + 1).padStart(2, "0"),
-  title: t,
-  time: chTimes[i],
-}));
-
-export const seriesMeta: Record<string, { name: string; cat: string; desc: string; meta: string }> = Object.fromEntries(
-  noteCats.flatMap((c) => c.cards.map((s) => [s.slug, { name: s.name, cat: c.name, desc: s.desc, meta: s.meta }])),
-);
-
-export const articleToc = ["一、循环在哪里", "二、一个 turn 的解剖", "三、流式事件如何冒泡", "四、循环怎么停下来", "五、小结"];
-
-export const rssBase = "agent-xray.dev";
-export const rssCats = [
-  { name: "全站更新", url: `${rssBase}/rss.xml`, dot: "#2563eb", main: true },
-  { name: "产品经理", url: `${rssBase}/rss/pm.xml`, dot: "#2563eb" },
-  { name: "源码拆解", url: `${rssBase}/rss/deep-dive.xml`, dot: "#16a34a" },
-  { name: "代码工程", url: `${rssBase}/rss/engineering.xml`, dot: "#f9c22e" },
-  { name: "AI 前沿", url: `${rssBase}/rss/frontier.xml`, dot: "#8b5cf6" },
-];
+// R5 起 Notes 三级页与 RSS 弹层已接 notes 服务(见 app/(site)/notes/**),
+// 演示数据整段移除,避免真假两份内容并存。
 
 // ───────────────────── About ─────────────────────
 

@@ -1,65 +1,41 @@
-"use client";
+// Notes 首页数据源(R5):真实 API 取代 demo-data,交互部分见 components/notes/NotesIndex。
+import { api } from "@/lib/api";
+import { rssDisplay, rssHref } from "@/lib/site";
+import { relTime } from "@/lib/time";
+import { NotesIndex, type IndexCategory } from "@/components/notes/NotesIndex";
+import type { RssCat } from "@/components/notes/RssModal";
 
-import Link from "next/link";
-import { useState } from "react";
-import { latestLine, noteCats } from "@/lib/demo-data";
-import { GhostButton } from "@/components/ui";
-import { mono } from "@/lib/styles";
-import { RssModal } from "@/components/notes/RssModal";
+// 内容随同步脚本变化,且 docker build 时后端不可达 —— 不允许构建期预渲染。
+export const dynamic = "force-dynamic";
 
-export default function NotesPage() {
-  const [rssOpen, setRssOpen] = useState(false);
-  return (
-    <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 32px 64px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 20, fontWeight: 650 }}>Notes · 研习笔记</div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>
-              从产品视角到源码拆解的 harness 工程研习库,全部内容提供 RSS 订阅。
-            </div>
-          </div>
-          <GhostButton height={32} style={{ width: 32, padding: 0 }} onClick={() => setRssOpen(true)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 11a9 9 0 0 1 9 9" />
-              <path d="M4 4a16 16 0 0 1 16 16" />
-              <circle cx="5" cy="19" r="1" />
-            </svg>
-          </GhostButton>
-        </div>
+export default async function NotesPage() {
+  const { categories, latest } = await api.notes.listSeries();
+  const now = Date.now();
 
-        {noteCats.map((cat) => (
-          <div key={cat.slug} style={{ marginTop: 32 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 4, background: cat.dot }} />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{cat.name}</span>
-              <span style={{ ...mono(11), color: "var(--text-dim)" }}>{cat.slug}</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
-              {cat.cards.map((c) => (
-                <Link
-                  key={c.slug}
-                  href={`/notes/${c.slug}`}
-                  style={{
-                    background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7,
-                    padding: 14, cursor: "pointer", boxSizing: "border-box", display: "block",
-                    color: "var(--text)", textDecoration: "none",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; e.currentTarget.style.borderColor = "var(--border)"; }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, marginTop: 5, minHeight: 38 }}>{c.desc}</div>
-                  <div style={{ ...mono(11), color: "var(--text-dim)", marginTop: 8 }}>{c.meta}</div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        ))}
+  const cats: IndexCategory[] = categories.map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    dot: c.dot,
+    cards: c.series.map((s) => ({
+      slug: s.slug,
+      name: s.name,
+      desc: s.description,
+      // 设计稿卡片副标题形如「15 章 · 更新于 3d ago」;空系列只说整理中
+      meta: s.chapterCount === 0 ? "整理中" : `${s.chapterCount} 章 · 更新于 ${relTime(s.updatedAt, now)}`,
+    })),
+  }));
 
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>{latestLine}</div>
-      </div>
-      <RssModal open={rssOpen} onClose={() => setRssOpen(false)} />
-    </div>
-  );
+  const latestLine = latest.length ? `最新 · ${latest.map((l) => l.title).join(" · ")}` : "";
+
+  const rssCats: RssCat[] = [
+    { name: "全站更新", url: rssDisplay(), href: rssHref(), dot: "#2563eb", main: true },
+    ...categories.map((c) => ({
+      name: c.name,
+      url: rssDisplay(c.slug),
+      href: rssHref(c.slug),
+      dot: c.dot,
+    })),
+  ];
+
+  return <NotesIndex categories={cats} latestLine={latestLine} rssCats={rssCats} />;
 }

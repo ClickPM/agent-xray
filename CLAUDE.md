@@ -28,7 +28,10 @@ design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token �
 deploy/       docker compose + Caddyfile(预发/生产共用;框架版,R9 定稿)
 docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署
 rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap 在根 ROUNDS.md
-.claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)+ MCP 启动脚本
+tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。
+              notes-sync:vault `学习分享/` → notes_* 表的内容同步管线(R5)
+.claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
+              + 自建 skill sync-notes(内容同步规程,R5)+ MCP 启动脚本
 .agents/      `.claude/skills` 的镜像,给 codex 审查者用(生成物,`dev.ps1 skills` 同步)。
               实测:codex 只认仓库级 `.agents/skills` 与 `.codex/skills`,**不认 `.claude/skills`**
 dev.ps1       Windows 本地 encore 唯一入口(规则 1)
@@ -45,10 +48,14 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
   → codex 独立审查:默认 /codex:review;质疑设计取舍用 /codex:adversarial-review;
      改动超过 1–2 个文件带 --background,用 /codex:status、/codex:result 跟进
   → findings 逐条处理(采纳整改 / 不采纳写明理由),回填任务卡「代码审查」段
-  → 只要有采纳整改的 findings → 对整改 diff 再发一轮 /codex:review 复审(缺陷门禁,非设计评审)
+  → 只要有采纳整改的 findings → 再发一轮复审(缺陷门禁,非设计评审),范围按下方「审查范围」
   → commit + 更新 ROUNDS.md 进度表
 ```
 
+- **审查范围(所有者裁定 2026-08-31)**:**只有前两轮**用固定的全量范围(`branch diff against main`);**第 3 轮起只审「上一轮 findings 整改后的 diff」**,即 `--base <上一轮已审提交>`。
+  - 命令:`node <codex-companion.mjs> review --background --base <上一轮已审提交>`(companion 支持 `--base <ref>` 与 `--scope <auto|working-tree|branch>`;`/codex:review` 这个版本不接受自定义关注点,但接受这两个参数)。
+  - 为什么:全量重扫一条百文件的分支单轮要 20 分钟上下,而第 3 轮起的复审职责只是「确认整改本身没引入新缺陷」。把范围收到整改 diff 既符合本条流程原本的措辞(「对**整改 diff** 再发一轮复审」),也避免审查器每轮在同一批未改动代码上重新起意。
+  - 代价要认:整改 diff 之外的问题这几轮不会再被扫到。所以**前两轮必须是全量**,那是覆盖面的来源;第 3 轮起是门禁,不是覆盖。
 - **复审收口标准(所有者裁定 2026-08-28)**:审查/复审循环不得带**阻塞性问题或明显 bug/漏洞类 findings**(high 级,或任何会丢数据、漏凭据、泄资源、逻辑错误的问题)收口——继续「整改 → 复审」直到此类 findings 清零才允许合并 `main`;低危改进项可写明理由记 `rounds/BACKLOG.md` 后放行。禁止以「spike 会被替换」「概率低」为由跳过整改(可作为**方案取舍**的理由写进任务卡,但对应风险必须有显式兜底)。
 - **审查边界(所有者裁定 2026-08-28)**:**严禁以审查代替设计**——审查是缺陷门禁,不负责长出方案;findings 若指向设计缺陷,停下回任务卡/所有者层面重定方案,不在「整改 → 复审」循环里逐条堆补丁。**非严重阻塞性 findings 严禁新增机制类修复**(新队列/新协议/新抽象/新配置/新导出面):只允许最小改动(改判断、改文案、删代码)或写明理由记 `rounds/BACKLOG.md`;机制类修复仅限严重阻塞性 bug/漏洞。发起复审时把本条作为审查要求带给审查者:只判定并报告缺陷与严重级别,不展开设计方案。
 - 降级到 Claude Code 自带 `/code-review` 只认硬失败(codex CLI 未安装/未登录/启动失败),降级原因写进任务卡;「等得久」「改动小」不是理由。
@@ -92,14 +99,15 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 check      # encore check(编译校验)
 .\dev.ps1 gen        # encore gen client → apps/web/lib/api-client.ts
 .\dev.ps1 db <名>    # encore db shell <数据库名>
+.\dev.ps1 notes      # 同步 vault 教程内容进库(R5;规程见 .claude/skills/sync-notes)
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```
 
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。
-- `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准。
-- **skill 升级后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。
+- `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;另有自建的 `sync-notes`(内容同步规程,R5)。
+- **skill 升级或新增后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。
 
 ## 部署环境矩阵
 

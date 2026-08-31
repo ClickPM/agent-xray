@@ -1,20 +1,30 @@
+// 系列目录(设计稿画板 2b)。数据来自 notes 服务;样式与拆分前一致(规则 7)。
 import Link from "next/link";
-import { cchChapters, seriesMeta } from "@/lib/demo-data";
+import { api, notFoundOnBadRoute } from "@/lib/api";
 import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
+import { relTime, tenThousand } from "@/lib/time";
 
-// 演示轮次:仅 claude-code-harness 有完整章节数据;其余系列显示占位。
-// 教程内容管道(vault 学习分享/ 编译入库)接入后由 notes 服务提供。
-
-export function generateStaticParams() {
-  return Object.keys(seriesMeta).map((series) => ({ series }));
-}
+// 内容随同步脚本变化,且 docker build 时后端不可达 —— 不允许构建期预渲染。
+// (原先的 generateStaticParams 依赖 demo-data 的固定 slug 列表,已随数据源一并移除。)
+export const dynamic = "force-dynamic";
 
 export default async function SeriesPage({ params }: { params: Promise<{ series: string }> }) {
   const { series } = await params;
-  const meta = seriesMeta[series] ?? { name: series, cat: "源码拆解", desc: "", meta: "" };
-  const hasChapters = series === "claude-code-harness";
-  const firstHref = `/notes/${series}/01`;
+
+  // 路由参数是访客可控的:认不出与形状不合法都渲染 404,真故障原样抛出。
+  const data = await api.notes.getSeries(series).catch(notFoundOnBadRoute);
+
+  const now = Date.now();
+  const pinned = data.chapters.find((c) => c.pinned);
+  const rest = data.chapters.filter((c) => !c.pinned);
+  const hasChapters = data.chapters.length > 0;
+  // 画板 2b 的按钮指向**第 1 章**(不是置顶的 README 行),文案也照抄
+  const firstChapter = rest[0];
+
+  const meta = hasChapters
+    ? `${data.chapterCount} 章 · 约 ${tenThousand(data.wordCount)} 万字 · 更新于 ${relTime(data.updatedAt, now)}`
+    : "";
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
@@ -23,23 +33,19 @@ export default async function SeriesPage({ params }: { params: Promise<{ series:
         <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
           <Link href="/notes" style={{ color: "var(--accent)" }}>Notes</Link>
           <span>/</span>
-          <Link href="/notes" style={{ color: "var(--accent)" }}>{meta.cat}</Link>
+          <Link href="/notes" style={{ color: "var(--accent)" }}>{data.categoryName}</Link>
           <span>/</span>
-          <span style={{ color: "var(--text-muted)" }}>{meta.name}</span>
+          <span style={{ color: "var(--text-muted)" }}>{data.name}</span>
         </div>
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginTop: 22 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 22, fontWeight: 650 }}>{meta.name}</div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>
-              {series === "claude-code-harness" ? "从 5.4MB 混淆产物逆向一个闭源 harness 的完整架构" : meta.desc}
-            </div>
-            <div style={{ ...mono(11), color: "var(--text-dim)", marginTop: 10 }}>
-              {series === "claude-code-harness" ? "15 章 · 约 12 万字 · 更新于 3d ago" : meta.meta}
-            </div>
+            <div style={{ fontSize: 22, fontWeight: 650 }}>{data.name}</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>{data.description}</div>
+            <div style={{ ...mono(11), color: "var(--text-dim)", marginTop: 10 }}>{meta}</div>
           </div>
-          {hasChapters && (
-            <Link href={firstHref} style={{ textDecoration: "none" }}>
+          {firstChapter && (
+            <Link href={`/notes/${series}/${firstChapter.slug}`} style={{ textDecoration: "none" }}>
               <GhostButton>从第 1 章开始读</GhostButton>
             </Link>
           )}
@@ -47,31 +53,35 @@ export default async function SeriesPage({ params }: { params: Promise<{ series:
 
         {hasChapters ? (
           <div style={{ marginTop: 26, border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }}>
-            <Link
-              href={firstHref}
-              style={{
-                display: "flex", alignItems: "center", gap: 14, padding: "12px 16px",
-                background: "var(--bg-panel)", cursor: "pointer", color: "var(--text)", textDecoration: "none",
-              }}
-            >
-              <span style={{ ...mono(12, 600), color: "var(--text-muted)", width: 52, flex: "none" }}>README</span>
-              <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>教程总览与阅读路线</span>
-              <span style={{ ...mono(10, 600), color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }}>置顶</span>
-            </Link>
-            {cchChapters.map((ch) => (
+            {pinned && (
               <Link
-                key={ch.num}
-                href={`/notes/${series}/${ch.num}`}
+                href={`/notes/${series}/${pinned.slug}`}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14, padding: "12px 16px",
+                  background: "var(--bg-panel)", cursor: "pointer", color: "var(--text)", textDecoration: "none",
+                }}
+              >
+                <span style={{ ...mono(12, 600), color: "var(--text-muted)", width: 52, flex: "none" }}>{pinned.label}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{pinned.title}</span>
+                <span style={{ ...mono(10, 600), color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }}>置顶</span>
+              </Link>
+            )}
+            {rest.map((ch, i) => (
+              <Link
+                key={ch.slug}
+                href={`/notes/${series}/${ch.slug}`}
                 className="chapter-row"
                 style={{
                   display: "flex", alignItems: "center", gap: 14, padding: "11px 16px",
-                  borderTop: "1px solid var(--border)", cursor: "pointer",
+                  borderTop: pinned || i > 0 ? "1px solid var(--border)" : "none", cursor: "pointer",
                   color: "var(--text)", textDecoration: "none",
                 }}
               >
-                <span style={{ ...mono(12), color: "var(--text-dim)", width: 52, flex: "none" }}>{ch.num}</span>
+                <span style={{ ...mono(12), color: "var(--text-dim)", width: 52, flex: "none" }}>{ch.label}</span>
                 <span style={{ fontSize: 14, flex: 1 }}>{ch.title}</span>
-                <span style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{ch.time}</span>
+                <span style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
+                  {relTime(ch.updatedAt, now)}
+                </span>
               </Link>
             ))}
           </div>

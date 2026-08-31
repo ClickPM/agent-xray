@@ -15,7 +15,7 @@
 | **R-BUN** | 运行时统一 bun(开发/测试/预发/生产)+ 部署方式按架构评审整改 | ✅ 已完成([任务卡](rounds/round-bun/round-bun.md),13 项门禁全过;codex 初审 4P1+4P2 与三轮复审共 14 条 findings 全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R3** | Runtime 对话流真实化(/agent/ask SSE + 前端切真实数据源) | ✅ 已完成([任务卡](rounds/round-03/round-03.md),10 项验收全过;codex 初审 5 条(3×P1)+ 复审第 1 轮 3 条(2×P1)findings 全采纳整改,复审第 2 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ✅ 已完成([任务卡](rounds/round-04/round-04.md),12 项验收全过(#11 按所有者裁定改为静态核验,镜像实跑冒烟并入 R9);codex 初审 3 条(2×P1)+ 复审三轮 5 条(全 P2)共 8 条 findings,7 条采纳整改、1 条写明理由记 BACKLOG,复审第 4 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
-| **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ⬜ | — |
+| **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ✅ 已完成([任务卡](rounds/round-05/round-05.md),8 项验收全过;codex 7 轮共 17 条 findings,15 条采纳整改、2 条所有者裁定不采纳并留兜底,末轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R6** | 沙箱与配额落地(只读工具组 · agent_ro · tool_config · daily_quota) | ⬜ | — |
 | **R7** | admin 服务 + /admin 五页对接(登录/统计/配置/工具) | ⬜ | — |
 | **R8** | metrics 打点 + About 真实化 | ⬜ | — |
@@ -81,10 +81,15 @@
 
 ### R5 — notes 服务与内容摄入
 
-- 迁移:`notes_series` / `notes_chapters`;vault `学习分享/` → 编译摄入脚本(本地执行,幂等可重跑)
-- 查询端点(系列/章节/正文)+ RSS 生成(全站 + 四分类)
+- 迁移:`notes_categories` / `notes_series` / `notes_chapters`(建在既有 agent 库,`deploy/migrate.sh` 只认这一个库)
+- vault `学习分享/` → `tools/notes-sync` 同步管线(本地执行,幂等可重跑);入口 `dev.ps1 notes`,操作规程收敛成 skill `sync-notes`
+- 查询端点(系列/章节/正文)+ RSS 生成(全站 + 四分类,地址在站根,Caddy 与 next dev 各一条路由)
 - Notes 三级页面 + RSS 弹层对接真实数据
 - 验收:RSS 通过校验器;摄入脚本重跑不产生重复数据
+
+> **摄入方案由所有者逐条裁定(2026-08-31)**:库里存标准 markdown、Obsidian 语法在同步阶段改写、
+> 前端渲染;frontmatter 不保留;图片压缩后进 web 静态资源;AI 资料只收中译并保留 source 原链;
+> `原始资料/` 不摄入且不生成指向它的链接;内容分享不同步。完整裁定表与实测数字见任务卡。
 
 ### R6 — 沙箱与配额落地(`docs/security.md` §1 第 1/2/4 层)
 

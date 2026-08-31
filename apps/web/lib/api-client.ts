@@ -16,7 +16,7 @@ export const Local: BaseURL = "http://localhost:4000"
  * Environment returns a BaseURL for calling the cloud environment with the given name.
  */
 export function Environment(name: string): BaseURL {
-    return `https://${name}-uozzs.encr.app`
+    return `https://${name}-gbf6c.encr.app`
 }
 
 /**
@@ -29,10 +29,11 @@ export function PreviewEnv(pr: number | string): BaseURL {
 const BROWSER = typeof globalThis === "object" && ("window" in globalThis);
 
 /**
- * Client is an API client for the uozzs Encore application.
+ * Client is an API client for the gbf6c Encore application.
  */
 export default class Client {
     public readonly agent: agent.ServiceClient
+    public readonly notes: notes.ServiceClient
     public readonly system: system.ServiceClient
     public readonly trace: trace.ServiceClient
     private readonly options: ClientOptions
@@ -50,6 +51,7 @@ export default class Client {
         this.options = options ?? {}
         const base = new BaseClient(this.target, this.options)
         this.agent = new agent.ServiceClient(base)
+        this.notes = new notes.ServiceClient(base)
         this.system = new system.ServiceClient(base)
         this.trace = new trace.ServiceClient(base)
     }
@@ -171,6 +173,140 @@ export namespace agent {
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI("GET", `/agent/sessions`, undefined, {query})
             return await resp.json() as ListSessionsResponse
+        }
+    }
+}
+
+export namespace notes {
+    export interface CategoryGroup {
+        slug: string
+        name: string
+        /**
+         * 分类圆点色,与 design token 一致
+         */
+        dot: string
+
+        series: SeriesCard[]
+    }
+
+    export interface ChapterLink {
+        slug: string
+        label: string
+        title: string
+    }
+
+    export interface ChapterSummary {
+        slug: string
+        label: string
+        title: string
+        /**
+         * 置顶行(README)
+         */
+        pinned: boolean
+
+        wordCount: number
+        updatedAt: string
+    }
+
+    export interface GetChapterResponse {
+        seriesSlug: string
+        seriesName: string
+        categorySlug: string
+        categoryName: string
+        slug: string
+        label: string
+        title: string
+        /**
+         * 标准 markdown(GFM);渲染在前端
+         */
+        contentMd: string
+
+        wordCount: number
+        /**
+         * 第三方文章原链;自有内容为 null
+         */
+        sourceUrl: string | null
+
+        publishedAt: string | null
+        updatedAt: string
+        prev: ChapterLink | null
+        next: ChapterLink | null
+    }
+
+    export interface GetSeriesResponse {
+        slug: string
+        name: string
+        description: string
+        categorySlug: string
+        categoryName: string
+        chapterCount: number
+        wordCount: number
+        updatedAt: string | null
+        chapters: ChapterSummary[]
+    }
+
+    export interface LatestItem {
+        title: string
+        seriesSlug: string
+        chapterSlug: string
+        updatedAt: string
+    }
+
+    export interface ListSeriesResponse {
+        categories: CategoryGroup[]
+        /**
+         * 首页底部「最新 · …」行
+         */
+        latest: LatestItem[]
+    }
+
+    export interface SeriesCard {
+        slug: string
+        name: string
+        description: string
+        chapterCount: number
+        /**
+         * ISO 8601;空系列为 null(前端显示"整理中")
+         */
+        updatedAt: string | null
+    }
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.categoryFeed = this.categoryFeed.bind(this)
+            this.getChapter = this.getChapter.bind(this)
+            this.getSeries = this.getSeries.bind(this)
+            this.listSeries = this.listSeries.bind(this)
+            this.siteFeed = this.siteFeed.bind(this)
+        }
+
+        public async categoryFeed(method: "GET", file: string, body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/rss/${encodeURIComponent(file)}`, body, options)
+        }
+
+        public async getChapter(series: string, chapter: string): Promise<GetChapterResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/notes/series/${encodeURIComponent(series)}/chapters/${encodeURIComponent(chapter)}`)
+            return await resp.json() as GetChapterResponse
+        }
+
+        public async getSeries(slug: string): Promise<GetSeriesResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/notes/series/${encodeURIComponent(slug)}`)
+            return await resp.json() as GetSeriesResponse
+        }
+
+        public async listSeries(): Promise<ListSeriesResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/notes/series`)
+            return await resp.json() as ListSeriesResponse
+        }
+
+        public async siteFeed(method: "GET", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/rss.xml`, body, options)
         }
     }
 }
@@ -440,7 +576,7 @@ class BaseClient {
         // Add User-Agent header if the script is running in the server
         // because browsers do not allow setting User-Agent headers to requests
         if (!BROWSER) {
-            this.headers["User-Agent"] = "uozzs-Generated-TS-Client (Encore/v1.57.13)";
+            this.headers["User-Agent"] = "gbf6c-Generated-TS-Client (Encore/v1.57.13)";
         }
 
         this.requestInit = options.requestInit ?? {};
