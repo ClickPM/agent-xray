@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { statsBar, suggestions } from "@/lib/demo-data";
 import {
   askStream,
@@ -220,10 +220,12 @@ export function Workbench() {
   const active = sessionId !== null || items.length > 0;
   const title = sessions.find((s) => s.id === sessionId)?.title || "";
 
-  // 右栏三视图 = 同一条轨迹流的三种投影(docs/architecture.md)
-  const timelineTurns = toTimelineTurns(events, streaming);
-  const chain = toChainView(events);
-  const lifeNodes = toLifecycleNodes(events, streaming);
+  // 右栏三视图 = 同一条轨迹流的三种投影(docs/architecture.md)。
+  // 必须 memo:events 最多 5000 条,而输入框每敲一个字都会触发重渲染——
+  // 不 memo 的话每次击键都要把整条轨迹重投影三遍。
+  const timelineTurns = useMemo(() => toTimelineTurns(events, streaming), [events, streaming]);
+  const chain = useMemo(() => toChainView(events), [events]);
+  const lifeNodes = useMemo(() => toLifecycleNodes(events, streaming), [events, streaming]);
 
   const refreshSessions = useCallback(() => {
     listSessions()

@@ -113,20 +113,25 @@ function toRow(run: EventRun, nextStart: number | undefined, streaming: boolean)
 export function toTimelineTurns(events: TraceEvent[], streaming = false): TraceTurn[] {
   if (events.length === 0) return [];
 
+  // 【别再写成"攒一批、遇到 turn_start 一起开组"】(codex review P2)那样写的话,
+  // 第二个 turn_start 会把**第一个 turn 的正文**连同自己一起塞进 Turn 2,
+  // 于是 Turn 1 只剩开场事件、后面每个 turn 都整体错位一格。单 turn 的会话看不出来。
+  // 正确形状:turn_start 开新组,其后的事件一律追加到**当前组**;
+  // 首个 turn_start 之前的准备事件(session_start / input / before_agent_start …)并入它开的那组。
   const groups: TraceEvent[][] = [];
-  let pending: TraceEvent[] = [];
+  let prelude: TraceEvent[] = [];
   for (const event of events) {
     if (event.eventType === "turn_start") {
-      groups.push([...pending, event]);
-      pending = [];
+      groups.push([...prelude, event]);
+      prelude = [];
+    } else if (groups.length === 0) {
+      prelude.push(event);
     } else {
-      pending.push(event);
+      groups[groups.length - 1].push(event);
     }
   }
-  if (pending.length > 0) {
-    if (groups.length > 0) groups[groups.length - 1].push(...pending);
-    else groups.push(pending);
-  }
+  // 整个会话还没出现过 turn_start(刚开始提问):准备事件自成 Turn 1
+  if (prelude.length > 0) groups.push(prelude);
 
   const lastSeq = events[events.length - 1].seq;
   return groups.map((group, i) => {

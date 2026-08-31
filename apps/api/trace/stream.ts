@@ -87,16 +87,20 @@ export function sessionSlots<T extends { sessionId: string; startedAt: number }>
 }
 
 /**
- * 该让位的旧连接:同会话 + 同 clientId 的既有流。
+ * 该让位的旧连接:**同 clientId 的既有流,不限会话**。
  * clientId 缺省时不让位(不认识的调用方之间无从判断谁替代谁)。
+ *
+ * 【不要再加 `sessionId` 条件】(codex review P1)一个标签页任何时刻只读一条轨迹流,
+ * 所以同 clientId 的旧连接一定已经死了——**包括它上一个会话那条**。加上同会话限制的话,
+ * 访客在左栏点着看历史会话时,每换一个会话就漏掉一个名额(旧的那条既收不到断开、
+ * 又不匹配让位条件),直到 MAX_STREAM_MS 才释放;翻几个会话就能把全站名额耗光。
  */
-export function selectSuperseded<T extends { sessionId: string; clientId: string | null }>(
+export function selectSuperseded<T extends { clientId: string | null }>(
   live: T[],
-  sessionId: string,
   clientId: string | null,
 ): T[] {
   if (!clientId) return [];
-  return live.filter((s) => s.sessionId === sessionId && s.clientId === clientId);
+  return live.filter((s) => s.clientId === clientId);
 }
 
 function liveSlots(): StreamSlot[] {
@@ -128,9 +132,10 @@ function acquireSlot(
     },
   };
 
-  for (const stale of selectSuperseded(liveSlots(), sessionId, clientId)) {
+  for (const stale of selectSuperseded(liveSlots(), clientId)) {
     console.log(
-      `superseding stale trace stream for session ${sessionId} client ${clientId} (slot ${stale.id})`,
+      `superseding stale trace stream for client ${clientId} ` +
+        `(slot ${stale.id}, session ${stale.sessionId})`,
     );
     stale.end("superseded");
   }

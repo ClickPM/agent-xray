@@ -126,7 +126,14 @@ const EVENT_FIELD_WHITELIST: Record<string, string[]> = {
   input: ["type", "text", "source", "streamingBehavior"],
 };
 
-/** 对话消息(AgentMessage)只透出角色 + 文本预览,不复制完整结构。 */
+/**
+ * 对话消息(AgentMessage)只透出角色 + 文本预览,不复制完整结构。
+ *
+ * 预览**必须过 previewText**(codex review P1):正文是访客与模型自由输入的内容,
+ * 里面完全可能出现凭据形态的串(有人把 `sk-…` 贴进对话框)。这里原先直接 slice,
+ * 于是 message_start / message_end / turn_end 三个事件把它原样带进库、再经公开的
+ * `/trace/stream` 发出去,绕过了 §2 的脱敏。previewText 同时负责凭据串清洗与截断。
+ */
 function summarizeMessage(m: unknown): unknown {
   if (typeof m !== "object" || m === null) return undefined;
   const msg = m as { role?: unknown; content?: unknown };
@@ -140,7 +147,7 @@ function summarizeMessage(m: unknown): unknown {
   }
   return {
     role: typeof msg.role === "string" ? msg.role : undefined,
-    preview: preview.length > 200 ? preview.slice(0, 200) + "…" : preview,
+    preview: previewText(preview, 200),
   };
 }
 
@@ -263,6 +270,19 @@ export function runSanitizeSelfTests(): SanitizeSelfTest[] {
     "agent_start",
     { type: "agent_start", futureCredentialField: "SECRET-FUT-8" },
     ["SECRET-FUT-8"],
+  );
+
+  leakCheck(
+    "消息正文里的凭据串(公开 SSE 的出口)",
+    "message_end",
+    {
+      type: "message_end",
+      message: {
+        role: "user",
+        content: "帮我看看这个 key 对不对:sk-abcdefghij0123456789,还有 Bearer abcdef1234567890",
+      },
+    },
+    ["sk-abcdefghij0123456789", "abcdef1234567890"],
   );
 
   const big: Record<string, string> = {};

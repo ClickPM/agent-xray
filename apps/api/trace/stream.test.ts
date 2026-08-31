@@ -103,24 +103,30 @@ describe("并发名额", () => {
     expect(sessionSlots(all, "c")).toEqual([]);
   });
 
-  it("只让同会话 + 同 clientId 的旧连接退场", () => {
+  it("只让同 clientId 的旧连接退场,别的观众一律不动", () => {
     const live = [
       slot(1, "a", "tabA", 100),
       slot(2, "a", "tabB", 200), // 同会话,别的观众 —— 不能动
-      slot(3, "b", "tabA", 300), // 同观众,别的会话 —— 不能动
-      slot(4, "a", null, 400), // 匿名调用方 —— 不能动
+      slot(3, "a", null, 400), // 匿名调用方 —— 不能动
     ];
-    expect(selectSuperseded(live, "a", "tabA").map((s) => s.id)).toEqual([1]);
+    expect(selectSuperseded(live, "tabA").map((s) => s.id)).toEqual([1]);
+  });
+
+  it("【回归】换会话时也要收回自己那条 —— 让位不看 sessionId", () => {
+    // codex review P1:一个标签页任何时刻只读一条轨迹流,它换会话时旧的那条
+    // 既收不到断开、又匹配不上"同会话"条件,就会漏一个名额直到 MAX_STREAM_MS。
+    const live = [slot(1, "sessionA", "tabA", 100), slot(2, "sessionB", "tabB", 200)];
+    expect(selectSuperseded(live, "tabA").map((s) => s.id)).toEqual([1]);
   });
 
   it("同一观众的多条残留连接一次全部退场", () => {
-    const live = [slot(1, "a", "tabA", 100), slot(2, "a", "tabA", 200), slot(3, "a", "tabB", 300)];
-    expect(selectSuperseded(live, "a", "tabA").map((s) => s.id)).toEqual([1, 2]);
+    const live = [slot(1, "a", "tabA", 100), slot(2, "b", "tabA", 200), slot(3, "a", "tabB", 300)];
+    expect(selectSuperseded(live, "tabA").map((s) => s.id)).toEqual([1, 2]);
   });
 
   it("没有 clientId 时谁都不让位(匿名调用方之间无从判断谁替代谁)", () => {
     const live = [slot(1, "a", null, 100), slot(2, "a", "tabA", 200)];
-    expect(selectSuperseded(live, "a", null)).toEqual([]);
+    expect(selectSuperseded(live, null)).toEqual([]);
   });
 
   it("【回归】不再按「最旧」逐出 —— 真正在看的那条恰恰是最旧的", () => {
@@ -129,7 +135,7 @@ describe("并发名额", () => {
     // 不同观众之间永远不会互相顶掉。
     const viewer = slot(1, "a", "viewer", 100); // 最旧 = 真正在看的
     const probe = slot(2, "a", "probe", 900); // 最新 = 短命探测
-    expect(selectSuperseded([viewer, probe], "a", "probe").map((s) => s.id)).toEqual([2]);
-    expect(selectSuperseded([viewer, probe], "a", "viewer").map((s) => s.id)).toEqual([1]);
+    expect(selectSuperseded([viewer, probe], "probe").map((s) => s.id)).toEqual([2]);
+    expect(selectSuperseded([viewer, probe], "viewer").map((s) => s.id)).toEqual([1]);
   });
 });

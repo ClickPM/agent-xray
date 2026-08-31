@@ -1,6 +1,6 @@
 # Round 04 — 轨迹流与三视图真实化
 
-> 状态:进行中(实现与验收已过,待 codex 审查)
+> 状态:进行中(初审 3 条 findings 已全部整改,待复审)
 
 ## 目标
 
@@ -151,11 +151,42 @@ R1 的能力已全部转正:34 事件与脱敏在 `agent/events.ts`、SSE 工具
 
 ## 代码审查
 
-<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
+- 审查方式:codex `/codex:review --background --base 276dbe7`(thread 01a05673-c6aa-72b1-81ec-5fd4491ed079)
+- 初审 findings **3 条(2×P1 + 1×P2),全部采纳**:
 
-- 审查方式:<codex /codex:review | codex /codex:adversarial-review | /code-review(写明降级原因)>
-- findings 处理:<逐条:采纳整改 / 不采纳及理由>
-- 结论:<PASS | 整改后 PASS>
+  - **[P1] 消息预览绕过脱敏**(`agent/events.ts` 的 `summarizeMessage`)——正文是访客与模型的
+    自由输入,里面可能出现凭据形态的串(有人把 `sk-…` 贴进对话框)。原实现直接 `slice(0,200)`,
+    于是 `message_start` / `message_end` / `turn_end` 把它原样带进库、再经**公开的** `/trace/stream`
+    发出去,绕过 `docs/security.md` §2。
+    **整改**:预览改走 `previewText(preview, 200)`(凭据串清洗 + 截断)。
+    **修的位置与审查者的建议不同**:审查者建议"发出前再洗一遍",但那会违背本轮 D5「脱敏点只有
+    一个:采集时」,而且库里仍会留着原文——所以修在采集侧,库与 SSE 一起变干净。
+    新增第 7 组脱敏 fixture 锁住它。
+  - **[P1] 换会话时收不回自己那条流**(`trace/stream.ts` 的 `selectSuperseded`)——让位条件写成了
+    「同 `sessionId` **且**同 `clientId`」。访客在左栏点着看历史会话时,旧会话那条流既收不到断开
+    信号、又匹配不上让位条件,于是每换一个会话漏一个名额,直到 `MAX_STREAM_MS`(5min)才释放;
+    翻几个会话就能把全站名额耗光并开始 429。
+    **整改**:让位只看 `clientId`,不看 `sessionId`——一个标签页任何时刻只读一条轨迹流,
+    同 `clientId` 的旧连接一定已经死了,**包括它上一个会话那条**。加了跨会话回收的回归用例。
+  - **[P2] Timeline 的 turn 分组整体错位一格**(`web/lib/trace-view.ts`)——原实现"攒一批、遇到
+    `turn_start` 一起开组",于是第二个 `turn_start` 把**第一个 turn 的正文**连同自己塞进 Turn 2,
+    Turn 1 只剩开场事件。单 turn 的会话看不出来,所以我的浏览器实测漏掉了它。
+    **整改(最小改动)**:`turn_start` 开新组,其后事件一律追加到**当前组**。
+    残留偏差(下一轮提问的开场事件挂在上一个 Turn 末尾)按「非阻塞 findings 只做最小改动」
+    记入 `rounds/BACKLOG.md`,不在本轮加额外的 run 边界判断。
+
+- **自查追加 1 条**(不是 findings):`Workbench` 每次渲染都重算三个投影,输入框每敲一个字都会把
+  最多 5000 条事件重投影三遍 → 三个 `useMemo`。
+- 整改后回归:`dev.ps1 check` 通过;`dev.ps1 test` **67/67** 全绿;`apps/web` `tsc --noEmit` 通过。
+  真机复测:
+  - 脱敏:新会话发含 `sk-abcdefghij0123456789` 与 `Bearer abcdef1234567890` 的提问 → 库内 173 条事件
+    对两个串命中 **0**,4 条事件里出现 `[redacted]`(`input` / `before_agent_start` / `message_start` /
+    `message_end`);同会话 SSE 原始流命中同样为 **0**。
+  - 跨会话回收:同 `clientId` 从会话 A 切到会话 B → A 那条收到 `bye{"reason":"superseded"}`;
+    对照组 `tabY` 未被误收回(命中 0)。
+  - turn 分组:用库里真实的 **912 条事件**跑 `toTimelineTurns` → 6 个 turn,每个都自带完整正文
+    (`turn_start … message_update ×N … turn_end … agent_end`),不再错位。
+- 初审结论:整改后待复审
 
 ## 失败处理
 
