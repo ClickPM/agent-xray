@@ -137,7 +137,7 @@ R1 的能力已全部转正:34 事件与脱敏在 `agent/events.ts`、SSE 工具
 | 8 | 名额与上界 | 同 `clientId` 重连 → 旧连接收到 `bye{reason:"superseded"}` 并结束,**不同观众之间互不影响**;同会话第 9 个观众 → 429;`MAX_STREAM_MS` 到点收到 `bye{reason:"max-duration"}`(实测时临时调小,测后改回并复跑 check+test) |
 | 9 | 三视图投影正确 | Chain View 显示最近 chain 事件;Lifecycle 的 `×N` 与 SQL `GROUP BY event_type` 计数一致;Timeline 折叠行的 `×N` 与实际事件数一致 |
 | 10 | 样式零改动 | `git diff` 中 `apps/web` 的 style 对象、className、token、动画参数逐字节一致(仅数据源与 props 接线) |
-| 11 | 服务白名单 | `dev.ps1 build` 后 `/trace/stream` 可达(不是 404),`/spike/*` 全部 404(已删除) |
+| 11 | 服务白名单 | **静态核验**:`dev.ps1` 的 `$hostedServices` 含 `trace`,且 `encore` 认得的服务集合与白名单一致(`get_services`);`spike` 目录已删除故不可能再暴露。**镜像形态的实跑冒烟交 R9**(所有者裁定:镜像只在部署时打包) |
 | 12 | gen client | `dev.ps1 gen` 重新生成后前端编译通过 |
 
 ## 禁止
@@ -179,7 +179,8 @@ R1 的能力已全部转正:34 事件与脱敏在 `agent/events.ts`、SSE 工具
 8. **名额与上界** PASS 同 `clientId` 重连 -> 旧连接收到 `bye{"lastSeq":818,"reason":"superseded"}` 并结束;8 个不同 `clientId` 占满后第 9 个 -> **429**,且前 8 条**一条都没被踢**;`MAX_STREAM_MS` 到点 -> `bye{"reason":"max-duration"}`。测完已把 20s 改回 5min 并复跑 check + test。
 9. **三视图投影正确** PASS Lifecycle 的 `xN` 与 SQL `GROUP BY event_type` 逐项一致(`message_update x97`、`context x1`、`turn_end x1` …;`tool_*` 三个节点 0 次 -> pending);Timeline 折叠行 `message_update x97` 与库内计数一致;Chain View 取到最近的 chain 事件 `message_end`;详情卡展开 `turn_start` 显示 `{ timestamp: …, turnIndex: 0 }`。
 10. **样式零改动** PASS `apps/web/components` 的 diff 里带样式的改动行只有 8 行,且每行的 style 对象**逐字节一致**,只换了取值表达式(`chainSteps.event` -> `chain.event`、`contextDetail.input` -> `detail.input` 等)。
-11. **服务白名单** — 见下(commit 后跑 `dev.ps1 build`,它要求工作区干净)。
+11. **服务白名单** PASS(静态核验)`dev.ps1` 的 `$hostedServices = "agent,trace,system"`,与 `encore` 实际推导出的服务集合(`get_services`:agent / trace / system)完全一致,无遗漏、无多余;`apps/api/spike/` 整目录已删除,`/spike/*` 不可能再存在。
+    **未跑 `dev.ps1 build`**——所有者裁定「镜像只在部署时打包」,不在开发轮里构建。镜像形态下「已声明服务全部可达」的实跑冒烟并入 R9 的部署冒烟(ROUNDS.md R9 本来就有这一条),`rounds/BACKLOG.md` 里那条白名单维护热点保持打开。
 12. **gen client** PASS `dev.ps1 gen` 重新生成(spike 命名空间消失、新增 trace),前端 `tsc --noEmit` 通过。
 
 实现要点与踩坑:
