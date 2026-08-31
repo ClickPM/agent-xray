@@ -113,6 +113,15 @@ export interface RuntimeSession {
 
 const registry = new Map<string, RuntimeSession>();
 
+/**
+ * 正在释放的会话:id → 「最终 flush 已落定」的 promise。
+ *
+ * 释放不是瞬时的(要先把待落库队列排干),这段窗口里同 id 的重建必须等它结束:
+ * 否则新实例的 `maxTraceSeq()` 读到的是旧批次提交**之前**的值,复用了仍在途的
+ * seq,两批事件撞上 `ON CONFLICT DO NOTHING` 后会有一批被静默丢掉(复审 P1)。
+ */
+const disposing = new Map<string, Promise<void>>();
+
 export function getRuntimeSession(id: string): RuntimeSession | undefined {
   const rec = registry.get(id);
   return rec && !rec.disposed ? rec : undefined;
@@ -278,31 +287,51 @@ export function selectEvictable(recs: RuntimeSession[]): RuntimeSession | undefi
 }
 
 /**
- * 释放运行时会话。
+ * 释放运行时会话。三处顺序都是被审查逼出来的,改动前请先看清各自防的是什么:
  *
- * **退出注册表与置位 disposed 必须同步完成**(codex review P1 整改):此后
- * `getRuntimeSession` / `selectEvictable` / sweeper 都看不到它——否则逐出目标在
- * `await` 排干队列期间仍可被并发请求认领,认领方拿到的是一个马上要 dispose 的会话。
- * 之后才排干待落库队列:回收/逐出不吞掉已采集的轨迹,排干失败只能显式记日志。
+ * 1. **`registry.delete` 同步执行**:此后 `getRuntimeSession` / `selectEvictable` /
+ *    sweeper 都看不到它——否则逐出目标在排干队列的 `await` 期间仍可被并发请求认领,
+ *    认领方拿到的是一个马上要 dispose 的会话(初审 P1)。
+ * 2. **`disposed` 置位放在最终 flush 之后**:置早了,增量 flush 失败时
+ *    `requeueFailedBatch` 会判定「会话已释放」直接丢掉在途批次,最终 flush 就没东西
+ *    可重试,留下永久轨迹缺口(复审 P1)。释放期间它仍是「活的」,失败批次能回队,
+ *    随后链上的最终 flush 会重试。
+ * 3. **释放登记进 `disposing`**:重建同 id 会话必须等最终 flush 落定,否则新实例的
+ *    `maxTraceSeq()` 会复用在途 seq(复审 P1,见 `disposing` 注释)。
+ *
+ * 排干失败只能显式记日志(库不可用时无处可写),不静默。
  */
-export async function disposeSession(rec: RuntimeSession): Promise<void> {
-  if (rec.disposed) return;
-  rec.disposed = true;
+export function disposeSession(rec: RuntimeSession): Promise<void> {
+  const inFlight = disposing.get(rec.id);
+  if (inFlight) return inFlight;
+  if (rec.disposed) return Promise.resolve();
+
+  // 同步退出注册表:此后不可被认领 / 逐出 / 回收
   registry.delete(rec.id);
-  try {
-    await flushTraceEvents(rec);
-  } catch (err) {
-    console.error(
-      `flush before dispose failed for session ${rec.id}: dropping ${rec.pendingFlush.length} ` +
-        `pending events — ${safeErrorText(err)}`,
-    );
-  }
-  rec.pendingFlush.length = 0;
-  try {
-    rec.session.dispose();
-  } catch (err) {
-    console.error(`pi session dispose failed for session ${rec.id}: ${safeErrorText(err)}`);
-  }
+
+  const done = (async () => {
+    try {
+      // 此时 disposed 仍为 false:失败批次可回队,并由本次链上的重试再写一遍
+      await flushTraceEvents(rec);
+    } catch (err) {
+      console.error(
+        `flush before dispose failed for session ${rec.id}: dropping ${rec.pendingFlush.length} ` +
+          `pending events — ${safeErrorText(err)}`,
+      );
+    }
+    rec.disposed = true;
+    rec.pendingFlush.length = 0;
+    try {
+      rec.session.dispose();
+    } catch (err) {
+      console.error(`pi session dispose failed for session ${rec.id}: ${safeErrorText(err)}`);
+    }
+  })().finally(() => {
+    disposing.delete(rec.id);
+  });
+
+  disposing.set(rec.id, done);
+  return done;
 }
 
 export async function sweepIdleSessions(now = Date.now()): Promise<number> {
@@ -463,6 +492,11 @@ export async function acquireSession(sessionId: string): Promise<RuntimeSession>
     // 排队期间别的请求可能已经把同一会话建好了
     const again = getRuntimeSession(sessionId);
     if (again) return claim(again);
+
+    // 同 id 的旧实例正在释放:必须等它的最终 flush 落定,否则下面 createRuntimeSession
+    // 里的 maxTraceSeq() 会读到旧批次提交前的值,复用在途 seq(复审 P1)
+    const pendingDispose = disposing.get(sessionId);
+    if (pendingDispose) await pendingDispose;
 
     if (activeSessions().length >= MAX_ACTIVE_SESSIONS) {
       const victim = selectEvictable(activeSessions());

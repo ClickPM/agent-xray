@@ -1,6 +1,6 @@
 # Round 03 — Runtime 对话流真实化
 
-> 状态:进行中(初审 5 条 findings 全部整改完成,待复审)
+> 状态:进行中(初审 5 条 + 复审第 1 轮 3 条 findings 全部整改,待第 2 轮复审)
 
 ## 目标
 
@@ -94,7 +94,29 @@
   库内只有 1 轮消息(user seq 0 / assistant seq 1)、轨迹 122 条 seq 0–121 连续,无重复会话与 seq 冲突;
   两轮正常对话上下文正常(「青花瓷」)。
 - 初审结论:整改后待复审
-- 复审:<待回填>
+- **复审第 1 轮** `/codex:review --background --base 88dc2ae`(thread 01a05628-23f3-7282-96d4-5ceef14e88a3),
+  3 条 findings(2×P1 + 1×P2),**全部指向上一轮整改本身,全部采纳**:
+
+  - **[P1] 释放中的会话被重建会复用在途 seq**(runtime.ts)——上一轮把 `registry.delete` 提到最终
+    flush 之前,于是 sweeper 回收途中若同 id 收到新请求,新实例的 `maxTraceSeq()` 会读到旧批次
+    **提交之前**的值,两批事件撞 `ON CONFLICT DO NOTHING` 后有一批被静默丢弃。
+    **整改**:新增 `disposing: Map<id, Promise<void>>` 登记释放过程,`acquireSession` 的冷启动
+    临界区在建实例前 `await disposing.get(id)`——释放 promise 落定即代表最终 flush 已提交。
+  - **[P1] 提前置 `disposed` 使在途失败批次被丢弃**(runtime.ts)——增量 flush 失败时
+    `requeueFailedBatch` 判定「会话已释放」直接丢批,最终 flush 无数据可重试,留下永久轨迹缺口。
+    **整改**:`disposed` 置位改到最终 flush **之后**;释放期间会话仍算「活的」,失败批次能回队并由
+    同一条 flushChain 上的最终 flush 重试。`registry.delete` 保持同步(它才是防认领的那道闸,
+    与 `disposed` 职责分开)。
+  - **[P2] 前端丢失加载中的会话历史**(Workbench.tsx)——`openSession` 已清空 items,若在
+    `getSession()` 返回前发送消息,上一轮的 `loadSeq` 作废逻辑会把历史结果一并丢掉,该会话的
+    历史再也不出现。**整改(最小改动,只加判断)**:新增 `loadingHistory` 状态,加载未回来时不收
+    发送——与 streaming 期间的拦截同一种处理,加载只有几十毫秒;`send` 不再递增 `loadSeq`。
+
+- 复审整改后回归:`dev.ps1 check` 通过;`dev.ps1 test` **48/48** 全绿(新增 3 条:释放期间失败批次
+  回队并由最终 flush 重试写成功、并发 dispose 共享同一释放过程且 pi 会话只释放一次、释放 promise
+  落定即轨迹已提交)。真机复测空闲回收 → 重建整条路径:回收日志出现后重新提问,上下文恢复
+  (答出「4271」),消息 seq 0–3 正确,轨迹 103 条 seq 0–102 **跨回收边界连续**(无缺口、无静默丢弃)。
+- 复审第 2 轮:<待回填>
 
 ## 失败处理
 

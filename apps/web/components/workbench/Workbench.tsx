@@ -248,6 +248,7 @@ export function Workbench() {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [panel, setPanel] = useState<Panel>("timeline");
 
   // 会话切换的请求序号:连点两个会话时,先发后到的历史加载必须被丢弃,
@@ -271,15 +272,19 @@ export function Workbench() {
       if (streaming) return;
       const seq = ++loadSeq.current;
       setPanel("timeline");
-      // 目标会话立刻生效:历史还在加载时发消息也会写进**这个**会话,而不是上一个
+      // 目标会话立刻生效:即便加载还没回来,状态也已经指向**这个**会话
       setSessionId(id);
       setItems([]);
+      setLoadingHistory(true);
       getSession(id)
         .then(({ messages }) => {
-          if (loadSeq.current !== seq) return; // 已被更晚的选择/新建/发送取代
+          if (loadSeq.current !== seq) return; // 已被更晚的选择/新建取代
           setItems(messages.map((m) => ({ kind: m.role, text: m.content })));
         })
-        .catch((err) => console.error("load session failed:", err));
+        .catch((err) => console.error("load session failed:", err))
+        .finally(() => {
+          if (loadSeq.current === seq) setLoadingHistory(false);
+        });
     },
     [streaming],
   );
@@ -287,6 +292,7 @@ export function Workbench() {
   const startNew = useCallback(() => {
     if (streaming) return;
     loadSeq.current++; // 作废在途的历史加载
+    setLoadingHistory(false);
     setSessionId(null);
     setItems([]);
     setDraft("");
@@ -295,8 +301,10 @@ export function Workbench() {
 
   const send = useCallback(() => {
     const prompt = draft.trim();
-    if (!prompt || streaming) return;
-    loadSeq.current++; // 作废在途的历史加载,别让它冲掉本轮消息
+    // 历史加载未回来时不收发送:此时 items 已被清空,若在这里作废加载结果,
+    // 这个会话的历史就再也不会出现在界面上(复审 P2)。加载只有几十毫秒,
+    // 与 streaming 期间的拦截是同一种处理。
+    if (!prompt || streaming || loadingHistory) return;
     setDraft("");
     setPanel("timeline");
     setItems((prev) => [...prev, { kind: "user", text: prompt }]);
@@ -335,7 +343,7 @@ export function Workbench() {
         setStreaming(false);
         refreshSessions();
       });
-  }, [draft, streaming, sessionId, refreshSessions]);
+  }, [draft, streaming, loadingHistory, sessionId, refreshSessions]);
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex" }}>

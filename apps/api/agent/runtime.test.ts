@@ -3,7 +3,7 @@
 // 与惰性动态 import),不打真实 LLM。
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { createSession, listTraceEvents } from "./store";
+import { createSession, listTraceEvents, maxTraceSeq } from "./store";
 import {
   buildHistoryTranscript,
   claim,
@@ -238,5 +238,52 @@ describe("并发认领与冷启动串行(codex review P1 整改)", () => {
     });
     await expect(boom).rejects.toThrow("cold start failed");
     await expect(serializeColdStart(async () => "next")).resolves.toBe("next");
+  });
+});
+
+describe("释放与重建的交接(复审 P1 整改)", () => {
+  it("释放期间失败的批次能回队,并由本次最终 flush 重试写成功", async () => {
+    // 会话行还不存在 → 首次 flush 外键失败;dispose 期间 disposed 仍为 false,
+    // 失败批次回队,随后建行再 flush 就应当写进去(整改前:批次被直接丢弃)
+    const id = randomUUID();
+    const rec = fakeRec(id);
+    rec.pendingFlush.push(ev(0), ev(1));
+
+    await expect(flushTraceEvents(rec)).rejects.toThrow();
+    expect(rec.pendingFlush.map((e) => e.seq)).toEqual([0, 1]); // 未被丢弃
+
+    await createSession(id); // 「库恢复」
+    await disposeSession(rec);
+
+    expect((await listTraceEvents(id)).map((e) => e.seq)).toEqual([0, 1]);
+    expect(rec.disposed).toBe(true);
+  });
+
+  it("dispose 并发调用共享同一个释放过程,pi 会话只释放一次", async () => {
+    const s = await createSession();
+    const disposed = vi.fn();
+    const rec = fakeRec(s.id, {
+      session: { dispose: disposed } as unknown as RuntimeSession["session"],
+    });
+    rec.pendingFlush.push(ev(0));
+
+    await Promise.all([disposeSession(rec), disposeSession(rec), disposeSession(rec)]);
+
+    expect(disposed).toHaveBeenCalledOnce();
+    expect((await listTraceEvents(s.id)).map((e) => e.seq)).toEqual([0]);
+  });
+
+  // acquireSession 在冷启动前 `await disposing.get(id)`,靠的就是下面这条不变式:
+  // 释放 promise 一旦落定,本会话的轨迹在库里已完整可查,重建时 maxTraceSeq() 读到的
+  // 就是提交后的值,不会复用在途 seq。冷启动本身要 pi + LLM 凭据,不在单测范围。
+  it("释放 promise 落定即代表轨迹已提交,maxTraceSeq 可安全用于重建", async () => {
+    const s = await createSession();
+    const rec = fakeRec(s.id);
+    rec.pendingFlush.push(ev(0), ev(1), ev(2));
+
+    await disposeSession(rec);
+
+    expect((await listTraceEvents(s.id)).map((e) => e.seq)).toEqual([0, 1, 2]);
+    expect(await maxTraceSeq(s.id)).toBe(2);
   });
 });
