@@ -14,7 +14,7 @@ import type {
   ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import { appendTraceEvents } from "../agent/store";
-import { ALL_EVENTS, EVENT_MODES, sanitizeEvent, type EventMode } from "./events";
+import { ALL_EVENTS, EVENT_MODES, sanitizeEvent, type EventMode } from "../agent/events";
 
 const deepSeekApiKey = secret("DeepSeekApiKey");
 

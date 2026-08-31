@@ -1,4 +1,6 @@
-// R1 spike:pi SDK 34 种扩展事件 × 四模式清单。
+// pi SDK 34 种扩展事件 × 四模式清单 + 事件流脱敏(docs/security.md §2 强约束)。
+// R1 在 spike/ 建立,R3 随正式采集点(agent/runtime.ts 观测者扩展)迁入 agent 服务:
+// spike 被 `dev.ps1 build --services` 排除出生产镜像,正式服务不得依赖 spike 目录。
 // 事件名以 @earendil-works/pi-coding-agent@0.84.3 dist/core/extensions/types.d.ts
 // 的 34 个 `pi.on()` 重载为准;模式按 handler result 语义划分:
 //   veto     = result 可取消/拦截(cancel / block / trust 裁决)
@@ -148,6 +150,24 @@ export function previewText(value: unknown, max = MAX_STRING): string {
   return truncate(scrubString(s), max);
 }
 
+/**
+ * 异常 → 一行已脱敏摘要,**服务端日志的唯一入口**(codex review P1)。
+ *
+ * provider SDK 抛出的异常常把响应体、甚至请求配置(含 Authorization 头)挂在
+ * 自定义字段上;`console.error(msg, err)` 会把整个对象打进日志,违反
+ * docs/security.md「明文凭据不进日志」。这里先把 Error 的 name/message 取出来
+ * (它们不是可枚举属性,直接 JSON.stringify 会得到 `{}`),再过 previewText 的
+ * 凭据键屏蔽 + 凭据串清洗 + 截断。**堆栈不进日志**——它对定位帮助有限,却是
+ * 最容易把上游内联的凭据字面量带出来的地方。
+ */
+export function safeErrorText(err: unknown): string {
+  if (err instanceof Error) {
+    const cause = err.cause === undefined ? "" : ` (cause: ${previewText(err.cause, 200)})`;
+    return `${previewText(`${err.name}: ${err.message}`)}${cause}`;
+  }
+  return previewText(err);
+}
+
 /** 每个事件允许透出的顶层字段(值仍经 sanitizeValue)。未列出的事件只透出 type。 */
 const EVENT_FIELD_WHITELIST: Record<string, string[]> = {
   project_trust: ["type", "cwd"],
@@ -259,7 +279,7 @@ export function sanitizeEvent(eventType: string, event: unknown): unknown {
   return out;
 }
 
-// —— 脱敏自测 fixtures(/spike/events/audit 暴露结果;正式测试基建是 R2 的事)——
+// —— 脱敏自测 fixtures(agent/events.test.ts 断言;/spike/events/audit 也在用)——
 export interface SanitizeSelfTest {
   name: string;
   pass: boolean;

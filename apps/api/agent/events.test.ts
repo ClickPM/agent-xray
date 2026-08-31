@@ -1,6 +1,5 @@
-// R1 脱敏自测 fixtures 转正式测试(rounds/BACKLOG.md 条目,R2 测试基建落地)。
-// fixtures 本体仍在 events.ts(/spike/events/audit 也在用);R4 正式 sanitize
-// 迁往 trace 服务时本测试随迁。
+// 脱敏自测 fixtures 正式测试(R1 建立 → R2 转 encore test → R3 随 events.ts
+// 迁入 agent 服务)。fixtures 本体在 events.ts。
 import { describe, expect, it } from "vitest";
 import { ALL_EVENTS, modeCounts, runSanitizeSelfTests } from "./events";
 
