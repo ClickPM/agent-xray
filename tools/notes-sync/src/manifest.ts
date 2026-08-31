@@ -125,6 +125,15 @@ function slugifyAscii(name: string): string {
 }
 
 /**
+ * AI资料 里**确认只有英文原文、没有中译**的子目录:覆盖校验命中它们时跳过而不是报错。
+ *
+ * 之前只在报错信息里提到这张表却没实现,等于给了一条走不通的出路 —— 遇到英文-only 的
+ * 新目录时同步会永久失败,而按提示又无处可加(codex review 2026-08-31 第 3 轮 P2)。
+ * 未知目录仍然默认失败:「宁可漏收也不误发英文原文」的取向不变。
+ */
+const ARCHIVE_SKIP = new Set<string>([]);
+
+/**
  * AI资料 里**中文**但不带 `-Chinese-` 标记的文章,逐条白名单放行。
  * 默认排除、白名单放行的方向不能反过来:反了以后 vault 新增未知形态的文件时,
  * 失败模式会从「漏收一篇」变成「把第三方英文原文发上公网」。
@@ -336,11 +345,12 @@ export const SERIES: SeriesSpec[] = [
       // 覆盖校验:命名漂移(有一篇中译叫「… (Chinese Translation).md」而不是 -Chinese-)
       // 的表现是**静默漏收**,和"英文原文被误发"相比后果轻但同样看不见。这里把它变成硬失败。
       for (const sub of subDirs(dir)) {
-        if (covered.has(sub)) continue;
+        const name = sub.split(/[\\/]/).pop() ?? "";
+        if (covered.has(sub) || ARCHIVE_SKIP.has(name)) continue;
         throw new Error(
-          `AI资料/${sub.split(/[\\/]/).pop()} 下没有识别出中译:\n` +
+          `AI资料/${name} 下没有识别出中译:\n` +
             `  ${mdFiles(sub).map((f) => f.split(/[\\/]/).pop()).join("\n  ")}\n` +
-            "  确认是「只有英文原文」则把该目录加进 ARCHIVE_SKIP;是命名不同则加进 ARCHIVE_EXTRA。",
+            "  确认是「只有英文原文」则把该目录名加进 ARCHIVE_SKIP;是命名不同则加进 ARCHIVE_EXTRA。",
         );
       }
       // 顺序在 main.ts 读到 frontmatter 后按 date 倒序重排;这里先给稳定的占位 label

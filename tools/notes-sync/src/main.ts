@@ -23,6 +23,12 @@ import { applyToDatabase, emitSql, type ChapterRow, type Desired, type SeriesRow
 import { verify } from "./verify.ts";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+/**
+ * 必须与 `apps/api/notes/series.ts` 的 SLUG_RE 一字不差。
+ * 两边一旦漂移,表现是章节在系列页列得出、点开 400 —— 没有任何一侧会报错。
+ */
+const API_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const DEFAULT_PUBLIC_DIR = join(REPO_ROOT, "apps", "web", "public", "notes");
 
 interface Args {
@@ -99,7 +105,17 @@ function loadAll(vault: string): Loaded[] {
   for (const spec of SERIES) {
     for (const file of spec.collect(vault)) {
       if (!existsSync(file.path)) die(`manifest 指向的文件不存在: ${file.path}(vault 结构变了?先修 manifest)`);
-      // slug 是业务唯一键。重复的后果是 upsert 时后者覆盖前者 —— 少一章而不报错,
+      // slug 同时是 URL 片段与 API 的路径参数,必须过 apps/api/notes/series.ts 的
+      // 同一条 SLUG_RE。不校验的话,一个偏长的文件名会产出「系列页列得出、点开 400」
+      // 的章节 —— 两边都不报错,只有读者撞得到(codex review 2026-08-31 第 3 轮 P2)。
+      if (!API_SLUG_RE.test(file.slug)) {
+        die(
+          `章节 slug 不合法(需匹配 ${API_SLUG_RE}): "${file.slug}"\n` +
+            `  来源: ${file.path}\n` +
+            "  多为文件名过长(上限 64 字符)。在 manifest 里给它一个显式的短 slug。",
+        );
+      }
+      // slug 还是业务唯一键。重复的后果是 upsert 时后者覆盖前者 —— 少一章而不报错,
       // 只能靠数数发现。宁可在这里停下。
       const key = `${spec.slug}/${file.slug}`;
       const dup = seen.get(key);
