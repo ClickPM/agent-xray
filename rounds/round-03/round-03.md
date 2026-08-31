@@ -116,7 +116,20 @@
   回队并由最终 flush 重试写成功、并发 dispose 共享同一释放过程且 pi 会话只释放一次、释放 promise
   落定即轨迹已提交)。真机复测空闲回收 → 重建整条路径:回收日志出现后重新提问,上下文恢复
   (答出「4271」),消息 seq 0–3 正确,轨迹 103 条 seq 0–102 **跨回收边界连续**(无缺口、无静默丢弃)。
-- 复审第 2 轮:<待回填>
+- **复审第 2 轮** `/codex:review --background --base 3686528`(thread 01a05632-816e-7143-bade-3a74b2a81b6b):
+  **未发现由本次改动引入的功能性缺陷**——「会话释放与重建的串行交接、失败批次回队、前端历史加载
+  保护逻辑均与现有生命周期约束一致」。阻塞性/明显 bug findings 清零。
+- **补充审查(带 encore skill)**:初审与两轮复审走的都是 codex 内置 reviewer,而 `/codex:review`
+  不支持自定义 prompt,`.claude/skills/` 又是 Claude Code 的约定、codex 不会自动加载,因此这三轮
+  都**没有**吃到 `encore-code-review` 这份框架清单(codex 实际读到的仓库上下文是 `AGENTS.md` →
+  `CLAUDE.md`)。已按 10 项清单自查一遍 R3 代码,无新问题:基础设施包级声明 ✅、ES6 import ✅、
+  APIError(raw 端点直接写状态码是正确用法)✅、SQL 全参数化/模板字面量 ✅、请求响应类型 ✅、
+  无内部端点误暴露 ✅、无 pub/sub、`secret()` 模块级声明 + 函数内取值 ✅、无新迁移。
+  唯一擦边项是**跨服务 import**:`spike/*` 编译期 import `agent/store`、`agent/events`——这条规则
+  针对的是「调另一服务的端点」,此处是共享普通库模块;方向 `spike → agent` 是本轮特意调正的
+  (agent 不反向依赖 spike,生产构建 `--services agent,system` 排除 spike 时不会漏带),spike 于 R4 删除。
+  为免后续轮次重蹈,已在 `AGENTS.md` 增加指向该 skill 的指针(AGENTS.md 本就是给审查者的指针文件)。
+- 复审第 3 轮(带 skill 指针,针对全轮次 diff):<待回填>
 
 ## 失败处理
 
