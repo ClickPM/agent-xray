@@ -16,6 +16,7 @@
 - [ ] R-BUN Next dev proxy 对**未百分号编码**的中文 query 返回 400,直连 Encore 同样请求返回 200。浏览器会自动编码故对真实用户影响小,但手写 URL 的脚本/测试会踩 (2026-08-29)
 - [ ] R-BUN **上线前必做(架构评审 P1-4)**:`apps/web/app/layout.tsx:17-21` 从 `fonts.googleapis.com` 加载 JetBrains Mono,是渲染阻塞样式表,境内首访会挂在字体请求超时上(数秒白屏)。改为自托管(`next/font/local` 或 woff2 放 `public/`),视觉零变化;属规则 7 允许的「接线需要的结构性改动」,任务卡写明理由即可。落地时记得在 `apps/web/Dockerfile` 补 `COPY … /app/public ./public`。R9 或 R10 完成 (2026-08-29)
 - [ ] R-BUN `next build` 仍以 node 执行(web Dockerfile 的 builder 阶段装 node/npm);runner 阶段已是纯 bun。若要连构建期也去掉 node,需单独验证 Next 构建器在 bun 下的行为 (2026-08-29)
+- [ ] R7 管理后台加密 LLM key 落地后,收敛 `.env` 引导键 `DEEPSEEK_API_KEY` 的职责(保留为部署引导 or 移除),交所有者裁定;背景见 docs/security.md §3「引导凭据例外」与 codex review 2026-08-31 P1 (2026-08-31)
 - [ ] R2 adversarial review 遗留:R3 正式 `/agent/ask` 需为助手消息持久化设计显式失败协议与幂等重试(turn 级去重键 / outbox),spike 现仅做「失败以 SSE error 收尾」的最小信号 (2026-08-28)
 - [ ] R2 复审遗留:R3 正式 `/agent/ask` 的 SSE error 消息需统一脱敏口径——spike 现仍将 provider promptError 原文透出(R1 起既有行为,persistError 已在 R2 改为固定提示) (2026-08-28)
 - [x] R1 脱敏自测 fixtures(`spike/events.ts` `runSanitizeSelfTests`,6 组凭据/超大对象用例)在 R2 测试基建落地后转正式 encore test——已落地 `apps/api/spike/events.test.ts`(R2,2026-08-28);测试随 R4 正式 sanitize 迁移到 trace 服务 (2026-08-28)

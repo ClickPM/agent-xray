@@ -24,7 +24,7 @@
 
 ## docker 部署流(预发/生产共用)
 
-镜像是**不可变制品**:同一个 git SHA 构建一次,预发验过之后原样提到生产,不重新构建。服务器上不装 encore CLI、不装 node/bun 工具链、不留 git 工作区,只有 docker + compose + `.env`。
+镜像是**不可变制品**:同一个 git SHA 构建一次,预发验过之后原样提到生产,不重新构建。服务器上不装 encore CLI、不装 node/bun 工具链、不留 git 工作区,只有 docker + compose 加**四个部署资产**:`docker-compose.yml`、`Caddyfile`、`migrate.sh`、`.env`(由 `.env.example` 复制)。这四个文件首次部署时随镜像一起 scp 上去,之后仅在其有变更的发布中重传——`migrate.sh` 是部署序列的必经步骤,漏传就无法完成迁移。
 
 1. **本机构建**(Windows,CLAUDE.md 规则 1/10):
 
@@ -36,7 +36,15 @@
 
    > ⚠️ `--base` 不能省。Encore 开启 `bun-runtime` 后会把镜像 ENTRYPOINT 改成 `bun run …`,却仍按默认基座 `node:slim` 打包,产出的镜像里没有 bun,`docker run` 直接报 `exec: "bun": executable file not found in $PATH`。`encore.app` 里的 `build.docker.base_image` 对本地构建**无效**(只对 Encore 自家 CI/CD 生效)。已固化进 `dev.ps1 build`,不要手敲 `encore build docker`。
 
-2. **镜像传输**:130 内网用 `docker save … | ssh … docker load`;生产按网络情况用同法或私有 registry。**任何环境都不用 `latest` tag**,compose 里 `${IMAGE_TAG:?}` 会拒绝空值。
+2. **镜像传输**:走文件,不走管道——**Windows PowerShell 5.1 的管道按文本重编码,`docker save … | ssh … docker load` 会把二进制 tar 破坏掉**(远端 load 报 unexpected EOF 之类):
+
+   ```powershell
+   docker save -o xray-<sha>.tar local/xray-api:<sha> local/xray-web:<sha>
+   scp xray-<sha>.tar <host>:~
+   ssh <host> docker load -i xray-<sha>.tar
+   ```
+
+   生产按网络情况用同法或私有 registry(registry 流程在 `./migrate.sh` 前先 `docker pull` 对应 api 镜像,迁移要从镜像里取 SQL)。**任何环境都不用 `latest` tag**:compose 里 `${IMAGE_TAG:?}` 挡空值,`migrate.sh` 进一步硬校验 tag 必须是 git SHA。部署资产(`docker-compose.yml` / `Caddyfile` / `migrate.sh` / `.env.example`)首次与变更时随包一起 scp。
 
 3. **服务器部署 —— 先迁移,后起服务**:
 
@@ -73,7 +81,17 @@
    - **幂等**:只应用 `version >` 当前版本的文件,重复执行是空操作
    - 遇到含 `CONCURRENTLY` 的语句会**拒绝执行**并提示人工处理——这类语句不能在事务内跑,宁可停下也不绕过事务保护
 
-   **升级顺序同样是「先迁移、后起服务」**:改 `.env` 的 `IMAGE_TAG` → `docker compose up -d --wait postgres`(库通常已在跑,此步是确认 healthy)→ `./migrate.sh` → `docker compose up -d`(拉起新版 api/web)。若新迁移与旧代码不兼容,按停机窗口处理。
+   **升级顺序:先停旧服务,再迁移,再起新版**。「先迁移、后起服务」在升级场景有个陷阱:只对 postgres `up -d --wait` 时,**旧版 api 还在跑、还在对外服务**,迁移是在它脚下改 schema——旧二进制遇到不兼容的新 schema 会出错甚至写坏数据。V1 用短暂停机换确定性:
+
+   ```bash
+   # 改 .env 的 IMAGE_TAG 为新 SHA 后:
+   docker compose stop api web            # 1) 停旧版(caddy 可留,回 502;库不动)
+   docker compose up -d --wait postgres   # 2) 确认库 healthy
+   ./migrate.sh                           # 3) 新 schema 就位
+   docker compose up -d                   # 4) 拉起新版 api / web
+   ```
+
+   不停机升级(跳过第 1 步)**仅当确认本次迁移与在跑旧版完全后向兼容**时才允许;V1 默认不做这个保证。
 
 5. **验证**:`/health` + 三 Tab + `/admin` 冒烟;并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
 

@@ -32,20 +32,35 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-DRY_RUN=0
-[[ "${1:-}" == "--status" ]] && DRY_RUN=1
-
 die() { echo "错误: $*" >&2; exit 1; }
 
+# 参数白名单:除 --status 外一律拒绝。打错参数(如 --stats)必须报错停下,
+# 不能静默落进写模式把生产迁移执行掉(codex review 2026-08-31 P2)。
+DRY_RUN=0
+case "${1:-}" in
+  "")        ;;
+  --status)  DRY_RUN=1 ;;
+  *)         die "未知参数 '$1'(仅支持 --status)" ;;
+esac
+[[ $# -le 1 ]] || die "多余参数(仅支持一个可选的 --status)"
+
 # —— 镜像坐标从 .env 取,与 docker compose up 用的是同一份 —— #
+# 只提取需要的两个键,不把 .env 当 shell 执行:compose 的 dotenv 语义与 bash source
+# 不同(source 会展开 $、反引号与命令替换,含特殊字符的密码会被执行或改写),
+# 且本脚本根本不需要 POSTGRES_PASSWORD——psql 走 postgres 容器内的 unix socket。
+# 取最后一次出现的值,与 compose 同键后者覆盖前者的行为一致。
 [[ -f .env ]] || die "找不到 .env(先 cp .env.example .env 并填好)"
-# shellcheck disable=SC1091
-set -a; source ./.env; set +a
-: "${IMAGE_TAG:?".env 里 IMAGE_TAG 为空;必须是 git SHA"}"
+env_get() { sed -n "s/^[[:space:]]*$1=//p" .env | tail -1 | sed -e "s/^[\"']//" -e "s/[\"']\$//"; }
+IMAGE_TAG="$(env_get IMAGE_TAG)"
+IMAGE_REGISTRY="$(env_get IMAGE_REGISTRY)"
+[[ -n "$IMAGE_TAG" ]] || die ".env 里 IMAGE_TAG 为空;必须是 git SHA"
+# ${IMAGE_TAG:?} 只能挡空值,挡不住 latest 等可变 tag;本脚本是部署序列的必经步骤,
+# 在这里把「tag 必须是 git SHA」变成硬校验(7–40 位十六进制)。
+[[ "$IMAGE_TAG" =~ ^[0-9a-f]{7,40}$ ]] || die "IMAGE_TAG 必须是 git SHA(当前值: '$IMAGE_TAG');禁止 latest 等可变 tag"
 API_IMAGE="${IMAGE_REGISTRY:-local}/xray-api:${IMAGE_TAG}"
 
 docker image inspect "$API_IMAGE" >/dev/null 2>&1 \
-  || die "本机没有镜像 $API_IMAGE(先 docker load 传过来)"
+  || die "本机没有镜像 $API_IMAGE(save/load 流程:先把 tar 传上来 docker load;registry 流程:先 docker pull $API_IMAGE)"
 
 # —— postgres 必须已就绪 —— #
 docker compose ps --status running postgres >/dev/null 2>&1 \

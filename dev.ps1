@@ -72,7 +72,11 @@ switch ($Cmd) {
         Write-Host ""
         Write-Host "构建完成。部署用:"
         Write-Host "  IMAGE_TAG=$sha (写进 deploy/.env)"
-        Write-Host "  传输:docker save $apiTag $webTag | ssh <host> docker load"
+        # 传输必须走文件,不能在 PowerShell 里管道直传:PS 5.1 对原生命令的管道
+        # 按文本重编码,docker save 输出的二进制 tar 会被破坏,远端 load 必失败。
+        Write-Host "  传输(勿在 PowerShell 用 `"docker save | ssh docker load`" 管道直传,二进制会被重编码破坏):"
+        Write-Host "    docker save -o xray-$sha.tar $apiTag $webTag"
+        Write-Host "    scp xray-$sha.tar <host>:~  然后  ssh <host> docker load -i xray-$sha.tar"
     }
     default { & $encore run --listen 127.0.0.1:4000 }
 }

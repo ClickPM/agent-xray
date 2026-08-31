@@ -83,11 +83,25 @@ pi SDK(`@earendil-works/pi-coding-agent`)自带 `npm-shrinkwrap.json` 锁定它�
 
 ## 代码审查
 
-<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
+- 审查方式:`/codex:review`(branch diff vs `main`),2026-08-31。`--background` 模式两次因宿主进程中断/companion 提前退出而失败,改前台 `--wait` 完成(job `review-mtglxzwh-d1o97v`);非 codex 硬失败,未降级。
+- 本机 Windows 复核(PR 存档注明 dev.ps1 未在 Windows 实跑):`dev.ps1 check` ✅;`dev.ps1 test` 16/16 ✅(实证经 `bun --bun vitest` 执行);`dev.ps1 build` 冒烟见收口记录。本机 bun 1.3.14 与钉版本 1.4.0 不一致——不影响镜像(基座由 `--base` 钉死),仅本机脚本执行器版本,建议 `bun upgrade` 对齐。
 
-- 审查方式:待执行(改动跨 12 个文件,应带 `--background`)
-- findings 处理:待回填
-- 结论:待回填
+### findings 处理(4 P1 + 4 P2,全部采纳,均为最小改动,无新增机制)
+
+| # | 级别 | finding | 处理 |
+|---|---|---|---|
+| 1 | P1 | LLM key 进 `deploy/.env` 与 security.md §3「管理后台写入加密入库」冲突 | **采纳(文档收口)**:`DeepSeekApiKey` 是 R1 起的 Encore secret,自托管镜像在 R7 管理后台落地前只能经 infra-config `$env` 注入,且所有者 2026-08-29 收口交付物已含该绑定——机制不改;在 security.md §3 补记「引导凭据例外」划清与 R7 管理面 key 的边界,`.env.example` 注明,R7 收敛职责记 BACKLOG |
+| 2 | P1 | 升级时旧版 api 仍在服务,迁移在旧二进制脚下改 schema(混版本窗口) | **采纳(改文案)**:升级顺序改为「先 `docker compose stop api web` → 迁移 → 起新版」,V1 用短暂停机换确定性;不停机升级仅当迁移确认后向兼容。compose 头注释 / deploy-environments / deploy-cn-lightweight 三处同步 |
+| 3 | P1 | `docker save \| ssh docker load` 在 PowerShell 5.1 管道下二进制被文本重编码破坏 | **采纳(改文案)**:dev.ps1 构建完成提示与两个部署文档全部改为文件流(`docker save -o` → `scp` → `docker load -i`),并注明原因 |
+| 4 | P1 | 服务器资产清单只列 compose/Caddyfile/.env,但部署序列必跑 `./migrate.sh`(且禁 clone 仓库) | **采纳(改文案)**:资产清单改为四件(compose/Caddyfile/migrate.sh/.env),传输步骤带上部署资产,两文档同步 |
+| 5 | P2 | registry 部署路径:迁移在 api 启动前跑,镜像尚未 pull,`docker image inspect` 直接 die | **采纳(改文案)**:die 提示与文档补「registry 流程先 `docker pull`」;不加自动 pull 逻辑(网络动作不该藏在迁移脚本里) |
+| 6 | P2 | `source .env` 把 dotenv 当 shell 执行:`$`/命令替换会被展开,与 compose 语义不一致 | **采纳(改判断)**:改为 `env_get` 只提取 `IMAGE_TAG`/`IMAGE_REGISTRY` 两键(脚本不需要 `POSTGRES_PASSWORD`,psql 走容器内 socket);注入用例实测不执行 |
+| 7 | P2 | 未知参数(如 `--stats` 打错)静默落入写模式执行生产迁移 | **采纳(改判断)**:参数白名单 case,未知/多余参数一律 die;实测拒绝 |
+| 8 | P2 | `${IMAGE_TAG:?}` 只挡空值,`latest` 能通过 | **采纳(改判断)**:migrate.sh(部署必经步骤)内加 SHA 格式硬校验(7–40 位十六进制);不新增独立 preflight 机制。`latest` 实测被拒 |
+
+整改验证:`bash -n` ✅;migrate.sh 六条失败路径行为测试全过(未知参数/多余参数/无 .env/latest/命令注入不执行/引号值解析);dev.ps1 BOM 完好且带参实跑 ✅;`docker compose config -q` ✅;`dev.ps1 check` ✅、`dev.ps1 test` 16/16 ✅。
+
+- 复审(缺陷门禁):待整改 commit 后执行,结果回填于下。
 
 **建议审查者重点看**:① `dev.ps1 build` 的 `--services` 白名单是维护热点——R4/R5/R7/R8 新增服务时漏改会静默 404;② `stop_grace_period 40s` 与 `graceful_shutdown.total 30s` 的配比在 SSE 长连接下是否够;③ compose 里 `${IMAGE_TAG:?}` 的强制是否会卡住某些正常运维路径;④ 「先迁移后起服务」的顺序在文档/compose/脚本三处是否已完全一致。
 

@@ -81,15 +81,21 @@ curl -fsSL https://get.docker.com | sh
 
 ## 3. 应用部署(不可变镜像)
 
-**服务器上不构建、不 clone 仓库、不装 encore/node/bun 工具链**(CLAUDE.md 规则 10)。服务器只需要 docker + docker compose + 两个文件(`docker-compose.yml`、`Caddyfile`)+ 一个 `.env`。
+**服务器上不构建、不 clone 仓库、不装 encore/node/bun 工具链**(CLAUDE.md 规则 10)。服务器只需要 docker + docker compose + **四个部署资产**:`docker-compose.yml`、`Caddyfile`、`migrate.sh`、`.env`(由 `.env.example` 复制)。这四个文件首次部署随镜像一起 scp,之后仅在变更时重传——`migrate.sh` 是部署必经步骤,漏传就做不了迁移。
+
+```powershell
+# —— 本机(Windows)——
+.\dev.ps1 build          # 出 xray-api:<sha> 与 xray-web:<sha>
+# ⚠️ 传输走文件。不要在 PowerShell 里 `docker save … | ssh … docker load`:
+#    PS 5.1 管道按文本重编码,二进制 tar 会被破坏,远端 load 必失败。
+docker save -o xray-<sha>.tar local/xray-api:<sha> local/xray-web:<sha>
+scp xray-<sha>.tar deploy/docker-compose.yml deploy/Caddyfile deploy/migrate.sh deploy/.env.example <host>:~/deploy/
+ssh <host> "docker load -i ~/deploy/xray-<sha>.tar && chmod +x ~/deploy/migrate.sh"
+```
 
 ```bash
-# —— 本机(Windows)——
-.\dev.ps1 build                          # 出 xray-api:<sha> 与 xray-web:<sha>
-docker save local/xray-api:<sha> local/xray-web:<sha> | ssh <host> docker load
-
 # —— 服务器 ——
-cd deploy && cp .env.example .env && chmod 600 .env    # 首次
+cd ~/deploy && cp .env.example .env && chmod 600 .env    # 首次
 # 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / DEEPSEEK_API_KEY
 
 docker compose up -d --wait postgres   # 1) 只起库,等到 healthy
@@ -97,7 +103,7 @@ docker compose up -d --wait postgres   # 1) 只起库,等到 healthy
 docker compose up -d                   # 3) 再起 api / web / caddy
 ```
 
-- **升级** = 构建新 SHA → 传输 → 改 `.env` 的 `IMAGE_TAG` → `up -d --wait postgres` → `./migrate.sh` → `docker compose up -d`
+- **升级** = 构建新 SHA → 传输 → 改 `.env` 的 `IMAGE_TAG` → **`docker compose stop api web`(先停旧版,否则旧二进制会踩着迁移中的新 schema 继续服务)** → `up -d --wait postgres` → `./migrate.sh` → `docker compose up -d`。不停机升级仅当迁移确认对旧版后向兼容时才允许,V1 默认不做该保证
 - **回滚** = 把 `IMAGE_TAG` 改回上一个 SHA → `docker compose up -d`(镜像即回滚单元;迁移不自动回退,涉及不可逆迁移时先恢复备份)
 - 禁止 `latest`:compose 里 `${IMAGE_TAG:?}` 会拒绝空值启动
 - ⚠️ **迁移不会自动执行,且必须在 api/web/caddy 起来之前完成**。忘了跑或顺序颠倒的表现是:健康检查全绿、Caddy 已放流量,而业务接口 500(`relation "sessions" does not exist`)——监控发现不了,只能靠部署顺序消除。`migrate.sh` 幂等,可安全重复执行;详见 [`deploy-environments.md`](deploy-environments.md)
