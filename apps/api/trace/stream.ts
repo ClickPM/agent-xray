@@ -209,18 +209,6 @@ export const stream = api.raw(
     }
     const { sessionId, afterSeq, clientId } = parsed;
 
-    // 会话必须真实存在(运行时会话可能早已回收,历史轨迹仍可回放)
-    try {
-      if (!(await sessionExists(sessionId))) {
-        fail(resp, 404, `session ${sessionId} not found`);
-        return;
-      }
-    } catch (err) {
-      console.error(`trace stream session lookup failed: ${safeErrorText(err)}`);
-      fail(resp, 500, "internal error");
-      return;
-    }
-
     // 收尾闸:唯一能结束这条流的东西(客户端断开探测不到,见文件头注释)
     let endReason: EndReason | null = null;
     let resolveEnd!: () => void;
@@ -233,6 +221,12 @@ export const stream = api.raw(
       resolveEnd();
     };
 
+    // 【顺序敏感】占名额必须排在**第一个 await 之前**(codex 复审 P2)。
+    // 放在 sessionExists 之后的话,同一标签页快速切会话(B → C)时两个请求会一起卡在
+    // 那次库查询上,谁先返回谁先占槽:若 C 先占、随后已经没人读的 B 才到,B 反过来把 C
+    // 让位掉——用户要看的那条流静默停掉,没人读的那条却占着名额到超时。
+    // 提到入口后,占槽顺序 = 请求到达顺序,不再受库延迟摆布。
+    // 代价:会话不存在时也会先占一下名额,但下面的 finally 立刻释放。
     let slot: StreamSlot;
     try {
       slot = acquireSlot(sessionId, clientId, end);
@@ -256,14 +250,28 @@ export const stream = api.raw(
       lastSeq = e.seq;
       sse(resp, "trace", e);
     };
-    const unsubscribe = subscribe(sessionId, (e) => {
-      if (replaying) pending.push(e);
-      else emit(e);
-    });
+    let unsubscribe: (() => void) | undefined;
 
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
+      // 会话必须真实存在(运行时会话可能早已回收,历史轨迹仍可回放)
+      try {
+        if (!(await sessionExists(sessionId))) {
+          fail(resp, 404, `session ${sessionId} not found`);
+          return;
+        }
+      } catch (err) {
+        console.error(`trace stream session lookup failed: ${safeErrorText(err)}`);
+        fail(resp, 500, "internal error");
+        return;
+      }
+
+      unsubscribe = subscribe(sessionId, (e) => {
+        if (replaying) pending.push(e);
+        else emit(e);
+      });
+
       let fromDb: TraceEvent[];
       try {
         fromDb = await listTraceEvents(sessionId, afterSeq, MAX_REPLAY_EVENTS);
@@ -289,7 +297,7 @@ export const stream = api.raw(
     } finally {
       if (heartbeat) clearInterval(heartbeat);
       if (deadline) clearTimeout(deadline);
-      unsubscribe();
+      unsubscribe?.();
       slot.ended = true;
       slots.delete(slot.id);
       // 上面的失败分支已经 fail() 过(writeHead + end),不能再 end 一次

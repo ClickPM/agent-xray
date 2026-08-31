@@ -61,6 +61,13 @@ interface EventRun {
 }
 
 /**
+ * 「新一轮 agent run 开场」的标志事件。`input` 是每次提问的第一个事件;
+ * 运行时会话被回收后重建时,`session_start` 会排在 `input` 之前,所以两个都要认。
+ * 认漏了不会出错,只是那几个开场事件退回到挂在上一个 Turn 末尾。
+ */
+const RUN_START_EVENTS = new Set(["session_start", "input"]);
+
+/**
  * 折叠连续的同类型事件。
  *
  * **不折叠就没法看**:实测一轮普通对话里 `message_update` 有 97 条(每个 token 一条),
@@ -113,24 +120,30 @@ function toRow(run: EventRun, nextStart: number | undefined, streaming: boolean)
 export function toTimelineTurns(events: TraceEvent[], streaming = false): TraceTurn[] {
   if (events.length === 0) return [];
 
-  // 【别再写成"攒一批、遇到 turn_start 一起开组"】(codex review P2)那样写的话,
-  // 第二个 turn_start 会把**第一个 turn 的正文**连同自己一起塞进 Turn 2,
-  // 于是 Turn 1 只剩开场事件、后面每个 turn 都整体错位一格。单 turn 的会话看不出来。
-  // 正确形状:turn_start 开新组,其后的事件一律追加到**当前组**;
-  // 首个 turn_start 之前的准备事件(session_start / input / before_agent_start …)并入它开的那组。
+  // 分组有两个都踩过的坑,改之前先读完(codex 初审 P2 + 复审 P2):
+  //   1. 别写成"一路攒着、遇到 turn_start 一起开组"——那样第二个 turn_start 会把
+  //      **第一个 turn 的正文**连同自己塞进 Turn 2,每个 turn 整体错位一格
+  //      (单 turn 的会话看不出来,所以浏览器实测漏掉过);
+  //   2. 也别写成"turn_start 之后的一切都追加到当前组"——下一轮提问的开场事件
+  //      (input / before_agent_start / agent_start,会话重建时还带 session_start)
+  //      发生在下一个 turn_start **之前**,会被挂到上一个 Turn 的末尾。
+  // 正确形状:turn_start 开新组;其后的事件追加到当前组;**一旦遇到下一轮 agent run
+  // 的开场事件就重新进入暂存**,等它引出的 turn_start 一起开下一组。
   const groups: TraceEvent[][] = [];
   let prelude: TraceEvent[] = [];
+  let buffering = true; // 会话开头本来就在暂存态
   for (const event of events) {
     if (event.eventType === "turn_start") {
       groups.push([...prelude, event]);
       prelude = [];
-    } else if (groups.length === 0) {
-      prelude.push(event);
-    } else {
-      groups[groups.length - 1].push(event);
+      buffering = false;
+      continue;
     }
+    if (RUN_START_EVENTS.has(event.eventType)) buffering = true;
+    if (buffering || groups.length === 0) prelude.push(event);
+    else groups[groups.length - 1].push(event);
   }
-  // 整个会话还没出现过 turn_start(刚开始提问):准备事件自成 Turn 1
+  // 末尾还攒着一批(最后一轮刚开场、turn_start 还没到):自成一组
   if (prelude.length > 0) groups.push(prelude);
 
   const lastSeq = events[events.length - 1].seq;

@@ -1,6 +1,6 @@
 # Round 04 — 轨迹流与三视图真实化
 
-> 状态:进行中(初审 3 条 findings 已全部整改,待复审)
+> 状态:进行中(初审 + 复审第 1 轮 findings 已全部处理,待复审第 2 轮)
 
 ## 目标
 
@@ -187,6 +187,33 @@ R1 的能力已全部转正:34 事件与脱敏在 `agent/events.ts`、SSE 工具
   - turn 分组:用库里真实的 **912 条事件**跑 `toTimelineTurns` → 6 个 turn,每个都自带完整正文
     (`turn_start … message_update ×N … turn_end … agent_end`),不再错位。
 - 初审结论:整改后待复审
+- **复审第 1 轮** `/codex:review --background --base 4e7411a`(thread 见任务输出),
+  3 条 findings(**全部 P2,全部指向上一轮整改本身**),处理如下:
+
+  - **[P2] 复制标签页会共用 `clientId`,两个标签页互相顶掉**(`trace-api.ts`)——浏览器「复制标签页」
+    会连 `sessionStorage` 一起复制。属实。
+    **不做机制类整改,记 BACKLOG 并在代码里写明边界**:改成「每次页面加载换新 id」确实避开了
+    复制标签页,但把代价换成**更常见**的动作——每刷新一次就漏一个名额到 5min 超时,连刷几次
+    就把本会话名额吃光;两头都占住需要「连接代次」这类协议字段,属机制类改动,按 CLAUDE.md
+    「非阻塞 findings 严禁新增机制类修复」不在整改范围。已与「断开探测不到」一并挂到 R9 重估
+    ——届时若能拿到断开信号,整个让位机制都可以退役。
+  - **[P2] 快速切会话时两个请求可能乱序进 `acquireSlot`,让位让错人**(`trace/stream.ts`)——属实:
+    占名额原本排在 `await sessionExists` **之后**,于是"谁的库查询先返回谁先占槽",已经没人读的
+    B 后到就会把用户正在看的 C 让位掉。
+    **整改(纯语句移位,不加机制)**:把 `acquireSlot` 提到**第一个 await 之前**,占槽顺序 = 请求
+    到达顺序,不再受库延迟摆布;`sessionExists` 挪进统一的 try/finally,404/400/500 路径由 finally
+    立刻释放名额。残留(网络把请求到达顺序也调换)需要连接代次才能根治,记 BACKLOG。
+  - **[P2] 上一轮的分组修正把下一轮开场事件归进了上一组**(`trace-view.ts`)——属实,这正是我
+    上一轮自己记进 BACKLOG 的残留。既然只需多认一个边界,本轮**改成彻底修好**而不是继续挂着:
+    遇到下一轮 agent run 的开场事件(`input`,会话重建时还有 `session_start`)就重新进入暂存,
+    等它引出的 `turn_start` 一起开下一组;BACKLOG 里那条随之删除。
+
+- 复审整改后回归:`dev.ps1 check` 通过;`dev.ps1 test` **67/67** 全绿;`apps/web` `tsc --noEmit` 通过。
+  真机复测:404 / 400 路径正常返回且名额被 finally 释放;正常流仍能回放 + `ready`;
+  跨会话让位仍生效(`bye{"reason":"superseded"}`)。
+  分组用库里真实的 **912 条事件**复核 → 6 个 turn **每个都自成完整一轮**
+  (开场 `input`/`before_agent_start`/`agent_start` → `turn_start` → 正文 → `turn_end`/`agent_end`/`agent_settled`),
+  开场与正文都不再串组。
 
 ## 失败处理
 

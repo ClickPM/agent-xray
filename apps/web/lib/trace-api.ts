@@ -19,9 +19,17 @@ export interface TraceStreamHandlers {
  * 观众标识:同一标签页在多次重连之间保持不变,服务端据此精确收回本标签页
  * 上一条已死的连接(它探测不到断开,只能靠这个,见 apps/api/trace/stream.ts)。
  *
- * 存 sessionStorage 而不是内存或 localStorage,是因为它的生命周期正好等于
+ * 存 sessionStorage 而不是内存或 localStorage,是因为它的生命周期最接近
  * 「一个标签页」:刷新后还在(重连时能收回自己那条名额),标签页关掉即消失,
- * 同一浏览器的两个标签页各算一个观众——这正是这里需要的粒度。
+ * 同一浏览器的两个标签页各算一个观众。
+ *
+ * 【已知边界:浏览器「复制标签页」会连 sessionStorage 一起复制】(codex 复审 P2)
+ * 那两个标签页会共用同一个 id,于是后开的那个一连上就把先前那个让位掉,先前那个
+ * 收到 `superseded` 后不再重连,面板停更(刷新或切会话可恢复)。
+ * **权衡后保留现状**:改成"每次页面加载生成一个新 id"确实能避开复制标签页,
+ * 但会把代价换成更常见的动作——每刷新一次就漏一个名额到 5 分钟超时,连刷几次
+ * 就把本会话的名额吃光。要两头都占住得引入「连接代次」这类协议字段,属机制类
+ * 改动,按 CLAUDE.md 不在非阻塞 findings 的整改范围内。已记 rounds/BACKLOG.md。
  */
 const CLIENT_ID_KEY = "xray-trace-client";
 let memoryClientId: string | null = null;
