@@ -113,6 +113,23 @@ function liveSlots(): StreamSlot[] {
 }
 
 /**
+ * 判容量时该计入的连接:**排除本客户端稍后会让位的那些旧连接**。
+ *
+ * 【别拿它们占名额】(codex 复审第 3 轮 P2)让位被挪到会话校验之后以后,容量判定就跑在
+ * 让位之前了。若把这些"马上就要释放"的旧连接算进去,同一个标签页在名额打满时连自己
+ * 那条都换不回来——重挂载 / 切会话 / 到期续连一律 429,而那条没人读的旧连接还要占到
+ * `MAX_STREAM_MS`,于是面板一直连不上。
+ */
+export function countableSlots<T extends { id: number; clientId: string | null }>(
+  live: T[],
+  clientId: string | null,
+  beforeId: number,
+): T[] {
+  const replaceable = new Set(selectSuperseded(live, clientId, beforeId).map((s) => s.id));
+  return live.filter((s) => !replaceable.has(s.id));
+}
+
+/**
  * 登记一个名额并判容量。**只登记,不让位**——让位是 `supersedeOlderStreams` 的事,
  * 它必须等会话校验通过之后才做(见那个函数的注释)。
  * 整段没有 await,并发请求不会双双通过;槽位 id 因此就是请求到达的顺序号。
@@ -135,7 +152,7 @@ function acquireSlot(
     },
   };
 
-  const live = liveSlots();
+  const live = countableSlots(liveSlots(), clientId, slot.id);
   if (live.length >= MAX_TOTAL_STREAMS) throw new StreamCapacityError(MAX_TOTAL_STREAMS);
   // 单会话的公平上限:防一个会话把全站名额吃光(名额只有被遗弃的连接才会长期占着)
   if (sessionSlots(live, sessionId).length >= MAX_STREAMS_PER_SESSION) {

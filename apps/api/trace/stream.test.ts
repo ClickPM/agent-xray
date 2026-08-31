@@ -2,7 +2,13 @@
 // 不起真实 SSE 连接(端点的实测在任务卡「本轮实测」段),这里只锁住那几处
 // 顺序/边界敏感的判定——它们出错时的表现都是「静默少一段轨迹」,肉眼看不出来。
 import { describe, expect, it } from "vitest";
-import { mergeEvents, parseStreamQuery, selectSuperseded, sessionSlots } from "./stream";
+import {
+  countableSlots,
+  mergeEvents,
+  parseStreamQuery,
+  selectSuperseded,
+  sessionSlots,
+} from "./stream";
 import type { TraceEvent } from "../shared/trace-bus";
 
 const SID = "34a7af6f-4cca-4b69-a77b-f8ec8b050822";
@@ -140,6 +146,24 @@ describe("并发名额", () => {
   it("没有 clientId 时谁都不让位(匿名调用方之间无从判断谁替代谁)", () => {
     const live = [slot(1, "a", null, 100), slot(2, "a", "tabA", 200)];
     expect(selectSuperseded(live, null, 99)).toEqual([]);
+  });
+
+  it("【回归】判容量时不把「本客户端马上要让位的旧连接」算进去", () => {
+    // codex 复审第 3 轮 P2:让位挪到会话校验之后,容量判定就跑在让位之前。
+    // 若把那条马上要释放的旧连接算进名额,同一标签页在名额打满时连自己那条都换不回来,
+    // 只会一直 429 到 MAX_STREAM_MS。
+    const mine = slot(10, "a", "tabA", 100); // 本标签页的旧连接:稍后会被让位
+    const others = [slot(11, "a", "tabB", 200), slot(12, "b", "tabC", 300)];
+    const live = [mine, ...others];
+
+    // 换我自己那条:名额里不算 mine
+    expect(countableSlots(live, "tabA", 99).map((s) => s.id)).toEqual([11, 12]);
+    // 别的客户端来占名额:mine 照常算数
+    expect(countableSlots(live, "tabZ", 99).map((s) => s.id)).toEqual([10, 11, 12]);
+    // 匿名调用方不让位,所以谁都不减
+    expect(countableSlots(live, null, 99).map((s) => s.id)).toEqual([10, 11, 12]);
+    // 只减比自己早的:比我新的同客户端连接不该被当成「马上要释放」
+    expect(countableSlots(live, "tabA", 5).map((s) => s.id)).toEqual([10, 11, 12]);
   });
 
   it("【回归】不再按「最旧」逐出 —— 真正在看的那条恰恰是最旧的", () => {
