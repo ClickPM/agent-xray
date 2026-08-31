@@ -16,6 +16,7 @@
 #       .\dev.ps1 check     encore check(编译校验)
 #       .\dev.ps1 gen       encore gen client -> apps\web\lib\api-client.ts
 #       .\dev.ps1 db <名>   encore db shell <数据库名>
+#       .\dev.ps1 notes     同步 vault 教程内容进库(R5;多余参数直传 notes-sync)
 #       .\dev.ps1 build     构建 api + web 生产镜像(tag = git 短 SHA)
 
 $env:LOCALAPPDATA = "D:\encore-data"
@@ -49,15 +50,26 @@ function Warn-BunDrift {
 
 # 打进公网镜像的服务白名单。spike 是 R1 验证脚手架(无认证、无限额、真实 LLM 端点),
 # 绝不能进预发/生产镜像;--services 是构建期硬门禁,实测可让 /spike/* 返回 404。
-# ⚠️ R4/R5/R7/R8 新增 trace / notes / admin / metrics 服务时必须在这里补名字,
+# ⚠️ R4/R7/R8 新增 trace / admin / metrics 服务时必须在这里补名字(notes 已于 R5 补入),
 #    漏补的表现是该服务端点 404,R9 冒烟会抓到。
-$hostedServices = "agent,system"
+$hostedServices = "agent,system,notes"
 
 switch ($Cmd) {
     "test"  { Warn-BunDrift; & $encore test @args }
     "check" { & $encore check }
     "gen"   { & $encore gen client --output ../web/lib/api-client.ts --env local }
     "db"    { & $encore db shell @args }
+    "notes" {
+        # R5 内容同步:vault 学习分享/ -> notes_* 表。操作规程见 .claude/skills/sync-notes。
+        # 连接串现取不写死:encore 本地库端口随 daemon 重启会变。
+        $vault = if ($env:NOTES_VAULT) { $env:NOTES_VAULT } else { "D:\variFlight_work\VariFlightWork\学习分享" }
+        if (-not (Test-Path $vault)) { throw "vault 不存在: $vault(用环境变量 NOTES_VAULT 指定)" }
+        $dsn = (& $encore db conn-uri agent | Out-String).Trim()
+        if (-not $dsn) { throw "拿不到 agent 库连接串。先跑一次 .\dev.ps1 让 encore 建库,并确认 Docker Desktop 已启动。" }
+        Write-Host "==> notes-sync  vault=$vault"
+        & bun --bun "$repoRoot\tools\notes-sync\src\main.ts" --vault $vault --dsn $dsn @args
+        if ($LASTEXITCODE -ne 0) { throw "内容同步失败" }
+    }
     "build" {
         $sha = (& git -C $repoRoot rev-parse --short HEAD).Trim()
         if (-not $sha) { throw "拿不到 git SHA,构建中止" }

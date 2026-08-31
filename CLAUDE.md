@@ -28,7 +28,10 @@ design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token �
 deploy/       docker compose + Caddyfile(预发/生产共用;框架版,R9 定稿)
 docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署
 rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap 在根 ROUNDS.md
-.claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)+ MCP 启动脚本
+tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。
+              notes-sync:vault `学习分享/` → notes_* 表的内容同步管线(R5)
+.claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
+              + 自建 skill sync-notes(内容同步规程)+ MCP 启动脚本
 dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 ```
 
@@ -90,13 +93,14 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 check      # encore check(编译校验)
 .\dev.ps1 gen        # encore gen client → apps/web/lib/api-client.ts
 .\dev.ps1 db <名>    # encore db shell <数据库名>
+.\dev.ps1 notes      # 同步 vault 教程内容进库(R5;规程见 .claude/skills/sync-notes)
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```
 
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。
-- `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准。
+- `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;另有自建的 `sync-notes`(内容同步规程,R5)。
 
 ## 部署环境矩阵
 

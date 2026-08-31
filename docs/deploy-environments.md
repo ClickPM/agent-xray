@@ -52,7 +52,7 @@
 
    ```bash
    cd deploy && cp .env.example .env && chmod 600 .env   # 首次
-   # 填 IMAGE_TAG=<git-sha> / POSTGRES_PASSWORD / DEEPSEEK_API_KEY
+   # 填 IMAGE_TAG=<git-sha> / POSTGRES_PASSWORD / DEEPSEEK_API_KEY / SITE_HOST=<对外域名>
 
    docker compose up -d --wait postgres   # 1) 只起库,--wait 会阻塞到 healthy
    ./migrate.sh                           # 2) schema 就位(详见下一节)

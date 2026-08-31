@@ -38,25 +38,9 @@ export interface LifeNode {
   count: string;
 }
 
-export interface SeriesCard {
-  slug: string;
-  name: string;
-  desc: string;
-  meta: string;
-}
-
-export interface NoteCategory {
-  name: string;
-  slug: string;
-  dot: string;
-  cards: SeriesCard[];
-}
-
-export interface Chapter {
-  num: string;
-  title: string;
-  time: string;
-}
+// SeriesCard / NoteCategory / Chapter 已随 R5 移除:Notes 的数据形状改由
+// `encore gen client` 产物(lib/api-client.ts 的 notes 命名空间)给出,
+// 不再在前端手写一份(CLAUDE.md 规则 6)。
 
 export interface RepoCard {
   name: string;

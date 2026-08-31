@@ -12,7 +12,7 @@
 - [x] R-BUN Encore 自托管镜像不执行数据库迁移(运行时无迁移逻辑,`encore db` 也无 migrate 子命令),空库直起则 `/health` 200 但触库端点 500——所有者裁定方案一,已落地 `deploy/migrate.sh`(SQL 取自被部署镜像、`schema_migrations` 与 Encore 同构、单事务、幂等),130 完整 compose 形态实测通过 (2026-08-29)
 - [ ] R-BUN `deploy/migrate.sh` 目前硬编码只认 `agent` 库,遇到别的库名报错停下(不猜)。将来若新增数据库需扩该脚本;含 `CONCURRENTLY` 的迁移会被主动拒绝,该路径尚未实测 (2026-08-29)
 - [ ] R-BUN 生产镜像形态下的 **SSE 冒烟无法演练**:两条 SSE 只在 spike 里而 spike 已被 `--services` 排除,正式 `/agent/ask`、`/trace/stream` 要等 R3/R4。R9 的 SSE 验收项需顺延 (2026-08-29)
-- [ ] R-BUN `dev.ps1 build` 的 `--services agent,system` 白名单是维护热点:R4/R5/R7/R8 新增 trace/notes/admin/metrics 服务时必须同步补名字,漏补表现为该服务端点静默 404。考虑在 R9 冒烟里加一条「已声明服务全部可达」的断言 (2026-08-29)
+- [ ] R-BUN `dev.ps1 build` 的 `--services` 白名单是维护热点:R4/R7/R8 新增 trace/admin/metrics 服务时必须同步补名字,漏补表现为该服务端点静默 404。考虑在 R9 冒烟里加一条「已声明服务全部可达」的断言 (2026-08-29;R5 已补入 notes,该条仍未消)
 - [ ] R-BUN Next dev proxy 对**未百分号编码**的中文 query 返回 400,直连 Encore 同样请求返回 200。浏览器会自动编码故对真实用户影响小,但手写 URL 的脚本/测试会踩 (2026-08-29)
 - [ ] R-BUN **上线前必做(架构评审 P1-4)**:`apps/web/app/layout.tsx:17-21` 从 `fonts.googleapis.com` 加载 JetBrains Mono,是渲染阻塞样式表,境内首访会挂在字体请求超时上(数秒白屏)。改为自托管(`next/font/local` 或 woff2 放 `public/`),视觉零变化;属规则 7 允许的「接线需要的结构性改动」,任务卡写明理由即可。落地时记得在 `apps/web/Dockerfile` 补 `COPY … /app/public ./public`。R9 或 R10 完成 (2026-08-29)
 - [ ] R-BUN `next build` 仍以 node 执行(web Dockerfile 的 builder 阶段装 node/npm);runner 阶段已是纯 bun。若要连构建期也去掉 node,需单独验证 Next 构建器在 bun 下的行为 (2026-08-29)

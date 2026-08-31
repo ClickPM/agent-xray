@@ -1,10 +1,25 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { rssCats } from "@/lib/demo-data";
 import { mono } from "@/lib/styles";
 
-export function RssModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export interface RssCat {
+  name: string;
+  /** 不带 scheme 的展示地址,复制时补 https://(设计稿画板 2d) */
+  url: string;
+  dot: string;
+  main?: boolean;
+}
+
+export function RssModal({
+  open,
+  onClose,
+  cats,
+}: {
+  open: boolean;
+  onClose: () => void;
+  cats: RssCat[];
+}) {
   const [copied, setCopied] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   if (!open) return null;
@@ -44,7 +59,7 @@ export function RssModal({ open, onClose }: { open: boolean; onClose: () => void
           </button>
         </div>
         <div style={{ padding: 8 }}>
-          {rssCats.map((rc, i) => (
+          {cats.map((rc, i) => (
             <div
               key={rc.url}
               style={{
