@@ -19,6 +19,8 @@
 #       .\dev.ps1 notes     同步 vault 教程内容进库(R5;多余参数直传 notes-sync)
 #       .\dev.ps1 build     构建 api + web 生产镜像(tag = git 短 SHA)
 #       .\dev.ps1 skills    把 .claude\skills 镜像到 .agents\skills(给 codex 审查者用)
+#       .\dev.ps1 wt-clean [名字|all] [--force]
+#                           清理 .claude\worktrees 残留(不带参数 = 只列不动;坑的说明见函数注释)
 
 $env:LOCALAPPDATA = "D:\encore-data"
 $env:APPDATA = "D:\encore-data\roaming"
@@ -54,6 +56,76 @@ function Warn-BunDrift {
 # ⚠️ R7/R8 新增 admin / metrics 服务时必须在这里补名字(trace 已于 R4、notes 已于 R5 补入),
 #    漏补的表现是该服务端点 404,R9 冒烟会抓到。
 $hostedServices = "agent,trace,notes,system"
+
+# —— worktree 残留清理 ——
+#
+# 【坑在哪】在 .claude\worktrees\<名字> 里跑过东西之后,那个目录就删不掉:
+# `git worktree remove` 报 Permission denied,而且往往已经删掉一半、只剩空壳,
+# 于是登记与磁盘状态长期不一致(本仓库曾同时留下 r3/r4/r5 三份,其中一份 385MB)。
+# 占用者有三类(2026-08-31 实测):
+#   1. .claude\mcp-encore.ps1 会 Set-Location 到 <worktree>\apps\api——encore.app 的 id 为空,
+#      本地 app 只能靠 cwd 定位,换 `encore mcp run --app <id>` 也绕不开;那个会话的
+#      encore mcp run 进程于是把 apps\api 当 cwd 占死。
+#   2. **encore daemon**:被上面那个 MCP 注册过该 app 之后,daemon 自己也握着 apps\api 的句柄。
+#      单杀 MCP 无效(实测杀完照样 Permission denied),必须连 daemon 一起停。
+#   3. codex 的 app-server-broker 以 --cwd <worktree> 启动,连同它拉起的 node/bun 占住根目录。
+# 本函数按 1→2 的顺序逐级升级,能不停 daemon 就不停(daemon 同机与 ticketBookingB2B 共用,
+# 规则 1);真停了会立刻拉回来。
+#
+# 【本函数不碰的一类】以该 worktree 为根目录的 Claude Code 会话进程(claude.exe)本身也占着根目录。
+# 那是你的会话,脚本不替你杀——删不掉时会提示你关掉对应会话窗口再重跑。
+function Remove-DevWorktree([string]$name, [bool]$force) {
+    $path = "$repoRoot\.claude\worktrees\$name"
+    if (-not (Test-Path $path)) { Write-Warning "$($name):目录不存在,跳过"; return }
+
+    $registered = (((& git -C $repoRoot worktree list --porcelain) -join "`n") -like "*$name*")
+
+    # 安全闸:未提交改动、或分支还有没并进 main 的提交,一律拒绝(确认要丢再加 --force)。
+    # **纯删除(D)不算未提交改动**:这条命令要处理的常态就是「上一次删到一半被占用中断」的半删目录,
+    # 那种状态下 git status 全是 D;这些文件的内容都在提交里,丢不了东西。真正要护住的是
+    # 修改 / 新增 / 未跟踪文件——那才是没有第二份的工作成果。
+    if ($registered -and -not $force) {
+        $dirty = (((& git -C $path status --porcelain 2>$null) | Where-Object { $_ -notmatch '^(D[ D]| D) ' }) -join "`n")
+        if ($dirty) { throw "$($name):有未提交改动,拒绝清理(确认要丢加 --force)`n$dirty" }
+        $branch = (& git -C $path rev-parse --abbrev-ref HEAD 2>$null)
+        if ($branch -and $branch -ne "HEAD") {
+            $ahead = ((& git -C $repoRoot log --oneline "main..$branch" 2>$null) -join "`n")
+            if ($ahead) { throw "$($name):分支 $branch 有未并入 main 的提交,拒绝清理(--force 跳过)`n$ahead" }
+        }
+    }
+
+    Write-Host "==> 清理 $name"
+    if ($registered) { & git -C $repoRoot worktree remove --force $path 2>$null }
+
+    # 第 1 级:命令行里带该 worktree 路径的进程(codex broker、encore run 拉起的 bun 应用进程等)
+    if (Test-Path $path) {
+        $holders = Get-CimInstance Win32_Process | Where-Object {
+            $_.ProcessId -ne $PID -and $_.Name -match '^(node|bun|codex|encore)' -and $_.CommandLine -like "*$name*"
+        }
+        foreach ($h in $holders) {
+            Write-Host "    停 $($h.Name) ($($h.ProcessId))"
+            Stop-Process -Id $h.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Milliseconds 300
+        Remove-Item -Recurse -Force $path -ErrorAction SilentlyContinue
+    }
+
+    # 第 2 级:还在 = daemon 握着句柄。停掉全部 encore 进程(daemon + 各会话的 mcp run)再删,完事拉回。
+    if (Test-Path $path) {
+        Write-Host "    仍被占用 -> 停 encore daemon 与全部 encore mcp run(同机共用,会一并重启)"
+        Get-Process encore -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 300
+        Remove-Item -Recurse -Force $path -ErrorAction SilentlyContinue
+        & $encore daemon | Out-Null
+    }
+
+    & git -C $repoRoot worktree prune
+    if (Test-Path $path) {
+        Write-Warning "$($name):仍删不掉。剩下的占用者多半是以该 worktree 为根目录的 Claude Code 会话(claude.exe);关掉那个会话窗口后重跑本命令。"
+    } else {
+        Write-Host "    已删除"
+    }
+}
 
 switch ($Cmd) {
     "test"  { Warn-BunDrift; & $encore test @args }
@@ -125,6 +197,31 @@ switch ($Cmd) {
         $n = (Get-ChildItem -Recurse -File $dst).Count
         Write-Host "已同步 $n 个文件到 .agents\skills:$names"
         Write-Host "(codex 读 .agents\skills;Claude Code 仍读 .claude\skills)"
+    }
+    "wt-clean" {
+        $wtRoot = "$repoRoot\.claude\worktrees"
+        $force = ($args -contains "--force")
+        $names = @($args | Where-Object { $_ -notlike "--*" })
+        $onDisk = @()
+        if (Test-Path $wtRoot) { $onDisk = @(Get-ChildItem -Force -Directory $wtRoot | Select-Object -ExpandProperty Name) }
+
+        # 不带名字 = 只列不动。磁盘目录与 git 登记会各自残留一边,两边都要看。
+        if ($names.Count -eq 0) {
+            & git -C $repoRoot worktree list
+            Write-Host ""
+            if (-not $onDisk) { Write-Host ".claude\worktrees 下没有残留目录。"; break }
+            Write-Host ".claude\worktrees 下的目录:"
+            foreach ($n in $onDisk) {
+                $cnt = (Get-ChildItem -Recurse -Force "$wtRoot\$n" -ErrorAction SilentlyContinue).Count
+                Write-Host "  $n  ($cnt 个文件)"
+            }
+            Write-Host ""
+            Write-Host "清理:.\dev.ps1 wt-clean <名字|all> [--force]"
+            break
+        }
+
+        if ($names -contains "all") { $names = $onDisk }
+        foreach ($n in $names) { Remove-DevWorktree $n $force }
     }
     default { & $encore run --listen 127.0.0.1:4000 }
 }

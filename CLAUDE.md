@@ -101,12 +101,14 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 db <名>    # encore db shell <数据库名>
 .\dev.ps1 notes      # 同步 vault 教程内容进库(R5;规程见 .claude/skills/sync-notes)
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
+.\dev.ps1 wt-clean   # 列出 .claude\worktrees 残留;带 <名字|all> 清理,--force 跳过安全闸
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```
 
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。
 - `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;另有自建的 `sync-notes`(内容同步规程,R5)。
+- **worktree 用完必须 `dev.ps1 wt-clean` 删,别手删也别只跑 `git worktree remove`**(2026-08-31 实测)。在 `.claude\worktrees\<名字>` 里跑过 encore 之后,该目录会被两处占住:那个会话的 `encore mcp run`(`.claude\mcp-encore.ps1` 把 cwd 设进 `<worktree>\apps\api`,而 `encore.app` 的 `id` 为空、本地 app 只能靠 cwd 定位,换 `--app` 也绕不开),以及**注册过该 app 后同样握着句柄的 encore daemon**——单杀 MCP 无效,必须连 daemon 一起停。表现是 `git worktree remove` 报 `Permission denied`、目录删到一半只剩空壳,登记与磁盘长期不一致(本仓库曾同时积下 r3/r4/r5 三份)。`wt-clean` 把「安全闸 → 杀占用进程 → 停 encore → 强删 → prune → 拉回 daemon」固化成一条命令;仍失败只剩一种可能:**还开着以该 worktree 为根目录的 Claude Code 会话**,关掉那个窗口再重跑。
 - **skill 升级或新增后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。
 
 ## 部署环境矩阵
