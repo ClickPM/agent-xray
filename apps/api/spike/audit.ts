@@ -8,7 +8,7 @@ import {
   PI_SDK_VERSION,
   runSanitizeSelfTests,
   type SanitizeSelfTest,
-} from "./events";
+} from "../agent/events";
 import { listSessions } from "./runtime";
 
 interface EventInfo {

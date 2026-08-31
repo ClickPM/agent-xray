@@ -16,7 +16,7 @@ export const Local: BaseURL = "http://localhost:4000"
  * Environment returns a BaseURL for calling the cloud environment with the given name.
  */
 export function Environment(name: string): BaseURL {
-    return `https://${name}-936eu.encr.app`
+    return `https://${name}-r5ugg.encr.app`
 }
 
 /**
@@ -29,7 +29,7 @@ export function PreviewEnv(pr: number | string): BaseURL {
 const BROWSER = typeof globalThis === "object" && ("window" in globalThis);
 
 /**
- * Client is an API client for the 936eu Encore application.
+ * Client is an API client for the r5ugg Encore application.
  */
 export default class Client {
     public readonly agent: agent.ServiceClient
@@ -112,6 +112,15 @@ export namespace agent {
         sessions: SessionSummary[]
     }
 
+    /**
+     * —— 脱敏自测 fixtures(agent/events.test.ts 断言;/spike/events/audit 也在用)——
+     */
+    export interface SanitizeSelfTest {
+        name: string
+        pass: boolean
+        detail: string
+    }
+
     export interface SessionSummary {
         id: string
         title: string
@@ -131,9 +140,14 @@ export namespace agent {
 
         constructor(baseClient: BaseClient) {
             this.baseClient = baseClient
+            this.ask = this.ask.bind(this)
             this.createSession = this.createSession.bind(this)
             this.getSession = this.getSession.bind(this)
             this.listSessions = this.listSessions.bind(this)
+        }
+
+        public async ask(method: "POST", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/agent/ask`, body, options)
         }
 
         /**
@@ -189,7 +203,7 @@ export namespace spike {
         /**
          * 脱敏自测(凭据键变体/嵌套/字符串值/headers/未知字段/超大对象),须全 pass
          */
-        sanitizeSelfTests: SanitizeSelfTest[]
+        sanitizeSelfTests: agent.SanitizeSelfTest[]
 
         sessions: SessionAudit[]
     }
@@ -234,15 +248,6 @@ export namespace spike {
         chain: number
         takeover: number
         total: number
-    }
-
-    /**
-     * —— 脱敏自测 fixtures(/spike/events/audit 暴露结果;正式测试基建是 R2 的事)——
-     */
-    export interface SanitizeSelfTest {
-        name: string
-        pass: boolean
-        detail: string
     }
 
     export interface SessionAudit {
@@ -601,7 +606,7 @@ class BaseClient {
         // Add User-Agent header if the script is running in the server
         // because browsers do not allow setting User-Agent headers to requests
         if (!BROWSER) {
-            this.headers["User-Agent"] = "936eu-Generated-TS-Client (Encore/v1.57.13)";
+            this.headers["User-Agent"] = "r5ugg-Generated-TS-Client (Encore/v1.57.13)";
         }
 
         this.requestInit = options.requestInit ?? {};

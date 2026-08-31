@@ -12,6 +12,8 @@ import {
   listMessages,
   listSessions,
   listTraceEvents,
+  maxTraceSeq,
+  upsertMessage,
   type NewTraceEvent,
 } from "./store";
 import {
@@ -174,5 +176,56 @@ describe("端点", () => {
     await expect(
       getSessionEndpoint({ id: "00000000-0000-0000-0000-000000000000" }),
     ).rejects.toSatisfy((e) => e instanceof APIError && String(e.code) === "not_found");
+  });
+});
+
+describe("turn 级去重键(R3 幂等落库)", () => {
+  it("同一 seq 重复 upsert 只更新内容,不追加重复消息", async () => {
+    const s = await createSession();
+    const user = await appendMessage(s.id, "user", "问题");
+
+    const first = await upsertMessage(s.id, user.seq + 1, "assistant", "回答");
+    const retry = await upsertMessage(s.id, user.seq + 1, "assistant", "回答");
+
+    expect(first?.seq).toBe(user.seq + 1);
+    expect(retry?.seq).toBe(user.seq + 1);
+    const msgs = await listMessages(s.id);
+    expect(msgs.map((m) => [m.role, m.content])).toEqual([
+      ["user", "问题"],
+      ["assistant", "回答"],
+    ]);
+  });
+
+  it("seq 被别的角色占用时不改写他人消息,返回 null", async () => {
+    const s = await createSession();
+    const user = await appendMessage(s.id, "user", "问题");
+
+    expect(await upsertMessage(s.id, user.seq, "assistant", "覆盖尝试")).toBeNull();
+    expect((await listMessages(s.id))[0]).toMatchObject({ role: "user", content: "问题" });
+  });
+
+  it("upsert 刷新 last_active_at,冲突失败时不刷新", async () => {
+    const s = await createSession();
+    const before = (await getSession(s.id))!.lastActiveAt;
+    await upsertMessage(s.id, 0, "assistant", "第一条");
+    expect((await getSession(s.id))!.lastActiveAt).toBeGreaterThanOrEqual(before);
+  });
+});
+
+describe("轨迹 seq 续接(会话重建)", () => {
+  it("空会话返回 -1,有事件返回最大 seq", async () => {
+    const s = await createSession();
+    expect(await maxTraceSeq(s.id)).toBe(-1);
+
+    const events: NewTraceEvent[] = [3, 7, 5].map((seq) => ({
+      seq,
+      eventType: "agent_start",
+      mode: "notify",
+      timestamp: Date.now(),
+      data: { type: "agent_start" },
+    }));
+    await appendTraceEvents(s.id, events);
+
+    expect(await maxTraceSeq(s.id)).toBe(7);
   });
 });

@@ -154,3 +154,52 @@ export async function listTraceEvents(sessionId: string, afterSeq = -1): Promise
     afterSeq,
   );
 }
+
+/**
+ * 按显式 seq 幂等写消息(R3 正式 `/agent/ask` 的「turn 级去重键」)。
+ * 去重键复用既有 UNIQUE(session_id, seq):同一 turn 的助手回复 seq 在用户消息
+ * 落库时就确定(userSeq + 1),重试写同一 seq 只会更新内容而非追加新行——
+ * 覆盖「提交成功但连接断开后重试」这类不确定路径(rounds/BACKLOG.md R2 遗留)。
+ * `WHERE messages.role = EXCLUDED.role` 是防串写护栏:seq 被别的角色占用时
+ * 不更新、不返回行,由调用方按异常处理,绝不静默改写他人消息。
+ */
+export async function upsertMessage(
+  sessionId: string,
+  seq: number,
+  role: MessageRole,
+  content: string,
+  payload?: unknown,
+): Promise<MessageRow | null> {
+  const payloadJson = payload === undefined ? null : JSON.stringify(payload);
+  const row = await db.rawQueryRow<MessageRow>(
+    `INSERT INTO messages (session_id, seq, role, content, payload)
+     VALUES ($1::uuid, $2, $3, $4, $5::text::jsonb)
+     ON CONFLICT (session_id, seq) DO UPDATE
+       SET content = EXCLUDED.content, payload = EXCLUDED.payload
+       WHERE messages.role = EXCLUDED.role
+     RETURNING seq, role, content,
+       (extract(epoch FROM created_at) * 1000)::double precision AS "createdAt"`,
+    sessionId,
+    seq,
+    role,
+    content,
+    payloadJson,
+  );
+  if (row) {
+    await db.exec`UPDATE sessions SET last_active_at = now() WHERE id = ${sessionId}::uuid`;
+  }
+  return row ?? null;
+}
+
+/**
+ * 会话内已落库轨迹事件的最大 seq(无事件返回 -1)。
+ * 运行时会话被空闲回收/进程重启后重建时,采集游标必须从这里续接——
+ * 否则新事件的 seq 会与库内既有行撞上,被 `ON CONFLICT DO NOTHING` 静默丢弃。
+ */
+export async function maxTraceSeq(sessionId: string): Promise<number> {
+  const row = await db.rawQueryRow<{ maxSeq: number | null }>(
+    `SELECT MAX(seq) AS "maxSeq" FROM trace_events WHERE session_id = $1::uuid`,
+    sessionId,
+  );
+  return row?.maxSeq ?? -1;
+}

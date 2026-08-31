@@ -1,4 +1,6 @@
-// R1 spike:pi SDK 34 种扩展事件 × 四模式清单。
+// pi SDK 34 种扩展事件 × 四模式清单 + 事件流脱敏(docs/security.md §2 强约束)。
+// R1 在 spike/ 建立,R3 随正式采集点(agent/runtime.ts 观测者扩展)迁入 agent 服务:
+// spike 被 `dev.ps1 build --services` 排除出生产镜像,正式服务不得依赖 spike 目录。
 // 事件名以 @earendil-works/pi-coding-agent@0.84.3 dist/core/extensions/types.d.ts
 // 的 34 个 `pi.on()` 重载为准;模式按 handler result 语义划分:
 //   veto     = result 可取消/拦截(cancel / block / trust 裁决)
@@ -259,7 +261,7 @@ export function sanitizeEvent(eventType: string, event: unknown): unknown {
   return out;
 }
 
-// —— 脱敏自测 fixtures(/spike/events/audit 暴露结果;正式测试基建是 R2 的事)——
+// —— 脱敏自测 fixtures(agent/events.test.ts 断言;/spike/events/audit 也在用)——
 export interface SanitizeSelfTest {
   name: string;
   pass: boolean;
