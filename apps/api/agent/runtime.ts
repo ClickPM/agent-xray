@@ -125,9 +125,8 @@ function serializeConfig<T>(fn: () => Promise<T>): Promise<T> {
  *   - **端点与模型定格在会话创建时**:`getModel()` 返回的 `Model` 对象自带 `baseUrl`,
  *     `AgentSession` 一直拿着它;重新注册 provider 只换 `ModelRuntime` 里的那份,
  *     换不掉会话手里的这份(实测:热会话第 2 轮仍打到已清空的旧中转)。
- *     所以**换 provider** 由 `acquireSession` 用「重建会话」兜住(见那里),
- *     而同一 provider 内改 baseUrl / 换模型只对新会话生效 —— 要不要让进行中的
- *     对话中途换端点是产品取舍,已记 rounds/BACKLOG.md 待裁定。
+ *     所以配置一旦变化,`acquireSession` 会**重建会话**来跟上(见那里),
+ *     判据是本函数返回的 `fingerprint`。
  *
  * 【别再加 `removeRuntimeApiKey`】(codex 初审 P1)曾以「进程里不留用不上的凭据」
  * 为由,在切 provider 时撤掉上一个的 key。后果是:A 的既有会话下一轮解析不到凭据、
@@ -204,14 +203,18 @@ export interface RuntimeSession {
   id: string;
   session: AgentSession;
   /**
-   * 会话创建时所用的 llm_config provider。
+   * 会话创建时那份 LLM 配置的指纹(`ActiveLlmConfig.fingerprint`)。
    *
-   * 会话手里的 `Model` 句柄自带该 provider 的端点,换不掉(见 refreshLlmConfig);
-   * 所以「当前默认 provider 变了」只能靠**重建会话**来跟上,而判据就是这个字段。
-   * 它同时是撤销的兜底:删掉一个非默认 provider 之后,它的会话在下一轮被重建到
-   * 当前默认 provider 上,不会继续拿着已删 provider 的 key 与端点跑(codex 复审 P1)。
+   * 会话手里的 `Model` 句柄自带 provider 的端点,事后换不掉(见 refreshLlmConfig),
+   * 所以配置变更只能靠**重建会话**来跟上,而判据就是这个字段。
+   *
+   * 【为什么是指纹而不是 provider 名】(codex 第 4 轮 P1)只比名字的话,
+   * 「删掉 A → 用新端点/新 key 重建一个同名的 A → 设为默认」这条路上名字没变,
+   * 于是不重建 —— 而 `refreshLlmConfig` 已经把**新 key** 装好了,
+   * 会话下一轮就拿着新凭据打**旧端点**。指纹覆盖 provider / baseUrl / 模型 / key
+   * 全部字段,同名重建也会变,这条路径自然被堵上。
    */
-  providerId: string;
+  configFingerprint: string;
   createdAt: number;
   /** 空闲回收判据;每次提问开始/结束都会刷新 */
   lastActiveAt: number;
@@ -547,7 +550,7 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
   const rec: RuntimeSession = {
     id: sessionId,
     session: undefined as unknown as AgentSession,
-    providerId: cfg.provider,
+    configFingerprint: cfg.fingerprint,
     createdAt: now,
     lastActiveAt: now,
     busy: false,
@@ -631,17 +634,27 @@ export async function acquireSession(sessionId: string): Promise<RuntimeSession>
       rec.busy = false;
       throw err;
     }
-    // provider 没变 —— 凭据已经是最新的,直接用
-    if (rec.providerId === cfg.provider) return rec;
+    // 配置没变 —— 凭据已经是最新的,直接用(绝大多数轮次走这里)
+    if (rec.configFingerprint === cfg.fingerprint) return rec;
 
-    // provider 变了(换了默认,或者这个会话的 provider 被删掉了)。
-    // 会话手里的 `Model` 自带旧 provider 的端点,换不掉,所以**重建**:
+    // 配置变了。会话手里的 `Model` 自带旧 provider 的端点、也定格了旧模型,
+    // 事后换不掉,所以唯一能真正跟上的办法是**重建**:
     // 释放 → dispose → 落到下面的冷启动路径,用当前配置重新建一个,
-    // 库内历史照常注入,访客这一轮正常继续(codex 复审 P1)。
-    // 空闲回收走的也是同一条重建路径,不是新机制。
-    console.log(
-      `rebuilding session ${sessionId}: provider ${rec.providerId} → ${cfg.provider}`,
-    );
+    // 库内历史照常注入,访客这一轮正常继续。空闲回收走的就是这条路径,不是新机制。
+    //
+    // 【先确认新配置能用,再动这个会话】(codex 第 3 轮 P2)所有者把默认模型填错时,
+    // 不该连**已有会话**一起打死 —— 那些会话根本不用那个新模型。
+    // 解析不出就原地留着旧会话,只有新会话被拒(503)。
+    try {
+      const { modelRuntime } = await getPiRuntime();
+      resolveModel(modelRuntime, cfg);
+    } catch (err) {
+      console.error(
+        `keeping session ${sessionId} on its previous config: ${safeErrorText(err)}`,
+      );
+      return rec;
+    }
+    console.log(`rebuilding session ${sessionId} onto provider ${cfg.provider}/${cfg.modelId}`);
     rec.busy = false;
     await disposeSession(rec);
   }

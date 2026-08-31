@@ -632,6 +632,11 @@ export async function setDefaultProvider(provider: string): Promise<void> {
  */
 export async function deleteProvider(provider: string): Promise<{ defaultRemains: boolean }> {
   return inTransaction(async (tx) => {
+    // 删除也必须进同一把闸(codex 第 4 轮 P2):advisory lock 与 `FOR UPDATE` 不同,
+    // 它不会顺带保护既有行不被别的事务 DELETE。不加的话,一次并发删除可以插在
+    // upsert 的「读 existing」与「UPDATE」之间,让那次 UPDATE 影响 0 行,
+    // 而 MCP 那边照样回成功。
+    await lockProviders(tx);
     const done = await tx.rawQueryRow<{ provider: string }>(
       `DELETE FROM llm_config WHERE provider = $1 RETURNING provider`,
       provider,

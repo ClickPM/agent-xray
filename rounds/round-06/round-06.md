@@ -96,7 +96,24 @@
 | 3 | P2 | 默认模型填错会连**已有会话**一起打死,与「换模型只影响新会话」的契约矛盾 | 属实,是第 2 轮引入的回归:热路径调的 `applyLlmConfig` 末尾会解析模型句柄并抛错 | 把函数拆成两段:`refreshLlmConfig`(注册 provider + 装 key)与 `resolveModel`(只有冷启动调)。**实测**:模型改成不存在的之后,热会话第 2 轮 HTTP 200,新会话 503 —— 正是契约描述的样子 |
 | 4 | P2 | `SELECT … FOR UPDATE` 在**空表**上锁不住东西,两个「第一次配 provider」的并发调用照样撞唯一索引 | 属实 | 换成事务级 advisory lock(`pg_advisory_xact_lock`)。与表里有没有行无关,一条语句覆盖两种情形,随事务结束自动释放 |
 
-- 结论:待第 4 轮复审
+### 第 4 轮 — 2 条 findings(1×P1 + 1×P2),**全部采纳整改**(范围:`--base 98c7e8e`)
+
+**这一轮我改了一个自己定的契约,值得单独说明。** 第 2/3/4 轮的多条 findings 其实是同一个
+设计问题的不同入口:「进行中的会话与配置变更的关系」。我原先定的是「换模型只影响新会话」,
+为此让热会话保留旧的 `Model` 句柄 —— 而那个句柄自带 provider 的端点,于是每一轮复审都能
+从另一条路走到「已在内存的会话拿着新 key 打旧端点」。第 3 轮我把它记进 BACKLOG 当作产品取舍;
+第 4 轮的 P1 说明它不是可以搁置的取舍,而是会持续产出撤销漏洞的结构。
+
+于是收敛成**一条统一规则**:会话记下创建时的**配置指纹**,指纹变了就在下一轮被重建到新配置上
+(走空闲回收已经在用的那条重建路径,库内历史照常注入,访客无感)。代价是换默认模型也会作用于
+进行中的对话 —— 但那比「有漏洞但不换模型」好解释得多,BACKLOG 里那条设计项也随之关闭。
+
+| # | 级别 | findings | 核实 | 处置 |
+|---|---|---|---|---|
+| 1 | P1 | 只比 provider **名字**不够:「删掉 A → 用新端点/新 key 重建同名 A → 设默认」这条路上名字没变,于是不重建,而新 key 已装好 —— 会话下一轮拿新凭据打旧端点 | 属实 | 判据从 `providerId` 换成 `configFingerprint`(覆盖 provider / baseUrl / 模型 / key 全部字段)。**并保住第 3 轮的 P2**:重建前先 `resolveModel` 试一次,解析不出就原地留着旧会话、只拒新会话。**实测**:同名重建到新端点 4003 后,旧端点 4002 的命中数不再增加;同一批实测里坏模型仍是「热会话 200 / 新会话 503」,日志出 `keeping session … on its previous config` |
+| 2 | P2 | `llm_provider_delete` 没进 advisory lock;它与 upsert 并发时能插在「读 existing」与「UPDATE」之间,让 UPDATE 影响 0 行而 MCP 照样回成功 | 属实。advisory lock 与 `FOR UPDATE` 不同,不会顺带保护既有行不被 DELETE | `deleteProvider` 也取同一把闸 |
+
+- 结论:待第 5 轮复审
 
 ## 失败处理
 
@@ -113,7 +130,7 @@
 | 3 | 发布全链路 | ✅ 新建系列 → 上传 1×1 webp → 发文章引用它 → `/notes/r6-smoke/01` 渲染出图(`naturalWidth=1`,来自 Postgres)→ `/rss.xml` 与 `/rss/engineering.xml` 出现该条 |
 | 4 | 存量零回归 | ✅ 56 张存量图经 `notes_asset_put` 回填(6.47 MB),`apps/web/public/notes/` 已删除;`/notes/pi/0b60f550dd19.webp` 仍 200,带强 ETag,`If-None-Match` → 304。文章页(无扩展名)不受 rewrite 影响,仍 200 |
 | 5 | key 只见掩码 | ✅ `llm_providers_list` 只回 `sk-…3f9a`;库内 `api_key_enc` 61 字节密文、不含明文;`mcp_audit` 全表搜不到 key 片段 |
-| 6 | 模型热生效 | ✅ 切到不存在的模型 → 下一个**新会话** 503;切回 → 新会话建起(服务端日志逐次打 `llm config applied`)。**生效面**见审查段第 2 轮 #3:换 key / 删 provider 对所有会话下一轮生效(实测),换 baseUrl / 换模型只对新会话生效 |
+| 6 | 模型热生效 | ✅ 切到不存在的模型 → **新会话** 503、热会话不受影响(200);切回 → 新会话建起。**最终口径**(第 4 轮收敛):配置指纹变了,会话在下一轮被**重建**到新配置上;新配置解析不出模型时既有会话原地不动。四个场景均实测,见审查段 |
 | 7 | 向下协商 | ✅ 2025-11-25 的 `initialize` 握手 200 且 `tools/list` 拿到 21 个工具;`GET`/`DELETE` → 405;不支持的版本 → 400 `UnsupportedProtocolVersionError`;头体不一致 → 400 `-32020 HeaderMismatch` |
 | 8 | 退役干净 | ✅ `/admin` 404、`next build` 5 条路由无 admin;`tools/notes-sync`、`dev.ps1 notes`、`sync-notes` skill 已删,`.agents/skills` 重同步为 8 个 |
 | 9 | 构建门禁 | ✅ `dev.ps1 check` 通过;`dev.ps1 test` 8 文件 111 用例全过(R6 新增 32 个);`tsc --noEmit` api 与 web 均干净;`--services` 已含 `mcp` |

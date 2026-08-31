@@ -34,7 +34,7 @@ Caddy :443(自动 TLS,单机反代)
 | 教程内容 | 所有者经 MCP 管理服务发布(标准 markdown 入库,server 只校验不改写),pi 经只读工具访问 | 2026-08-31 裁定,替代 R5 的 vault 静态编译管道;pi 可读不可改(SELECT-only 角色) |
 | 管理面 | **无状态 MCP server**(2026-07-28,官方 TS SDK **v2** 保留向下协商;静态 bearer token) | 2026-08-31 裁定,替代 /admin 后台(画板 3a–3e 废弃);solo 维护无需 OAuth;无 cookie 即无 CSRF 面;详见 security.md §4 |
 | MCP SDK 选型 | `@modelcontextprotocol/server` + `@modelcontextprotocol/node` **2.0.0**(不是 `@modelcontextprotocol/sdk`) | R6 实测:旧包最新版(1.30.0)的 `LATEST_PROTOCOL_VERSION` 仍是 `2025-11-25`、没有 `server/discover`;2026-07-28 由 SDK v2 以新包名提供。`createMcpHandler` 默认 `legacy:'stateless'`,同一份工具定义同时服务两个时代 |
-| LLM 凭据与模型 | 全部来自 `llm_config` 表(多 provider,key 经 AES-256-GCM 加密入库),**无引导 secret** | 2026-08-31 裁定;`agent/runtime.ts` 每次**冷启动会话**读一次并按需向 `ModelRuntime` 注册,所以「改配置 → 下一个新会话生效」有确定答案,进行中的会话不会中途换模型 |
+| LLM 凭据与模型 | 全部来自 `llm_config` 表(多 provider,key 经 AES-256-GCM 加密入库),**无引导 secret** | 2026-08-31 裁定。`agent/runtime.ts` 在冷启动与**每一轮热路径**上都读一次配置并比对指纹:**配置变了,会话在下一轮被重建到新配置上**(走空闲回收同一条重建路径,库内历史照常注入)。这条统一规则是四轮 codex review 收敛出来的——只让新会话跟上配置,会留下「已在内存的会话拿着新 key 打旧端点」这类撤销漏洞 |
 | notes 附件 | 存 Postgres,运行期由 api 供图;**镜像内不烧任何 notes 内容** | 2026-08-31 裁定。对外 URL 保持 `/notes/<系列>/<哈希>.webp` 不变(免改写存量正文);API 侧走 `/assets/notes/…`,因为 Encore 路由里 `/notes/:series/:file` 会与 `/notes/series/:slug` 撞车 |
 
 ## 事件模式与观测
