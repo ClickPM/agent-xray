@@ -494,16 +494,21 @@ export interface UpsertProviderInput {
  * `encryptionKeyB64` 由 tools 层从 secret 取好传入(CLAUDE.md 规则 5)。
  */
 /**
- * 把 `llm_config` 的既有行锁住,再做任何「唯一默认」相关的读改写。
+ * `llm_config` 的「唯一默认」相关读改写的串行闸。
  *
  * 【为什么事务本身不够】(codex 复审 P2)两个并发的 `makeDefault=true` 在
  * READ COMMITTED 下各自看到对方提交前的快照:双双把旧默认清掉、再各自置位,
  * 后提交的那个撞上 `idx_llm_config_single_default` 报约束冲突 —— 对调用方是一句
  * 无从解释的 internal error。而 MCP 客户端是可以并发发 tool call 的。
- * `FOR UPDATE` 让第二个事务阻塞到第一个提交、然后**重新求值**,变成串行。
+ *
+ * 【为什么不是 `SELECT … FOR UPDATE`】(codex 第 3 轮 P2)行锁在**空表**上锁不住
+ * 任何东西:两个「第一次配置 provider」的并发调用会双双通过,然后同样撞唯一索引。
+ * 事务级 advisory lock 与表里有没有行无关,一条语句覆盖两种情形,
+ * 且随事务结束自动释放(不需要显式解锁,回滚也不会漏)。
  */
+const LLM_CONFIG_LOCK = 0x6c6c6d31; // 'llm1',本库内唯一即可
 async function lockProviders(tx: Transaction): Promise<void> {
-  await tx.rawExec(`SELECT provider FROM llm_config FOR UPDATE`);
+  await tx.rawExec(`SELECT pg_advisory_xact_lock($1)`, LLM_CONFIG_LOCK);
 }
 
 export async function upsertProvider(

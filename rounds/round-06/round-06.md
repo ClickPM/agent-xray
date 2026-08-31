@@ -84,7 +84,19 @@
 | 5 | P2 | 并发 `makeDefault=true` 会撞唯一索引回 500 | 属实。READ COMMITTED 下两个事务各自从自己的快照清旧默认再置位,后提交者撞 `idx_llm_config_single_default`;而 MCP 客户端可以并发发 tool call | 两个相关事务开头加一句 `SELECT provider FROM llm_config FOR UPDATE`,让第二个事务阻塞到第一个提交后**重新求值**。一条语句,不引入锁表/重试机制 |
 | 6 | P2 | 大写扩展名的附件能传上去,但生产 Caddy matcher 只认小写 | **属实,同一次 Caddy 实跑复现**:`/notes/pi/abc.PNG` 落到了 WEB 而不是 ASSET | `ASSET_NAME_RE` 去掉 `i` 标志,只收小写。收紧输入比让两处 matcher 变大小写不敏感更省 —— 文件名本来就约定是小写十六进制哈希 |
 
-- 结论:待第 3 轮复审(范围按 CLAUDE.md「第 3 轮起只审整改 diff」)
+### 第 3 轮 — 4 条 findings(2×P1 + 2×P2),**全部采纳整改**(范围:`--base 7de979b`,即上一轮整改 diff)
+
+四条都是第 2 轮修复引出的连带问题,值得单独记一笔:第 2 轮为了让热会话跟上配置,
+在热路径加了「读库 + 施加」,于是把三个新面暴露出来(并发、模型校验连累、撤销语义)。
+
+| # | 级别 | findings | 核实 | 处置 |
+|---|---|---|---|---|
+| 1 | P1 | 删掉**非默认** provider 后,它的既有会话仍拿着已删的 key 与端点跑 | 属实。热路径只读「当前默认」那一行,而 `applyLlmConfig` 又刻意保留旧 provider 的 key(那是第 1 轮的整改) | `RuntimeSession` 记下创建时的 `providerId`;热路径发现它与当前默认不一致就**重建会话**(释放 → dispose → 落到既有的冷启动路径,库内历史照常注入,访客这一轮正常继续)。空闲回收走的就是这条重建路径,不是新机制。**实测**:relay-a 会话打到桩中转 1 次 → 切默认到 deepseek 并删掉 relay-a → 同一会话第 2 轮命中数不再增加,日志出 `rebuilding session … provider relay-a → deepseek` |
+| 2 | P1 | 「读配置 + 施加」没有串行,并发请求跨在一次配置变更上会把旧 key 写回去 | 属实。`appliedFingerprint` 与 `ModelRuntime` 都是进程级的,而热路径每轮都读一次 | 用本文件已有的 promise 链写法(`serializeColdStart` 同款)把读与施加绑成一段。链上只有一次单行查询与几个内存操作,不含 LLM 调用,**不引入新的锁原语** |
+| 3 | P2 | 默认模型填错会连**已有会话**一起打死,与「换模型只影响新会话」的契约矛盾 | 属实,是第 2 轮引入的回归:热路径调的 `applyLlmConfig` 末尾会解析模型句柄并抛错 | 把函数拆成两段:`refreshLlmConfig`(注册 provider + 装 key)与 `resolveModel`(只有冷启动调)。**实测**:模型改成不存在的之后,热会话第 2 轮 HTTP 200,新会话 503 —— 正是契约描述的样子 |
+| 4 | P2 | `SELECT … FOR UPDATE` 在**空表**上锁不住东西,两个「第一次配 provider」的并发调用照样撞唯一索引 | 属实 | 换成事务级 advisory lock(`pg_advisory_xact_lock`)。与表里有没有行无关,一条语句覆盖两种情形,随事务结束自动释放 |
+
+- 结论:待第 4 轮复审
 
 ## 失败处理
 

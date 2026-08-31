@@ -59,7 +59,7 @@ function loadPi(): Promise<PiModule> {
 // —— ModelRuntime 单例(隔离路径;凭据不落盘)——
 //
 // 注意这里**不再注册任何凭据**:R6 起 provider / 模型 / key 全部来自 `llm_config`,
-// 由 `applyLlmConfig()` 在每次冷启动会话时按需注册。单例本身不带任何模型偏好。
+// 由 `refreshLlmConfig()` 在冷启动与每一轮热路径上按需注册。单例本身不带任何模型偏好。
 let runtimePromise: Promise<{ pi: PiModule; modelRuntime: ModelRuntime }> | undefined;
 
 function getPiRuntime() {
@@ -88,54 +88,94 @@ function getPiRuntime() {
 let appliedFingerprint: string | undefined;
 
 /**
- * 把库里的当前配置施加到 ModelRuntime 上,返回可用的模型句柄。
+ * 「读库 + 施加」的串行链。
  *
- * 冷启动与热路径都会调,所以「改了配置何时生效」有确定答案。
- * 但生效面分两半,**别把它们当成一件事**(两轮 codex review + 桩中转实测校准):
+ * 【为什么必须串行】(codex 复审 P1)`appliedFingerprint` 与 `ModelRuntime` 都是
+ * 进程级的,而热路径上每一轮提问都会读一次配置。两个并发请求跨在一次配置变更上时,
+ * 可能是 `load(旧) → load(新) → apply(新) → apply(旧)` 的顺序 —— 于是刚轮换掉的
+ * 旧 key 又被写回去,接下来若干次调用都在用它。把读与施加绑成一个不可分割的段,
+ * 顺序就只能是「谁后读到,谁最后施加」。
+ *
+ * 用与 `serializeColdStart` 同一个 promise 链写法(本文件已有的惯用法),
+ * 不引入新的锁原语。链上只有一次单行查询与几个内存操作,不含 LLM 调用。
+ */
+let configChain: Promise<unknown> = Promise.resolve();
+
+function serializeConfig<T>(fn: () => Promise<T>): Promise<T> {
+  const run = configChain.then(fn, fn);
+  configChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+/**
+ * 读当前配置并施加到 ModelRuntime(注册 provider + 装 key),返回这份配置。
+ *
+ * **不解析模型句柄** —— 那是冷启动才需要的一步(codex 复审 P2:热路径若也做这步,
+ * 所有者把默认模型填错时会连**已有会话**一起打死,而契约说的是「换模型只影响新会话」,
+ * 已有会话根本不用那个新模型)。
+ *
+ * 生效面分两半,**别把它们当成一件事**(三轮 codex review + 桩中转实测校准):
  *
  *   - **凭据是进程级的,当轮生效**:`ModelRuntime` 是单例,pi 每次请求都经
- *     `prepareRequest → getAuth` 重新解析(源码核实)。所以轮换 key、删掉 provider
- *     会作用到**所有会话的下一轮**,包括还在内存里的。实测:删 provider 之后
- *     同一个热会话的下一轮直接 503。凭据撤销要的就是这个。
+ *     `prepareRequest → getAuth` 重新解析(源码核实)。轮换 key 作用到**所有会话的
+ *     下一轮**,包括还在内存里的。实测:删掉默认 provider 之后热会话下一轮直接 503。
  *   - **端点与模型定格在会话创建时**:`getModel()` 返回的 `Model` 对象自带 `baseUrl`,
  *     `AgentSession` 一直拿着它;重新注册 provider 只换 `ModelRuntime` 里的那份,
  *     换不掉会话手里的这份(实测:热会话第 2 轮仍打到已清空的旧中转)。
- *     于是改 baseUrl / 换模型只对**新会话**生效,已在内存的会话要等空闲回收
- *     (`IDLE_TIMEOUT_MS`)或被逐出后重建。
- *     要不要让进行中的对话中途换端点/模型是**产品取舍**不是缺陷修复
- *     (pi 有 `AgentSession.setModel` 这个杠杆),已记 rounds/BACKLOG.md 待裁定。
+ *     所以**换 provider** 由 `acquireSession` 用「重建会话」兜住(见那里),
+ *     而同一 provider 内改 baseUrl / 换模型只对新会话生效 —— 要不要让进行中的
+ *     对话中途换端点是产品取舍,已记 rounds/BACKLOG.md 待裁定。
  *
- * 【别再加 `removeRuntimeApiKey`】(codex review P1)曾以「进程里不留用不上的凭据」
+ * 【别再加 `removeRuntimeApiKey`】(codex 初审 P1)曾以「进程里不留用不上的凭据」
  * 为由,在切 provider 时撤掉上一个的 key。后果是:A 的既有会话下一轮解析不到凭据、
- * 直接失败。留着一个不再被选中的 provider 的 key,代价只是进程内多一个字符串。
+ * 直接失败。撤销由「provider 变了就重建会话」来保证,不靠抽 key。
  */
-async function applyLlmConfig(
+function refreshLlmConfig(modelRuntime: ModelRuntime): Promise<ActiveLlmConfig> {
+  return serializeConfig(async () => {
+    const cfg = await loadActiveLlmConfig();
+    applyProviderConfig(modelRuntime, cfg);
+    if (appliedFingerprint !== cfg.fingerprint) {
+      await modelRuntime.setRuntimeApiKey(cfg.provider, cfg.apiKey);
+      appliedFingerprint = cfg.fingerprint;
+      console.log(`llm config applied: provider=${cfg.provider} model=${cfg.modelId}`);
+    }
+    return cfg;
+  });
+}
+
+/** provider overlay(中转端点 / 自定义模型目录)的注册;指纹没变时不动。 */
+function applyProviderConfig(modelRuntime: ModelRuntime, cfg: ActiveLlmConfig): void {
+  if (appliedFingerprint === cfg.fingerprint) return;
+  // 【必须先 unregister】(codex 初审 P1)`registerProvider` 是**合并**语义 ——
+  // 源码注释原文:"Re-registration merges defined values over the previous
+  // registration and preserves undefined ones"。于是把 baseUrl 从「某中转」改回
+  // null 时,只是省略这个字段的话旧值会**留着**;两个字段都为 null 时按旧写法
+  // 干脆不调用,旧 overlay 原封不动。表现是:所有者以为已经撤掉中转,
+  // 而 key 与 prompt 还在发往那个端点。先撤干净再按新配置重建,与合并语义无关。
+  modelRuntime.unregisterProvider(cfg.provider);
+  // 中转端点与自定义模型目录是 pi 的「扩展 provider」配置面(ProviderConfigInput);
+  // 两者都为空 = 用内置 provider 原样,上面的 unregister 已经把它恢复了。
+  if (cfg.baseUrl !== null || cfg.models !== null) {
+    modelRuntime.registerProvider(cfg.provider, {
+      ...(cfg.baseUrl !== null && { baseUrl: cfg.baseUrl }),
+      ...(cfg.models !== null && {
+        models: cfg.models as Parameters<ModelRuntime["registerProvider"]>[1]["models"],
+      }),
+    });
+  }
+}
+
+/**
+ * 解析模型句柄。**只有冷启动会调** —— 已有会话用的是它自己创建时拿到的那个句柄,
+ * 不该因为新配置里的模型 id 填错而被牵连(codex 复审 P2)。
+ */
+function resolveModel(
   modelRuntime: ModelRuntime,
   cfg: ActiveLlmConfig,
-): Promise<NonNullable<ReturnType<ModelRuntime["getModel"]>>> {
-  if (appliedFingerprint !== cfg.fingerprint) {
-    // 【必须先 unregister】(codex review P1)`registerProvider` 是**合并**语义 ——
-    // 源码注释原文:"Re-registration merges defined values over the previous
-    // registration and preserves undefined ones"。于是把 baseUrl 从「某中转」改回
-    // null 时,只是省略这个字段的话旧值会**留着**;两个字段都为 null 时按旧写法
-    // 干脆不调用,旧 overlay 原封不动。表现是:所有者以为已经撤掉中转,
-    // 而 key 与 prompt 还在发往那个端点。先撤干净再按新配置重建,与合并语义无关。
-    modelRuntime.unregisterProvider(cfg.provider);
-    // 中转端点与自定义模型目录是 pi 的「扩展 provider」配置面(ProviderConfigInput);
-    // 两者都为空 = 用内置 provider 原样,上面的 unregister 已经把它恢复了。
-    if (cfg.baseUrl !== null || cfg.models !== null) {
-      modelRuntime.registerProvider(cfg.provider, {
-        ...(cfg.baseUrl !== null && { baseUrl: cfg.baseUrl }),
-        ...(cfg.models !== null && {
-          models: cfg.models as Parameters<ModelRuntime["registerProvider"]>[1]["models"],
-        }),
-      });
-    }
-    await modelRuntime.setRuntimeApiKey(cfg.provider, cfg.apiKey);
-    appliedFingerprint = cfg.fingerprint;
-    console.log(`llm config applied: provider=${cfg.provider} model=${cfg.modelId}`);
-  }
-
+): NonNullable<ReturnType<ModelRuntime["getModel"]>> {
   const model = modelRuntime.getModel(cfg.provider, cfg.modelId);
   if (!model) {
     // 指纹已经记成「已施加」,但这份配置其实用不了 —— 清掉,
@@ -163,6 +203,15 @@ export interface RuntimeSession {
   /** ≡ DB sessions.id */
   id: string;
   session: AgentSession;
+  /**
+   * 会话创建时所用的 llm_config provider。
+   *
+   * 会话手里的 `Model` 句柄自带该 provider 的端点,换不掉(见 refreshLlmConfig);
+   * 所以「当前默认 provider 变了」只能靠**重建会话**来跟上,而判据就是这个字段。
+   * 它同时是撤销的兜底:删掉一个非默认 provider 之后,它的会话在下一轮被重建到
+   * 当前默认 provider 上,不会继续拿着已删 provider 的 key 与端点跑(codex 复审 P1)。
+   */
+  providerId: string;
   createdAt: number;
   /** 空闲回收判据;每次提问开始/结束都会刷新 */
   lastActiveAt: number;
@@ -491,12 +540,14 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
   const { pi, modelRuntime } = await getPiRuntime();
   // 配置从库读、逐次施加:所有者经 MCP 换了 provider/模型/key 之后,
   // 下一个新会话就用新配置(验收 ⑥)。未配置时抛 LlmNotConfiguredError → 503。
-  const model = await applyLlmConfig(modelRuntime, await loadActiveLlmConfig());
+  const cfg = await refreshLlmConfig(modelRuntime);
+  const model = resolveModel(modelRuntime, cfg);
 
   const now = Date.now();
   const rec: RuntimeSession = {
     id: sessionId,
     session: undefined as unknown as AgentSession,
+    providerId: cfg.provider,
     createdAt: now,
     lastActiveAt: now,
     busy: false,
@@ -567,20 +618,32 @@ export async function acquireSession(sessionId: string): Promise<RuntimeSession>
   const existing = getRuntimeSession(sessionId);
   if (existing) {
     const rec = claim(existing);
-    // 【热路径也要施加配置】(codex 复审 P1)配置只在冷启动读的话,
-    // 一个一直活着的会话会**一直**用着旧凭据与旧端点:所有者轮换了泄漏的 key、
-    // 甚至删掉了整个 provider,只要没有别的会话恰好冷启动,就什么都不会发生。
-    // `applyLlmConfig` 在指纹没变时是空操作,代价只有这一次单行索引查询 ——
-    // 与一次 LLM 调用相比可以忽略。指纹变了则连凭据一起换掉,撤销当轮生效。
+    // 【热路径也要读配置】(codex 复审 P1)只在冷启动读的话,一个一直活着的会话会
+    // **一直**用着旧凭据与旧端点:所有者轮换了泄漏的 key、甚至删掉了 provider,
+    // 只要没有别的会话恰好冷启动,就什么都不会发生。
+    // 指纹没变时这段只是一次单行索引查询,与一次 LLM 调用相比可以忽略。
     // 认领之后到这里之间必须保证释放:否则一次库故障会把会话永久锁死。
+    let cfg: ActiveLlmConfig;
     try {
       const { modelRuntime } = await getPiRuntime();
-      await applyLlmConfig(modelRuntime, await loadActiveLlmConfig());
+      cfg = await refreshLlmConfig(modelRuntime);
     } catch (err) {
       rec.busy = false;
       throw err;
     }
-    return rec;
+    // provider 没变 —— 凭据已经是最新的,直接用
+    if (rec.providerId === cfg.provider) return rec;
+
+    // provider 变了(换了默认,或者这个会话的 provider 被删掉了)。
+    // 会话手里的 `Model` 自带旧 provider 的端点,换不掉,所以**重建**:
+    // 释放 → dispose → 落到下面的冷启动路径,用当前配置重新建一个,
+    // 库内历史照常注入,访客这一轮正常继续(codex 复审 P1)。
+    // 空闲回收走的也是同一条重建路径,不是新机制。
+    console.log(
+      `rebuilding session ${sessionId}: provider ${rec.providerId} → ${cfg.provider}`,
+    );
+    rec.busy = false;
+    await disposeSession(rec);
   }
 
   return serializeColdStart(async () => {

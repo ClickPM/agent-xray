@@ -27,6 +27,7 @@ function fakeRec(id: string, over: Partial<RuntimeSession> = {}): RuntimeSession
   return {
     id,
     session: { dispose: () => {}, isStreaming: false } as unknown as RuntimeSession["session"],
+    providerId: "test-provider",
     createdAt: now,
     lastActiveAt: now,
     busy: false,
