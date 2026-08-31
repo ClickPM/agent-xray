@@ -1,6 +1,6 @@
 # Round 06 — MCP 管理服务(替代 /admin 后台)
 
-> 状态:进行中(第 1 轮 findings 已整改,待复审)
+> 状态:已完成(codex 五轮审查,缺陷门禁 PASS)
 
 ## 目标
 
@@ -113,7 +113,14 @@
 | 1 | P1 | 只比 provider **名字**不够:「删掉 A → 用新端点/新 key 重建同名 A → 设默认」这条路上名字没变,于是不重建,而新 key 已装好 —— 会话下一轮拿新凭据打旧端点 | 属实 | 判据从 `providerId` 换成 `configFingerprint`(覆盖 provider / baseUrl / 模型 / key 全部字段)。**并保住第 3 轮的 P2**:重建前先 `resolveModel` 试一次,解析不出就原地留着旧会话、只拒新会话。**实测**:同名重建到新端点 4003 后,旧端点 4002 的命中数不再增加;同一批实测里坏模型仍是「热会话 200 / 新会话 503」,日志出 `keeping session … on its previous config` |
 | 2 | P2 | `llm_provider_delete` 没进 advisory lock;它与 upsert 并发时能插在「读 existing」与「UPDATE」之间,让 UPDATE 影响 0 行而 MCP 照样回成功 | 属实。advisory lock 与 `FOR UPDATE` 不同,不会顺带保护既有行不被 DELETE | `deleteProvider` 也取同一把闸 |
 
-- 结论:待第 5 轮复审
+### 第 5 轮 — 1 条 finding(P2),**不采纳、写明理由记 BACKLOG**(范围:`--base 3446091`)
+
+| # | 级别 | findings | 核实 | 处置 |
+|---|---|---|---|---|
+| 1 | P2 | 会话重建与配置写入之间有竞态:确认新配置可用之后才 dispose 旧会话,但 `createRuntimeSession` 会在冷启动链里重读配置;若这两步之间又写入一个解析不出模型的配置,旧会话已没、新的建不起来 | **属实**,结构上确实存在 | **不采纳,记 BACKLOG**(缺陷门禁允许:P2、非阻塞、不丢数据)。理由三条:①代价有界 —— 消息早已落库、dispose 前先排干轨迹,访客下一轮照常继续;②触发条件是「一次**无效的**管理写入恰好落在毫秒级窗口」,而那个写入本身就会让所有新会话 503,多这一个会话不改变处境;③真正的修法是「先建新的再拆旧的」,会动到 `disposing` 映射与 seq 续接那套保护(它们是前几轮 P1 的整改产物)—— 属机制类改动,按 CLAUDE.md 不在非阻塞 findings 的整改范围 |
+
+- **结论:整改后 PASS**。第 5 轮零 P1、零 bug/漏洞类 findings,唯一的 P2 已写明理由记 `rounds/BACKLOG.md`,满足 CLAUDE.md 的缺陷门禁收口标准。
+- 五轮合计 18 条 findings:**16 条采纳整改、1 条判定误报不采纳(Caddy RE2,有实跑证据)、1 条写明理由记 BACKLOG**。
 
 ## 失败处理
 
