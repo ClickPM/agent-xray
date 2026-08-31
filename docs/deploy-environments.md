@@ -113,7 +113,7 @@
 
    内容(文章与配图)同理:库是空的,由所有者经 MCP 发布,或从别的环境 `pg_dump`/`pg_restore` 搬过来。**镜像里不含任何 notes 内容**。
 
-6. **验证**:`/health` + 三 Tab + `/api/mcp`(带 token 实连,无 token 必须 401)+ 正文配图路由(`/notes/<系列>/<哈希>.webp` 应回 200 且带 `Cache-Control: immutable`);并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
+6. **验证**:`/health` + 三 Tab + `/api/mcp`(带 token 实连,无 token 必须 401)+ 正文配图路由(`/notes/<系列>/<哈希>.webp` 应回 200 且带 `ETag`,再带 `If-None-Match` 请求应回 304);并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
 
    > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,system`)白名单决定。R8 落地 `metrics` 时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
    >

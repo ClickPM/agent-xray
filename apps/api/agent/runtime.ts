@@ -84,31 +84,40 @@ function getPiRuntime() {
 
 // —— llm_config → ModelRuntime 的注册(验收 ⑥「切换默认模型后新会话生效」)——
 
-/** 上次注册进 ModelRuntime 的配置指纹与 provider;指纹没变就不重复注册。 */
+/** 上次注册进 ModelRuntime 的配置指纹;指纹没变就不重复注册。 */
 let appliedFingerprint: string | undefined;
-let appliedProvider: string | undefined;
 
 /**
  * 把库里的当前配置施加到 ModelRuntime 上,返回可用的模型句柄。
  *
- * 每次**冷启动会话**都会调(热路径不调),所以「改了配置何时生效」有确定答案:
- * 下一个新会话。进行中的会话不受影响 —— 中途换模型会让同一轮对话前后半段
- * 出自不同模型,那不是「热生效」,是数据不一致。
+ * 每次**冷启动会话**都会调(热路径不调),所以「改了配置何时生效」有确定答案。
+ * 但要分清生效面(codex review P1 ×2 之后校准的口径):
  *
- * 换 provider 时先撤掉上一个的运行期 key:进程里不留用不上的凭据。
+ *   - **模型选择**是每个会话自己的:会话创建时拿到的 `model` 句柄不会被改动,
+ *     换默认模型只影响新会话。
+ *   - **凭据与 provider 组合(baseUrl/模型目录)是进程级的**:`ModelRuntime` 是单例,
+ *     而 pi 每次请求都经 `prepareRequest → getAuth` 重新解析(实测源码),
+ *     所以改 key 或改中转端点会作用到**所有会话的下一轮**,包括进行中的。
+ *     单例是既定架构(内存基线按它标定),这里只把事实说准,不为此改架构。
+ *
+ * 【别再加 `removeRuntimeApiKey`】(codex review P1)曾以「进程里不留用不上的凭据」
+ * 为由,在切 provider 时撤掉上一个的 key。后果是:A 的既有会话下一轮解析不到凭据、
+ * 直接失败。留着一个不再被选中的 provider 的 key,代价只是进程内多一个字符串。
  */
 async function applyLlmConfig(
   modelRuntime: ModelRuntime,
   cfg: ActiveLlmConfig,
 ): Promise<NonNullable<ReturnType<ModelRuntime["getModel"]>>> {
   if (appliedFingerprint !== cfg.fingerprint) {
-    if (appliedProvider && appliedProvider !== cfg.provider) {
-      await modelRuntime
-        .removeRuntimeApiKey(appliedProvider)
-        .catch((err) => console.error(`remove stale provider key failed: ${safeErrorText(err)}`));
-    }
-    // 中转端点与自定义模型目录是 pi 的「扩展 provider」配置面
-    // (ProviderConfigInput);内置 provider 用默认目录时两者都为空,不必注册。
+    // 【必须先 unregister】(codex review P1)`registerProvider` 是**合并**语义 ——
+    // 源码注释原文:"Re-registration merges defined values over the previous
+    // registration and preserves undefined ones"。于是把 baseUrl 从「某中转」改回
+    // null 时,只是省略这个字段的话旧值会**留着**;两个字段都为 null 时按旧写法
+    // 干脆不调用,旧 overlay 原封不动。表现是:所有者以为已经撤掉中转,
+    // 而 key 与 prompt 还在发往那个端点。先撤干净再按新配置重建,与合并语义无关。
+    modelRuntime.unregisterProvider(cfg.provider);
+    // 中转端点与自定义模型目录是 pi 的「扩展 provider」配置面(ProviderConfigInput);
+    // 两者都为空 = 用内置 provider 原样,上面的 unregister 已经把它恢复了。
     if (cfg.baseUrl !== null || cfg.models !== null) {
       modelRuntime.registerProvider(cfg.provider, {
         ...(cfg.baseUrl !== null && { baseUrl: cfg.baseUrl }),
@@ -118,7 +127,6 @@ async function applyLlmConfig(
       });
     }
     await modelRuntime.setRuntimeApiKey(cfg.provider, cfg.apiKey);
-    appliedProvider = cfg.provider;
     appliedFingerprint = cfg.fingerprint;
     console.log(`llm config applied: provider=${cfg.provider} model=${cfg.modelId}`);
   }

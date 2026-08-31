@@ -20,10 +20,17 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const NAME_RE = /^[a-z0-9][a-z0-9._-]{0,95}$/i;
 
 /**
- * 一年不可变缓存。文件名是内容哈希(R5 的口径,MCP 上传时沿用),
- * 内容变了文件名就变了 —— 这正是 `immutable` 成立的前提。
+ * 一天缓存 + ETag 复验。
+ *
+ * 【为什么不是 `immutable` 的一年】(codex review P2)`immutable` 的前提是
+ * 「这个 URL 的内容永远不变」。文件名**按约定**是内容哈希,但 `notes_asset_put`
+ * 明确支持同名覆盖(那是所有者纠错的唯一手段),约定不是强制 —— 一旦覆盖,
+ * 已经缓存过的浏览器整整一年都不会回来复验,页面上还是旧图。
+ * 改不成「强制文件名 = 内容哈希」:存量 56 张的名字是 R5 按**源文件**算的哈希,
+ * 与上传字节的哈希对不上,强制等于把存量 URL 全废掉。
+ * 于是退一步:TTL 收到一天,配合强 ETag,复验成本是一次 304。
  */
-const CACHE_CONTROL = "public, max-age=31536000, immutable";
+const CACHE_CONTROL = "public, max-age=86400";
 
 function notFound(resp: ServerResponse): void {
   resp.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });

@@ -22,7 +22,8 @@ R5 的 `tools/notes-sync` 管道与 sync-notes skill 已随 R6 删除(存量数�
 ## 已实现(R6):正文配图供图
 
 - `GET /assets/notes/:series/:file`(`assets.ts`,`api.raw`)—— 从 `notes_assets` 读二进制,
-  带一年 `immutable` 缓存与强 ETag(文件名是内容哈希,这是 immutable 成立的前提)。
+  带一天缓存与强 ETag。**不用 `immutable`**:文件名按约定是内容哈希,但同名覆盖是
+  所有者纠错的唯一手段,`immutable` 会让覆盖后的一年里浏览器永不复验(codex review P2)。
   写面在 mcp 服务(全权角色),读面在这里(`docs/security.md` §4「两个面互不触碰」)。
 - **对外 URL 仍是 `/notes/<系列>/<哈希>.webp`**,不带 `/assets` —— 存量正文里的 markdown
   就是这么写的,改 URL 等于要改写全部存量文章。桥接由 `deploy/Caddyfile`(生产)

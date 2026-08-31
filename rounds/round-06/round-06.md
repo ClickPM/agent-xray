@@ -1,6 +1,6 @@
 # Round 06 — MCP 管理服务(替代 /admin 后台)
 
-> 状态:进行中
+> 状态:进行中(第 1 轮 findings 已整改,待复审)
 
 ## 目标
 
@@ -61,7 +61,19 @@
 
 ## 代码审查
 
-<!-- 完成后回填 -->
+- 审查方式:codex `/codex:review --background`(范围:branch diff against main)
+
+### 第 1 轮 — 5 条 findings(3×P1 + 2×P2),**全部采纳整改**
+
+| # | 级别 | findings | 核实 | 处置 |
+|---|---|---|---|---|
+| 1 | P1 | `.env.example` 用 `Get-Random` 生成 token 与加密密钥 | 属实。PS 5.1 的 `Get-Random` 背后是 `System.Random`(非密码学 PRNG),而 docs/security.md §4 要求 token「高熵随机」 | 改用 `RandomNumberGenerator::Create().GetBytes()`;两处生成命令都重写 |
+| 2 | P1 | 清空 `baseUrl`/`models` 时旧 overlay 不会被撤掉 | **属实且有安全后果**。pi 源码注释原文:"Re-registration merges defined values over the previous registration and preserves undefined ones";两字段都为 null 时旧写法干脆不调用 `registerProvider`。表现是所有者以为撤掉了中转,而 key 与 prompt 还在发往那个端点 | `applyLlmConfig` 改为**先 `unregisterProvider` 再按新配置重建**,与合并语义无关。**桩中转实测**:配上 4002 → 会话命中 1 次;清空 baseUrl → 新会话命中数不再增加 |
+| 3 | P1 | 切 provider 时 `removeRuntimeApiKey` 会打断旧 provider 的既有会话 | 属实。`ModelRuntime` 是单例,pi 每次请求都经 `prepareRequest → getAuth` 重新解析凭据(源码核实),撤掉 A 的 key 会让 A 的既有会话下一轮失败 | 删掉那次 `removeRuntimeApiKey`(它本来只是「不留无用凭据」的洁癖)。同时**校准文档口径**:换模型只影响新会话,换 key / baseUrl 是进程级的、作用于所有会话的下一轮 |
+| 4 | P2 | 可覆盖的附件 URL 不该标 `immutable` | 属实。`notes_asset_put` 明确支持同名覆盖,而 `immutable` 让浏览器一年内不复验 | `Cache-Control` 从 `max-age=31536000, immutable` 改为 `max-age=86400`,保留强 ETag。**没有**改成「强制文件名 = 内容哈希」:存量 56 张的名字是 R5 按源文件算的哈希,与上传字节的哈希对不上,强制等于废掉存量 URL |
+| 5 | P2 | `SHA256::HashData` 在 PS 5.1 不存在,文档命令跑不通 | 属实,**当场复现**:`Method invocation failed because [System.Security.Cryptography.SHA256] does not contain a method named 'HashData'` | 换成 `SHA256::Create().ComputeHash(...)`,并在本机 PS 5.1 实跑确认两条命令都出正确结果 |
+
+- 结论:待复审
 
 ## 失败处理
 
@@ -76,9 +88,9 @@
 | 1 | MCP 客户端实连 | ✅ `claude mcp list` → `✔ Connected`。**抓包实测 Claude Code 原生说 2026-07-28**:三个请求依次是 `server/discover` → `subscriptions/listen` → `tools/list`,均带 `MCP-Protocol-Version: 2026-07-28` 与 `Mcp-Method` 头,没有走 initialize 握手 |
 | 2 | 认证 | ✅ 无 token / 错 token / 多带一个字符 → 全 401 `unauthorized`(文案一致,不回显细节);带 `Origin` → 403;四次尝试在 `mcp_audit` 各留一条 `denied` 记录 |
 | 3 | 发布全链路 | ✅ 新建系列 → 上传 1×1 webp → 发文章引用它 → `/notes/r6-smoke/01` 渲染出图(`naturalWidth=1`,来自 Postgres)→ `/rss.xml` 与 `/rss/engineering.xml` 出现该条 |
-| 4 | 存量零回归 | ✅ 56 张存量图经 `notes_asset_put` 回填(6.47 MB),`apps/web/public/notes/` 已删除;`/notes/pi/0b60f550dd19.webp` 仍 200,`Cache-Control: …immutable` + 强 ETag,`If-None-Match` → 304。文章页(无扩展名)不受 rewrite 影响,仍 200 |
+| 4 | 存量零回归 | ✅ 56 张存量图经 `notes_asset_put` 回填(6.47 MB),`apps/web/public/notes/` 已删除;`/notes/pi/0b60f550dd19.webp` 仍 200,带强 ETag,`If-None-Match` → 304。文章页(无扩展名)不受 rewrite 影响,仍 200 |
 | 5 | key 只见掩码 | ✅ `llm_providers_list` 只回 `sk-…3f9a`;库内 `api_key_enc` 61 字节密文、不含明文;`mcp_audit` 全表搜不到 key 片段 |
-| 6 | 模型热生效 | ✅ 切到不存在的模型 → 下一个**新会话** 503;切回 → 新会话建起(服务端日志逐次打 `llm config applied`)。进行中的会话不受影响 |
+| 6 | 模型热生效 | ✅ 切到不存在的模型 → 下一个**新会话** 503;切回 → 新会话建起(服务端日志逐次打 `llm config applied`)。**生效面**见下方审查段:换模型只影响新会话,换 key / baseUrl 是进程级的 |
 | 7 | 向下协商 | ✅ 2025-11-25 的 `initialize` 握手 200 且 `tools/list` 拿到 21 个工具;`GET`/`DELETE` → 405;不支持的版本 → 400 `UnsupportedProtocolVersionError`;头体不一致 → 400 `-32020 HeaderMismatch` |
 | 8 | 退役干净 | ✅ `/admin` 404、`next build` 5 条路由无 admin;`tools/notes-sync`、`dev.ps1 notes`、`sync-notes` skill 已删,`.agents/skills` 重同步为 8 个 |
 | 9 | 构建门禁 | ✅ `dev.ps1 check` 通过;`dev.ps1 test` 8 文件 111 用例全过(R6 新增 32 个);`tsc --noEmit` api 与 web 均干净;`--services` 已含 `mcp` |

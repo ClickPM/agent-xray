@@ -439,7 +439,8 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         "provider 是 pi-ai 的 provider id(如 deepseek)。apiKey 加密入库,读回只给掩码。" +
         "**部分更新:省略的字段一律保留库内原值**(baseUrl / models 传 null 才是清空)——" +
         "只想改个 baseUrl 时不必、也不该重报 key 与限额。首次配置必须给出 apiKey 与 modelId。" +
-        "baseUrl 用于海外中转端点。**改动在下一个新会话生效**,进行中的会话不受影响。" +
+        "baseUrl 用于海外中转端点。**换模型只影响新会话**;换 key 或换 baseUrl 是进程级的," +
+        "会作用到所有会话的下一轮(pi 每次请求重新解析凭据与 provider 组合)。" +
         "第一个配好的 provider 自动成为默认。",
       inputSchema: {
         provider: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/, "provider 需为 pi-ai 的 provider id"),
