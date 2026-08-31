@@ -1,6 +1,6 @@
 # Round 05 — notes 服务与内容摄入
 
-> 状态:进行中(实现与自验完成,待 codex 审查)
+> 状态:已完成(codex 7 轮审查,末轮零 findings,缺陷门禁 PASS)
 
 ## 目标
 
@@ -175,7 +175,14 @@ dev.ps1                                      新增 notes 子命令;build --serv
   本轮之前的第 2–6 轮都误用了全量口径(我裸跑 `review --background`,没注意 companion 支持
   `--base` / `--scope`),单轮耗时 20 分钟上下。
 
-- **结论**:待第 7 轮复审(按新范围,`--base d215a8d`)确认清零。
+- **第 7 轮复审(首次按新范围)**:`--base d215a8d`,**零 findings**。审查者结论:
+  "The code change correctly removes the line-ending-width assumption in `takeTitle`,
+  preserving correct offsets for CRLF input."
+  耗时对比很直观:全量的第 6 轮 **20m20s**,收窄到整改 diff 的第 7 轮 **2m50s**。
+
+- **结论**:**整改后 PASS**。7 轮共 17 条 findings(P1×4 / P2×13):15 条采纳整改,
+  2 条按所有者裁定不采纳(远程图内嵌、Setext 标题)并各自留了显式兜底与 BACKLOG 记录。
+  末轮零 findings,阻塞性与 bug/漏洞类 findings 已清零,达到 CLAUDE.md 的收口标准。
 
 ## 失败处理
 

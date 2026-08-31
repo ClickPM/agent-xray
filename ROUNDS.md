@@ -15,7 +15,7 @@
 | **R-BUN** | 运行时统一 bun(开发/测试/预发/生产)+ 部署方式按架构评审整改 | ✅ 已完成([任务卡](rounds/round-bun/round-bun.md),13 项门禁全过;codex 初审 4P1+4P2 与三轮复审共 14 条 findings 全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R3** | Runtime 对话流真实化(/agent/ask SSE + 前端切真实数据源) | ⬜ | — |
 | **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ⬜ | — |
-| **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | 🟡 实现完成,待 codex 审查([任务卡](rounds/round-05/round-05.md)) | — |
+| **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ✅ 已完成([任务卡](rounds/round-05/round-05.md),8 项验收全过;codex 7 轮共 17 条 findings,15 条采纳整改、2 条所有者裁定不采纳并留兜底,末轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R6** | 沙箱与配额落地(只读工具组 · agent_ro · tool_config · daily_quota) | ⬜ | — |
 | **R7** | admin 服务 + /admin 五页对接(登录/统计/配置/工具) | ⬜ | — |
 | **R8** | metrics 打点 + About 真实化 | ⬜ | — |
