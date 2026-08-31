@@ -27,12 +27,28 @@
 		reverse_proxy api:4000
 	}
 
-	# 管理后台可选 IP 白名单(启用时取消注释并填入自己的出口 IP)
-	# @adminBlocked {
-	# 	path /admin*
+	# Notes 正文配图(R6)。图片存在 Postgres 里、由 api 运行期供图
+	# (所有者裁定:镜像内不烧任何 notes 内容),但**对外 URL 保持
+	# /notes/<系列>/<哈希>.webp 不变** —— 存量正文里的 markdown 就是这么写的。
+	#
+	# 【为什么按扩展名分流】文章页地址是 /notes/<系列>/<章节>,与图片地址同形;
+	# 唯一可靠的区分是扩展名。少了这条的表现是正文里的图全部 404 到 Next 上。
+	# 【为什么要 rewrite】Encore 路由里 /notes/:series/:file 会和既有的
+	# /notes/series/:slug 撞车,所以 api 侧的路径是 /assets/notes/…,这里补前缀。
+	# next.config.ts 有同款 dev 规则,两处改动要同步。
+	@notesAsset path_regexp ^/notes/[^/]+/[^/]+\.(?:webp|png|jpe?g|gif)$
+	handle @notesAsset {
+		rewrite * /assets{path}
+		reverse_proxy api:4000
+	}
+
+	# MCP 管理面可选 IP 白名单(docs/security.md §4;启用时取消注释并填入自己的出口 IP)。
+	# /api/mcp 已有静态 bearer token 认证,这一层是纵深防御,不是唯一防线。
+	# @mcpBlocked {
+	# 	path /api/mcp*
 	# 	not remote_ip 1.2.3.4
 	# }
-	# respond @adminBlocked 403
+	# respond @mcpBlocked 403
 
 	# 前端(Next.js)
 	handle {

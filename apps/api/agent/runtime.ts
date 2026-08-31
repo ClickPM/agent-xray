@@ -7,7 +7,9 @@
 //
 // 安全:`noTools: 'all'` 起步、资源发现指向空隔离目录(绝不加载本机 ~/.pi 下的
 // 用户扩展/工具)、事件进队列前逐字段白名单脱敏——docs/security.md §1/§2。
-import { secret } from "encore.dev/config";
+//
+// R6 起 provider / 模型 / key 不再硬编码,全部来自 `llm_config`(经 MCP 管理面维护);
+// 引导 secret `DeepSeekApiKey` 已按所有者裁定彻底移除。见 `llm-config.ts`。
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,15 +22,11 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { dropSession as dropTraceBuffer, publish as publishTrace } from "../shared/trace-bus";
 import { ALL_EVENTS, EVENT_MODES, safeErrorText, sanitizeEvent, type EventMode } from "./events";
+import { loadActiveLlmConfig, LlmNotConfiguredError, type ActiveLlmConfig } from "./llm-config";
 import { appendTraceEvents, listMessages, maxTraceSeq, type MessageRow } from "./store";
-
-const deepSeekApiKey = secret("DeepSeekApiKey");
 
 /** pi 的资源发现(extensions/skills/settings/AGENTS.md)全部指向这个空目录。 */
 const ISOLATED_DIR = join(tmpdir(), "agent-xray-runtime-pi");
-
-const MODEL_PROVIDER = "deepseek";
-const MODEL_ID = "deepseek-v4-flash";
 
 const SYSTEM_PROMPT =
   "你是 Agent X-Ray 站点上的演示 agent。访客与你对话的同时,页面右侧会实时展示你的内核事件轨迹。" +
@@ -58,7 +56,10 @@ function loadPi(): Promise<PiModule> {
   return piPromise;
 }
 
-// —— ModelRuntime 单例(隔离路径 + secret 注入 key,凭据不落盘)——
+// —— ModelRuntime 单例(隔离路径;凭据不落盘)——
+//
+// 注意这里**不再注册任何凭据**:R6 起 provider / 模型 / key 全部来自 `llm_config`,
+// 由 `applyLlmConfig()` 在每次冷启动会话时按需注册。单例本身不带任何模型偏好。
 let runtimePromise: Promise<{ pi: PiModule; modelRuntime: ModelRuntime }> | undefined;
 
 function getPiRuntime() {
@@ -71,7 +72,6 @@ function getPiRuntime() {
         modelsPath: join(ISOLATED_DIR, "models.json"),
         modelsStorePath: join(ISOLATED_DIR, "models-store.json"),
       });
-      await modelRuntime.setRuntimeApiKey(MODEL_PROVIDER, deepSeekApiKey());
       return { pi, modelRuntime };
     })();
     // 初始化失败不缓存失败态,下次请求重试
@@ -80,6 +80,60 @@ function getPiRuntime() {
     });
   }
   return runtimePromise;
+}
+
+// —— llm_config → ModelRuntime 的注册(验收 ⑥「切换默认模型后新会话生效」)——
+
+/** 上次注册进 ModelRuntime 的配置指纹与 provider;指纹没变就不重复注册。 */
+let appliedFingerprint: string | undefined;
+let appliedProvider: string | undefined;
+
+/**
+ * 把库里的当前配置施加到 ModelRuntime 上,返回可用的模型句柄。
+ *
+ * 每次**冷启动会话**都会调(热路径不调),所以「改了配置何时生效」有确定答案:
+ * 下一个新会话。进行中的会话不受影响 —— 中途换模型会让同一轮对话前后半段
+ * 出自不同模型,那不是「热生效」,是数据不一致。
+ *
+ * 换 provider 时先撤掉上一个的运行期 key:进程里不留用不上的凭据。
+ */
+async function applyLlmConfig(
+  modelRuntime: ModelRuntime,
+  cfg: ActiveLlmConfig,
+): Promise<NonNullable<ReturnType<ModelRuntime["getModel"]>>> {
+  if (appliedFingerprint !== cfg.fingerprint) {
+    if (appliedProvider && appliedProvider !== cfg.provider) {
+      await modelRuntime
+        .removeRuntimeApiKey(appliedProvider)
+        .catch((err) => console.error(`remove stale provider key failed: ${safeErrorText(err)}`));
+    }
+    // 中转端点与自定义模型目录是 pi 的「扩展 provider」配置面
+    // (ProviderConfigInput);内置 provider 用默认目录时两者都为空,不必注册。
+    if (cfg.baseUrl !== null || cfg.models !== null) {
+      modelRuntime.registerProvider(cfg.provider, {
+        ...(cfg.baseUrl !== null && { baseUrl: cfg.baseUrl }),
+        ...(cfg.models !== null && {
+          models: cfg.models as Parameters<ModelRuntime["registerProvider"]>[1]["models"],
+        }),
+      });
+    }
+    await modelRuntime.setRuntimeApiKey(cfg.provider, cfg.apiKey);
+    appliedProvider = cfg.provider;
+    appliedFingerprint = cfg.fingerprint;
+    console.log(`llm config applied: provider=${cfg.provider} model=${cfg.modelId}`);
+  }
+
+  const model = modelRuntime.getModel(cfg.provider, cfg.modelId);
+  if (!model) {
+    // 指纹已经记成「已施加」,但这份配置其实用不了 —— 清掉,
+    // 否则改回一个可用模型之后指纹若恰好没变(不可能,但别赌)会被跳过
+    appliedFingerprint = undefined;
+    throw new LlmNotConfiguredError(
+      `模型 ${cfg.provider}/${cfg.modelId} 不在目录中;` +
+        "内置 provider 请核对模型 id,自定义端点请在 llm_provider_upsert 里给出 models",
+    );
+  }
+  return model;
 }
 
 // —— 会话注册表 ——
@@ -422,8 +476,9 @@ export function serializeColdStart<T>(fn: () => Promise<T>): Promise<T> {
 
 async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> {
   const { pi, modelRuntime } = await getPiRuntime();
-  const model = modelRuntime.getModel(MODEL_PROVIDER, MODEL_ID);
-  if (!model) throw new Error(`${MODEL_PROVIDER}/${MODEL_ID} not in model catalog`);
+  // 配置从库读、逐次施加:所有者经 MCP 换了 provider/模型/key 之后,
+  // 下一个新会话就用新配置(验收 ⑥)。未配置时抛 LlmNotConfiguredError → 503。
+  const model = await applyLlmConfig(modelRuntime, await loadActiveLlmConfig());
 
   const now = Date.now();
   const rec: RuntimeSession = {

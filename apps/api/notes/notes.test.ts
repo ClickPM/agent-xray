@@ -1,5 +1,5 @@
 // R5 notes 服务测试:查询端点的分组/排序/边界,以及 RSS 文档生成。
-// 内容写入不在服务里(由 tools/notes-sync 从 vault 同步),所以这里的夹具直接写库。
+// 内容写入不在本服务里(R6 起由 mcp 管理面写),所以这里的夹具直接写库。
 // 经 `dev.ps1 test` 运行(CLAUDE.md 规则 2)。
 import { beforeEach, describe, expect, it } from "vitest";
 import { APIError, ErrCode } from "encore.dev/api";
@@ -46,10 +46,10 @@ async function seedChapter(opts: {
   await db.exec`
     INSERT INTO notes_chapters
       (series_slug, slug, ordinal, label, pinned, title, summary, content_md, word_count,
-       source_url, source_path, content_hash, published_at, updated_at)
+       source_url, content_hash, published_at, updated_at)
     VALUES (${opts.series}, ${opts.slug}, ${opts.ordinal}, ${opts.label}, ${opts.pinned ?? false},
             ${opts.title}, ${"摘要"}, ${opts.md ?? "正文"}, ${opts.words ?? 400},
-            ${opts.sourceUrl ?? null}, ${`vault/${opts.series}/${opts.slug}.md`}, ${`h-${opts.series}-${opts.slug}`},
+            ${opts.sourceUrl ?? null}, ${`h-${opts.series}-${opts.slug}`},
             NULL, ${updated}::timestamptz)`;
 }
 

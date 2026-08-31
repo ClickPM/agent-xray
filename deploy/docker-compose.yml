@@ -92,7 +92,13 @@ services:
       - PORT=4000
       # 下列变量由 deploy/infra-config.json 以 {"$env": …} 引用,构建时已绑定
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?}
+      # MCP 管理面(R6)。**注意这里放的不是可直接使用的凭据**:
+      #   MCP_AUTH_TOKEN_HASH  = bearer token 的 sha256(hex);原 token 只在所有者手里
+      #   CONFIG_ENCRYPTION_KEY = llm_config 里 LLM key 的 AES-256-GCM 密钥(32 字节 base64)
+      # 换 CONFIG_ENCRYPTION_KEY 会让库里既有的密文全部解不开 —— agent 直接停摆,
+      # 必须经 MCP 重新写一遍各 provider 的 key。生成方式见 deploy/.env.example。
+      - MCP_AUTH_TOKEN_HASH=${MCP_AUTH_TOKEN_HASH:?}
+      - CONFIG_ENCRYPTION_KEY=${CONFIG_ENCRYPTION_KEY:?}
       # RSS 条目里的绝对链接。不配就会回落到请求头里的 Host —— 那等于让任何人
       # 换个 Host 头就能左右订阅源里的链接指向。
       # **必须含 scheme**:备案通过前 130 预发只有明文 HTTP,写死 https 会让整份

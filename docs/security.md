@@ -25,7 +25,7 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 
 ### 第 2 层 · 数据面只读
 
-- 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_*` 表 `SELECT`,对 `llm_config` / `admin_*` / `tool_config` / `visits` 无任何权限
+- 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_*` 表 `SELECT`,对 `llm_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `visits` 无任何权限
 - 即使 prompt injection 完全操纵了工具调用,能做的也只有「读教程」
 
 ### 第 3 层 · 容器隔离
@@ -48,7 +48,9 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 ## 3. 凭据管理
 
 - LLM key:经 MCP 管理面写入 → 服务端加密存储(Postgres);任何读接口**含 MCP tool result**只返回掩码(`sk-…abcd`)——tool result 会进入 MCP 客户端的模型上下文,掩码必须在服务端完成
-  - **引导凭据例外**(R-BUN 部署形态,所有者裁定 2026-08-29,文档补记 2026-08-31):`DeepSeekApiKey` 是 R1 起的 Encore secret,自托管镜像没有管理面之前只能经 `deploy/.env`(600、不入 Git)→ infra-config `{"$env"}` 注入进程环境——与 §5「中转地址作为 secrets 管理」同一路径。不入镜像、不入日志、不经任何读接口暴露。R6(MCP 管理服务)`llm_config` 加密入库落地后,运行期 LLM key 以库内为准,该 `.env` 引导键的去留交所有者裁定(已记 `rounds/BACKLOG.md`)
+  - **不存在引导凭据**(所有者裁定 2026-08-31,R6 落地):R1–R5 期间的 Encore secret `DeepSeekApiKey` 已**彻底移除**——secret 声明、`deploy/infra-config.json` 的 secrets 段、compose 的 `DEEPSEEK_API_KEY` 三处一并删除。运行期 LLM 凭据的**唯一来源是 `llm_config` 表**,密文由 `ConfigEncryptionKey` 解开。代价已认:新环境首次部署后必须先经 MCP 的 `llm_provider_upsert` 写入一个 provider,`/agent/ask` 才可用(在那之前回明确的 503,不是含糊的模型错误)
+  - 加密口径:AES-256-GCM,密文布局 `nonce(12)‖ct‖tag(16)` 存 BYTEA(`apps/api/shared/crypto.ts`)。选认证加密是为了让「库被改一个字节」直接解密失败,而不是解出一段垃圾 key 去打 provider。`ConfigEncryptionKey` 换掉 = 既有密文全部作废,必须经 MCP 重写各 provider 的 key
+  - `ConfigEncryptionKey` 与 `McpAuthTokenHash` 都不是可直接使用的凭据:前者是密钥、后者是**哈希**,拿到它们既登不了管理面也用不了 LLM
 - `.env` 不入 Git;仓库推送前跑 gitleaks;`.gitignore` 已覆盖 `.env*` / `*.key` / `*.pem`
 - 服务器上 `.env` 权限 600
 
@@ -58,8 +60,15 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 
 - 单管理员;认证 = **静态 bearer token**:高熵随机、服务端只存哈希、经 secret/`.env` 注入,永不入 Git 与日志(solo 维护,不上 OAuth——规范的 authorization 章节为可选项,此为显式取舍)
 - 无 cookie 会话,故无 CSRF 攻击面;仅 HTTPS(Caddy 终止);可选:Caddy 层对 `/api/mcp` 加 IP 白名单
-- 认证失败一律拒绝且不回显细节;失败尝试与全部写操作(内容、配置、工具启停)写审计日志
-- **两个面互不触碰**:MCP 服务用全权 DB 角色写库;pi agent 工具仍走 `agent_ro` 只读,且 in-process 进程无 HTTP 类工具、物理上不可达 MCP 端点
+- 认证失败一律拒绝且不回显细节(是没带、格式不对、还是值不对,对调用方都是同一句 `unauthorized`——差异化文案等于帮猜 token 的人做二分);失败尝试与全部写操作(内容、配置、工具启停)写审计日志
+- **两个面互不触碰**:MCP 服务用全权 DB 角色写库;pi agent 工具仍走 `agent_ro` 只读,且 in-process 进程无 HTTP 类工具、物理上不可达 MCP 端点。`encore gen client` 也显式排除 mcp 服务,浏览器包里不出现管理面的类型化包装
+
+R6 落地补记(2026-08-31):
+
+- **审计表 `mcp_audit`** 字段:`outcome`(ok/denied/error)· `method` · `tool` · `summary`(过 `shared/redact` 口径,不含请求原文)· `remote` · `detail`。`remote` 存的是**所有者自己的**来源地址(反代 XFF 首段),与 §6「访客统计不存原始 IP」不是同一件事:管理面只有一个使用者,审计要能回答「这次写入从哪儿发起」
+- **带 `Origin` 头的请求一律 403**。规范要求校验 Origin 防 DNS rebinding;管理面没有浏览器客户端(所有者用的是 Claude Code 这类进程内客户端,它们不发 Origin),所以「有 Origin 就拒」比维护一份随环境漂移的域名白名单更严也更省。将来真要接浏览器客户端,改成白名单并同步本条
+- **`subscriptions/listen` 显式关闭**(`maxSubscriptions: 0`)。它是 SDK 自带的,而 Claude Code 一连上来就会调(实测抓包)。开着等于在管理端点上留长连 SSE,而 Encore 网关**不把客户端断开传导进来**(见 `apps/api/trace/README.md`),那些流没有东西能收尾。管理面本无订阅需求
+- **附件是可执行文档的入口**:上传只接受 webp/png/jpeg/gif,**SVG 永不接受**(同源下的存储型 XSS);扩展名、`contentType`、文件头魔数三者必须一致;供图响应带 `X-Content-Type-Options: nosniff`
 
 ## 5. 服务器基线(境内轻量服务器)
 

@@ -16,7 +16,7 @@
 | **R3** | Runtime 对话流真实化(/agent/ask SSE + 前端切真实数据源) | ✅ 已完成([任务卡](rounds/round-03/round-03.md),10 项验收全过;codex 初审 5 条(3×P1)+ 复审第 1 轮 3 条(2×P1)findings 全采纳整改,复审第 2 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ✅ 已完成([任务卡](rounds/round-04/round-04.md),12 项验收全过(#11 按所有者裁定改为静态核验,镜像实跑冒烟并入 R9);codex 初审 3 条(2×P1)+ 复审三轮 5 条(全 P2)共 8 条 findings,7 条采纳整改、1 条写明理由记 BACKLOG,复审第 4 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ✅ 已完成([任务卡](rounds/round-05/round-05.md),8 项验收全过;codex 7 轮共 17 条 findings,15 条采纳整改、2 条所有者裁定不采纳并留兜底,末轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
-| **R6** | MCP 管理服务(无状态 2026-07-28:notes 内容/About/LLM 多 provider/工具启停;/admin 与 R5 管道退役) | ⬜ | — |
+| **R6** | MCP 管理服务(无状态 2026-07-28:notes 内容/About/LLM 多 provider/工具启停;/admin 与 R5 管道退役) | 🔄 实现与验收完成,待 codex 审查([任务卡](rounds/round-06/round-06.md)) | — |
 | **R7** | 沙箱与配额落地(只读工具组 · agent_ro · daily_quota,消费 R6 配置表) | ⬜ | — |
 | **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ⬜ | — |
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ⬜ | — |
@@ -104,6 +104,15 @@
 - 附件供图:**镜像内不烧任何 notes 内容(所有者裁定),全部从 Postgres 读**——存量 `apps/web/public/notes/` 图片回填 `notes_assets` 后从 web 删除;API raw 端点从库读、带长缓存头;**图片 URL 保持既有 `/notes/<系列>/<哈希>.webp` 不变**(免改写存量 markdown),Caddy 按扩展名把该路径分流到 api,next dev 加对应 rewrite(RSS 先例)
 - 退役与删除:`apps/web/app/admin/` 六页整目录删除(所有者裁定;规则 7 结构性改动,理由=功能废弃)· `apps/api/admin/` 占位已换 `apps/api/mcp/` · `tools/notes-sync/` + `dev.ps1 notes` + `.claude/skills/sync-notes` 删除并 `dev.ps1 skills` 重同步镜像 · `dev.ps1 build --services` 补 `mcp`
 - 验收:①本机 Claude Code 实连打通(**第一验收项**,客户端对 2026-07-28/向下协商的支持在此验证);②无 token/错 token 全拒且有审计记录;③经 MCP 发布一篇含附件新文章全链路(写入 → 前端渲染 → RSS 更新);④存量文章与图片零回归(URL 不变);⑤LLM key 读回只见掩码;⑥切换默认模型后新会话生效
+
+> **落地补记(2026-08-31,与上面计划的四处偏离,详见任务卡)**
+>
+> 1. **SDK 换包名**:2026-07-28 由官方 TS SDK **v2** 提供,包名是 `@modelcontextprotocol/server` / `@modelcontextprotocol/node`(2.0.0)。原包 `@modelcontextprotocol/sdk` 最新版(1.30.0)的 `LATEST_PROTOCOL_VERSION` 仍是 `2025-11-25`、没有 `server/discover`。
+> 2. **`subscriptions/listen` 要显式关**:它是 SDK 自带的,而 Claude Code 一连上来就调(抓包实测)。留着等于在管理端点上开一条断连探测不到的长连 SSE,已用 `maxSubscriptions: 0` 关掉。
+> 3. **供图端点换前缀**:Encore 路由里 `/notes/:series/:file` 与既有的 `/notes/series/:slug` 冲突,API 侧改为 `/assets/notes/:series/:file`;**对外 URL 不变**,由 Caddy 与 next dev 按扩展名分流。
+> 4. **`DEEPSEEK_API_KEY` 所有者裁定彻底移除**(不保留为部署引导):运行期 LLM 凭据只有 `llm_config` 一个来源;新环境首次部署后必须先经 MCP 写 provider,`/agent/ask` 在那之前回 503。已写进 `docs/deploy-environments.md` 部署步骤。
+>
+> 另:Claude Code **原生说 2026-07-28**(抓包见 `MCP-Protocol-Version: 2026-07-28` + `Mcp-Method` 头),向下协商这次没被用到,但按所有者裁定保留。
 
 ### R7 — 沙箱与配额落地(原 R6;`docs/security.md` §1 第 1/2/4 层)
 

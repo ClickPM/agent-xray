@@ -52,7 +52,8 @@
 
    ```bash
    cd deploy && cp .env.example .env && chmod 600 .env   # 首次
-   # 填 IMAGE_TAG=<git-sha> / POSTGRES_PASSWORD / DEEPSEEK_API_KEY / SITE_ORIGIN=<含 scheme 的对外地址>
+   # 填 IMAGE_TAG=<git-sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY
+   #   / SITE_ORIGIN=<含 scheme 的对外地址>   ← 生成方式见 .env.example 里的注释
 
    docker compose up -d --wait postgres   # 1) 只起库,--wait 会阻塞到 healthy
    ./migrate.sh                           # 2) schema 就位(详见下一节)
@@ -95,15 +96,32 @@
 
    不停机升级(跳过第 1 步)**仅当确认本次迁移与在跑旧版完全后向兼容**时才允许;V1 默认不做这个保证。
 
-5. **验证**:`/health` + 三 Tab + `/admin` 冒烟;并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
+5. **首次部署必做:经 MCP 配置 LLM provider**(R6 起没有引导密钥,`docs/security.md` §3)。
 
-   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,system`)白名单决定。R4/R5/R7/R8 落地 `trace` / `notes` / `admin` / `metrics` 时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
+   在这一步之前,站点三个 Tab 都能开,但 `/agent/ask` 会回 `503 对话服务尚未配置模型` —— 这是**设计如此**,不是故障。运行期 LLM 凭据的唯一来源是 `llm_config` 表,只能经管理面写入:
+
+   ```jsonc
+   // MCP 客户端(Claude Code 等)指向 https://<对外地址>/api/mcp,
+   // 带 Authorization: Bearer <你的 token>(服务端只存它的 sha256)
+   llm_provider_upsert {
+     "provider": "deepseek",              // pi-ai 的 provider id
+     "apiKey": "<明文 key,加密入库,读回只给掩码>",
+     "baseUrl": "https://<海外中转端点>/v1",  // 境内直连不稳,§5
+     "modelId": "deepseek-v4-flash"
+   }
+   ```
+
+   内容(文章与配图)同理:库是空的,由所有者经 MCP 发布,或从别的环境 `pg_dump`/`pg_restore` 搬过来。**镜像里不含任何 notes 内容**。
+
+6. **验证**:`/health` + 三 Tab + `/api/mcp`(带 token 实连,无 token 必须 401)+ 正文配图路由(`/notes/<系列>/<哈希>.webp` 应回 200 且带 `Cache-Control: immutable`);并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
+
+   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,system`)白名单决定。R8 落地 `metrics` 时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
    >
    > 因此冒烟不能只看 `/health`,要**逐个确认当前已落地的正式 service 端点都可达**。本 PR 不引入自动服务发现,这条靠清单与冒烟兜住。
 
    > **SSE ×2 的冒烟要等 R3/R4**:两条 SSE 目前只存在于 spike 里,而 spike 已被正确地排除出镜像;正式的 `/agent/ask` 与 `/trace/stream` 分别在 R3、R4 落地。在那之前**生产镜像里没有任何 SSE 端点**,这一项无法演练——R-BUN 记录的 SSE 通过结果是在 `encore run` 开发形态下取得的,不代表生产镜像形态已验证。不为此人为保留 spike 或新增临时 SSE 端点。
 
-6. **回滚**:镜像即回滚单元。把 `.env` 的 `IMAGE_TAG` 换回上一个 SHA,`docker compose up -d`。涉及不可逆迁移时先恢复备份(R10 衔接)。
+7. **回滚**:镜像即回滚单元。把 `.env` 的 `IMAGE_TAG` 换回上一个 SHA,`docker compose up -d`。涉及不可逆迁移时先恢复备份(R10 衔接)。
 
 ## 环境差异要点
 

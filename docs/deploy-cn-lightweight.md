@@ -97,7 +97,8 @@ ssh <host> "docker load -i ~/deploy/xray-<sha>.tar && chmod +x ~/deploy/migrate.
 ```bash
 # —— 服务器 ——
 cd ~/deploy && cp .env.example .env && chmod 600 .env    # 首次
-# 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / DEEPSEEK_API_KEY
+# 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY / SITE_ORIGIN
+# (R6 起没有 LLM 引导密钥:起完服务后经 MCP 的 llm_provider_upsert 写入 provider)
 
 docker compose up -d --wait postgres   # 1) 只起库,等到 healthy
 ./migrate.sh                           # 2) schema 就位(镜像不会自跑迁移)
@@ -114,7 +115,7 @@ docker compose up -d                   # 3) 再起 api / web / caddy
 
 ## 4. Caddyfile 要点
 
-见 [deploy/Caddyfile](../deploy/Caddyfile):`/` → web、`/api/*` → api;`/admin*` 可选 IP 白名单段;全局限速可用 caddy-ratelimit 插件或前置云厂商防护。
+见 [deploy/Caddyfile](../deploy/Caddyfile):`/` → web、`/api/*` → api、`/notes/**.webp` 按扩展名分流到 api 供图;`/api/mcp*` 可选 IP 白名单段;全局限速可用 caddy-ratelimit 插件或前置云厂商防护。
 
 ## 5. 数据备份
 
@@ -131,7 +132,7 @@ docker compose up -d                   # 3) 再起 api / web / caddy
 - [ ] `IMAGE_TAG` 是 git SHA 而非 latest;该 SHA 与预发验过的完全一致
 - [ ] 迁移已带外施加且版本可追溯;空库直起会 500 的坑已规避
 - [ ] postgres 仅在 `back` 内部网段可达(caddy/web 连不上)
-- [ ] `/admin` 强密码 + 登录限速生效;可选 IP 白名单
+- [ ] `/api/mcp` 无 token / 错 token 全拒且有审计记录;可选 IP 白名单
 - [ ] SSE 事件流抽查:无 Authorization/api-key 字段
 - [ ] SSE 优雅关闭:`docker compose stop api` 时客户端收到明确断流而非静默挂起
 - [ ] 限额:小额度演练超限路径(拒新会话 + 前端提示)
