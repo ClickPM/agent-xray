@@ -87,20 +87,25 @@ export function sessionSlots<T extends { sessionId: string; startedAt: number }>
 }
 
 /**
- * 该让位的旧连接:**同 clientId 的既有流,不限会话**。
+ * 该让位的旧连接:**同 clientId、且比 `beforeId` 更早**的既有流,不限会话。
  * clientId 缺省时不让位(不认识的调用方之间无从判断谁替代谁)。
  *
- * 【不要再加 `sessionId` 条件】(codex review P1)一个标签页任何时刻只读一条轨迹流,
+ * 【不要再加 `sessionId` 条件】(codex 初审 P1)一个标签页任何时刻只读一条轨迹流,
  * 所以同 clientId 的旧连接一定已经死了——**包括它上一个会话那条**。加上同会话限制的话,
  * 访客在左栏点着看历史会话时,每换一个会话就漏掉一个名额(旧的那条既收不到断开、
  * 又不匹配让位条件),直到 MAX_STREAM_MS 才释放;翻几个会话就能把全站名额耗光。
+ *
+ * 【`beforeId` 是让位方向的定盘星】(codex 复审 P2)槽位 id 按**请求到达顺序**递增,
+ * 只让位比自己更早的那些,于是"新请求赢"这件事与各自的库查询谁先返回无关——
+ * 快速切会话时,已经没人读的旧请求即便晚一步跑到这里,也不会反过来把新的那条顶掉。
  */
-export function selectSuperseded<T extends { clientId: string | null }>(
+export function selectSuperseded<T extends { id: number; clientId: string | null }>(
   live: T[],
   clientId: string | null,
+  beforeId: number,
 ): T[] {
   if (!clientId) return [];
-  return live.filter((s) => s.clientId === clientId);
+  return live.filter((s) => s.clientId === clientId && s.id < beforeId);
 }
 
 function liveSlots(): StreamSlot[] {
@@ -108,11 +113,9 @@ function liveSlots(): StreamSlot[] {
 }
 
 /**
- * 占一个名额。**先让同 clientId 的旧连接退场,再判容量**:同一个标签页重连
- * (React 重挂载、MAX_STREAM_MS 到期续上、刷新页面)必须立刻收回自己那条,
- * 否则它会一直占着名额直到超时,几次重连就把本会话的名额吃光。
- * `end()` 同步置 `ended`,让位对名额统计立即生效(handler 的 finally 是异步的)。
- * 整段没有 await,并发请求不会双双通过。
+ * 登记一个名额并判容量。**只登记,不让位**——让位是 `supersedeOlderStreams` 的事,
+ * 它必须等会话校验通过之后才做(见那个函数的注释)。
+ * 整段没有 await,并发请求不会双双通过;槽位 id 因此就是请求到达的顺序号。
  */
 function acquireSlot(
   sessionId: string,
@@ -132,14 +135,6 @@ function acquireSlot(
     },
   };
 
-  for (const stale of selectSuperseded(liveSlots(), clientId)) {
-    console.log(
-      `superseding stale trace stream for client ${clientId} ` +
-        `(slot ${stale.id}, session ${stale.sessionId})`,
-    );
-    stale.end("superseded");
-  }
-
   const live = liveSlots();
   if (live.length >= MAX_TOTAL_STREAMS) throw new StreamCapacityError(MAX_TOTAL_STREAMS);
   // 单会话的公平上限:防一个会话把全站名额吃光(名额只有被遗弃的连接才会长期占着)
@@ -149,6 +144,27 @@ function acquireSlot(
 
   slots.set(slot.id, slot);
   return slot;
+}
+
+/**
+ * 让同一标签页更早的那些连接退场。
+ *
+ * 【必须排在会话校验成功之后】(codex 复审第 2 轮 P2)让位是不可逆的:客户端收到
+ * `bye{superseded}` 就不再重连。若在校验之前让位,一个 sessionId 已失效(或恰好赶上
+ * 库查询失败)的请求会先掐掉那条**健康的**流,自己又建不起来,观众两头落空。
+ * 放到校验之后,失败的请求什么都不动,旧流照常活着。
+ *
+ * 让位只针对 `slot.id` 之前的连接,所以"新请求赢"与库查询谁先返回无关(见
+ * `selectSuperseded`);`end()` 同步置 `ended`,名额统计立即生效(handler 的 finally 是异步的)。
+ */
+function supersedeOlderStreams(slot: StreamSlot): void {
+  for (const stale of selectSuperseded(liveSlots(), slot.clientId, slot.id)) {
+    console.log(
+      `superseding stale trace stream for client ${slot.clientId} ` +
+        `(slot ${stale.id}, session ${stale.sessionId})`,
+    );
+    stale.end("superseded");
+  }
 }
 
 // —— 回放合并 ——
@@ -221,11 +237,11 @@ export const stream = api.raw(
       resolveEnd();
     };
 
-    // 【顺序敏感】占名额必须排在**第一个 await 之前**(codex 复审 P2)。
+    // 【顺序敏感】登记名额必须排在**第一个 await 之前**(codex 复审第 1 轮 P2)。
     // 放在 sessionExists 之后的话,同一标签页快速切会话(B → C)时两个请求会一起卡在
-    // 那次库查询上,谁先返回谁先占槽:若 C 先占、随后已经没人读的 B 才到,B 反过来把 C
-    // 让位掉——用户要看的那条流静默停掉,没人读的那条却占着名额到超时。
-    // 提到入口后,占槽顺序 = 请求到达顺序,不再受库延迟摆布。
+    // 那次库查询上,谁先返回谁拿到更大的槽位号,让位方向就可能反过来。
+    // 提到入口后,槽位号 = 请求到达顺序,让位方向由它定死。
+    // 注意这里**只登记不让位**:让位要等会话校验通过(见 supersedeOlderStreams)。
     // 代价:会话不存在时也会先占一下名额,但下面的 finally 立刻释放。
     let slot: StreamSlot;
     try {
@@ -266,6 +282,9 @@ export const stream = api.raw(
         fail(resp, 500, "internal error");
         return;
       }
+
+      // 会话确实存在,这次连接站得住脚了,才收回本标签页更早的那些连接
+      supersedeOlderStreams(slot);
 
       unsubscribe = subscribe(sessionId, (e) => {
         if (replaying) pending.push(e);
