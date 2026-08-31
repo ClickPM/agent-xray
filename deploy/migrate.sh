@@ -109,15 +109,31 @@ for dir in "${MIG_DIRS[@]}"; do
   current="${current:-0}"
   echo "当前版本: $current"
 
-  mapfile -t FILES < <(img_sh "ls -1 $dir/*.up.sql 2>/dev/null | sort" || true)
+  mapfile -t FILES < <(img_sh "ls -1 $dir/*.up.sql 2>/dev/null" || true)
   [[ ${#FILES[@]} -gt 0 ]] || die "$dir 下没有 *.up.sql"
 
-  pending=0
+  # 版本号解析 + 数值排序 + 唯一性校验(codex 复审 2026-08-31 第 2 轮 P2):
+  # - 字典序 sort 在版本宽度变化时会错序(999 排在 1000 后 → v999 被静默跳过);
+  # - 两个分支各自新增同号迁移(002_a / 002_b),第一份应用后第二份会被
+  #   「version > current」判断静默跳过,库里永久缺一份变更。
+  # 两种情况都必须在执行前拒绝,而不是靠约定。
+  ORDERED=()
   for f in "${FILES[@]}"; do
     base="$(basename "$f")"
     # 文件名前缀数字即版本号(001_init.up.sql -> 1)
     ver="$(printf '%s' "$base" | sed -n 's/^0*\([0-9][0-9]*\)_.*/\1/p')"
     [[ -n "$ver" ]] || die "迁移文件名不符合 <数字>_<名字>.up.sql 约定: $base"
+    ORDERED+=("$ver $f")
+  done
+  mapfile -t ORDERED < <(printf '%s\n' "${ORDERED[@]}" | sort -n -k1,1)
+  dup="$(printf '%s\n' "${ORDERED[@]}" | awk '{print $1}' | uniq -d | head -1)"
+  [[ -z "$dup" ]] || die "发现重复的迁移版本号 v$dup(多个分支各自新增了同号迁移?)。重命名消除冲突后再部署。"
+
+  pending=0
+  for entry in "${ORDERED[@]}"; do
+    ver="${entry%% *}"
+    f="${entry#* }"
+    base="$(basename "$f")"
     (( ver > current )) || continue
     pending=$((pending + 1))
 

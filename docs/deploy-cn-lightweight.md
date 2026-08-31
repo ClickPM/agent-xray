@@ -89,6 +89,7 @@ curl -fsSL https://get.docker.com | sh
 # ⚠️ 传输走文件。不要在 PowerShell 里 `docker save … | ssh … docker load`:
 #    PS 5.1 管道按文本重编码,二进制 tar 会被破坏,远端 load 必失败。
 docker save -o xray-<sha>.tar local/xray-api:<sha> local/xray-web:<sha>
+ssh <host> "mkdir -p ~/deploy"      # 首次:scp 不会自建目标目录
 scp xray-<sha>.tar deploy/docker-compose.yml deploy/Caddyfile deploy/migrate.sh deploy/.env.example <host>:~/deploy/
 ssh <host> "docker load -i ~/deploy/xray-<sha>.tar && chmod +x ~/deploy/migrate.sh"
 ```
