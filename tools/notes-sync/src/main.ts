@@ -208,17 +208,26 @@ function normalizeRel(p: string): string {
  */
 function takeTitle(body: string, fallback: string, fm: Record<string, unknown>): { title: string; body: string } {
   const fmTitle = typeof fm.title === "string" ? fm.title.trim() : "";
-  const lines = body.split(/\r?\n/);
+
+  // 直接在原串上走下标,**不能**先 split 再累加 `line.length + 1`:
+  // 那样等于假设行终止符恒为 1 个字符,遇到 CRLF 每行少算 1,切片位置逐行前移,
+  // 结果是标题的末尾几个字被留在正文开头(codex review 2026-08-31 第 6 轮 P1)。
   let offset = 0;
-  for (const line of lines) {
+  while (offset <= body.length) {
+    const nl = body.indexOf("\n", offset);
+    const lineEnd = nl < 0 ? body.length : nl;
+    const line = body.slice(offset, lineEnd).replace(/\r$/, "");
+
     if (/^\s{0,3}(`{3,}|~{3,})/.test(line)) break; // 撞到围栏就不再往下找
     const m = /^\s{0,3}#\s+(.+?)\s*$/.exec(line);
     if (m) {
       const before = body.slice(0, offset).trim();
-      const rest = before === "" ? body.slice(offset + line.length) : body;
-      return { title: fmTitle || m[1].trim(), body: rest };
+      // 从行尾(不含行终止符)切,剩下的前导换行交给 normalizeBlankLines 收
+      return { title: fmTitle || m[1].trim(), body: before === "" ? body.slice(lineEnd) : body };
     }
-    offset += line.length + 1;
+
+    if (nl < 0) break;
+    offset = nl + 1;
   }
   return { title: fmTitle || fallback, body };
 }
