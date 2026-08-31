@@ -77,7 +77,19 @@ export function rewrite(body: string, ctx: RewriteContext, report: RewriteReport
   const out: string[] = [];
 
   let fence: string | null = null;
+  let inComment = false;
   for (const raw of lines) {
+    // —— Obsidian 注释 `%%…%%` 可跨行;它在围栏之外才成立 —— //
+    if (inComment) {
+      const close = raw.indexOf("%%");
+      if (close < 0) continue;
+      inComment = false;
+      const rest = raw.slice(close + 2);
+      if (rest.trim() === "") continue;
+      out.push(rewriteLine(rest, ctx, report));
+      continue;
+    }
+
     // —— 围栏内原样透传 —— //
     const fenceHit = FENCE_RE.exec(raw);
     if (fence) {
@@ -91,13 +103,33 @@ export function rewrite(body: string, ctx: RewriteContext, report: RewriteReport
       continue;
     }
 
-    out.push(rewriteLine(raw, ctx, report));
+    const { text: stripped, opened } = dropComments(raw);
+    inComment = opened;
+    if (stripped.trim() === "" && raw.trim() !== "") continue;
+    out.push(rewriteLine(stripped, ctx, report));
   }
 
-  let text = out.join("\n");
-  text = dropCommentBlocks(text, report);
-  text = normalizeBlankLines(text);
-  return text;
+  return normalizeBlankLines(out.join("\n"));
+}
+
+/**
+ * 去掉一行里成对的 `%%…%%`;返回是否留下一个未闭合的开引号(注释跨到下一行)。
+ *
+ * 必须逐行做、且只在围栏之外做:早先的实现是对整篇正文跑一次
+ * `/%%[\s\S]*?%%/g`,那样代码块里的 `%%`(批处理的 `%%A` 循环变量、
+ * SQL 的 `LIKE '%%'`)会被当成注释一起吃掉,而且吃完仍是合法 markdown,看不出来。
+ */
+function dropComments(line: string): { text: string; opened: boolean } {
+  let out = "";
+  let i = 0;
+  for (;;) {
+    const open = line.indexOf("%%", i);
+    if (open < 0) return { text: out + line.slice(i), opened: false };
+    out += line.slice(i, open);
+    const close = line.indexOf("%%", open + 2);
+    if (close < 0) return { text: out, opened: true };
+    i = close + 2;
+  }
 }
 
 function rewriteLine(line: string, ctx: RewriteContext, report: RewriteReport): string {
@@ -303,11 +335,6 @@ function rewriteRawHtml(text: string, report: RewriteReport): string {
 /** 行内 `#标签`(实测 4 处)。标题的 `# ` 有空格,不会命中 */
 function stripInlineTags(text: string): string {
   return text.replace(/(^|[\s(（])#([一-龥A-Za-z][一-龥\w/-]*)/g, "$1$2");
-}
-
-/** `%%…%%` Obsidian 注释(实测 2 处),可跨行 */
-function dropCommentBlocks(text: string, _report: RewriteReport): string {
-  return text.replace(/%%[\s\S]*?%%/g, "");
 }
 
 /** 改写会留下空行(丢弃的图片、注释),压成最多一个空行 */

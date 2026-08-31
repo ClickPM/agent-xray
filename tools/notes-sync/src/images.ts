@@ -10,7 +10,13 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+
+/** abs 是否在 root 之内(含相等);按路径分隔符边界比,避免 `/vault-x` 被当成 `/vault` 的子目录 */
+function isInside(root: string, abs: string): boolean {
+  const rel = relative(resolve(root), abs);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
 
 const MAX_WIDTH = 1600;
 const WEBP_QUALITY = 82;
@@ -38,7 +44,11 @@ export class ImagePipeline {
   private readonly missing: string[] = [];
   private referenced = 0;
 
-  constructor(private readonly publicDir: string) {}
+  constructor(
+    private readonly publicDir: string,
+    /** vault 根;正文里的相对路径不许指到它外面去 */
+    private readonly vaultRoot: string,
+  ) {}
 
   /**
    * 内嵌 base64 图(`data:image/png;base64,…`)。知识星球课程经 Web Clipper 抓下来时
@@ -73,6 +83,12 @@ export class ImagePipeline {
    */
   resolve(mdPath: string, relUrl: string, seriesSlug: string): string | null {
     const abs = resolve(dirname(mdPath), relUrl);
+    // 正文里的相对路径是内容,不是配置:`../../../x.png` 会把 vault 之外的文件
+    // 复制进公网可访问的 public/。这里挡住,顺便也能抓出"图放错目录"的手误。
+    if (!isInside(this.vaultRoot, abs)) {
+      this.missing.push(`${abs}(在 vault 之外,已拒绝)`);
+      return null;
+    }
     if (!existsSync(abs) || !statSync(abs).isFile()) {
       this.missing.push(abs);
       return null;

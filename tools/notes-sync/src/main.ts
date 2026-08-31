@@ -311,7 +311,7 @@ async function main() {
   console.log(`发现   : ${loaded.length} 篇正文 / ${SERIES.length} 个系列`);
 
   const index = new LinkIndex(loaded);
-  const images = new ImagePipeline(args.publicDir);
+  const images = new ImagePipeline(args.publicDir, vault);
   const times = gitTimes(vault);
   const report = emptyReport();
 
