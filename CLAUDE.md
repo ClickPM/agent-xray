@@ -31,7 +31,9 @@ rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap
 tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。
               notes-sync:vault `学习分享/` → notes_* 表的内容同步管线(R5)
 .claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
-              + 自建 skill sync-notes(内容同步规程)+ MCP 启动脚本
+              + 自建 skill sync-notes(内容同步规程,R5)+ MCP 启动脚本
+.agents/      `.claude/skills` 的镜像,给 codex 审查者用(生成物,`dev.ps1 skills` 同步)。
+              实测:codex 只认仓库级 `.agents/skills` 与 `.codex/skills`,**不认 `.claude/skills`**
 dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 ```
 
@@ -105,6 +107,7 @@ cd apps\web; npm run dev   # 前端 next dev :3000
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。
 - `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;另有自建的 `sync-notes`(内容同步规程,R5)。
+- **skill 升级或新增后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。
 
 ## 部署环境矩阵
 

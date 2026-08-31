@@ -1,4 +1,6 @@
-// R1 spike:pi SDK 34 种扩展事件 × 四模式清单。
+// pi SDK 34 种扩展事件 × 四模式清单 + 事件流脱敏(docs/security.md §2 强约束)。
+// R1 在 spike/ 建立,R3 随正式采集点(agent/runtime.ts 观测者扩展)迁入 agent 服务
+// (spike 已于 R4 整体删除);R4 又把与事件无关的凭据脱敏原语下沉到 shared/redact.ts。
 // 事件名以 @earendil-works/pi-coding-agent@0.84.3 dist/core/extensions/types.d.ts
 // 的 34 个 `pi.on()` 重载为准;模式按 handler result 语义划分:
 //   veto     = result 可取消/拦截(cancel / block / trust 裁决)
@@ -7,6 +9,12 @@
 //   notify   = 纯通知,无影响流程的 result
 // 实测计数 notify 19 / veto 6 / chain 7 / takeover 2 = 34;
 // docs/architecture.md 原记 notify 18(合计 33)已按本清单回改(CLAUDE.md 规则:以实测为准)。
+
+import { previewText, sanitizeValue } from "../shared/redact";
+
+// R3 的调用点(agent/ask.ts、agent/runtime.ts)从本模块取脱敏工具,R4 迁移后
+// 保持同一入口,避免调用点为一次搬家而全量改写。
+export { previewText, safeErrorText, sanitizeValue } from "../shared/redact";
 
 export const PI_SDK_VERSION = "0.84.3";
 
@@ -73,80 +81,11 @@ export function modeCounts(): Record<EventMode, number> & { total: number } {
 //     凭据模式清洗——未知嵌套字段不可能以结构形式存活。
 // 放行的值仍经 sanitizeValue(截断 + 键数上限 + 凭据键/值兜底);单事件序列化超
 // MAX_EVENT_BYTES 整体降级为 {type, oversized}。
-const DROP_KEY =
-  /authorization|api[-_]?key|apikey|token|secret|credential|cookie|passw|private[-_]?key|bearer|headers/i;
-// 字符串值内的凭据形态(sk-/rk-/pk-/sess- 前缀串、Bearer 串)
-const SECRET_VALUE_PATTERNS = [
-  /\b(?:sk|rk|pk|sess)-[A-Za-z0-9_-]{10,}\b/g,
-  /\bbearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,
-];
-const MAX_STRING = 400;
-const MAX_ARRAY = 20;
-const MAX_DEPTH = 4;
-const MAX_PROPS = 30;
+//
+// 凭据脱敏原语(DROP_KEY / sanitizeValue / previewText / safeErrorText)在 R4 抽到
+// `shared/redact.ts`:trace 服务也要用同一套口径写日志(任务卡 D2)。这里只保留
+// 「事件级」的规则——字段白名单、派生摘要、单事件体积上限。
 const MAX_EVENT_BYTES = 8_192;
-
-function scrubString(s: string): string {
-  let out = s;
-  for (const p of SECRET_VALUE_PATTERNS) out = out.replace(p, "[redacted]");
-  return out;
-}
-
-function truncate(s: string, max = MAX_STRING): string {
-  return s.length > max ? s.slice(0, max) + `…[+${s.length - max} chars]` : s;
-}
-
-export function sanitizeValue(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
-  if (value === null || value === undefined) return value;
-  const t = typeof value;
-  if (t === "string") return truncate(scrubString(value as string));
-  if (t === "number" || t === "boolean") return value;
-  if (t === "bigint") return String(value);
-  if (t === "function") return "[fn]";
-  if (depth >= MAX_DEPTH) return "[depth]";
-  if (typeof value === "object") {
-    if (seen.has(value as object)) return "[circular]";
-    seen.add(value as object);
-    if (Array.isArray(value)) {
-      const out = value.slice(0, MAX_ARRAY).map((v) => sanitizeValue(v, depth + 1, seen));
-      if (value.length > MAX_ARRAY) out.push(`…[+${value.length - MAX_ARRAY} items]`);
-      return out;
-    }
-    const out: Record<string, unknown> = {};
-    const entries = Object.entries(value as Record<string, unknown>);
-    for (const [k, v] of entries.slice(0, MAX_PROPS)) {
-      if (DROP_KEY.test(k)) {
-        out[k] = "[redacted]";
-        continue;
-      }
-      out[k] = sanitizeValue(v, depth + 1, seen);
-    }
-    if (entries.length > MAX_PROPS) out["…"] = `[+${entries.length - MAX_PROPS} props]`;
-    return out;
-  }
-  return String(value);
-}
-
-/**
- * 任意值 → 单条截断文本预览:结构在序列化时展平,凭据键在 replacer 层置
- * [redacted](值根本不进入输出),字符串再过凭据模式清洗后截断。
- */
-export function previewText(value: unknown, max = MAX_STRING): string {
-  let s: string;
-  if (typeof value === "string") {
-    s = value;
-  } else {
-    try {
-      s =
-        JSON.stringify(value, (k, v) =>
-          k !== "" && DROP_KEY.test(k) ? "[redacted]" : typeof v === "bigint" ? String(v) : v,
-        ) ?? String(value);
-    } catch {
-      s = "[unserializable]";
-    }
-  }
-  return truncate(scrubString(s), max);
-}
 
 /** 每个事件允许透出的顶层字段(值仍经 sanitizeValue)。未列出的事件只透出 type。 */
 const EVENT_FIELD_WHITELIST: Record<string, string[]> = {
@@ -187,7 +126,14 @@ const EVENT_FIELD_WHITELIST: Record<string, string[]> = {
   input: ["type", "text", "source", "streamingBehavior"],
 };
 
-/** 对话消息(AgentMessage)只透出角色 + 文本预览,不复制完整结构。 */
+/**
+ * 对话消息(AgentMessage)只透出角色 + 文本预览,不复制完整结构。
+ *
+ * 预览**必须过 previewText**(codex review P1):正文是访客与模型自由输入的内容,
+ * 里面完全可能出现凭据形态的串(有人把 `sk-…` 贴进对话框)。这里原先直接 slice,
+ * 于是 message_start / message_end / turn_end 三个事件把它原样带进库、再经公开的
+ * `/trace/stream` 发出去,绕过了 §2 的脱敏。previewText 同时负责凭据串清洗与截断。
+ */
 function summarizeMessage(m: unknown): unknown {
   if (typeof m !== "object" || m === null) return undefined;
   const msg = m as { role?: unknown; content?: unknown };
@@ -201,7 +147,7 @@ function summarizeMessage(m: unknown): unknown {
   }
   return {
     role: typeof msg.role === "string" ? msg.role : undefined,
-    preview: preview.length > 200 ? preview.slice(0, 200) + "…" : preview,
+    preview: previewText(preview, 200),
   };
 }
 
@@ -259,7 +205,7 @@ export function sanitizeEvent(eventType: string, event: unknown): unknown {
   return out;
 }
 
-// —— 脱敏自测 fixtures(/spike/events/audit 暴露结果;正式测试基建是 R2 的事)——
+// —— 脱敏自测 fixtures(agent/events.test.ts 断言;/spike/events/audit 也在用)——
 export interface SanitizeSelfTest {
   name: string;
   pass: boolean;
@@ -324,6 +270,19 @@ export function runSanitizeSelfTests(): SanitizeSelfTest[] {
     "agent_start",
     { type: "agent_start", futureCredentialField: "SECRET-FUT-8" },
     ["SECRET-FUT-8"],
+  );
+
+  leakCheck(
+    "消息正文里的凭据串(公开 SSE 的出口)",
+    "message_end",
+    {
+      type: "message_end",
+      message: {
+        role: "user",
+        content: "帮我看看这个 key 对不对:sk-abcdefghij0123456789,还有 Bearer abcdef1234567890",
+      },
+    },
+    ["sk-abcdefghij0123456789", "abcdef1234567890"],
   );
 
   const big: Record<string, string> = {};

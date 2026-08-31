@@ -1,5 +1,10 @@
 # dependencies
 node_modules/
+# bun 只是运行时,不负责依赖解析(CLAUDE.md 规则 11):依赖仍由 npm ci +
+# package-lock.json 锁定。bun 执行脚本时会顺手生成 bun.lock,提交它会造成
+# 「有两份 lockfile」的错觉,也会让工作区在每次 dev.ps1 test 后变脏、卡住
+# dev.ps1 build 的洁净检查。
+bun.lock
 
 # next.js
 .next/

@@ -1,133 +1,18 @@
 // 演示数据 — 从 design/Agent Runtime Workbench.dc.html 与 Prototype 的 dc-script 提炼。
-// 下一轮接入 pi in-process 后,这些数据由 /api/trace/stream 与 /api/agent/ask 实时替代。
-import type {
-  ChatItem,
-  LifeNode,
-  RepoCard,
-  SessionInfo,
-  ToolRow,
-  TraceTurn,
-} from "./types";
+//
+// Runtime 工作台部分已全部真实化:对话与会话列表在 R3 切到 /api/agent/*,
+// 右栏三视图(Timeline / Chain View / Lifecycle Map)在 R4 切到 /api/trace/stream,
+// 对应的演示数据已随之删除,投影逻辑见 lib/trace-view.ts。
+// 这里剩下的是尚未接后端的部分:统计条的 tokens/cost/ctx(R7/R8 计量)、
+// 空状态引导语、About / Admin 两块(R7 / R8)。
+// Notes 三块页面已在 R5 切到 /api/notes/*,演示数据随之删除。
+import type { RepoCard, ToolRow } from "./types";
 
-export const EV = {
-  chain: "#2563eb",
-  notify: "#9ca3af",
-  veto: "#ef4444",
-  takeover: "#f9c22e",
-};
-
-/** Timeline 色条宽度:与设计稿同款算法 */
-export const barWidth = (ms: number) =>
-  Math.min(198, Math.max(4, Math.round(Math.sqrt(ms) * 11)));
-
-export const sessions: SessionInfo[] = [
-  { title: "演示:危险命令拦截", time: "2m ago" },
-  { title: "帮我查上海→东京的低价航线", time: "1h ago" },
-  { title: "permission-gate 源码解读", time: "3h ago" },
-  { title: "context 注入前后对比实验", time: "昨天" },
-  { title: "/demo 接管命令演示", time: "2d ago" },
-];
-
-export const chatScript: ChatItem[] = [
-  { kind: "user", text: "帮我把 /etc/hosts 里的旧条目清掉" },
-  { kind: "assistant", text: "我需要先看一下当前的 hosts 文件内容。" },
-  {
-    kind: "tool",
-    tool: { name: "read_file", preview: '{"path": "/etc/hosts"}', dur: "0.3s", error: false },
-  },
-  {
-    kind: "tool",
-    tool: { name: "bash", preview: "sudo sed -i '/legacy/d' /etc/hosts", dur: "0.1s", error: true },
-  },
-  {
-    kind: "assistant",
-    text: "这条命令被 permission-gate 拦截了——它匹配到了 `sudo sed` 写系统文件的模式。我改为给出手动修改建议:…",
-  },
-];
-
-export const traceTurns: TraceTurn[] = [
-  {
-    label: "Turn 1",
-    rows: [
-      { name: "context", ms: 12, dur: "12ms", color: EV.chain },
-      { name: "before_provider_request", ms: 4, dur: "4ms", color: EV.chain },
-      { name: "after_provider_response", ms: 2, dur: "2ms", color: EV.notify },
-      { name: "tool_call · read_file", ms: 8, dur: "8ms", color: EV.veto },
-      { name: "tool_execution_start", ms: 0.3, dur: "0ms", color: EV.notify },
-      { name: "tool_execution_end", ms: 310, dur: "310ms", color: EV.notify },
-      { name: "tool_result", ms: 10, dur: "10ms", color: EV.chain },
-    ],
-  },
-  {
-    label: "Turn 2",
-    rows: [
-      { name: "context", ms: 11, dur: "11ms", color: EV.chain, expandable: true },
-      { name: "before_provider_request", ms: 4, dur: "4ms", color: EV.chain },
-      { name: "tool_call · bash", ms: 18, dur: "18ms", color: EV.veto, hasBadge: true, hasNote: true },
-      { name: "tool_result", ms: 6, dur: "6ms", color: EV.chain },
-      { name: "message_start", ms: 1, dur: "1ms", color: EV.notify },
-      { name: "message_update", ms: 2, dur: "…", color: EV.notify, streaming: true },
-    ],
-  },
-];
-
-/** 画板 1b:context 事件展开详情 */
-export const contextDetail = {
-  input: '{ messages: [23 items], systemPrompt: "…", tools: [4] }',
-  extension: "context-injector",
-  returned: "{ messages: [24 items] }",
-  diff: "+ [23] { role: 'custom', content: '当前时间 2026-08-28 14:32, 工作目录 /srv/demo…' }",
-};
-
-export const chainSteps = {
-  event: "tool_result",
-  subtitle: "链式传递 · 2 个扩展参与",
-  raw: 'content: "8000 字符的编译日志…"',
-  steps: [
-    {
-      name: "truncator",
-      badge: "修改",
-      badgeColor: "#2563eb",
-      lines: [{ text: "content: ", highlight: '"前 500 字符…(truncated)"' }],
-    },
-    {
-      name: "annotator",
-      badge: "追加",
-      badgeColor: "#f9c22e",
-      lines: [
-        { text: "content: (未修改)", muted: true },
-        { text: "details: ", highlight: "{ originalLen: 8000 }" },
-      ],
-    },
-  ],
-};
-
-export const lifeNodes: LifeNode[] = [
-  { name: "session_start", state: "fired", count: "×1" },
-  { name: "before_agent_start", state: "fired", count: "×1" },
-  { name: "context", state: "fired", count: "×2" },
-  { name: "before_provider_request", state: "fired", count: "×2" },
-  { name: "LLM", state: "llm", count: "" },
-  { name: "tool_call", state: "fired", count: "×2" },
-  { name: "tool_execution", state: "fired", count: "×1" },
-  { name: "tool_result", state: "fired", count: "×2" },
-  { name: "message_update", state: "active", count: "" },
-  { name: "turn_end", state: "pending", count: "" },
-  { name: "agent_end", state: "pending", count: "" },
-  { name: "session_shutdown", state: "pending", count: "" },
-];
-
-export const lifeIdle: LifeNode[] = lifeNodes.map((n) => ({
-  ...n,
-  state: n.name === "LLM" ? "llmIdle" : "pending",
-  count: "",
-}));
-
+// 顶栏统计条:events 已由真实轨迹流计数(R4),其余三项等 R7/R8 的计量与限额
 export const statsBar = {
   tokens: "12.4k tokens",
   cost: "$0.038",
   ctx: "ctx 6%",
-  events: "47 events",
 };
 
 export const suggestions = [

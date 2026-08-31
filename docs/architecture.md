@@ -34,7 +34,7 @@ Caddy :443(自动 TLS,单机反代)
 
 ## 事件模式与观测
 
-pi 扩展系统 34 种事件按四模式分组,观测者扩展全量订阅、采集 `{eventType, mode, timestamp, data(sanitized)}` 推给前端(计数为 R1 对 `@earendil-works/pi-coding-agent@0.84.3` 类型面的实测,修正了旧记载 notify 18/合计 33 的笔误;逐事件清单见 `apps/api/spike/events.ts`):
+pi 扩展系统 34 种事件按四模式分组,观测者扩展全量订阅、采集 `{eventType, mode, timestamp, data(sanitized)}` 推给前端(计数为 R1 对 `@earendil-works/pi-coding-agent@0.84.3` 类型面的实测,修正了旧记载 notify 18/合计 33 的笔误;逐事件清单见 `apps/api/agent/events.ts`):
 
 - **notify**(19):agent/turn/message/tool_execution/session/provider-response/model 生命周期通知
 - **veto**(6):tool_call、session_before_*、project_trust 等可否决点
@@ -42,6 +42,12 @@ pi 扩展系统 34 种事件按四模式分组,观测者扩展全量订阅、采
 - **takeover**(2):input、user_bash 接管点
 
 R1 实测注意:bare `createAgentSession()` 不向扩展广播 `session_start`/`resources_discover`,需在创建后调用 `session.bindExtensions({ mode: "print" })`(run 模式层职责);R3 正式实现沿用此调用。
+
+R4 落地轨迹流后补记两条实现约束:
+
+- **采集点即脱敏点**:事件在 `agent/runtime.ts` 的观测者里就过白名单 sanitize,库与 SSE 拿到的都已是脱敏数据。`docs/security.md` §2「SSE 推送前 sanitize」以此满足——入口脱敏比出口再洗一遍更强,否则库里会留着原文。
+- **两个服务的耦合走中立模块**:trace 服务消费 agent 产生的进程内事件,二者都只依赖 `apps/api/shared/`(`trace-bus` 事件总线、`sse` 帧写出、`redact` 凭据脱敏),互不 import 对方目录;trace 读库经 `SQLDatabase.named("agent")`,只读、不拥有 schema。
+- **SSE 连接的客户端断开在本架构下探测不到**(Encore 网关不传导,R3 POST / R4 GET 各实测一次),故长连接的生命周期由服务端硬上界 + 同 `clientId` 让位兜底,详见 `apps/api/trace/README.md`。
 
 前端右栏三视图 = 同一事件流的三种投影:Timeline(时序瀑布)、Chain View(单事件的链式传递)、Lifecycle Map(生命周期节点图)。
 

@@ -1,4 +1,6 @@
-// R1 spike:SSE 写出小工具(api.raw + node:http,docs/architecture.md 流式通道决策)。
+// SSE 写出小工具(`api.raw` + node:http,docs/architecture.md「流式通道」决策)。
+// R1 在 spike/ 验证,R3 随正式端点转正,R4 移到 shared/:对话流(agent)与轨迹流(trace)
+// 两个服务都要写 SSE 帧,放中立模块避免服务间互相 import 内部实现。
 import type { ServerResponse } from "node:http";
 
 export const SSE_HEADERS = {
@@ -9,10 +11,17 @@ export const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 } as const;
 
+/** 客户端已断开后再写会抛 ERR_STREAM_WRITE_AFTER_END,统一在这里挡掉。 */
+function writable(resp: ServerResponse): boolean {
+  return !resp.writableEnded && !resp.destroyed;
+}
+
 export function sse(resp: ServerResponse, event: string, data: unknown): void {
+  if (!writable(resp)) return;
   resp.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
 export function sseComment(resp: ServerResponse, text: string): void {
+  if (!writable(resp)) return;
   resp.write(`: ${text}\n\n`);
 }

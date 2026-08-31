@@ -1,6 +1,6 @@
 "use client";
 
-import { chainSteps } from "@/lib/demo-data";
+import type { ChainViewModel } from "@/lib/types";
 import { mono } from "@/lib/styles";
 
 function Arrow() {
@@ -21,21 +21,21 @@ const card = {
   padding: "8px 12px",
 } as const;
 
-/** 链式传递视图(画板 1c):tool_result 在扩展间的流转 */
-export function ChainView() {
+/** 链式传递视图(画板 1c):最近一个 chain 模式事件在扩展间的流转 */
+export function ChainView({ chain }: { chain: ChainViewModel }) {
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "14px 18px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
-        <span style={{ ...mono(12, 600), color: "var(--text)" }}>{chainSteps.event}</span>
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{chainSteps.subtitle}</span>
+        <span style={{ ...mono(12, 600), color: "var(--text)" }}>{chain.event}</span>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{chain.subtitle}</span>
       </div>
 
       <div style={card}>
         <div style={{ ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.06em", marginBottom: 4 }}>RAW OUTPUT</div>
-        <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{chainSteps.raw}</div>
+        <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{chain.raw}</div>
       </div>
 
-      {chainSteps.steps.map((step) => (
+      {chain.steps.map((step) => (
         <div key={step.name}>
           <Arrow />
           <div style={card}>

@@ -1,0 +1,207 @@
+---
+name: encore-service
+description: Plan how to split an Encore.ts application into services and lay out its directory structure. Architecture and decomposition, not first-time CLI install (that's `encore-getting-started`).
+when_to_use: >-
+  User is deciding monolith vs. microservices, weighing "one service or several", drawing service boundaries, planning a multi-service system (e.g. orders + payments + inventory + shipping), creating an `encore.service.ts`, naming directories/folders, designing systems-of-services hierarchies, or asking for an application architecture / project layout recommendation. Trigger phrases: "lay out the directories", "directory structure", "service boundaries", "one service or several", "monolith vs microservices", "where to put", "systems of services".
+---
+
+# Encore Service Structure
+
+## Instructions
+
+### Creating a Service
+
+Every Encore service needs an `encore.service.ts` file:
+
+```typescript
+// encore.service.ts
+import { Service } from "encore.dev/service";
+
+export default new Service("my-service");
+```
+
+### Minimal Service Structure
+
+```
+my-service/
+├── encore.service.ts    # Service definition (required)
+├── api.ts               # API endpoints
+└── db.ts                # Database (if needed)
+```
+
+## Application Patterns
+
+### Single Service (Recommended Start)
+
+Best for new projects - start simple, split later if needed:
+
+```
+my-app/
+├── package.json
+├── encore.app
+├── encore.service.ts
+├── api.ts
+├── db.ts
+└── migrations/
+    └── 001_initial.up.sql
+```
+
+### Multi-Service
+
+For distributed systems with clear domain boundaries:
+
+```
+my-app/
+├── encore.app
+├── package.json
+├── user/
+│   ├── encore.service.ts
+│   ├── api.ts
+│   └── db.ts
+├── order/
+│   ├── encore.service.ts
+│   ├── api.ts
+│   └── db.ts
+└── notification/
+    ├── encore.service.ts
+    └── api.ts
+```
+
+### Large Application (System-based)
+
+Group related services into systems:
+
+```
+my-app/
+├── encore.app
+├── commerce/
+│   ├── order/
+│   │   └── encore.service.ts
+│   ├── cart/
+│   │   └── encore.service.ts
+│   └── payment/
+│       └── encore.service.ts
+├── identity/
+│   ├── user/
+│   │   └── encore.service.ts
+│   └── auth/
+│       └── encore.service.ts
+└── comms/
+    ├── email/
+    │   └── encore.service.ts
+    └── push/
+        └── encore.service.ts
+```
+
+## Service-to-Service Calls
+
+Import other services from `~encore/clients`:
+
+```typescript
+import { user } from "~encore/clients";
+
+export const getOrderWithUser = api(
+  { method: "GET", path: "/orders/:id", expose: true },
+  async ({ id }): Promise<OrderWithUser> => {
+    const order = await getOrder(id);
+    const orderUser = await user.get({ id: order.userId });
+    return { ...order, user: orderUser };
+  }
+);
+```
+
+## When to Split Services
+
+Split when you have:
+
+| Signal | Action |
+|--------|--------|
+| Different scaling needs | Split (e.g., auth vs analytics) |
+| Different deployment cycles | Split |
+| Clear domain boundaries | Split |
+| Shared database tables | Keep together |
+| Tightly coupled logic | Keep together |
+| Just organizing code | Use folders, not services |
+
+## Service with Middleware
+
+```typescript
+import { Service } from "encore.dev/service";
+import { middleware } from "encore.dev/api";
+
+const loggingMiddleware = middleware(
+  { target: { all: true } },
+  async (req, next) => {
+    console.log(`Request: ${req.requestMeta?.path}`);
+    return next(req);
+  }
+);
+
+export default new Service("my-service", {
+  middlewares: [loggingMiddleware],
+});
+```
+
+### Middleware Targeting
+
+Control which endpoints middleware applies to:
+
+```typescript
+// Apply to all endpoints
+middleware({ target: { all: true } }, handler);
+
+// Apply only to authenticated endpoints
+middleware({ target: { auth: true } }, handler);
+
+// Apply only to exposed (public) endpoints
+middleware({ target: { expose: true } }, handler);
+
+// Apply to raw endpoints only
+middleware({ target: { isRaw: true } }, handler);
+
+// Apply to streaming endpoints only
+middleware({ target: { isStream: true } }, handler);
+
+// Apply to endpoints with specific tags
+middleware({ target: { tags: ["admin", "internal"] } }, handler);
+```
+
+### Middleware Request Object
+
+The request object provides access to:
+
+```typescript
+const myMiddleware = middleware(
+  { target: { all: true } },
+  async (req, next) => {
+    // For typed and streaming APIs
+    const meta = req.requestMeta;  // { method, path, pathParams }
+
+    // For raw endpoints
+    const rawReq = req.rawRequest;
+    const rawRes = req.rawResponse;
+
+    // For streaming endpoints
+    const stream = req.stream;
+
+    // Custom data to pass to handlers
+    req.data = { startTime: Date.now() };
+
+    const resp = await next(req);
+
+    // Modify response headers
+    resp.header.set("X-Response-Time", `${Date.now() - req.data.startTime}ms`);
+
+    return resp;
+  }
+);
+```
+
+## Guidelines
+
+- Services cannot be nested within other services
+- Start with one service, split when there's a clear reason
+- Use `~encore/clients` for cross-service calls (never direct imports)
+- Each service can have its own database
+- Service names should be lowercase, descriptive
+- Don't create services just for code organization - use folders instead

@@ -34,8 +34,8 @@ const BROWSER = typeof globalThis === "object" && ("window" in globalThis);
 export default class Client {
     public readonly agent: agent.ServiceClient
     public readonly notes: notes.ServiceClient
-    public readonly spike: spike.ServiceClient
     public readonly system: system.ServiceClient
+    public readonly trace: trace.ServiceClient
     private readonly options: ClientOptions
     private readonly target: string
 
@@ -52,8 +52,8 @@ export default class Client {
         const base = new BaseClient(this.target, this.options)
         this.agent = new agent.ServiceClient(base)
         this.notes = new notes.ServiceClient(base)
-        this.spike = new spike.ServiceClient(base)
         this.system = new system.ServiceClient(base)
+        this.trace = new trace.ServiceClient(base)
     }
 
     /**
@@ -133,9 +133,14 @@ export namespace agent {
 
         constructor(baseClient: BaseClient) {
             this.baseClient = baseClient
+            this.ask = this.ask.bind(this)
             this.createSession = this.createSession.bind(this)
             this.getSession = this.getSession.bind(this)
             this.listSessions = this.listSessions.bind(this)
+        }
+
+        public async ask(method: "POST", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/agent/ask`, body, options)
         }
 
         /**
@@ -306,188 +311,6 @@ export namespace notes {
     }
 }
 
-export namespace spike {
-    export interface AuditResponse {
-        piPackage: string
-        piVersion: string
-        catalog: EventInfo[]
-        /**
-         * 实测(以 SDK 类型面 + 运行时订阅为准)
-         */
-        measured: ModeCounts
-
-        /**
-         * docs/architecture.md 修订前的记载,留作核对痕迹
-         */
-        architectureDocBefore: ModeCounts
-
-        matchesArchitectureDocBefore: boolean
-        /**
-         * 脱敏自测(凭据键变体/嵌套/字符串值/headers/未知字段/超大对象),须全 pass
-         */
-        sanitizeSelfTests: SanitizeSelfTest[]
-
-        sessions: SessionAudit[]
-    }
-
-    export interface CountByKey {
-        key: string
-        count: number
-    }
-
-    export interface EventInfo {
-        name: string
-        mode: string
-    }
-
-    export interface MemSessionsParams {
-        /**
-         * 并发空闲会话数(默认 3,上限 5)
-         */
-        count?: number
-
-        /**
-         * create/dispose 循环次数(默认 10,上限 30)
-         */
-        cycles?: number
-    }
-
-    /**
-     * —— 内存基线 ——
-     */
-    export interface MemSnapshot {
-        stage: string
-        at: number
-        rss: number
-        heapUsed: number
-        heapTotal: number
-        external: number
-    }
-
-    export interface ModeCounts {
-        notify: number
-        veto: number
-        chain: number
-        takeover: number
-        total: number
-    }
-
-    /**
-     * —— 脱敏自测 fixtures(/spike/events/audit 暴露结果;正式测试基建是 R2 的事)——
-     */
-    export interface SanitizeSelfTest {
-        name: string
-        pass: boolean
-        detail: string
-    }
-
-    export interface SessionAudit {
-        sessionId: string
-        disposed: boolean
-        createdAt: number
-        /**
-         * pi.on 成功订阅的事件数(期望 34)
-         */
-        subscribedCount: number
-
-        subscribeErrors: {
-            name: string
-            error: string
-        }[]
-        capturedTotal: number
-        capturedByType: CountByKey[]
-        capturedByMode: CountByKey[]
-    }
-
-    export class ServiceClient {
-        private baseClient: BaseClient
-
-        constructor(baseClient: BaseClient) {
-            this.baseClient = baseClient
-            this.ask = this.ask.bind(this)
-            this.eventsAudit = this.eventsAudit.bind(this)
-            this.mem = this.mem.bind(this)
-            this.memImport = this.memImport.bind(this)
-            this.memSessions = this.memSessions.bind(this)
-            this.traceStream = this.traceStream.bind(this)
-        }
-
-        public async ask(method: "GET", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
-            return this.baseClient.callAPI(method, `/spike/ask`, body, options)
-        }
-
-        public async eventsAudit(): Promise<AuditResponse> {
-            // Now make the actual call to the API
-            const resp = await this.baseClient.callTypedAPI("GET", `/spike/events/audit`)
-            return await resp.json() as AuditResponse
-        }
-
-        public async mem(): Promise<{
-    piLoaded: boolean
-    now: MemSnapshot
-    log: MemSnapshot[]
-}> {
-            // Now make the actual call to the API
-            const resp = await this.baseClient.callTypedAPI("GET", `/spike/mem`)
-            return await resp.json() as {
-    piLoaded: boolean
-    now: MemSnapshot
-    log: MemSnapshot[]
-}
-        }
-
-        public async memImport(): Promise<{
-    alreadyLoaded: boolean
-    before?: MemSnapshot
-    after?: MemSnapshot
-    deltaRss?: number
-    deltaHeapUsed?: number
-}> {
-            // Now make the actual call to the API
-            const resp = await this.baseClient.callTypedAPI("POST", `/spike/mem/import`)
-            return await resp.json() as {
-    alreadyLoaded: boolean
-    before?: MemSnapshot
-    after?: MemSnapshot
-    deltaRss?: number
-    deltaHeapUsed?: number
-}
-        }
-
-        public async memSessions(params: MemSessionsParams): Promise<{
-    gcForced: boolean
-    count: number
-    cycles: number
-    base: MemSnapshot
-    afterCreate: MemSnapshot
-    perSessionRss: number
-    perSessionHeapUsed: number
-    afterDispose: MemSnapshot
-    afterChurn: MemSnapshot
-    churnResidualRss: number
-}> {
-            // Now make the actual call to the API
-            const resp = await this.baseClient.callTypedAPI("POST", `/spike/mem/sessions`, JSON.stringify(params))
-            return await resp.json() as {
-    gcForced: boolean
-    count: number
-    cycles: number
-    base: MemSnapshot
-    afterCreate: MemSnapshot
-    perSessionRss: number
-    perSessionHeapUsed: number
-    afterDispose: MemSnapshot
-    afterChurn: MemSnapshot
-    churnResidualRss: number
-}
-        }
-
-        public async traceStream(method: "GET", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
-            return this.baseClient.callAPI(method, `/spike/trace/stream`, body, options)
-        }
-    }
-}
-
 export namespace system {
 
     export class ServiceClient {
@@ -510,6 +333,22 @@ export namespace system {
             return await resp.json() as {
     status: string
 }
+        }
+    }
+}
+
+export namespace trace {
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.stream = this.stream.bind(this)
+        }
+
+        public async stream(method: "GET", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/trace/stream`, body, options)
         }
     }
 }

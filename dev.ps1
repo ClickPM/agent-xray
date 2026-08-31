@@ -18,6 +18,7 @@
 #       .\dev.ps1 db <名>   encore db shell <数据库名>
 #       .\dev.ps1 notes     同步 vault 教程内容进库(R5;多余参数直传 notes-sync)
 #       .\dev.ps1 build     构建 api + web 生产镜像(tag = git 短 SHA)
+#       .\dev.ps1 skills    把 .claude\skills 镜像到 .agents\skills(给 codex 审查者用)
 
 $env:LOCALAPPDATA = "D:\encore-data"
 $env:APPDATA = "D:\encore-data\roaming"
@@ -50,9 +51,9 @@ function Warn-BunDrift {
 
 # 打进公网镜像的服务白名单。spike 是 R1 验证脚手架(无认证、无限额、真实 LLM 端点),
 # 绝不能进预发/生产镜像;--services 是构建期硬门禁,实测可让 /spike/* 返回 404。
-# ⚠️ R4/R7/R8 新增 trace / admin / metrics 服务时必须在这里补名字(notes 已于 R5 补入),
+# ⚠️ R7/R8 新增 admin / metrics 服务时必须在这里补名字(trace 已于 R4、notes 已于 R5 补入),
 #    漏补的表现是该服务端点 404,R9 冒烟会抓到。
-$hostedServices = "agent,system,notes"
+$hostedServices = "agent,trace,notes,system"
 
 switch ($Cmd) {
     "test"  { Warn-BunDrift; & $encore test @args }
@@ -103,6 +104,27 @@ switch ($Cmd) {
         Write-Host "  传输(勿在 PowerShell 用 `"docker save | ssh docker load`" 管道直传,二进制会被重编码破坏):"
         Write-Host "    docker save -o xray-$sha.tar $apiTag $webTag"
         Write-Host "    scp xray-$sha.tar <host>:~  然后  ssh <host> docker load -i xray-$sha.tar"
+    }
+    "skills" {
+        # 把 .claude\skills 镜像到 .agents\skills。
+        #
+        # 【为什么要这份镜像】codex 只从 CODEX_HOME(~/.codex/skills)、插件缓存,以及**仓库级**
+        # 的 .agents\skills / .codex\skills 发现 skill——**不认 .claude\skills**(2026-08-31 实测:
+        # 四个候选目录各放一个探针,只有 .agents\skills 与 .codex\skills 被加载)。没有镜像时,
+        # codex 审查拿不到 encore 官方 skill 里的框架缺陷清单,只能靠 AGENTS.md/CLAUDE.md。
+        #
+        # 【权威副本仍是 .claude\skills】它由 skills-lock.json 锁版本、`npx -y skills update` 升级;
+        # .agents\skills 是生成物。**升级 skill 后必须跑一次本命令重新同步**,否则审查者吃到的是旧版。
+        $src = "$repoRoot\.claude\skills"
+        $dst = "$repoRoot\.agents\skills"
+        if (-not (Test-Path $src)) { throw "找不到 $src" }
+        if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
+        New-Item -ItemType Directory -Force $dst | Out-Null
+        Copy-Item -Recurse -Force "$src\*" $dst
+        $names = (Get-ChildItem -Directory $dst | Select-Object -ExpandProperty Name) -join ", "
+        $n = (Get-ChildItem -Recurse -File $dst).Count
+        Write-Host "已同步 $n 个文件到 .agents\skills:$names"
+        Write-Host "(codex 读 .agents\skills;Claude Code 仍读 .claude\skills)"
     }
     default { & $encore run --listen 127.0.0.1:4000 }
 }
