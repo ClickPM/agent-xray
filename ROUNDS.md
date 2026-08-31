@@ -14,7 +14,7 @@
 | **R2** | 数据层:迁移 · 会话/消息/轨迹落库 · encore test 基建 · gen client | ✅ 已完成([任务卡](rounds/round-02/round-02.md),codex 审查整改后 PASS) | 2026-08-28 |
 | **R-BUN** | 运行时统一 bun(开发/测试/预发/生产)+ 部署方式按架构评审整改 | ✅ 已完成([任务卡](rounds/round-bun/round-bun.md),13 项门禁全过;codex 初审 4P1+4P2 与三轮复审共 14 条 findings 全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R3** | Runtime 对话流真实化(/agent/ask SSE + 前端切真实数据源) | ✅ 已完成([任务卡](rounds/round-03/round-03.md),10 项验收全过;codex 初审 5 条(3×P1)+ 复审第 1 轮 3 条(2×P1)findings 全采纳整改,复审第 2 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
-| **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ⬜ | — |
+| **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ✅ 已完成([任务卡](rounds/round-04/round-04.md),12 项验收全过(#11 按所有者裁定改为静态核验,镜像实跑冒烟并入 R9);codex 初审 3 条(2×P1)+ 复审三轮 5 条(全 P2)共 8 条 findings,7 条采纳整改、1 条写明理由记 BACKLOG,复审第 4 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ⬜ | — |
 | **R6** | 沙箱与配额落地(只读工具组 · agent_ro · tool_config · daily_quota) | ⬜ | — |
 | **R7** | admin 服务 + /admin 五页对接(登录/统计/配置/工具) | ⬜ | — |
@@ -116,9 +116,9 @@
 - 数据库迁移已由 R-BUN 的 `deploy/migrate.sh` 解决(所有者裁定方案一);R9 只需把它纳入部署流程文档与冒烟清单
 - `agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色 + 仅 SELECT `notes_*` 授权(R6 建表后补授权的顺序写进文档)
 - 130 部署流程文档 + 脚本:`dev.ps1 build` → 文件方式传输(`docker save -o` → `scp` → `docker load -i`;**勿在 PowerShell 用管道直传,二进制会被文本重编码破坏**)→ 130 上按**先迁移后起服务**的顺序(`up -d --wait postgres` → `./migrate.sh` → `up -d`),避免「健康检查全绿但业务接口 500」的中间状态;升级另需先 `docker compose stop api web`(见 docs/deploy-environments.md「升级顺序」)
-- 预发全链路验证:三 Tab + /admin + 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / **最终运行镜像**内无 node / `/spike/*` 404 / postgres 仅 `back` 网段可达)
+- 预发全链路验证:三 Tab + /admin + 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / **最终运行镜像**内无 node / postgres 仅 `back` 网段可达)。spike 服务已于 R4 整目录删除,`/spike/*` 不再存在,该项从冒烟清单撤下
 - **服务白名单核验**:`dev.ps1 build` 的 `--services` 是维护热点——冒烟时必须逐个确认**当前已落地的正式 service 端点都可达**(不只是 `/health`),漏改的表现是镜像构建正常、健康检查正常、而该服务端点静默 404
-- **SSE 冒烟需等 R3/R4**:两条 SSE 目前只在 spike 里,而 spike 已被 `--services` 排除出镜像;正式端点落地后再补「心跳 15s、断线重连 `afterSeq` 回放、`docker compose stop api` 时客户端收到明确断流而非静默挂起、SSE 脱敏抽查」这组验证
+- **SSE 冒烟**(R3/R4 已就绪,可以做了):正式端点 `POST /agent/ask` 与 `GET /trace/stream` 均已落地并进白名单。冒烟内容:心跳 15s、断线重连 `afterSeq` 回放、`docker compose stop api` 时客户端收到明确断流而非静默挂起、SSE 脱敏抽查。**另需复测两条 R4 挂起的限制**(见 `rounds/BACKLOG.md`):Caddy + 自托管镜像的真实拓扑下能否拿到 SSE 客户端断开信号——若能,`/trace/stream` 的让位机制与 `MAX_STREAM_MS` 硬上界都可以放宽甚至退役
 - 回滚演练:`IMAGE_TAG` 换回上一 SHA + `up -d` 真跑一次
 - 验收:130 上从干净环境按文档一次部署成功,且回滚演练通过
 

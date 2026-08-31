@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { statsBar, suggestions } from "@/lib/demo-data";
 import {
   askStream,
@@ -10,7 +10,9 @@ import {
   AskError,
   type SessionSummary,
 } from "@/lib/agent-api";
-import type { ChatItem } from "@/lib/types";
+import { openTraceStream } from "@/lib/trace-api";
+import { toChainView, toLifecycleNodes, toTimelineTurns } from "@/lib/trace-view";
+import type { ChatItem, TraceEvent } from "@/lib/types";
 import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
 import { TimelineView } from "./TimelineView";
@@ -18,6 +20,9 @@ import { ChainView } from "./ChainView";
 import { LifecycleMap } from "./LifecycleMap";
 
 type Panel = "timeline" | "chain" | "lifecycle";
+
+/** 前端保留的轨迹事件条数上界,与服务端单次回放上限(MAX_REPLAY_EVENTS)同口径。 */
+const MAX_TRACE_EVENTS = 5000;
 
 /** 请求失败时给访客看的固定文案(服务端已把细节挡在日志里,前端只按状态分档)。 */
 function askErrorText(err: unknown): string {
@@ -27,50 +32,6 @@ function askErrorText(err: unknown): string {
     if (err.status === 404) return "这个会话已不存在,请新建一个会话。";
   }
   return "请求失败了,请稍后再试。";
-}
-
-/** 演示回放:右栏三视图仍消费 demo-data,R4 接 /trace/stream 后由真实事件流驱动。
- *  (chat 字段在 R3 已由真实对话接管,这里只保留 trace 行数。) */
-const PLAYBACK: Array<{ trace: number; delay: number }> = [
-  { trace: 0, delay: 300 },
-  { trace: 2, delay: 500 },
-  { trace: 3, delay: 600 },
-  { trace: 4, delay: 400 },
-  { trace: 6, delay: 700 },
-  { trace: 7, delay: 400 },
-  { trace: 9, delay: 500 },
-  { trace: 10, delay: 600 },
-  { trace: 11, delay: 400 },
-  { trace: 13, delay: 500 },
-];
-
-function usePlayback(active: boolean) {
-  const [step, setStep] = useState(active ? PLAYBACK.length : 0);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!active) {
-      setStep(0);
-      return;
-    }
-    setStep(0);
-    let i = 0;
-    const tick = () => {
-      if (i >= PLAYBACK.length) return;
-      timer.current = setTimeout(() => {
-        i += 1;
-        setStep(i);
-        tick();
-      }, PLAYBACK[Math.min(i, PLAYBACK.length - 1)].delay);
-    };
-    tick();
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [active]);
-  if (!active) return { trace: 0, done: false };
-  if (step === 0) return { trace: 0, done: false };
-  const s = PLAYBACK[step - 1];
-  return { trace: s.trace, done: step >= PLAYBACK.length };
 }
 
 function SessionSidebar({
@@ -250,14 +211,21 @@ export function Workbench() {
   const [streaming, setStreaming] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [panel, setPanel] = useState<Panel>("timeline");
+  const [events, setEvents] = useState<TraceEvent[]>([]);
 
   // 会话切换的请求序号:连点两个会话时,先发后到的历史加载必须被丢弃,
   // 否则 UI 会被旧会话的消息覆盖(codex review P2)
   const loadSeq = useRef(0);
 
   const active = sessionId !== null || items.length > 0;
-  const { trace } = usePlayback(active);
   const title = sessions.find((s) => s.id === sessionId)?.title || "";
+
+  // 右栏三视图 = 同一条轨迹流的三种投影(docs/architecture.md)。
+  // 必须 memo:events 最多 5000 条,而输入框每敲一个字都会触发重渲染——
+  // 不 memo 的话每次击键都要把整条轨迹重投影三遍。
+  const timelineTurns = useMemo(() => toTimelineTurns(events, streaming), [events, streaming]);
+  const chain = useMemo(() => toChainView(events), [events]);
+  const lifeNodes = useMemo(() => toLifecycleNodes(events, streaming), [events, streaming]);
 
   const refreshSessions = useCallback(() => {
     listSessions()
@@ -266,6 +234,23 @@ export function Workbench() {
   }, []);
 
   useEffect(refreshSessions, [refreshSessions]);
+
+  // 会话确定后订阅轨迹流:先回放该会话已有轨迹,再 live tail。
+  // 服务端每条流有存活上界(客户端断开探测不到,见 apps/api/trace/stream.ts),
+  // 到点由 trace-api 凭 afterSeq 自动续上,这里不必感知。
+  useEffect(() => {
+    setEvents([]);
+    if (!sessionId) return;
+    return openTraceStream(sessionId, {
+      onEvent: (event) =>
+        setEvents((prev) => {
+          // seq 严格递增到达;重连窗口里的重复/乱序帧一律丢弃
+          if (prev.length > 0 && event.seq <= prev[prev.length - 1].seq) return prev;
+          const next = [...prev, event];
+          return next.length > MAX_TRACE_EVENTS ? next.slice(next.length - MAX_TRACE_EVENTS) : next;
+        }),
+    });
+  }, [sessionId]);
 
   const openSession = useCallback(
     (id: string) => {
@@ -367,7 +352,7 @@ export function Workbench() {
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
                 {statsBar.ctx}
               </span>
-              <span>·</span><span>{statsBar.events}</span>
+              <span>·</span><span>{events.length} events</span>
             </div>
           )}
         </div>
@@ -401,14 +386,14 @@ export function Workbench() {
             </div>
             {active ? (
               panel === "timeline" ? (
-                <TimelineView visibleRows={trace} />
+                <TimelineView turns={timelineTurns} />
               ) : panel === "chain" ? (
-                <ChainView />
+                <ChainView chain={chain} />
               ) : (
-                <LifecycleMap />
+                <LifecycleMap nodes={lifeNodes} />
               )
             ) : (
-              <LifecycleMap idle />
+              <LifecycleMap nodes={lifeNodes} idle />
             )}
           </div>
         </div>

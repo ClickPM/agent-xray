@@ -22,7 +22,7 @@ import {
   type RuntimeSession,
 } from "./runtime";
 import { previewText, safeErrorText } from "./events";
-import { sse, sseComment, SSE_HEADERS } from "./sse";
+import { sse, sseComment, SSE_HEADERS } from "../shared/sse";
 import {
   appendMessage,
   createSession as createDbSession,

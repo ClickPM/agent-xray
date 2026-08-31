@@ -1,6 +1,6 @@
 // R3 正式运行时:pi SDK in-process 会话注册表(docs/architecture.md「agent 运行时」决策)。
 //
-// 与 R1 的 `spike/runtime.ts` 的区别(spike 在 R4 随 trace 服务落地整体移除):
+// 与 R1 的 `spike/runtime.ts` 的区别(spike 已随 R4 的 trace 服务落地整体删除):
 //   - 运行时会话 id ≡ DB `sessions.id`,不再各自生成
 //   - 会话可被**空闲回收**并在下次 `/agent/ask` 时按库内历史重建(注入上下文)
 //   - 容量满时先逐出最旧的空闲会话,确实无可逐出才拒绝
@@ -18,6 +18,7 @@ import type {
   InlineExtension,
   ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
+import { dropSession as dropTraceBuffer, publish as publishTrace } from "../shared/trace-bus";
 import { ALL_EVENTS, EVENT_MODES, safeErrorText, sanitizeEvent, type EventMode } from "./events";
 import { appendTraceEvents, listMessages, maxTraceSeq, type MessageRow } from "./store";
 
@@ -202,14 +203,21 @@ function maybeScheduleFlush(rec: RuntimeSession): void {
     });
 }
 
+/**
+ * 采集一条事件:脱敏 → 待落库队列 → 进程内总线(R4 的 `/trace/stream` 从总线
+ * 拿 live 帧)。**两条去向都在这里,且总线在前一步之后**:落库队列是持久化的
+ * 事实来源,总线只是给已连上的观众的即时副本,发布失败不该影响落库。
+ */
 function capture(rec: RuntimeSession, eventType: string, event: unknown): void {
-  queuePendingEvent(rec, {
+  const captured: CapturedEvent = {
     seq: rec.seq++,
     eventType,
     mode: EVENT_MODES[eventType],
     timestamp: Date.now(),
     data: sanitizeEvent(eventType, event),
-  });
+  };
+  queuePendingEvent(rec, captured);
+  publishTrace(rec.id, captured);
   maybeScheduleFlush(rec);
 }
 
@@ -321,6 +329,9 @@ export function disposeSession(rec: RuntimeSession): Promise<void> {
     }
     rec.disposed = true;
     rec.pendingFlush.length = 0;
+    // 【顺序敏感】丢缓冲必须排在最终 flush **之后**:提前丢会出现「库里还没写、
+    // buffer 已经空」的空窗,这期间连上来的 /trace/stream 会缺一段轨迹(任务卡 D6)
+    dropTraceBuffer(rec.id);
     try {
       rec.session.dispose();
     } catch (err) {

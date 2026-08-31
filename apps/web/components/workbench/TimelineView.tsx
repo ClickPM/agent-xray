@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, Fragment } from "react";
-import { barWidth, contextDetail, traceTurns } from "@/lib/demo-data";
-import type { TraceRow } from "@/lib/types";
+import { barWidth } from "@/lib/trace-view";
+import type { TraceRow, TraceRowDetail, TraceTurn } from "@/lib/types";
 import { mono } from "@/lib/styles";
 
-function DetailCard() {
+function DetailCard({ detail }: { detail: TraceRowDetail }) {
   return (
     <div
       style={{
@@ -25,13 +25,13 @@ function DetailCard() {
         Ask why ↗
       </button>
       <div style={{ ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.06em", marginBottom: 3 }}>INPUT</div>
-      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{contextDetail.input}</div>
+      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{detail.input}</div>
       <div style={{ ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.06em", margin: "10px 0 3px" }}>
-        EXTENSION RETURNED · <span style={{ color: "var(--accent)" }}>{contextDetail.extension}</span>
+        EXTENSION RETURNED · <span style={{ color: "var(--accent)" }}>{detail.extension}</span>
       </div>
-      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{contextDetail.returned}</div>
+      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{detail.returned}</div>
       <div style={{ ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.06em", margin: "10px 0 3px" }}>DIFF</div>
-      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--ok-text)" }}>{contextDetail.diff}</div>
+      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--ok-text)" }}>{detail.diff}</div>
     </div>
   );
 }
@@ -71,22 +71,18 @@ function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; on
           └ permission-gate returned {"{"}block: true{"}"}
         </div>
       )}
-      {expanded && <DetailCard />}
+      {expanded && row.detail && <DetailCard detail={row.detail} />}
     </>
   );
 }
 
-/** DevTools 式事件瀑布(画板 1a/1b);visibleRows=-1 表示全部可见 */
-export function TimelineView({ visibleRows = -1 }: { visibleRows?: number }) {
+/** DevTools 式事件瀑布(画板 1a/1b),消费 /trace/stream 的真实事件投影 */
+export function TimelineView({ turns }: { turns: TraceTurn[] }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  let shown = 0;
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "10px 14px" }}>
-      {traceTurns.map((turn) => {
-        const rows = turn.rows.filter(() => {
-          shown += 1;
-          return visibleRows < 0 || shown <= visibleRows;
-        });
+      {turns.map((turn) => {
+        const rows = turn.rows;
         if (rows.length === 0) return null;
         return (
           <Fragment key={turn.label}>
@@ -100,7 +96,7 @@ export function TimelineView({ visibleRows = -1 }: { visibleRows?: number }) {
               {turn.label}
             </div>
             {rows.map((row) => {
-              const key = `${turn.label}:${row.name}`;
+              const key = row.key;
               return (
                 <Row
                   key={key}

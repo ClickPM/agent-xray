@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 import { ALL_EVENTS, modeCounts, runSanitizeSelfTests } from "./events";
 
 describe("事件脱敏(docs/security.md §2)", () => {
-  it("六组凭据/超大对象 fixtures 全部 PASS", () => {
+  it("七组凭据/超大对象 fixtures 全部 PASS", () => {
     const results = runSanitizeSelfTests();
-    expect(results).toHaveLength(6);
+    expect(results).toHaveLength(7);
     for (const r of results) {
       expect(r.pass, `${r.name} — ${r.detail}`).toBe(true);
     }

@@ -1,6 +1,5 @@
 "use client";
 
-import { lifeIdle, lifeNodes } from "@/lib/demo-data";
 import type { LifeNode, LifeState } from "@/lib/types";
 import { mono } from "@/lib/styles";
 
@@ -32,9 +31,8 @@ function Node({ node, last }: { node: LifeNode; last: boolean }) {
   );
 }
 
-/** 生命周期图(画板 1d/1e):idle=true 为待命全灰态 */
-export function LifecycleMap({ idle = false }: { idle?: boolean }) {
-  const nodes = idle ? lifeIdle : lifeNodes;
+/** 生命周期图(画板 1d/1e):idle=true 为待命全灰态(节点由调用方按事件流投影) */
+export function LifecycleMap({ nodes, idle = false }: { nodes: LifeNode[]; idle?: boolean }) {
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "14px 18px", display: "flex", flexDirection: "column" }}>
       {idle && <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 12 }}>对话开始后,这里会亮起来</div>}

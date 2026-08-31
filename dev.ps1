@@ -52,7 +52,7 @@ function Warn-BunDrift {
 # 绝不能进预发/生产镜像;--services 是构建期硬门禁,实测可让 /spike/* 返回 404。
 # ⚠️ R4/R5/R7/R8 新增 trace / notes / admin / metrics 服务时必须在这里补名字,
 #    漏补的表现是该服务端点 404,R9 冒烟会抓到。
-$hostedServices = "agent,system"
+$hostedServices = "agent,trace,system"
 
 switch ($Cmd) {
     "test"  { Warn-BunDrift; & $encore test @args }

@@ -4,7 +4,7 @@ import { PassThrough } from "node:stream";
 import type { ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
 import { parseAskBody } from "./ask";
-import { sse, sseComment } from "./sse";
+import { sse, sseComment } from "../shared/sse";
 
 describe("请求体校验", () => {
   it("接受最小合法体,并 trim prompt", () => {
