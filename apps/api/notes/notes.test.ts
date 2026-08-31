@@ -85,6 +85,21 @@ describe("GET /notes/series", () => {
     expect(sharing.updatedAt).toBeNull();
   });
 
+  it("章节数与系列页同口径:不含置顶的 README(codex review 2026-08-31 P2)", async () => {
+    await seedCategory("deep-dive", "源码拆解", 2);
+    await seedSeries("pi", "deep-dive", "Pi");
+    await seedChapter({ series: "pi", slug: "readme", ordinal: 0, label: "README", title: "总览", pinned: true });
+    await seedChapter({ series: "pi", slug: "01", ordinal: 1, label: "01", title: "第1章" });
+    await seedChapter({ series: "pi", slug: "02", ordinal: 2, label: "02", title: "第2章" });
+
+    const home = await listSeries();
+    const card = home.categories[0].series[0];
+    const detail = await getSeries({ slug: "pi" });
+    // 两个页面显示同一个系列时给出不同的章数,是最容易被当成"数据坏了"的那种 bug
+    expect(card.chapterCount).toBe(detail.chapterCount);
+    expect(card.chapterCount).toBe(2);
+  });
+
   it("latest 取最近更新的 3 条,按时间倒序", async () => {
     await seedCategory("pm", "产品经理", 1);
     await seedSeries("agent-basics", "pm", "Agent 基础知识");

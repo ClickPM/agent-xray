@@ -77,65 +77,77 @@ export function rewrite(body: string, ctx: RewriteContext, report: RewriteReport
   const out: string[] = [];
 
   let fence: string | null = null;
-  let inComment = false;
+  // Obsidian 注释可跨行,状态要在行之间带着走
+  const state = { inComment: false };
   for (const raw of lines) {
-    // —— Obsidian 注释 `%%…%%` 可跨行;它在围栏之外才成立 —— //
-    if (inComment) {
-      const close = raw.indexOf("%%");
-      if (close < 0) continue;
-      inComment = false;
-      const rest = raw.slice(close + 2);
-      if (rest.trim() === "") continue;
-      out.push(rewriteLine(rest, ctx, report));
-      continue;
-    }
-
-    // —— 围栏内原样透传 —— //
+    // —— 围栏内原样透传;注释未闭合时,围栏本身也属于被注掉的内容 —— //
     const fenceHit = FENCE_RE.exec(raw);
     if (fence) {
-      out.push(raw);
+      if (!state.inComment) out.push(raw);
       if (fenceHit && raw.trimStart().startsWith(fence)) fence = null;
       continue;
     }
-    if (fenceHit) {
+    if (fenceHit && !state.inComment) {
       fence = fenceHit[1];
       out.push(raw);
       continue;
     }
 
-    const { text: stripped, opened } = dropComments(raw);
-    inComment = opened;
-    if (stripped.trim() === "" && raw.trim() !== "") continue;
-    out.push(rewriteLine(stripped, ctx, report));
+    const line = rewriteLine(raw, ctx, report, state);
+    // 整行都是注释时不要留下一行空白
+    if (line.trim() === "" && raw.trim() !== "") continue;
+    out.push(line);
   }
 
   return normalizeBlankLines(out.join("\n"));
 }
 
 /**
- * 去掉一行里成对的 `%%…%%`;返回是否留下一个未闭合的开引号(注释跨到下一行)。
+ * 从一段**普通文本**里剥掉 Obsidian 注释 `%%…%%`,返回存活内容与「注释是否仍开着」。
  *
- * 必须逐行做、且只在围栏之外做:早先的实现是对整篇正文跑一次
- * `/%%[\s\S]*?%%/g`,那样代码块里的 `%%`(批处理的 `%%A` 循环变量、
- * SQL 的 `LIKE '%%'`)会被当成注释一起吃掉,而且吃完仍是合法 markdown,看不出来。
+ * 两条约束都是踩出来的:
+ *  - 必须逐行 + 跨行状态,不能对整篇跑 `/%%…%%/g` —— 那样代码围栏里的 `%%`
+ *    (批处理的 `%%A`、SQL 的 `LIKE '%%'`)会被当注释吃掉;
+ *  - 必须在**行内代码切分之后**调用(codex review 2026-08-31 P1):放在切分之前的话,
+ *    正文里写 `` `LIKE '%%'` `` 这样的例子会被改成 `` `LIKE '` ``,而且剩下的半个标记
+ *    还会把后面几行一起吞掉。markdown 里代码跨度的优先级高于注释标记。
  */
-function dropComments(line: string): { text: string; opened: boolean } {
-  let out = "";
+function stripComments(text: string, open: boolean): { kept: string; open: boolean } {
+  let kept = "";
   let i = 0;
+  let inComment = open;
   for (;;) {
-    const open = line.indexOf("%%", i);
-    if (open < 0) return { text: out + line.slice(i), opened: false };
-    out += line.slice(i, open);
-    const close = line.indexOf("%%", open + 2);
-    if (close < 0) return { text: out, opened: true };
-    i = close + 2;
+    const at = text.indexOf("%%", i);
+    if (at < 0) {
+      if (!inComment) kept += text.slice(i);
+      return { kept, open: inComment };
+    }
+    if (!inComment) kept += text.slice(i, at);
+    inComment = !inComment;
+    i = at + 2;
   }
 }
 
-function rewriteLine(line: string, ctx: RewriteContext, report: RewriteReport): string {
-  let s = rewriteCallout(line, report);
-  s = mapTextSegments(s, (t) => rewriteInline(t, ctx, report));
-  return s;
+function rewriteLine(
+  line: string,
+  ctx: RewriteContext,
+  report: RewriteReport,
+  state: { inComment: boolean },
+): string {
+  const head = state.inComment ? line : rewriteCallout(line, report);
+  let out = "";
+  for (const seg of splitSegments(head)) {
+    if (seg.code) {
+      // 行内代码整段原样保留,里面的 `%%` 不算注释标记;
+      // 但注释若已经开着,这段本来就在被注掉的范围内
+      if (!state.inComment) out += seg.text;
+      continue;
+    }
+    const { kept, open } = stripComments(seg.text, state.inComment);
+    state.inComment = open;
+    out += rewriteInline(kept, ctx, report);
+  }
+  return out;
 }
 
 /**
@@ -151,34 +163,41 @@ function rewriteCallout(line: string, report: RewriteReport): string {
   return `${prefix}**${label}**`;
 }
 
+interface Segment {
+  /** true = 行内代码跨度,原样保留 */
+  code: boolean;
+  text: string;
+}
+
 /**
- * 把一行切成「行内代码 / 普通文本」交替片段,只对普通文本调用 fn。
+ * 把一行切成「行内代码 / 普通文本」交替片段。返回片段而不是就地映射,是因为
+ * 注释剥离也要按片段走(见 stripComments 的第二条约束)。
  * 反引号数量需成对匹配(``a`b`` 这种双反引号包单反引号的写法在 TS 教程里出现过)。
  */
-function mapTextSegments(line: string, fn: (text: string) => string): string {
-  const parts: string[] = [];
+function splitSegments(line: string): Segment[] {
+  const segs: Segment[] = [];
   let i = 0;
   while (i < line.length) {
     const tick = line.indexOf("`", i);
     if (tick < 0) {
-      parts.push(fn(line.slice(i)));
+      segs.push({ code: false, text: line.slice(i) });
       break;
     }
-    parts.push(fn(line.slice(i, tick)));
-    // 开围栏长度
+    if (tick > i) segs.push({ code: false, text: line.slice(i, tick) });
+
     let openLen = 0;
     while (line[tick + openLen] === "`") openLen++;
     const open = "`".repeat(openLen);
     const close = line.indexOf(open, tick + openLen);
     if (close < 0) {
-      // 不闭合的反引号:剩余部分当纯文本处理,但不再改写(宁可少改也不改错)
-      parts.push(line.slice(tick));
+      // 不闭合的反引号:剩余部分当代码原样留着(宁可少改也不改错)
+      segs.push({ code: true, text: line.slice(tick) });
       break;
     }
-    parts.push(line.slice(tick, close + openLen));
+    segs.push({ code: true, text: line.slice(tick, close + openLen) });
     i = close + openLen;
   }
-  return parts.join("");
+  return segs;
 }
 
 function rewriteInline(text: string, ctx: RewriteContext, report: RewriteReport): string {

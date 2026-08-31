@@ -4,6 +4,12 @@
 // 为什么必须压:vault 里 56 张位图中位数 1.4MB、最大 1.88MB,原样带走是 77.7MB,
 // 每次镜像构建与传输都要背着(CLAUDE.md 规则 10 是「本机构建后整包传输」)。
 //
+// 为什么连 SVG 也栅格化(codex review 2026-08-31 P1):SVG 是**可执行文档**。
+// 经 <img> 加载时脚本被禁,但直接访问 /notes/<系列>/<哈希>.svg 就是在本站同源下
+// 打开一份来源不可控的文档(vault 里有 Web Clipper 抓来的内容),那是存储型 XSS。
+// 最省事又最彻底的堵法不是消毒(要引消毒库 = 新增机制),是**不产出可执行文档**:
+// 输出目录里只允许有位图。代价是 41 张图从矢量变 1600px 位图,体积见同步报告。
+//
 // 为什么文件名用内容哈希:源文件名是中文且含未转义括号
 // (`01-分层图(阶段-0-的-⭐-最小产出就是把这张图画出来).png`),进 URL 只会带来编码麻烦;
 // 哈希还顺带让「内容没变 → 文件名没变 → git 无 diff」成立,支撑同步幂等。
@@ -68,9 +74,8 @@ export class ImagePipeline {
     if (buf.length === 0) return null;
     this.referenced++;
 
-    const ext = subtype.toLowerCase() === "svg+xml" ? "svg" : "webp";
     const hash = createHash("sha1").update(buf).digest("hex").slice(0, 12);
-    const outName = `${hash}.${ext}`;
+    const outName = `${hash}.webp`;
     const key = `${seriesSlug}/${outName}`;
     if (!this.pending.has(key)) this.pending.set(key, { source: buf, seriesSlug, outName });
     return `/notes/${key}`;
@@ -95,9 +100,8 @@ export class ImagePipeline {
     }
     this.referenced++;
 
-    const ext = abs.toLowerCase().endsWith(".svg") ? "svg" : "webp";
     const hash = createHash("sha1").update(readFileSync(abs)).digest("hex").slice(0, 12);
-    const outName = `${hash}.${ext}`;
+    const outName = `${hash}.webp`;
     const key = `${seriesSlug}/${outName}`;
     if (!this.pending.has(key)) this.pending.set(key, { source: abs, seriesSlug, outName });
     return `/notes/${key}`;
@@ -115,8 +119,7 @@ export class ImagePipeline {
       bytesOut: 0,
     };
 
-    // sharp 是原生依赖,只在真的有位图要转时才加载 —— 全 SVG 的轮次不该被它的
-    // 安装状态卡住(Rust/TypeScript 教程一张图都没有)。
+    // sharp 是原生依赖,只在真有图要转时才加载(Rust/TypeScript 教程一张图都没有)
     let sharp: typeof import("sharp") | null = null;
 
     for (const [key, item] of this.pending) {
@@ -131,15 +134,13 @@ export class ImagePipeline {
         continue;
       }
 
-      if (item.outName.endsWith(".svg")) {
-        writeFileSync(outPath, typeof item.source === "string" ? readFileSync(item.source) : item.source);
-      } else {
-        if (!sharp) sharp = (await import("sharp")).default as unknown as typeof import("sharp");
-        await sharp(item.source)
-          .resize({ width: MAX_WIDTH, withoutEnlargement: true })
-          .webp({ quality: WEBP_QUALITY })
-          .toFile(outPath);
-      }
+      if (!sharp) sharp = (await import("sharp")).default as unknown as typeof import("sharp");
+      // density 只对矢量输入(SVG)有意义:按默认 72dpi 栅格化 960×640 的示意图会糊,
+      // 提到 216 相当于 3 倍渲染,再被 resize 收到 MAX_WIDTH。位图输入忽略这个参数。
+      await sharp(item.source, { density: 216 })
+        .resize({ width: MAX_WIDTH, withoutEnlargement: true })
+        .webp({ quality: WEBP_QUALITY })
+        .toFile(outPath);
       report.written++;
       report.bytesOut += statSync(outPath).size;
     }

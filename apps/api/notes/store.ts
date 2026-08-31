@@ -23,7 +23,10 @@ export async function listSeriesCards(): Promise<SeriesCardRow[]> {
   return db.rawQueryAll<SeriesCardRow>(
     `SELECT c.slug AS "categorySlug", c.name AS "categoryName", c.dot,
             s.slug, s.name, s.description,
-            COUNT(ch.id)::int AS "chapterCount",
+            -- 置顶的 README 是"总览"不是"第 N 章":getSeries 的 chapterCount 排除它,
+            -- 这里必须用同一口径,否则首页卡片会比系列页多显示一章
+            -- (codex review 2026-08-31 P2)
+            COUNT(ch.id) FILTER (WHERE NOT ch.pinned)::int AS "chapterCount",
             ${ms("MAX(ch.updated_at)", "updatedAt")}
        FROM notes_categories c
        JOIN notes_series s ON s.category_slug = c.slug

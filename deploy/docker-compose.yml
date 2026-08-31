@@ -55,8 +55,8 @@ services:
       # Notes 三级页是 Server Component,取数发自 web 进程 → 直连内网的 api,
       # 不经 caddy(本机开发默认 127.0.0.1:4000)。R5
       - API_INTERNAL_URL=http://api:4000
-      # 订阅弹层里展示的 RSS 地址(对外域名,不带 scheme)。R5
-      - SITE_HOST=${SITE_HOST:?SITE_HOST 必须填对外域名,RSS 地址与订阅弹层都用它}
+      # 订阅弹层里展示与复制的 RSS 地址。R5
+      - SITE_ORIGIN=${SITE_ORIGIN:?SITE_ORIGIN 必须填对外访问地址(含 scheme,必要时含端口)}
     expose:
       - "3000"
     networks: [front]
@@ -94,8 +94,10 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?}
       # RSS 条目里的绝对链接。不配就会回落到请求头里的 Host —— 那等于让任何人
-      # 换个 Host 头就能左右订阅源里的链接指向。R5
-      - SITE_ORIGIN=https://${SITE_HOST:?}
+      # 换个 Host 头就能左右订阅源里的链接指向。
+      # **必须含 scheme**:备案通过前 130 预发只有明文 HTTP,写死 https 会让整份
+      # 订阅源指向一个没在听的端点(codex review 2026-08-31 P2)。R5
+      - SITE_ORIGIN=${SITE_ORIGIN:?}
       # R6 落地 agent_ro 只读工具连接、R7 落地 admin/LLM 配置时,
       # 在 infra-config.json 的 secrets 段增声明后再在此处补对应变量。
       # 高危工具双闸之一(默认不设):XRAY_UNLOCK_DANGEROUS_TOOLS

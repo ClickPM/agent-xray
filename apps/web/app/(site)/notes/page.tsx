@@ -1,6 +1,6 @@
 // Notes 首页数据源(R5):真实 API 取代 demo-data,交互部分见 components/notes/NotesIndex。
 import { api } from "@/lib/api";
-import { rssPath } from "@/lib/site";
+import { rssDisplay, rssHref } from "@/lib/site";
 import { relTime } from "@/lib/time";
 import { NotesIndex, type IndexCategory } from "@/components/notes/NotesIndex";
 import type { RssCat } from "@/components/notes/RssModal";
@@ -21,15 +21,20 @@ export default async function NotesPage() {
       name: s.name,
       desc: s.description,
       // 设计稿卡片副标题形如「15 章 · 更新于 3d ago」;空系列只说整理中
-      meta: s.chapterCount === 0 ? "整理中" : `${s.chapterCount} 篇 · 更新于 ${relTime(s.updatedAt, now)}`,
+      meta: s.chapterCount === 0 ? "整理中" : `${s.chapterCount} 章 · 更新于 ${relTime(s.updatedAt, now)}`,
     })),
   }));
 
   const latestLine = latest.length ? `最新 · ${latest.map((l) => l.title).join(" · ")}` : "";
 
   const rssCats: RssCat[] = [
-    { name: "全站更新", url: rssPath(), dot: "#2563eb", main: true },
-    ...categories.map((c) => ({ name: c.name, url: rssPath(c.slug), dot: c.dot })),
+    { name: "全站更新", url: rssDisplay(), href: rssHref(), dot: "#2563eb", main: true },
+    ...categories.map((c) => ({
+      name: c.name,
+      url: rssDisplay(c.slug),
+      href: rssHref(c.slug),
+      dot: c.dot,
+    })),
   ];
 
   return <NotesIndex categories={cats} latestLine={latestLine} rssCats={rssCats} />;

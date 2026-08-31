@@ -63,7 +63,10 @@ switch ($Cmd) {
         # R5 内容同步:vault 学习分享/ -> notes_* 表。操作规程见 .claude/skills/sync-notes。
         # 连接串现取不写死:encore 本地库端口随 daemon 重启会变。
         $vault = if ($env:NOTES_VAULT) { $env:NOTES_VAULT } else { "D:\variFlight_work\VariFlightWork\学习分享" }
-        if (-not (Test-Path $vault)) { throw "vault 不存在: $vault(用环境变量 NOTES_VAULT 指定)" }
+        # --verify 只读库、不碰 vault;不该被 vault 路径挡在门外
+        if (($args -notcontains "--verify") -and -not (Test-Path $vault)) {
+            throw "vault 不存在: $vault(用环境变量 NOTES_VAULT 指定)"
+        }
         $dsn = (& $encore db conn-uri agent | Out-String).Trim()
         if (-not $dsn) { throw "拿不到 agent 库连接串。先跑一次 .\dev.ps1 让 encore 建库,并确认 Docker Desktop 已启动。" }
         Write-Host "==> notes-sync  vault=$vault"

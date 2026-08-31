@@ -263,6 +263,12 @@ function frontmatterSource(fm: Record<string, unknown>): string | null {
 /**
  * 每个文件在 vault git 里的最近提交时间。一次 git log 建全表,
  * 逐文件调 git 是 293 次进程启动(Windows 上要几十秒)。
+ *
+ * **工作区里有未提交改动的文件不进这张表**(codex review 2026-08-31 P2):
+ * 所有者的 vault 是「vault backup」式批量提交,平时工作区常年带着改动
+ * (首次同步时实测就有 3 个文件是 M 状态)。若这类文件仍取上一次的提交时间,
+ * 同步会写进新正文却配一个旧 updatedAt —— 首页「最新」行与 RSS 都不会浮出这次更新,
+ * 要等 vault 提交后再同步一次才出现。这类文件回落到 mtime。
  */
 function gitTimes(vault: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -271,6 +277,21 @@ function gitTimes(vault: string): Map<string, string> {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
+
+    // 先拿脏文件集合。--porcelain 的路径含 vault 之外的改动也无妨,只用于排除
+    const dirty = new Set<string>();
+    const status = execFileSync(
+      "git",
+      ["-c", "core.quotepath=false", "-C", vault, "status", "--porcelain", "--", "."],
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] },
+    );
+    for (const line of status.split("\n")) {
+      // 格式:XY <path> 或 XY <old> -> <new>(重命名)
+      const p = line.slice(3).trim();
+      if (!p) continue;
+      const target = p.includes(" -> ") ? p.slice(p.indexOf(" -> ") + 4) : p;
+      dirty.add(resolve(root, target.replace(/^"|"$/g, "")));
+    }
     const out = execFileSync(
       "git",
       ["-c", "core.quotepath=false", "-C", vault, "log", "--format=%x01%cI", "--name-only", "--", "."],
@@ -285,6 +306,7 @@ function gitTimes(vault: string): Map<string, string> {
       const p = line.trim();
       if (!p || !cur) continue;
       const abs = resolve(root, p);
+      if (dirty.has(abs)) continue; // 有未提交改动 -> 交给 mtime
       if (!map.has(abs)) map.set(abs, new Date(cur).toISOString()); // log 从新到旧,首次即最近
     }
   } catch {

@@ -5,8 +5,10 @@ import { mono } from "@/lib/styles";
 
 export interface RssCat {
   name: string;
-  /** 不带 scheme 的展示地址,复制时补 https://(设计稿画板 2d) */
+  /** 展示地址:设计稿画板 2d 不显示 scheme */
   url: string;
+  /** 复制到剪贴板的完整地址(含 scheme 与端口)。不在这里拼 scheme —— 预发是明文 HTTP */
+  href: string;
   dot: string;
   main?: boolean;
 }
@@ -24,9 +26,9 @@ export function RssModal({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   if (!open) return null;
 
-  const copy = (url: string) => {
+  const copy = (url: string, href: string) => {
     try {
-      void navigator.clipboard.writeText(`https://${url}`);
+      void navigator.clipboard.writeText(href);
     } catch {}
     setCopied(url);
     if (timer.current) clearTimeout(timer.current);
@@ -73,7 +75,7 @@ export function RssModal({
               <span style={{ fontSize: 13, fontWeight: rc.main ? 600 : 400, width: 64, flex: "none" }}>{rc.name}</span>
               <span style={{ ...mono(11), color: "var(--text-dim)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rc.url}</span>
               <button
-                onClick={() => copy(rc.url)}
+                onClick={() => copy(rc.url, rc.href)}
                 style={{
                   display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer",
                   borderRadius: 5, padding: "2px 6px", background: "none", border: "none",
