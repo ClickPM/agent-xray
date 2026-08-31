@@ -1,6 +1,6 @@
 # notes 服务
 
-教程库查询与 RSS(R5 已落地);pi 只读工具组待 R6。
+教程库查询与 RSS(R5 已落地);pi 只读工具组待 R7(2026-08-31 轮次对调)。
 
 ## 已实现(R5)
 
@@ -16,10 +16,11 @@
   所以 `deploy/Caddyfile` 与 `next.config.ts` 各有一条对应路由,少了就 404。
 
 正文以**标准 markdown** 返回,渲染在前端(所有者裁定 2026-08-31)。
-服务只读:内容由 `tools/notes-sync` 从 vault `学习分享/` 同步入库,
-操作规程见 `.claude/skills/sync-notes/SKILL.md`。
+服务只读:内容由所有者经 **MCP 管理服务**发布(R6;入参即标准 markdown,只校验不改写)。
+R5 的 `tools/notes-sync` 管道与 sync-notes skill 已裁定废除(2026-08-31,存量数据不动);
+附件随 R6 迁入 Postgres(`notes_assets`),镜像不再烧任何 notes 内容,图片 URL 保持不变。
 
-## 待实现(R6)
+## 待实现(R7,原 R6)
 
 - **pi 只读工具组**(`defineTool`):`notes_list_series` / `notes_get_chapter` / `notes_search`
   - 连接串用 `AGENT_RO_DATABASE_URL`(`agent_ro` 角色,仅 SELECT `notes_*` 三张表)

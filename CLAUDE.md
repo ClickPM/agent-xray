@@ -9,9 +9,9 @@ This file provides guidance to Claude Code when working in this repository.
 
 ## 项目定位
 
-**Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。三个 Tab:Runtime 工作台 / Notes 研习库 / About;另有单管理员后台 `/admin`。
+**Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。三个 Tab:Runtime 工作台 / Notes 研习库 / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(2026-08-31 裁定,原 `/admin` 后台与画板 3a–3e 废弃,见 ROUNDS.md R6)。
 
-- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) 15 块画板 + 可交互原型(规则 8)。
+- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) 画板 1a–1e + 2a–2e(共 10 块)+ 可交互原型(规则 8;3a–3e 已废弃)。管理面范围以 ROUNDS.md R6 裁定清单为准。
 - 架构与既定决策:[`docs/architecture.md`](docs/architecture.md)(pi SDK in-process、Encore 类型化 RPC、SSE ×2、Postgres、单机 compose)。
 - 安全强约束:[`docs/security.md`](docs/security.md)——威胁模型、四层沙箱、脱敏、凭据管理;**是约束不是建议**(规则 9)。
 
@@ -20,18 +20,19 @@ This file provides guidance to Claude Code when working in this repository.
 ## 仓库结构
 
 ```
-apps/web      Next.js 15 前端(App Router)。三 Tab + /admin 已按 15 块画板全部实现,
-              当前跑在 lib/demo-data.ts 演示数据上;轮次实现 = 逐块换成真实 API(样式零改动,规则 7)
-apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。当前仅 system/health.ts 实端点;
-              agent/ trace/ notes/ admin/ metrics/ 五个服务只有 README(职责与安全约束已写明,实现按 ROUNDS.md)
+apps/web      Next.js 15 前端(App Router)。三 Tab 已按画板实现,轮次实现 = 逐块换成真实
+              API(样式零改动,规则 7);/admin 六页已裁定废弃,R6 整目录删除
+apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。agent/ trace/ notes/ 已落地
+              (R3/R4/R5);mcp/ metrics/ 只有 README(职责与安全约束已写明,实现按 ROUNDS.md)
 design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token 速查)——实现时逐画板对照
 deploy/       docker compose + Caddyfile(预发/生产共用;框架版,R9 定稿)
 docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署
 rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap 在根 ROUNDS.md
 tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。
-              notes-sync:vault `学习分享/` → notes_* 表的内容同步管线(R5)
+              notes-sync:R5 的内容同步管线——**已裁定废除(2026-08-31),R6 删除**;
+              内容发布改走无状态 MCP 管理服务(存量数据不动)
 .claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
-              + 自建 skill sync-notes(内容同步规程,R5)+ MCP 启动脚本
+              + MCP 启动脚本;自建 skill sync-notes 随管道废除,R6 删除并重同步镜像
 .agents/      `.claude/skills` 的镜像,给 codex 审查者用(生成物,`dev.ps1 skills` 同步)。
               实测:codex 只认仓库级 `.agents/skills` 与 `.codex/skills`,**不认 `.claude/skills`**
 dev.ps1       Windows 本地 encore 唯一入口(规则 1)
@@ -73,8 +74,8 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 4. **写 JSONB 一律 `${JSON.stringify(x)}::text::jsonb`,绝不写裸 `::jsonb`,也别改成直接传 JS 值**。`::jsonb` 会让驱动把 JS 字符串再编码一次,库里存成 JSON 字符串标量(`jsonb_typeof` 回 `string`),SQL 侧 `->`/`@>`/GIN 全部失效而 JS 侧读回来看似正常;直接传值则 `COALESCE(${null}, col)` 的裸 null 会被写成 `jsonb 'null'` 而非 SQL NULL。`::text::jsonb` 对 null 与非 null 是同一套语义。R2 建轨迹/消息表起就适用。
 5. **`secret()` 只能在 service 目录内声明**(Encore 限制);共享库里不出现 `secret()`,需要密钥的共享代码收「已取好的值」作参数。
 6. **`apps/api` 是 Encore app root,不做 npm workspaces 提升**(规避 encore#1723:app root 下无关 node_modules/.ts 干扰 parser)。web 与 api 不手工共享源码文件;类型经 `encore gen client` 产物(`apps/web/lib/api-client.ts`)流向前端,该文件是生成物,不许手改。
-7. **非必要不得修改前端页面样式,不做视觉 review**。15 块画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。
-8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28)。功能范围 = `design/` 15 画板 + 可交互原型;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
+7. **非必要不得修改前端页面样式,不做视觉 review**。画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。(2026-08-31 修订:3a–3e 废弃,对应 `/admin` 六页按所有者裁定于 R6 整目录删除——属本条允许的结构性改动。)
+8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31 修订)。站点访客功能范围 = `design/` 画板 1a–1e + 2a–2e + 可交互原型;**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、业务工具必须纯函数、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**;SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
 10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。**镜像一律本机构建后传输,服务器不构建、不留仓库与工具链**;tag 必须是 git SHA,禁止 `latest`。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。
 11. **生产 JS 运行时统一为 bun,且「开实验位」与「换基座」必须成对出现**(所有者裁定 2026-08-29,R-BUN)。开发/测试/预发/生产四个环境的**运行时**都是 bun,**最终运行镜像(final runtime image)里不含 node**。三处配置缺一不可:`apps/api/encore.app` 的 `"experiments": ["bun-runtime"]`、构建时的 `--base oven/bun:<钉住版本>-slim`、`apps/web/Dockerfile` 的 bun 基座。
@@ -99,7 +100,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 check      # encore check(编译校验)
 .\dev.ps1 gen        # encore gen client → apps/web/lib/api-client.ts
 .\dev.ps1 db <名>    # encore db shell <数据库名>
-.\dev.ps1 notes      # 同步 vault 教程内容进库(R5;规程见 .claude/skills/sync-notes)
+.\dev.ps1 notes      # [已裁定废除,R6 删除] R5 内容同步管线;内容发布改走 MCP 管理服务
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
 .\dev.ps1 wt-clean   # 列出 .claude\worktrees 残留;带 <名字|all> 清理,--force 跳过安全闸
 cd apps\web; npm run dev   # 前端 next dev :3000
@@ -107,7 +108,7 @@ cd apps\web; npm run dev   # 前端 next dev :3000
 
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。
-- `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;另有自建的 `sync-notes`(内容同步规程,R5)。
+- `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;自建的 `sync-notes` 已随 R5 管道裁定废除(R6 删除)。
 - **worktree 用完必须 `dev.ps1 wt-clean` 删,别手删也别只跑 `git worktree remove`**(2026-08-31 实测)。在 `.claude\worktrees\<名字>` 里跑过 encore 之后,该目录会被两处占住:那个会话的 `encore mcp run`(`.claude\mcp-encore.ps1` 把 cwd 设进 `<worktree>\apps\api`,而 `encore.app` 的 `id` 为空、本地 app 只能靠 cwd 定位,换 `--app` 也绕不开),以及**注册过该 app 后同样握着句柄的 encore daemon**——单杀 MCP 无效,必须连 daemon 一起停。表现是 `git worktree remove` 报 `Permission denied`、目录删到一半只剩空壳,登记与磁盘长期不一致(本仓库曾同时积下 r3/r4/r5 三份)。`wt-clean` 把「安全闸 → 杀占用进程 → 停 encore → 强删 → prune → 拉回 daemon」固化成一条命令;仍失败只剩一种可能:**还开着以该 worktree 为根目录的 Claude Code 会话**,关掉那个窗口再重跑。
 - **skill 升级或新增后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。
 

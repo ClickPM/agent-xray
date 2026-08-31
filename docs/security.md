@@ -9,18 +9,18 @@
 1. **访客借 agent 触达服务器**——通过对话诱导 agent 执行命令 / 读写文件 / 改配置(含 prompt injection)
 2. **凭据泄漏**——LLM API key 经由事件流、前端、Git 仓库外泄
 3. **资源滥用**——刷爆 LLM 费用、OOM 拖垮单机、把服务器当代理
-4. **管理后台被攻破**——弱认证 / 会话劫持 / CSRF
+4. **管理面被攻破**——MCP 管理端点的 token 泄漏 / 暴力猜测 / 审计缺失
 
 ## 1. 沙箱化工具执行环境(四层)
 
 pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等插件),隔离目标:**用户不能通过 pi 操作服务器的任何设置**。
 
-### 第 1 层 · 工具白名单(管理后台可配)
+### 第 1 层 · 工具白名单(MCP 管理面可配)
 
 - `createAgentSession({ noTools: 'all', ... })` 关掉 pi 全部内置工具——bash / read / write / edit / glob 一个不留
-- 业务工具经 `defineTool` 逐个注册,注册集合由 `tool_config` 表的启停配置决定(管理后台可切换,集成与下线走代码发布)
+- 业务工具经 `defineTool` 逐个注册,注册集合由 `tool_config` 表的启停配置决定(经 MCP 管理面切换,集成与下线走代码发布)
 - 每个工具必须是**纯函数**:不接触文件系统、不 spawn 进程、不读 `process.env`、不做动态 import
-- 执行类内置工具默认**锁定**:开启需「服务器 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1` + 管理后台开关」双闸;所有启停操作写审计日志
+- 执行类内置工具默认**锁定**:开启需「服务器 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1` + MCP 管理面开关」双闸;所有启停操作写审计日志
 - **明文规则:bash / write / 任意代码执行类工具永久禁止进 in-process 进程。** 未来确需执行类能力时,必须独立一次性沙箱容器,不共享本进程
 
 ### 第 2 层 · 数据面只读
@@ -47,17 +47,19 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 
 ## 3. 凭据管理
 
-- LLM key:管理后台写入 → 服务端加密存储(Postgres);任何读接口只返回掩码(`sk-…abcd`)
-  - **引导凭据例外**(R-BUN 部署形态,所有者裁定 2026-08-29,文档补记 2026-08-31):`DeepSeekApiKey` 是 R1 起的 Encore secret,自托管镜像没有管理后台之前只能经 `deploy/.env`(600、不入 Git)→ infra-config `{"$env"}` 注入进程环境——与 §5「中转地址作为 secrets 管理」同一路径。不入镜像、不入日志、不经任何读接口暴露。R7 管理后台加密入库落地后,运行期 LLM key 以库内为准,该 `.env` 引导键的去留交所有者裁定(已记 `rounds/BACKLOG.md`)
+- LLM key:经 MCP 管理面写入 → 服务端加密存储(Postgres);任何读接口**含 MCP tool result**只返回掩码(`sk-…abcd`)——tool result 会进入 MCP 客户端的模型上下文,掩码必须在服务端完成
+  - **引导凭据例外**(R-BUN 部署形态,所有者裁定 2026-08-29,文档补记 2026-08-31):`DeepSeekApiKey` 是 R1 起的 Encore secret,自托管镜像没有管理面之前只能经 `deploy/.env`(600、不入 Git)→ infra-config `{"$env"}` 注入进程环境——与 §5「中转地址作为 secrets 管理」同一路径。不入镜像、不入日志、不经任何读接口暴露。R6(MCP 管理服务)`llm_config` 加密入库落地后,运行期 LLM key 以库内为准,该 `.env` 引导键的去留交所有者裁定(已记 `rounds/BACKLOG.md`)
 - `.env` 不入 Git;仓库推送前跑 gitleaks;`.gitignore` 已覆盖 `.env*` / `*.key` / `*.pem`
 - 服务器上 `.env` 权限 600
 
-## 4. 管理后台(同域 /admin)
+## 4. 管理面(无状态 MCP,`/api/mcp`)
 
-- 单管理员;密码 argon2id 哈希;登录限速 + 连续失败锁定
-- 会话 cookie:`HttpOnly` + `Secure` + `SameSite=Strict`;写操作校验 CSRF
-- 可选:Caddy 层对 `/admin*` 加 IP 白名单
-- 登录、配置变更、工具启停全部写审计日志
+> 2026-08-31 所有者裁定:原 `/admin` 后台(画板 3a–3e)整体废弃,唯一管理入口改为**无状态 MCP server**(2026-07-28 规范为目标版本,保留 SDK 向下协商),所有者以 MCP 客户端(Claude Code 等)操作。本节替代原「管理后台(同域 /admin)」全部条款。
+
+- 单管理员;认证 = **静态 bearer token**:高熵随机、服务端只存哈希、经 secret/`.env` 注入,永不入 Git 与日志(solo 维护,不上 OAuth——规范的 authorization 章节为可选项,此为显式取舍)
+- 无 cookie 会话,故无 CSRF 攻击面;仅 HTTPS(Caddy 终止);可选:Caddy 层对 `/api/mcp` 加 IP 白名单
+- 认证失败一律拒绝且不回显细节;失败尝试与全部写操作(内容、配置、工具启停)写审计日志
+- **两个面互不触碰**:MCP 服务用全权 DB 角色写库;pi agent 工具仍走 `agent_ro` 只读,且 in-process 进程无 HTTP 类工具、物理上不可达 MCP 端点
 
 ## 5. 服务器基线(境内轻量服务器)
 
@@ -69,7 +71,7 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 ## 6. 隐私与合规
 
 - 访问统计自托管:IP 加盐哈希后落库,不存原始 IP;无第三方统计脚本
-- 站点无用户注册、无用户上传;About 页仅 GitHub 公开数据
+- 站点无用户注册、无用户上传;About 页仅所有者经管理面发布的公开信息(GitHub / origin 链接等)
 
 ## 7. 供应链
 

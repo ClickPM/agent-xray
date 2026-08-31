@@ -1,5 +1,8 @@
 # notes-sync
 
+> **已裁定废除(所有者 2026-08-31),R6 整目录删除,勿再运行**:内容发布改走无状态 MCP 管理服务
+> (入参即标准 markdown,只校验不改写);存量库内数据不动,附件随 R6 迁入 Postgres。见 ROUNDS.md R6。
+
 vault `学习分享/` → `notes_categories` / `notes_series` / `notes_chapters` + `apps/web/public/notes/` 的内容同步管线(R5)。
 
 **入口是 `.\dev.ps1 notes`,操作规程在 [`.claude/skills/sync-notes/SKILL.md`](../../.claude/skills/sync-notes/SKILL.md)** —— 那里写了流程、验收、vault 结构变化怎么办、以及不能做的事。本文件只说代码怎么分的。

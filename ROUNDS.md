@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——功能范围以 [`design/`](design/README.md) 15 块画板 + 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;2026-08-31 修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1e + 2a–2e(共 10 块)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 
 ## 进度表
 
@@ -16,9 +16,9 @@
 | **R3** | Runtime 对话流真实化(/agent/ask SSE + 前端切真实数据源) | ✅ 已完成([任务卡](rounds/round-03/round-03.md),10 项验收全过;codex 初审 5 条(3×P1)+ 复审第 1 轮 3 条(2×P1)findings 全采纳整改,复审第 2 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ✅ 已完成([任务卡](rounds/round-04/round-04.md),12 项验收全过(#11 按所有者裁定改为静态核验,镜像实跑冒烟并入 R9);codex 初审 3 条(2×P1)+ 复审三轮 5 条(全 P2)共 8 条 findings,7 条采纳整改、1 条写明理由记 BACKLOG,复审第 4 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ✅ 已完成([任务卡](rounds/round-05/round-05.md),8 项验收全过;codex 7 轮共 17 条 findings,15 条采纳整改、2 条所有者裁定不采纳并留兜底,末轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
-| **R6** | 沙箱与配额落地(只读工具组 · agent_ro · tool_config · daily_quota) | ⬜ | — |
-| **R7** | admin 服务 + /admin 五页对接(登录/统计/配置/工具) | ⬜ | — |
-| **R8** | metrics 打点 + About 真实化 | ⬜ | — |
+| **R6** | MCP 管理服务(无状态 2026-07-28:notes 内容/About/LLM 多 provider/工具启停;/admin 与 R5 管道退役) | ⬜ | — |
+| **R7** | 沙箱与配额落地(只读工具组 · agent_ro · daily_quota,消费 R6 配置表) | ⬜ | — |
+| **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ⬜ | — |
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ⬜ | — |
 | **R10** | 安全加固 + 上线前检查单逐项 | ⬜ | — |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
@@ -29,8 +29,8 @@
 |---|---|---|---|
 | **M0** | R0–R1 | 环境 + 风险门禁 | R1 任一门禁不过 → **停**,重新评估 sidecar 形态并改写本表 |
 | **M1** | R2–R4 | Runtime 核心真实化(站点核心卖点跑通) | — |
-| **M2** | R5–R6 | 内容库 + 安全沙箱(公开可访问的安全底线) | R6 沙箱验收不过 → 不得进入任何公网部署轮 |
-| **M3** | R7–R8 | 管理后台 + 统计(功能完备) | — |
+| **M2** | R5–R7 | 内容库 + MCP 管理面 + 安全沙箱(公开可访问的安全底线) | R7 沙箱验收不过 → 不得进入任何公网部署轮 |
+| **M3** | R8 | 统计 + About(功能完备) | — |
 | **M4** | R9–R11 | 预发 → 生产上线 | `docs/security.md` 上线检查单不全绿不上生产 |
 
 ## 各轮拆解
@@ -91,37 +91,43 @@
 > 前端渲染;frontmatter 不保留;图片压缩后进 web 静态资源;AI 资料只收中译并保留 source 原链;
 > `原始资料/` 不摄入且不生成指向它的链接;内容分享不同步。完整裁定表与实测数字见任务卡。
 
-### R6 — 沙箱与配额落地(`docs/security.md` §1 第 1/2/4 层)
+### R6 — MCP 管理服务(替代 /admin 后台;所有者裁定 2026-08-31)
+
+> 原 R7 的 admin 服务与 `/admin` 五页(画板 3a–3e)整体废弃,与原 R6 对调进位。管理面改为**无状态 MCP server**,所有者以 MCP 客户端(Claude Code 等)对站点内容与配置直接操作。R5 的 notes-sync 管道与 sync-notes skill 同时废除(**存量文章与数据不动**)。安全条款见 `docs/security.md` §4(已按本裁定重写)。
+
+- 协议:**2026-07-28 规范为目标版本**(无状态核心:无 initialize 握手、无 `Mcp-Session-Id`,每请求 `_meta` 带版本与能力;`server/discover` 必须实现;POST 带 `Mcp-Method`/`Mcp-Name` 头)。用官方 TS SDK 并**保留向下协商**(客户端支持仍在铺开,所有者裁定);不实现 `subscriptions/listen`(管理面无订阅需求,纯 POST 单端点)
+- 挂载:`api.raw` 端点 `/api/mcp`(走既有 `/api/*` 反代,无需新增 Caddy 路由);bun 下跑官方 TS SDK 属轮内验证项
+- 认证与审计:静态 bearer token(高熵随机、服务端只存哈希、经 secret 注入;solo 维护不上 OAuth)+ 可选 Caddy 层 IP 白名单;认证失败与全部写操作入审计日志
+- 迁移(原 R6/R7 的配置表在本轮一次建齐,R7 只消费):`llm_config`(多 provider:provider / key **加密** / baseURL / 默认模型 / 限额配置)· `tool_config` · `about_content`(github/origin 双链等)· `notes_assets`(附件二进制)· 审计表
+- MCP tools 首批:notes 三张表 CRUD(**入参即标准 markdown,server 只校验不改写**——Obsidian 改写器随管道退役,与 BACKLOG「vault 源头写标准 markdown」裁定自洽)· 附件上传/删除 · About 内容 · LLM provider 管理(key 任何读回只给掩码)· 工具启停(双闸之一)。**统计查询 tools 不在本轮**(数据面在 R8,所有者裁定后挪)
+- LLM 多 provider:**直接用 pi-ai 统一对接,不另起炉灶**(所有者裁定):`ModelRuntime.setRuntimeApiKey` 按 provider 注册、models.json 定义模型;`agent/runtime.ts` 硬编码的 `MODEL_PROVIDER`/`MODEL_ID`/单 secret 改从 `llm_config` 读。轮内验证:中转 baseURL 在 pi-ai 配置面的表达、key/模型变更热生效;`.env` 引导键 `DEEPSEEK_API_KEY` 去留在本轮裁定(BACKLOG 既有条目)
+- 附件供图:**镜像内不烧任何 notes 内容(所有者裁定),全部从 Postgres 读**——存量 `apps/web/public/notes/` 图片回填 `notes_assets` 后从 web 删除;API raw 端点从库读、带长缓存头;**图片 URL 保持既有 `/notes/<系列>/<哈希>.webp` 不变**(免改写存量 markdown),Caddy 按扩展名把该路径分流到 api,next dev 加对应 rewrite(RSS 先例)
+- 退役与删除:`apps/web/app/admin/` 六页整目录删除(所有者裁定;规则 7 结构性改动,理由=功能废弃)· `apps/api/admin/` 占位已换 `apps/api/mcp/` · `tools/notes-sync/` + `dev.ps1 notes` + `.claude/skills/sync-notes` 删除并 `dev.ps1 skills` 重同步镜像 · `dev.ps1 build --services` 补 `mcp`
+- 验收:①本机 Claude Code 实连打通(**第一验收项**,客户端对 2026-07-28/向下协商的支持在此验证);②无 token/错 token 全拒且有审计记录;③经 MCP 发布一篇含附件新文章全链路(写入 → 前端渲染 → RSS 更新);④存量文章与图片零回归(URL 不变);⑤LLM key 读回只见掩码;⑥切换默认模型后新会话生效
+
+### R7 — 沙箱与配额落地(原 R6;`docs/security.md` §1 第 1/2/4 层)
 
 - `defineTool` 只读工具组:`notes_list_series` / `notes_get_chapter` / `notes_search`——纯函数,连接串用 `AGENT_RO_DATABASE_URL`
-- 迁移:`agent_ro` 角色(仅 SELECT notes 表)+ `tool_config` 表;注册集合按启停配置决定
-- `daily_quota`:每日 token/费用计数,超限拒新会话;单会话 turn 上限
+- 迁移:`agent_ro` 角色(仅 SELECT notes 表);注册集合按 **R6 已建的 `tool_config`** 启停配置决定
+- `daily_quota`:每日 token/费用计数,超限拒新会话;单会话 turn 上限;限额值从 R6 的 `llm_config` 配置读
 - prompt injection 自测清单过一遍(诱导执行/读配置/改数据),结果回填任务卡
 - 验收:以 agent_ro 连接尝试写库必须失败;超限路径有明确拒绝行为
 
-### R7 — admin 服务与后台对接
-
-- 迁移:`admin_*`(账户/会话/审计)+ `llm_config`
-- `POST /admin/login`:argon2id + HttpOnly/Secure/SameSite=Strict cookie;登录限速 + 连续失败锁定;写操作 CSRF 校验
-- stats / config(LLM key 加密存储,读返回掩码)/ tools 启停 + 审计日志;高危工具双闸(`XRAY_UNLOCK_DANGEROUS_TOOLS` + 后台开关)
-- `/admin` 五页(login / Overview / Traffic / Settings / Tools)对接真实数据
-- 验收:错误密码限速生效;key 任何读接口只见掩码;启停操作在审计日志可查
-
-### R8 — metrics 与 About 真实化
+### R8 — metrics 与 About 真实化 + 统计查询 MCP 工具
 
 - `POST /t` pageview beacon:date / path / **加盐 IP 哈希** / UA 摘要,不存原始 IP(`docs/security.md` §6);web 端打点接入
-- 聚合查询供 /admin Traffic 页(PV/UV/路径分布/近 30 天趋势)
-- About 页 GitHub 公开数据(构建时拉取或后端缓存代理,二选一在任务卡定);footer 备案号占位
-- 验收:库中无原始 IP;Traffic 页数字与打点一致
+- 聚合查询(PV/UV/路径分布/近 30 天趋势)——**展示面是 MCP 统计查询 tools**(画板 3c Traffic 页已废弃;统计 tools 按所有者裁定挪到本轮,数据面就绪后落地)
+- About 页从 `about_content` 读真实数据(github/origin 双链,表与管理 tools R6 已建);footer 备案号占位
+- 验收:库中无原始 IP;MCP 统计查询结果与打点一致;About 内容经 MCP 修改后前端生效
 
 ### R9 — 容器化与 130 预发部署
 
 > R-BUN 已把镜像构建、compose 定稿、安全参数、文档四块前移完成(bun 基座、不可变镜像、`infra-config.json`、`cap_drop`/`pids_limit`/网络分段/healthcheck)。R9 只剩「在 130 上真跑一遍 + 补齐尚未落地的部分」。
 
 - 数据库迁移已由 R-BUN 的 `deploy/migrate.sh` 解决(所有者裁定方案一);R9 只需把它纳入部署流程文档与冒烟清单
-- `agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色 + 仅 SELECT `notes_*` 授权(R6 建表后补授权的顺序写进文档)
+- `agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色 + 仅 SELECT `notes_*` 授权(R7 建角色、建表在先授权在后的顺序写进文档)
 - 130 部署流程文档 + 脚本:`dev.ps1 build` → 文件方式传输(`docker save -o` → `scp` → `docker load -i`;**勿在 PowerShell 用管道直传,二进制会被文本重编码破坏**)→ 130 上按**先迁移后起服务**的顺序(`up -d --wait postgres` → `./migrate.sh` → `up -d`),避免「健康检查全绿但业务接口 500」的中间状态;升级另需先 `docker compose stop api web`(见 docs/deploy-environments.md「升级顺序」)
-- 预发全链路验证:三 Tab + /admin + 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / **最终运行镜像**内无 node / postgres 仅 `back` 网段可达)。spike 服务已于 R4 整目录删除,`/spike/*` 不再存在,该项从冒烟清单撤下
+- 预发全链路验证:三 Tab + `/api/mcp` 管理端点(带 token 实连)+ notes 附件供图路由(Caddy 扩展名分流)+ 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / **最终运行镜像**内无 node / postgres 仅 `back` 网段可达)。spike 服务已于 R4 整目录删除,`/spike/*` 不再存在,该项从冒烟清单撤下
 - **服务白名单核验**:`dev.ps1 build` 的 `--services` 是维护热点——冒烟时必须逐个确认**当前已落地的正式 service 端点都可达**(不只是 `/health`),漏改的表现是镜像构建正常、健康检查正常、而该服务端点静默 404
 - **SSE 冒烟**(R3/R4 已就绪,可以做了):正式端点 `POST /agent/ask` 与 `GET /trace/stream` 均已落地并进白名单。冒烟内容:心跳 15s、断线重连 `afterSeq` 回放、`docker compose stop api` 时客户端收到明确断流而非静默挂起、SSE 脱敏抽查。**另需复测两条 R4 挂起的限制**(见 `rounds/BACKLOG.md`):Caddy + 自托管镜像的真实拓扑下能否拿到 SSE 客户端断开信号——若能,`/trace/stream` 的让位机制与 `MAX_STREAM_MS` 硬上界都可以放宽甚至退役
 - 回滚演练:`IMAGE_TAG` 换回上一 SHA + `up -d` 真跑一次
