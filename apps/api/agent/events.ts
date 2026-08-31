@@ -1,6 +1,6 @@
 // pi SDK 34 种扩展事件 × 四模式清单 + 事件流脱敏(docs/security.md §2 强约束)。
-// R1 在 spike/ 建立,R3 随正式采集点(agent/runtime.ts 观测者扩展)迁入 agent 服务:
-// spike 被 `dev.ps1 build --services` 排除出生产镜像,正式服务不得依赖 spike 目录。
+// R1 在 spike/ 建立,R3 随正式采集点(agent/runtime.ts 观测者扩展)迁入 agent 服务
+// (spike 已于 R4 整体删除);R4 又把与事件无关的凭据脱敏原语下沉到 shared/redact.ts。
 // 事件名以 @earendil-works/pi-coding-agent@0.84.3 dist/core/extensions/types.d.ts
 // 的 34 个 `pi.on()` 重载为准;模式按 handler result 语义划分:
 //   veto     = result 可取消/拦截(cancel / block / trust 裁决)
@@ -9,6 +9,12 @@
 //   notify   = 纯通知,无影响流程的 result
 // 实测计数 notify 19 / veto 6 / chain 7 / takeover 2 = 34;
 // docs/architecture.md 原记 notify 18(合计 33)已按本清单回改(CLAUDE.md 规则:以实测为准)。
+
+import { previewText, sanitizeValue } from "../shared/redact";
+
+// R3 的调用点(agent/ask.ts、agent/runtime.ts)从本模块取脱敏工具,R4 迁移后
+// 保持同一入口,避免调用点为一次搬家而全量改写。
+export { previewText, safeErrorText, sanitizeValue } from "../shared/redact";
 
 export const PI_SDK_VERSION = "0.84.3";
 
@@ -75,98 +81,11 @@ export function modeCounts(): Record<EventMode, number> & { total: number } {
 //     凭据模式清洗——未知嵌套字段不可能以结构形式存活。
 // 放行的值仍经 sanitizeValue(截断 + 键数上限 + 凭据键/值兜底);单事件序列化超
 // MAX_EVENT_BYTES 整体降级为 {type, oversized}。
-const DROP_KEY =
-  /authorization|api[-_]?key|apikey|token|secret|credential|cookie|passw|private[-_]?key|bearer|headers/i;
-// 字符串值内的凭据形态(sk-/rk-/pk-/sess- 前缀串、Bearer 串)
-const SECRET_VALUE_PATTERNS = [
-  /\b(?:sk|rk|pk|sess)-[A-Za-z0-9_-]{10,}\b/g,
-  /\bbearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,
-];
-const MAX_STRING = 400;
-const MAX_ARRAY = 20;
-const MAX_DEPTH = 4;
-const MAX_PROPS = 30;
+//
+// 凭据脱敏原语(DROP_KEY / sanitizeValue / previewText / safeErrorText)在 R4 抽到
+// `shared/redact.ts`:trace 服务也要用同一套口径写日志(任务卡 D2)。这里只保留
+// 「事件级」的规则——字段白名单、派生摘要、单事件体积上限。
 const MAX_EVENT_BYTES = 8_192;
-
-function scrubString(s: string): string {
-  let out = s;
-  for (const p of SECRET_VALUE_PATTERNS) out = out.replace(p, "[redacted]");
-  return out;
-}
-
-function truncate(s: string, max = MAX_STRING): string {
-  return s.length > max ? s.slice(0, max) + `…[+${s.length - max} chars]` : s;
-}
-
-export function sanitizeValue(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
-  if (value === null || value === undefined) return value;
-  const t = typeof value;
-  if (t === "string") return truncate(scrubString(value as string));
-  if (t === "number" || t === "boolean") return value;
-  if (t === "bigint") return String(value);
-  if (t === "function") return "[fn]";
-  if (depth >= MAX_DEPTH) return "[depth]";
-  if (typeof value === "object") {
-    if (seen.has(value as object)) return "[circular]";
-    seen.add(value as object);
-    if (Array.isArray(value)) {
-      const out = value.slice(0, MAX_ARRAY).map((v) => sanitizeValue(v, depth + 1, seen));
-      if (value.length > MAX_ARRAY) out.push(`…[+${value.length - MAX_ARRAY} items]`);
-      return out;
-    }
-    const out: Record<string, unknown> = {};
-    const entries = Object.entries(value as Record<string, unknown>);
-    for (const [k, v] of entries.slice(0, MAX_PROPS)) {
-      if (DROP_KEY.test(k)) {
-        out[k] = "[redacted]";
-        continue;
-      }
-      out[k] = sanitizeValue(v, depth + 1, seen);
-    }
-    if (entries.length > MAX_PROPS) out["…"] = `[+${entries.length - MAX_PROPS} props]`;
-    return out;
-  }
-  return String(value);
-}
-
-/**
- * 任意值 → 单条截断文本预览:结构在序列化时展平,凭据键在 replacer 层置
- * [redacted](值根本不进入输出),字符串再过凭据模式清洗后截断。
- */
-export function previewText(value: unknown, max = MAX_STRING): string {
-  let s: string;
-  if (typeof value === "string") {
-    s = value;
-  } else {
-    try {
-      s =
-        JSON.stringify(value, (k, v) =>
-          k !== "" && DROP_KEY.test(k) ? "[redacted]" : typeof v === "bigint" ? String(v) : v,
-        ) ?? String(value);
-    } catch {
-      s = "[unserializable]";
-    }
-  }
-  return truncate(scrubString(s), max);
-}
-
-/**
- * 异常 → 一行已脱敏摘要,**服务端日志的唯一入口**(codex review P1)。
- *
- * provider SDK 抛出的异常常把响应体、甚至请求配置(含 Authorization 头)挂在
- * 自定义字段上;`console.error(msg, err)` 会把整个对象打进日志,违反
- * docs/security.md「明文凭据不进日志」。这里先把 Error 的 name/message 取出来
- * (它们不是可枚举属性,直接 JSON.stringify 会得到 `{}`),再过 previewText 的
- * 凭据键屏蔽 + 凭据串清洗 + 截断。**堆栈不进日志**——它对定位帮助有限,却是
- * 最容易把上游内联的凭据字面量带出来的地方。
- */
-export function safeErrorText(err: unknown): string {
-  if (err instanceof Error) {
-    const cause = err.cause === undefined ? "" : ` (cause: ${previewText(err.cause, 200)})`;
-    return `${previewText(`${err.name}: ${err.message}`)}${cause}`;
-  }
-  return previewText(err);
-}
 
 /** 每个事件允许透出的顶层字段(值仍经 sanitizeValue)。未列出的事件只透出 type。 */
 const EVENT_FIELD_WHITELIST: Record<string, string[]> = {

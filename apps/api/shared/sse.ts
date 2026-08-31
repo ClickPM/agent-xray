@@ -1,5 +1,6 @@
 // SSE 写出小工具(`api.raw` + node:http,docs/architecture.md「流式通道」决策)。
-// R1 在 spike/sse.ts 验证,R3 随正式端点落 agent 服务。
+// R1 在 spike/ 验证,R3 随正式端点转正,R4 移到 shared/:对话流(agent)与轨迹流(trace)
+// 两个服务都要写 SSE 帧,放中立模块避免服务间互相 import 内部实现。
 import type { ServerResponse } from "node:http";
 
 export const SSE_HEADERS = {
