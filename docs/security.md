@@ -36,7 +36,7 @@ R7 落地补记(2026-09-01,`apps/api/agent/tools.ts` + `runtime.ts`):
 - 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_categories` / `notes_series` / `notes_chapters` 三张表 `SELECT`,对 `llm_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `daily_quota` / `visits` 无任何权限
 - 即使 prompt injection 完全操纵了工具调用,能做的也只有「读教程」
 
-R7 落地补记(2026-09-01,所有者裁定;`apps/api/agent/ro-db.ts` + 迁移 `004`):
+R7 落地补记(2026-09-01,所有者裁定;`apps/api/agent/ro-db.ts` + 迁移 `006`):
 
 - **成员资格只授给「已经能读本库 `sessions` 表」的角色**:role membership 是**集群级**的,而 Postgres 默认把 CONNECT 授给 PUBLIC —— 按「能连本库」授,同集群里别的应用的角色也会拿到 agent_ro,真的多出「连过来读 notes 三张表」这件原本做不到的事(codex 复审 P2)。用 `sessions` 做判据是因为它是本应用的表且 **agent_ro 对它无权限**(拿 notes_* 判会绕回自身),能读它的角色本来就能读得比 agent_ro 多,授权因而**可证明地**不扩大权限
 - **角色是真的,登录能力没有**:`agent_ro` 建成 `NOLOGIN`,由应用连接在事务里 `SET LOCAL ROLE agent_ro` 临时降权,而不是另开一条 `AGENT_RO_DATABASE_URL` 连接。权限仍由 Postgres 强制(降权后 `current_user` 就是 `agent_ro`,写 notes 表回 `permission denied`),但省掉了一个 pg 驱动依赖、一份角色口令(`.env` / initdb / secret 各一处)和一个 Encore 管不到的第二连接池
@@ -56,7 +56,7 @@ R7 落地补记(2026-09-01,所有者裁定;`apps/api/agent/ro-db.ts` + 迁移 `0
 - 每日 token + 费用计数(`daily_quota`),超限拒绝新会话;单会话 turn 上限
 - 用户无法借工具把服务器变成任意代理
 
-R7 落地补记(2026-09-01,`apps/api/agent/quota.ts` + 迁移 `004`):
+R7 落地补记(2026-09-01,`apps/api/agent/quota.ts` + 迁移 `006`):
 
 - **限额值与用量分两张表**:值在 R6 的 `llm_config` 默认行(`daily_token_limit` / `daily_cost_limit_cents` / `max_turns_per_session`,**0 = 不限**,经 MCP 改),用量在 `daily_quota`(每轮累加)。变更节奏不同,合表会让「改配置」与「跑对话」抢同一行
 - **日界写死 `Asia/Shanghai`**,不用 UTC 也不依赖服务器 TZ:所有者在境内,「今天的额度」应当在本地零点重置;容器里 TZ 通常是 UTC,依赖它等于让日界随部署环境漂移
@@ -108,6 +108,38 @@ R6 落地补记(2026-08-31):
 
 - 访问统计自托管:IP 加盐哈希后落库,不存原始 IP;无第三方统计脚本
 - 站点无用户注册、无用户上传;About 页仅所有者经管理面发布的公开信息(GitHub / origin 链接等)
+
+R8 落地补记(2026-09-01,`apps/api/metrics/`):
+
+- **`POST /t` 是无认证的公开写入口**,所以进 `visits` 表的每一列都必须是服务端派生的闭集值:
+  - `visitor` = `sha256(salt ‖ day ‖ IP网段 ‖ UA摘要)` 的 hex 前 32 位。盐来自 secret
+    `MetricsIpSalt`;**盐未配置时打点整个停用**(端点回 204、不写库、日志一行 error),
+    不会退化成不加盐哈希 —— 那等于把本节的承诺悄悄降级。compose 用
+    `${METRICS_IP_SALT:?}` 让漏配在启动时就炸
+  - **`day` 进哈希输入是刻意的**:同一个人在不同日期得到不同的 `visitor`,库泄漏也串不出
+    任何人的跨天访问史。代价是「近 30 天 UV」这个数在本方案下不存在,统计只给各日 UV 之和
+    (tool 里叫 `visitorDays`,不叫 UV)
+  - **哈希的每一个输入分量都必须有界**(codex 第 1 轮 P1)。`visitor` 是 `visits` 主键的
+    一部分,而 `/t` 无认证:请求方只要能自由左右哈希输入,就能自由制造新行,把库撑爆。
+    所以进哈希的不是原始值:
+    - IP 先收敛到**网段**(IPv4 `/24`、IPv6 `/48`)。一台机器手上常有一整个 IPv6 `/64`,
+      逐个换地址几乎零成本;收到 `/48` 之后再怎么换都是同一行。这同时也更隐私
+    - IP 取的是 `X-Forwarded-For` 的**最后一段** —— Caddy 的 `reverse_proxy` 是**追加**
+      而不是覆盖,第一段是请求方自己写的。**这条依赖「Caddy 前面没有别的代理」**;
+      将来加 CDN / 云 LB 必须同步改成「跳过 N 层可信代理」
+    - UA 进哈希的是 `<浏览器族>/<平台族>` 闭集摘要(≤42 种),不是原始串
+  - `ua` 列存的就是那个闭集摘要(如 `Chrome/Windows`),**原始 UA 串不落库** ——
+    它本身就是一份高熵指纹,存下来等于给「不存原始 IP」开一扇后门
+  - `path` 先按站内**已知路由形状**归一,再校验 slug 在库里真实存在,归不出来的一律折进
+    常量桶 `/*`。这既是隐私(不落任何访客可控的字符串),也是可用性:否则任何人都能
+    对着 `/t` 打循环把 `visits` 灌成任意大
+- **原始 IP / 原始 UA 只在 `metrics/visitor.ts` 的函数栈里出现过**:不返回、不落库、不进日志。
+  `/t` 的 `api.raw` 选项带 `sensitive: true` —— 不设的话 Encore 会把请求头(含 `X-Forwarded-For`)
+  原样写进 trace,等于在承诺「不存原始 IP」的同时把它抄进了另一个地方
+- **无 cookie、无 localStorage、无第三方脚本**:前端打点组件(`apps/web/components/Beacon.tsx`)
+  发出的全部信息就是一个站内路径
+- 统计的读面是 MCP 管理面的三个只读 tool(`traffic_overview` / `traffic_paths` / `traffic_agents`),
+  没有任何公开的统计查询端点;`agent_ro` 对 `visits` 无权限(§1 第 2 层、§2 已列)
 
 ## 7. 供应链
 

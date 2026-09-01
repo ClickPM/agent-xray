@@ -53,7 +53,8 @@
    ```bash
    cd deploy && cp .env.example .env && chmod 600 .env   # 首次
    # 填 IMAGE_TAG=<git-sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY
-   #   / SITE_ORIGIN=<含 scheme 的对外地址>   ← 生成方式见 .env.example 里的注释
+   #   / METRICS_IP_SALT / SITE_ORIGIN=<含 scheme 的对外地址>  ← 生成方式见 .env.example 里的注释
+   # 生产另填 ICP_BEIAN=<备案号>(备案通过后;预发留空,留空则页面底部不渲染那条底栏)
 
    docker compose up -d --wait postgres   # 1) 只起库,--wait 会阻塞到 healthy
    ./migrate.sh                           # 2) schema 就位(详见下一节)

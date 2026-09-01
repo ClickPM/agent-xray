@@ -79,14 +79,9 @@ export interface LifeNode {
 // `encore gen client` 产物(lib/api-client.ts 的 notes 命名空间)给出,
 // 不再在前端手写一份(CLAUDE.md 规则 6)。
 
-export interface RepoCard {
-  name: string;
-  lang: string;
-  dot: string;
-  stars: number;
-  desc: string;
-  pushed: string;
-}
+// RepoCard / LangSlice(About 页画板 2e 的仓库卡与语言条)随 R8 移除:
+// 它们的数据形状改由 `encore gen client` 产物(lib/api-client.ts 的 about 命名空间)
+// 给出,不再在前端手写一份(CLAUDE.md 规则 6)——与 R5 移除 Notes 那批类型同理。
 
 // ToolRow(/admin 工具页的行模型)随 R6 的 /admin 废弃一并删除:
 // 工具启停改由 MCP 的 tool_config_set 维护,没有前端界面。

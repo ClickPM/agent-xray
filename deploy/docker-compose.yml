@@ -57,6 +57,10 @@ services:
       - API_INTERNAL_URL=http://api:4000
       # 订阅弹层里展示与复制的 RSS 地址。R5
       - SITE_ORIGIN=${SITE_ORIGIN:?SITE_ORIGIN 必须填对外访问地址(含 scheme,必要时含端口)}
+      # ICP 备案号(R8)。**只有生产填**:填了才在页面底部渲染一条链到工信部的
+      # 底栏,留空则整块不渲染(130 预发不备案,保持留空)。
+      # 不能改成构建期注入:镜像是不可变制品,预发与生产共用同一个 SHA(规则 10)。
+      - ICP_BEIAN=${ICP_BEIAN:-}
     expose:
       - "3000"
     networks: [front]
@@ -99,6 +103,10 @@ services:
       # 必须经 MCP 重新写一遍各 provider 的 key。生成方式见 deploy/.env.example。
       - MCP_AUTH_TOKEN_HASH=${MCP_AUTH_TOKEN_HASH:?}
       - CONFIG_ENCRYPTION_KEY=${CONFIG_ENCRYPTION_KEY:?}
+      # 访问统计(R8)的访客标识盐。`:?` 是刻意的:漏配时**启动就失败**,
+      # 而不是留到运行期变成「打点静默停用、统计永远是 0」——后者要靠翻日志
+      # 才发现。docs/security.md §6「IP 加盐哈希后落库,不存原始 IP」。
+      - METRICS_IP_SALT=${METRICS_IP_SALT:?}
       # RSS 条目里的绝对链接。不配就会回落到请求头里的 Host —— 那等于让任何人
       # 换个 Host 头就能左右订阅源里的链接指向。
       # **必须含 scheme**:备案通过前 130 预发只有明文 HTTP,写死 https 会让整份
@@ -106,7 +114,7 @@ services:
       - SITE_ORIGIN=${SITE_ORIGIN:?}
       # R7 的 agent_ro 只读角色**不需要任何变量**:它是 NOLOGIN 角色,由应用连接在
       # 事务里 SET LOCAL ROLE 临时降权(docs/security.md §1 第 2 层的落地补记),
-      # 没有第二套连接串、也没有第二份口令。角色与授权由迁移 004 建,
+      # 没有第二套连接串、也没有第二份口令。角色与授权由迁移 006 建,
       # 因此 deploy/migrate.sh 必须在起 api 之前跑完(本来就是既定顺序)。
       #
       # 高危工具双闸之一,**默认不设**(设了也只是开了第一闸,还要 tool_config 那半):

@@ -18,7 +18,7 @@
 | **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ✅ 已完成([任务卡](rounds/round-05/round-05.md),8 项验收全过;codex 7 轮共 17 条 findings,15 条采纳整改、2 条所有者裁定不采纳并留兜底,末轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R6** | MCP 管理服务(无状态 2026-07-28:notes 内容/About/LLM 多 provider/工具启停;/admin 与 R5 管道退役) | ✅ 已完成([任务卡](rounds/round-06/round-06.md),10 项验收全过;codex 五轮共 18 条 findings,16 条采纳整改、1 条实跑证伪不采纳、1 条写明理由记 BACKLOG,末轮零 P1,缺陷门禁 PASS) | 2026-08-31 |
 | **R7** | 沙箱与配额落地(只读工具组 · agent_ro · daily_quota,消费 R6 配置表) | ✅ 已完成([任务卡](rounds/round-07/round-07.md),12 项验收全过;codex 三轮共 6 条 findings(1×P1 · 4×P2 · 1×P3)**全部采纳整改**,末轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
-| **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ⬜ | — |
+| **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ✅ 已完成([任务卡](rounds/round-08/round-08.md),15 项验收全过;codex 三轮共 3 条 findings(P1/P2/P3 各一)全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ⬜ | — |
 | **R10** | 安全加固 + 上线前检查单逐项 | ⬜ | — |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
@@ -129,7 +129,7 @@
 >    (`.env`/initdb/secret 各一处)和一个 Encore 管不到的第二连接池。**决定性理由是验收能不能自动跑**:
 >    本机 encore 的库由 CLI 托管,agent_ro 的登录口令进不去,「以 agent_ro 写库必须失败」只能推到部署轮
 >    人工核验——而 M2 的止损正是「R7 沙箱验收不过不得进入任何公网部署轮」。改法之后这条进了 `dev.ps1 test`。
->    **连带**:下面 R9 的「`docker-entrypoint-initdb.d` 建角色」一项取消(角色由迁移 004 建)。
+>    **连带**:下面 R9 的「`docker-entrypoint-initdb.d` 建角色」一项取消(角色由迁移 006 建)。
 > 2. **不用 pi 的 `defineTool()` 运行时导出**,只用它的类型:那是个恒等函数,唯一作用是保住 TypeBox 的泛型推断,
 >    而工具 schema 用的是普通 JSON Schema 对象(pi 校验器显式支持);静态 import 它会把整个 pi 包在 API 启动时
 >    拉进来,破坏 `runtime.ts` 刻意做的惰性加载。
@@ -141,13 +141,30 @@
 - About 页从 `about_content` 读真实数据(github/origin 双链,表与管理 tools R6 已建);footer 备案号占位
 - 验收:库中无原始 IP;MCP 统计查询结果与打点一致;About 内容经 MCP 修改后前端生效
 
+> **落地补记(2026-09-01,与上面计划的四处偏离,详见任务卡)**
+>
+> 1. **所有者裁定扩 `about_content` 两列**(`repos` / `lang_bar`):画板 2e 的「公开仓库 / 语言构成」
+>    两块 R6 没进表,仍是 `demo-data.ts` 的硬编码。不扩表就没法说 About「真实化」了。
+>    同轮 `about_set` 从「整体覆盖」改成**部分更新**——字段涨到 6 个之后,整体覆盖会变成一个
+>    「改一句 intro 静默清空七张仓库卡」的接口。
+> 2. **origin 链接按所有者裁定加同款 ghost 按钮**(画板 2e 只画了一个 GitHub 按钮)。
+>    `originUrl` 为空时整个按钮不渲染,此时页面与画板一字不差。
+> 3. **新增了两个服务目录**,不是一个:`metrics`(打点)与 `about`(访客面的只读读取)。
+>    About 的读路径没有合适的既有落点;`about` 与 notes(读)/ mcp(写)的分工同构。
+>    两个名字都已补进 `dev.ps1` 的 `--services` 白名单。
+> 4. **多一个 `traffic_agents`(UA 摘要分布)**:打点规格要求存 UA 摘要,存了却没有读路径
+>    等于存了个只能靠手写 SQL 才看得到的列。聚合 SQL 与另外两个同构,不引入新机制。
+>
+> 另:**访客标识按天轮换**(哈希输入含日期),所以「区间 UV」这个数在本方案下不存在 ——
+> 统计只给各日 UV 之和,tool 里叫 `visitorDays` 而不是 UV。这是隐私设计的直接后果。
+
 ### R9 — 容器化与 130 预发部署
 
 > R-BUN 已把镜像构建、compose 定稿、安全参数、文档四块前移完成(bun 基座、不可变镜像、`infra-config.json`、`cap_drop`/`pids_limit`/网络分段/healthcheck)。R9 只剩「在 130 上真跑一遍 + 补齐尚未落地的部分」。
 
 - 数据库迁移已由 R-BUN 的 `deploy/migrate.sh` 解决(所有者裁定方案一);R9 只需把它纳入部署流程文档与冒烟清单
 - ~~`agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色~~ —— **本项取消**(R7 落地补记 1):角色是 NOLOGIN、
-  没有口令,由迁移 `004` 连同授权一起建。R9 这边只剩一条既有约束:**`migrate.sh` 必须在起 api 之前跑完**
+  没有口令,由迁移 `006` 连同授权一起建。R9 这边只剩一条既有约束:**`migrate.sh` 必须在起 api 之前跑完**
   (本来就是既定顺序);冒烟时顺带核一句「以 agent_ro 写库失败」
 - 130 部署流程文档 + 脚本:`dev.ps1 build` → 文件方式传输(`docker save -o` → `scp` → `docker load -i`;**勿在 PowerShell 用管道直传,二进制会被文本重编码破坏**)→ 130 上按**先迁移后起服务**的顺序(`up -d --wait postgres` → `./migrate.sh` → `up -d`),避免「健康检查全绿但业务接口 500」的中间状态;升级另需先 `docker compose stop api web`(见 docs/deploy-environments.md「升级顺序」)
 - 预发全链路验证:三 Tab + `/api/mcp` 管理端点(带 token 实连)+ notes 附件供图路由(Caddy 扩展名分流)+ 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / **最终运行镜像**内无 node / postgres 仅 `back` 网段可达)。spike 服务已于 R4 整目录删除,`/spike/*` 不再存在,该项从冒烟清单撤下

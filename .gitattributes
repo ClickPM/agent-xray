@@ -1,3 +1,11 @@
 * text=auto eol=lf
 *.png binary
 *.ico binary
+
+# 源码一律按**文本**做 diff。
+# R6 时 apps/api/mcp/mcp.test.ts 的 GIF 魔数用例里混进过一个裸 NUL 字节,git 据此
+# 把整个文件判成二进制,`git diff` 显示成 "Bin … bytes" —— 代码审查者于是读不到
+# 那个文件的任何改动(R8 发现)。NUL 已换成 `\0` 转义写法,这两条是兜底:
+# 再混进控制字符时,diff 仍然可读,而不是整份消失。
+*.ts  diff
+*.tsx diff

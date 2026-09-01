@@ -3,7 +3,7 @@
 // 契约:本模块之外,`agent/tools.ts` 里的工具实现不得 import 任何别的 db 句柄。
 // 工具能碰到的东西到此为止 —— 三张 notes 表,只读。
 //
-// 【为什么不是独立连接串】见 migrations/004_sandbox_quota.up.sql 顶部的裁定说明:
+// 【为什么不是独立连接串】见 migrations/006_sandbox_quota.up.sql 顶部的裁定说明:
 // agent_ro 是真角色、权限由库强制,只是不给登录能力,改由应用连接在事务内临时降权。
 //
 // 【为什么必须是 SET LOCAL 而不是 SET】Encore 的连接是池化的。`SET ROLE` 会留在连接上,

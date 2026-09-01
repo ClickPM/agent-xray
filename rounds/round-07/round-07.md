@@ -18,7 +18,7 @@ pi agent 拿到一组**只读**业务工具,且「即使 prompt injection 完全
 
 | 路径 | 内容 |
 |---|---|
-| `apps/api/agent/migrations/004_sandbox_quota.up.sql` | `agent_ro` 角色 + 授权 · `daily_quota` 表 · 三个工具的 `tool_config` 种子 |
+| `apps/api/agent/migrations/006_sandbox_quota.up.sql` | `agent_ro` 角色 + 授权 · `daily_quota` 表 · 三个工具的 `tool_config` 种子 |
 | `apps/api/agent/ro-db.ts` | `queryAsAgentRo`:工具的唯一取数通道(READ ONLY + statement_timeout + `SET LOCAL ROLE`) |
 | `apps/api/agent/tools.ts` | 三个只读工具的实现 + `TOOL_REGISTRY` + `loadEnabledTools`(启停与双闸) |
 | `apps/api/agent/quota.ts` | 限额判定 `checkQuota` 与用量累加 `recordUsage` |
@@ -63,7 +63,7 @@ ROUNDS.md 原文是「连接串用 `AGENT_RO_DATABASE_URL`」。落地时发现�
 改法:角色仍是**真的** Postgres 角色、权限仍由库强制,只是建成 `NOLOGIN`,由应用连接在事务里 `SET LOCAL ROLE agent_ro` 临时降权。语义与独立连接等价(降权后 `current_user` 就是 `agent_ro`,写库一样 `permission denied`),而 `SET LOCAL` 随事务结束复位,连接池复用不会把降权状态泄漏给下一个请求。
 
 代价与连带:
-- ROUNDS.md R9 的「`docker-entrypoint-initdb.d` 建角色」一项取消(角色由迁移 004 建)。
+- ROUNDS.md R9 的「`docker-entrypoint-initdb.d` 建角色」一项取消(角色由迁移 006 建)。
 - 多一条隐含前提:`deploy/migrate.sh` 必须在起 api 之前跑完 —— 那本来就是既定顺序,已在 compose 注释里写明。
 
 ### 2. 只用 `defineTool` 的**类型**,不用它的运行时导出
@@ -134,6 +134,16 @@ ROUNDS.md 把工具组钉成三个名字,而模型要读一章必须先拿到章
 ## 本轮实测
 
 ### 踩到的坑
+
+0. **与 R8 撞了迁移号,而 git 不会告诉你。** 合并 main 时才发现 R8 已经占了 `004`(metrics)
+   与 `005`(about showcase),本轮也叫 `004` —— 两个文件名不同,git 自动合并**零冲突**,
+   但 `deploy/migrate.sh` 对同号迁移是**硬失败**(`发现重复的迁移版本号 v4`,R-BUN 那轮
+   codex 复审专门加的守卫),而在没有这道守卫的路径上后果更糟:「version > current」
+   会让第二份被静默跳过,库里永久缺一份变更。本轮迁移改号 `006`,同时改掉 7 处引用
+   (代码注释 / docs/security.md / compose 注释 / ROUNDS.md / 任务卡 / 测试)。
+   **教训**:并行开轮次时,迁移号冲突是 git 看不见的一类冲突,合并后必须 `ls migrations/`
+   看一眼、并把本地库 `encore db reset` 后重跑一次 —— 改号之后本地 `schema_migrations`
+   停在旧号上,不 reset 的话新号之前的迁移会被跳过。
 
 1. **`GRANT agent_ro TO CURRENT_USER` 在本机跑不通。** encore 的本地集群按职责分了多个登录角色,**迁移与业务查询不是同一个**:迁移跑在 `encore-migrator` 上,请求跑在 `encore-write` / `encore-service` 上。只授给 `CURRENT_USER` 的表现是迁移成功、运行期 `permission denied to set role "agent_ro"`。生产 compose 只有 `app` 一个角色,两者同名,所以这个坑**只在本机暴露** —— 而本机正是验收要跑的地方。改成遍历「能连本库的登录角色」逐个授。授得宽是安全的:membership 给的是「**降**到 agent_ro 的能力」,agent_ro 的权限集是这些角色的真子集。
 

@@ -11,7 +11,7 @@ import { checkQuota, recordUsage } from "./quota";
 import { loadEnabledTools, snippetAround, capText, TOOL_REGISTRY } from "./tools";
 import { appendMessage, createSession } from "./store";
 
-/** 迁移 004 种下的三行启停配置;本文件会清空 tool_config,跑完复原。 */
+/** 迁移 006 种下的三行启停配置;本文件会清空 tool_config,跑完复原。 */
 const SEED_TOOLS = ["notes_list_series", "notes_get_chapter", "notes_search"];
 
 async function seedNotes() {
@@ -37,7 +37,7 @@ describe("第 1 层 · 工具白名单", () => {
   });
 
   afterAll(async () => {
-    // 复原迁移 004 的种子,免得影响随后跑的文件与本地开发库
+    // 复原迁移 006 的种子,免得影响随后跑的文件与本地开发库
     await db.exec`DELETE FROM tool_config`;
     for (const name of SEED_TOOLS) {
       await db.rawExec(
@@ -167,7 +167,18 @@ describe("第 2 层 · agent_ro 只读(ROUNDS.md R7 验收:写库必须失败)",
   });
 
   it("配置面与配额面对 agent_ro 不可见", async () => {
-    for (const table of ["llm_config", "tool_config", "about_content", "notes_assets", "mcp_audit", "daily_quota"]) {
+    // 与 docs/security.md §1 第 2 层逐表列举的清单一致。`visits` 是 R8 建的
+    // 访客统计表(合并 main 时补入):它同样属于「管理/数据面写、agent 永不可见」那一侧
+    const denied = [
+      "llm_config",
+      "tool_config",
+      "about_content",
+      "notes_assets",
+      "mcp_audit",
+      "daily_quota",
+      "visits",
+    ];
+    for (const table of denied) {
       const tx = await db.begin();
       let message = "";
       try {

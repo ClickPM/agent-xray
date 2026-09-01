@@ -120,7 +120,7 @@ export async function checkQuota(sessionId: string): Promise<QuotaDenial | null>
  * 报成失败,是本末倒置。
  *
  * `tokens` 取 pi 的 `Usage.totalTokens`(含 input/output/cache,provider 报什么记什么),
- * `costMicros` 取 `Usage.cost.total`(美元)换算成百万分之一美元 —— 见迁移 004 里
+ * `costMicros` 取 `Usage.cost.total`(美元)换算成百万分之一美元 —— 见迁移 006 里
  * 「为什么费用存 micros」。
  */
 export async function recordUsage(tokens: number, costMicros: number): Promise<void> {
