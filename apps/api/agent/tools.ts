@@ -153,9 +153,12 @@ const notesListSeries: ToolDefinition = {
           });
         }
         const allSeries = await tx.rawQueryAll<SeriesRow>(
+          // 章节数**必须**与公开 API 同口径(codex 初审 P2):置顶的 README 是「总览」
+          // 不是「第 N 章」,`notes/store.ts` 的 listSeriesCards / getSeries 都把它排除在外。
+          // 这里少一个 FILTER,agent 说出来的数字就会比站点上显示的多一。
           `SELECT c.slug AS "categorySlug", c.name AS "categoryName",
                   s.slug, s.name, s.description,
-                  COUNT(ch.id)::int AS "chapterCount"
+                  COUNT(ch.id) FILTER (WHERE NOT ch.pinned)::int AS "chapterCount"
              FROM notes_categories c
              JOIN notes_series s ON s.category_slug = c.slug
              LEFT JOIN notes_chapters ch ON ch.series_slug = s.slug
@@ -236,7 +239,11 @@ interface SearchRow {
   seriesName: string;
   chapterSlug: string;
   title: string;
+  /** 命中在正文里的位置(strpos 口径,1-based;0 = 正文没命中) */
   pos: number;
+  /** 命中在摘要里的位置;正文没命中时片段取这里 */
+  summaryPos: number;
+  summary: string;
   contentMd: string;
 }
 
@@ -266,7 +273,8 @@ const notesSearch: ToolDefinition = {
           `SELECT ch.series_slug AS "seriesSlug", s.name AS "seriesName",
                   ch.slug AS "chapterSlug", ch.title,
                   strpos(lower(ch.content_md), lower($1)) AS pos,
-                  ch.content_md AS "contentMd"
+                  strpos(lower(ch.summary), lower($1)) AS "summaryPos",
+                  ch.summary, ch.content_md AS "contentMd"
              FROM notes_chapters ch JOIN notes_series s ON s.slug = ch.series_slug
             WHERE strpos(lower(ch.title), lower($1)) > 0
                OR strpos(lower(ch.summary), lower($1)) > 0
@@ -284,7 +292,15 @@ const notesSearch: ToolDefinition = {
           seriesName: r.seriesName,
           chapter: r.chapterSlug,
           title: r.title,
-          snippet: snippetAround(r.contentMd, r.pos),
+          // 【片段要取真正命中的那段文本】(codex 初审 P2)只在摘要里命中的行,
+          // 正文 pos 为 0,按正文取片段就会返回一段与关键词无关的开头 ——
+          // 模型看到的"证据"里根本没有它搜的词。命中在哪就从哪取。
+          snippet:
+            r.pos > 0
+              ? snippetAround(r.contentMd, r.pos)
+              : r.summaryPos > 0
+                ? snippetAround(r.summary, r.summaryPos)
+                : snippetAround(r.contentMd, 0),
         }));
         return textResult(jsonList("hits", hits, { query }), { count: hits.length });
       }),
@@ -343,7 +359,11 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
   const names: string[] = [];
   const dropped: string[] = [];
   for (const row of rows) {
-    if (!(row.name in TOOL_REGISTRY)) {
+    // 【必须是 hasOwn 而不是 `in`】(codex 初审 P3)`in` 会走到 Object.prototype 上:
+    // 一个叫 `constructor` 的行(`tool_config_set` 的 snake_case 校验放行它)会被判为
+    // 「已实现」,然后把 `Object` 本身当工具定义塞进 customTools —— 那东西没有 execute。
+    // 注册表是数据不是原型链。
+    if (!Object.hasOwn(TOOL_REGISTRY, row.name)) {
       dropped.push(`${row.name}(未实现)`);
       continue;
     }

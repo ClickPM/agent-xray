@@ -45,9 +45,9 @@ interface QuotaRow {
  * (字符串 / BigInt),而这些计数远在 2^53 以内,用 double 读回来就是普通 number。
  * 与 store.ts 的 `ms()` 是同一个理由、同一套写法。
  *
- * `sessionId` 为 null(新会话)时子查询自然回 0,不需要分支。
+ * 全新会话传的是一个库里还没有行的 uuid,子查询自然回 0,不需要分支。
  */
-async function loadQuotaRow(sessionId: string | null): Promise<QuotaRow | null> {
+async function loadQuotaRow(sessionId: string): Promise<QuotaRow | null> {
   return db.rawQueryRow<QuotaRow>(
     `SELECT l.daily_token_limit::double precision       AS "dailyTokenLimit",
             l.daily_cost_limit_cents::double precision  AS "dailyCostLimitCents",
@@ -72,18 +72,23 @@ async function loadQuotaRow(sessionId: string | null): Promise<QuotaRow | null> 
  * MAX_ACTIVE_SESSIONS 个会话各自把 max_turns_per_session 的剩余轮数跑完。
  * 想收紧就把 max_turns_per_session 调小,而不是改这里的语义。
  *
+ * 【「新会话」的判据是库里有没有轮次,不是请求里带没带 sessionId】
+ * (codex 初审 P1)`POST /agent/sessions` 是**公开**端点,建的是一个空会话。
+ * 按「请求带了 id 就算续接」判定的话,先批量预建会话、再逐个带 id 提问,
+ * 每一次都是「续接」—— 每日限额被整体绕过。以 `turns === 0` 为判据,
+ * 预建的空会话与全新会话落在同一格,这条路自然被堵上;而真正在对话中的
+ * 会话(turns ≥ 1)仍然不会被中途掐断,原口径不变。
+ *
  * 【没有默认 provider 时不拦】那种情况下 `acquireSession` 会抛
  * LlmNotConfiguredError → 503,让它去说话;在这里拦只会把「没配模型」
  * 报成「额度用完」,把部署方引到错误的方向。
  */
-export async function checkQuota(opts: {
-  isNew: boolean;
-  sessionId: string | null;
-}): Promise<QuotaDenial | null> {
-  const row = await loadQuotaRow(opts.isNew ? null : opts.sessionId);
+export async function checkQuota(sessionId: string): Promise<QuotaDenial | null> {
+  const row = await loadQuotaRow(sessionId);
   if (!row) return null;
 
-  if (opts.isNew) {
+  // 本会话还没有过任何一轮 = 这是在「开一段新对话」,每日限额对它生效
+  if (row.turns === 0) {
     if (row.dailyTokenLimit > 0 && row.tokens >= row.dailyTokenLimit) {
       return {
         reason: "daily_tokens",

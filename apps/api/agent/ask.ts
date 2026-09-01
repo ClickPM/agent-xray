@@ -194,7 +194,7 @@ export const ask = api.raw(
     // 判定本身失败(库读不到)回 500,不静默放行也不静默拒绝——库都读不到的话
     // 下一步的消息落库同样会失败,500 是诚实的答案。
     try {
-      const denial = await checkQuota({ isNew, sessionId: id });
+      const denial = await checkQuota(id);
       if (denial) {
         console.warn(`quota denied for session ${id}: ${denial.detail}`);
         fail(resp, 429, "quota exceeded", denial.reason);

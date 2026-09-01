@@ -66,6 +66,16 @@ describe("第 1 层 · 工具白名单", () => {
     expect(enabled.definitions).toHaveLength(1);
   });
 
+  it("原型链上的键不算「已实现」(constructor / toString)", async () => {
+    // tool_config_set 的 snake_case 校验放行 'constructor',而 `in` 会命中 Object.prototype
+    for (const name of ["constructor", "tostring", "valueof"]) {
+      await db.rawExec(`INSERT INTO tool_config (name, enabled, dangerous) VALUES ($1, TRUE, FALSE)`, name);
+    }
+    const enabled = await loadEnabledTools();
+    expect(enabled.names).toEqual([]);
+    expect(enabled.definitions).toEqual([]);
+  });
+
   it("enabled=false 的行不注册", async () => {
     await db.rawExec(
       `INSERT INTO tool_config (name, enabled, dangerous) VALUES ('notes_search', FALSE, FALSE)`,
@@ -199,6 +209,38 @@ describe("只读工具的行为", () => {
     expect(await call("notes_list_series", { series: "nope" })).toContain("不存在");
   });
 
+  it("系列的章节数与公开 API 同口径:置顶 README 不算一章", async () => {
+    await db.rawExec(
+      `INSERT INTO notes_chapters
+         (series_slug, slug, ordinal, label, pinned, title, summary, content_md, word_count,
+          source_url, content_hash, published_at, updated_at)
+       VALUES ('pi','readme',0,'README',TRUE,'总览','','x',10,NULL,'h-readme',NULL,now())`,
+    );
+    // 不 import notes/store 来做对比:跨服务 import 会把 Encore 的服务归属搞乱。
+    // 口径在 notes/store.ts 的 listSeriesCards / getSeries 里,
+    // 都是 `COUNT(...) FILTER (WHERE NOT pinned)` —— 两章里只有一章不是置顶。
+    const parsed = JSON.parse(await call("notes_list_series", {})) as {
+      series: { slug: string; chapterCount: number }[];
+    };
+    expect(parsed.series[0].chapterCount).toBe(1);
+  });
+
+  it("只在摘要里命中时,片段取的是摘要而不是正文开头", async () => {
+    await db.rawExec(
+      `INSERT INTO notes_chapters
+         (series_slug, slug, ordinal, label, pinned, title, summary, content_md, word_count,
+          source_url, content_hash, published_at, updated_at)
+       VALUES ('pi','only-summary',5,'05',FALSE,'另一章',$1,$2,10,NULL,'h-os',NULL,now())`,
+      "这一章讲的是 独门关键词 的用法",
+      "正文里完全没有那个词,只有一堆别的内容。",
+    );
+    const text = await call("notes_search", { query: "独门关键词" });
+    const parsed = JSON.parse(text) as { hits: { chapter: string; snippet: string }[] };
+    const hit = parsed.hits.find((h) => h.chapter === "only-summary");
+    expect(hit).toBeDefined();
+    expect(hit!.snippet).toContain("独门关键词");
+  });
+
   it("notes_get_chapter 返回正文,找不到时给出可行动的提示", async () => {
     expect(await call("notes_get_chapter", { series: "pi", chapter: "loop" })).toContain("扩展事件");
     expect(await call("notes_get_chapter", { series: "pi", chapter: "x" })).toContain("notes_list_series");
@@ -269,43 +311,55 @@ describe("第 4 层 · 每日限额与单会话轮数(ROUNDS.md R7 验收:超限
     );
   }
 
+  /** 全新会话:一个库里还没有行的 uuid,与 ask.ts 的 `randomUUID()` 同形 */
+  const FRESH = "00000000-0000-4000-8000-000000000001";
+
   it("没有默认 provider 时不拦(由 503「未配置模型」去说话)", async () => {
-    expect(await checkQuota({ isNew: true, sessionId: null })).toBeNull();
+    expect(await checkQuota(FRESH)).toBeNull();
   });
 
   it("限额为 0 = 不限", async () => {
     await seedLimits({});
     await recordUsage(999_999, 999_999_999);
-    expect(await checkQuota({ isNew: true, sessionId: null })).toBeNull();
+    expect(await checkQuota(FRESH)).toBeNull();
   });
 
   it("超过每日 token 限额后拒绝新会话", async () => {
     await seedLimits({ tokens: 100 });
-    expect(await checkQuota({ isNew: true, sessionId: null })).toBeNull();
+    expect(await checkQuota(FRESH)).toBeNull();
     await recordUsage(60, 0);
-    expect(await checkQuota({ isNew: true, sessionId: null })).toBeNull();
+    expect(await checkQuota(FRESH)).toBeNull();
     await recordUsage(60, 0); // 累计 120 ≥ 100
-    expect((await checkQuota({ isNew: true, sessionId: null }))?.reason).toBe("daily_tokens");
+    expect((await checkQuota(FRESH))?.reason).toBe("daily_tokens");
   });
 
   it("超过每日费用限额后拒绝新会话(cents ↔ micros 换算)", async () => {
     await seedLimits({ cents: 2 }); // 2 分 = 20000 micros
     await recordUsage(0, 19_999);
-    expect(await checkQuota({ isNew: true, sessionId: null })).toBeNull();
+    expect(await checkQuota(FRESH)).toBeNull();
     await recordUsage(0, 1);
-    expect((await checkQuota({ isNew: true, sessionId: null }))?.reason).toBe("daily_cost");
+    expect((await checkQuota(FRESH))?.reason).toBe("daily_cost");
   });
 
-  it("每日超限只拦新会话,已有会话靠 turn 上限兜住", async () => {
+  it("预建的空会话不能绕过每日限额(codex 初审 P1)", async () => {
+    // POST /agent/sessions 是公开端点:先批量建空会话、再逐个带 id 提问,
+    // 按「带了 id 就算续接」判定的话每日限额会被整体绕过
+    await seedLimits({ tokens: 10 });
+    await recordUsage(50, 0);
+    const empty = await createSession();
+    expect((await checkQuota(empty.id))?.reason).toBe("daily_tokens");
+  });
+
+  it("每日超限只拦新对话,已开始的会话靠 turn 上限兜住", async () => {
     await seedLimits({ tokens: 10, turns: 3 });
     await recordUsage(50, 0);
     const s = await createSession();
     await appendMessage(s.id, "user", "第一轮");
-    // 已有会话:每日额度已超,但仍放行(docs/security.md §1 第 4 层的原文口径)
-    expect(await checkQuota({ isNew: false, sessionId: s.id })).toBeNull();
+    // 已经开始的会话:每日额度已超,但仍放行(docs/security.md §1 第 4 层的原文口径)
+    expect(await checkQuota(s.id)).toBeNull();
     await appendMessage(s.id, "user", "第二轮");
     await appendMessage(s.id, "user", "第三轮");
-    expect((await checkQuota({ isNew: false, sessionId: s.id }))?.reason).toBe("turn_limit");
+    expect((await checkQuota(s.id))?.reason).toBe("turn_limit");
   });
 
   it("recordUsage 按日累加,turns 同步计数", async () => {

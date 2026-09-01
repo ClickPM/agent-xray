@@ -95,11 +95,24 @@ ROUNDS.md 把工具组钉成三个名字,而模型要读一章必须先拿到章
 
 ## 代码审查
 
+审查方式:codex `/codex:review --background`(全量 `branch diff against main`;CLAUDE.md「审查范围」前两轮全量)。
+
+### 第 1 轮:4 条 findings,**全部采纳整改**
+
+| # | 级别 | finding | 判定 | 整改 |
+|---|---|---|---|---|
+| 1 | P1 | 每日限额可经公开的 `POST /agent/sessions` 绕过:先预建空会话,再带 id 提问 → `isNew=false` → 两条每日检查全跳过 | **属实,是真的绕过路径**。`sessions.ts` 的 createSession 是 `expose: true`,建的就是一个空会话;批量预建即可无限开新对话 | 判据从「请求里带没带 sessionId」换成「**库里有没有轮次**」(`turns === 0`)。预建的空会话与全新会话就此落在同一格;真正在对话中的会话(turns ≥ 1)仍不被中途掐断,原口径不变。`checkQuota` 的入参随之简化成一个 sessionId。补 1 条针对性用例 |
+| 2 | P2 | `notes_list_series` 的 chapterCount 把置顶 README 算进去,比公开 API 多一 | 属实。`notes/store.ts` 的 `listSeriesCards` / `getSeries` 都是 `COUNT(...) FILTER (WHERE NOT pinned)`,agent 说的数字会和站点上显示的对不上 | 补同一个 FILTER。用例断言「两章里只有一章不是置顶 → 回 1」 |
+| 3 | P2 | 只在 summary 里命中时,片段取的是正文开头 —— 模型拿到的"证据"里没有它搜的词 | 属实。`pos` 只从 `content_md` 算,summary-only 命中时为 0 | 多取一列 `summaryPos` 与 `summary`,命中在哪就从哪取片段。补 1 条针对性用例 |
+| 4 | P3 | `row.name in TOOL_REGISTRY` 会走到 `Object.prototype`:一行叫 `constructor` 的配置会被判为「已实现」 | 属实,**且后果比 finding 描述的更重**:`TOOL_REGISTRY["constructor"]` 是 `Object` 本身,会被当工具定义塞进 `customTools`,而它没有 `execute`。`tool_config_set` 的 snake_case 正则放行这个名字 | 换 `Object.hasOwn`。补 1 条用例覆盖 constructor / tostring / valueof |
+
+四条都是最小改动(改判断 / 加一个 SQL FILTER / 多取一列 / 换一个存在性检查),没有新增机制。
+
+### 第 2 轮(复审)
+
 <!-- 完成后回填 -->
 
-- 审查方式:
-- findings 处理:
-- 结论:
+结论:<!-- 完成后回填 -->
 
 ## 失败处理
 
