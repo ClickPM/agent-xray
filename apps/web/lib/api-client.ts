@@ -16,7 +16,7 @@ export const Local: BaseURL = "http://localhost:4000"
  * Environment returns a BaseURL for calling the cloud environment with the given name.
  */
 export function Environment(name: string): BaseURL {
-    return `https://${name}-k2yas.encr.app`
+    return `https://${name}-qpquw.encr.app`
 }
 
 /**
@@ -29,10 +29,12 @@ export function PreviewEnv(pr: number | string): BaseURL {
 const BROWSER = typeof globalThis === "object" && ("window" in globalThis);
 
 /**
- * Client is an API client for the k2yas Encore application.
+ * Client is an API client for the qpquw Encore application.
  */
 export default class Client {
+    public readonly about: about.ServiceClient
     public readonly agent: agent.ServiceClient
+    public readonly metrics: metrics.ServiceClient
     public readonly notes: notes.ServiceClient
     public readonly system: system.ServiceClient
     public readonly trace: trace.ServiceClient
@@ -50,7 +52,9 @@ export default class Client {
         this.target = target
         this.options = options ?? {}
         const base = new BaseClient(this.target, this.options)
+        this.about = new about.ServiceClient(base)
         this.agent = new agent.ServiceClient(base)
+        this.metrics = new metrics.ServiceClient(base)
         this.notes = new notes.ServiceClient(base)
         this.system = new system.ServiceClient(base)
         this.trace = new trace.ServiceClient(base)
@@ -82,6 +86,82 @@ export interface ClientOptions {
 
     /** Default RequestInit to be used for the client */
     requestInit?: Omit<RequestInit, "headers"> & { headers?: Record<string, string> }
+}
+
+export namespace about {
+    export interface GetAboutResponse {
+        /**
+         * GitHub 用户名;头像取 https://github.com/<user>.png,空字符串 = 未配置
+         */
+        githubUser: string
+
+        /**
+         * 第二条外链(画板 2e 的 GitHub 按钮旁);空字符串 = 不渲染那个按钮
+         */
+        originUrl: string
+
+        intro: string
+        /**
+         * 「本站如何构建」逐条
+         */
+        buildPoints: string[]
+
+        /**
+         * 「公开仓库」卡片
+         */
+        repos: RepoCard[]
+
+        /**
+         * 底部语言构成条
+         */
+        langBar: LangSlice[]
+
+        /**
+         * ISO 8601;从未设置过时为 null
+         */
+        updatedAt: string | null
+    }
+
+    export interface LangSlice {
+        name: string
+        /**
+         * 语言条占比,0–100
+         */
+        pct: number
+
+        color: string
+    }
+
+    export interface RepoCard {
+        name: string
+        lang: string
+        /**
+         * 语言圆点色,#RRGGBB
+         */
+        dot: string
+
+        stars: number
+        desc: string
+        /**
+         * 最近推送日期的展示文本(画板 2e 右下角)
+         */
+        pushed: string
+    }
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.get = this.get.bind(this)
+        }
+
+        public async get(): Promise<GetAboutResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/about`)
+            return await resp.json() as GetAboutResponse
+        }
+    }
 }
 
 export namespace agent {
@@ -173,6 +253,22 @@ export namespace agent {
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI("GET", `/agent/sessions`, undefined, {query})
             return await resp.json() as ListSessionsResponse
+        }
+    }
+}
+
+export namespace metrics {
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.track = this.track.bind(this)
+        }
+
+        public async track(method: "POST", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/t`, body, options)
         }
     }
 }
@@ -581,7 +677,7 @@ class BaseClient {
         // Add User-Agent header if the script is running in the server
         // because browsers do not allow setting User-Agent headers to requests
         if (!BROWSER) {
-            this.headers["User-Agent"] = "k2yas-Generated-TS-Client (Encore/v1.57.13)";
+            this.headers["User-Agent"] = "qpquw-Generated-TS-Client (Encore/v1.57.13)";
         }
 
         this.requestInit = options.requestInit ?? {};

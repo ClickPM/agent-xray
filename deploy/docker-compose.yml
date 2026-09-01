@@ -57,6 +57,10 @@ services:
       - API_INTERNAL_URL=http://api:4000
       # 订阅弹层里展示与复制的 RSS 地址。R5
       - SITE_ORIGIN=${SITE_ORIGIN:?SITE_ORIGIN 必须填对外访问地址(含 scheme,必要时含端口)}
+      # ICP 备案号(R8)。**只有生产填**:填了才在页面底部渲染一条链到工信部的
+      # 底栏,留空则整块不渲染(130 预发不备案,保持留空)。
+      # 不能改成构建期注入:镜像是不可变制品,预发与生产共用同一个 SHA(规则 10)。
+      - ICP_BEIAN=${ICP_BEIAN:-}
     expose:
       - "3000"
     networks: [front]
@@ -99,13 +103,17 @@ services:
       # 必须经 MCP 重新写一遍各 provider 的 key。生成方式见 deploy/.env.example。
       - MCP_AUTH_TOKEN_HASH=${MCP_AUTH_TOKEN_HASH:?}
       - CONFIG_ENCRYPTION_KEY=${CONFIG_ENCRYPTION_KEY:?}
+      # 访问统计(R8)的访客标识盐。`:?` 是刻意的:漏配时**启动就失败**,
+      # 而不是留到运行期变成「打点静默停用、统计永远是 0」——后者要靠翻日志
+      # 才发现。docs/security.md §6「IP 加盐哈希后落库,不存原始 IP」。
+      - METRICS_IP_SALT=${METRICS_IP_SALT:?}
       # RSS 条目里的绝对链接。不配就会回落到请求头里的 Host —— 那等于让任何人
       # 换个 Host 头就能左右订阅源里的链接指向。
       # **必须含 scheme**:备案通过前 130 预发只有明文 HTTP,写死 https 会让整份
       # 订阅源指向一个没在听的端点(codex review 2026-08-31 P2)。R5
       - SITE_ORIGIN=${SITE_ORIGIN:?}
-      # R6 落地 agent_ro 只读工具连接、R7 落地 admin/LLM 配置时,
-      # 在 infra-config.json 的 secrets 段增声明后再在此处补对应变量。
+      # R7 落地 agent_ro 只读工具连接时,在 infra-config.json 的 secrets 段
+      # 增声明后再在此处补对应变量。
       # 高危工具双闸之一(默认不设):XRAY_UNLOCK_DANGEROUS_TOOLS
     expose:
       - "4000"

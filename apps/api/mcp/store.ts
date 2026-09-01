@@ -8,6 +8,7 @@
 import type { Transaction } from "encore.dev/storage/sqldb";
 import { encryptSecret, maskSecret } from "../shared/crypto";
 import { safeErrorText } from "../shared/redact";
+import { siteDay, siteDayAgo } from "../shared/site-time";
 import { chapterHash, countWords, sha256Hex } from "./content";
 import { db } from "./db";
 
@@ -395,42 +396,197 @@ export async function deleteAsset(seriesSlug: string, name: string): Promise<voi
 
 // ───────────────────── About ─────────────────────
 
+/** 画板 2e 的仓库卡;形状由 tools.ts 的 zod schema 把关,库里只存整块 JSONB。 */
+export interface RepoCard {
+  name: string;
+  lang: string;
+  dot: string;
+  stars: number;
+  desc: string;
+  pushed: string;
+}
+
+/** 画板 2e 底部的语言构成条。 */
+export interface LangSlice {
+  name: string;
+  pct: number;
+  color: string;
+}
+
 export interface AboutRow {
   githubUser: string;
   originUrl: string;
   intro: string;
   buildPoints: string[];
+  repos: RepoCard[];
+  langBar: LangSlice[];
   /** epoch ms;从未设置过时为 null */
   updatedAt: number | null;
+}
+
+const EMPTY_ABOUT: AboutRow = {
+  githubUser: "",
+  originUrl: "",
+  intro: "",
+  buildPoints: [],
+  repos: [],
+  langBar: [],
+  updatedAt: null,
+};
+
+/** JSONB 列在驱动侧已是 JS 值;非数组(手工改库改坏了)按空数组处理,不让页面炸。 */
+function asArray<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
 }
 
 export async function getAbout(): Promise<AboutRow> {
   const row = await db.rawQueryRow<AboutRow>(
     `SELECT github_user AS "githubUser", origin_url AS "originUrl", intro,
-            build_points AS "buildPoints", ${ms("updated_at", "updatedAt")}
+            build_points AS "buildPoints", repos, lang_bar AS "langBar",
+            ${ms("updated_at", "updatedAt")}
        FROM about_content WHERE id`,
   );
-  if (!row) return { githubUser: "", originUrl: "", intro: "", buildPoints: [], updatedAt: null };
-  // JSONB 列在驱动侧已是 JS 值;非数组(手工改库改坏了)按空数组处理,不让页面炸
-  return { ...row, buildPoints: Array.isArray(row.buildPoints) ? row.buildPoints : [] };
+  if (!row) return EMPTY_ABOUT;
+  return {
+    ...row,
+    buildPoints: asArray<string>(row.buildPoints),
+    repos: asArray<RepoCard>(row.repos),
+    langBar: asArray<LangSlice>(row.langBar),
+  };
 }
 
+/**
+ * About 内容写入,**部分更新**:`undefined` 的字段保留库内原值。
+ *
+ * 【为什么从 R6 的「整体覆盖」改过来】(所有者裁定 2026-09-01,R8)
+ * R8 把「公开仓库」与「语言构成」也收进这张表,字段从 4 个变成 6 个,其中两个
+ * 是几十行的数组。若保持整体覆盖语义,那么「只想改一句 intro」就必须把 7 张
+ * 仓库卡与整条语言构成原样重报一遍 —— 少报一个字段不会报错,只会把它清空。
+ * 这是个只会静默丢数据的接口。改成部分更新之后,清空是**显式**动作
+ * (传 `[]` / `""`),与 `llm_provider_upsert` 的口径一致。
+ *
+ * 单行表用 COALESCE 做部分更新:`$n::text::jsonb` 对 null 与非 null 是同一套
+ * 语义(CLAUDE.md 规则 4)—— 写成裸 `::jsonb` 的话,COALESCE 里的 null 会变成
+ * jsonb 'null' 而不是 SQL NULL,于是「省略字段」会把列写成 JSON null。
+ */
 export async function setAbout(input: {
-  githubUser: string;
-  originUrl: string;
-  intro: string;
-  buildPoints: string[];
+  githubUser?: string;
+  originUrl?: string;
+  intro?: string;
+  buildPoints?: string[];
+  repos?: RepoCard[];
+  langBar?: LangSlice[];
 }): Promise<void> {
+  const json = (v: unknown) => (v === undefined ? null : JSON.stringify(v));
   await db.rawExec(
-    `INSERT INTO about_content (id, github_user, origin_url, intro, build_points, updated_at)
-     VALUES (TRUE, $1, $2, $3, $4::text::jsonb, now())
+    `INSERT INTO about_content (id, github_user, origin_url, intro, build_points, repos, lang_bar, updated_at)
+     VALUES (TRUE,
+             COALESCE($1, ''), COALESCE($2, ''), COALESCE($3, ''),
+             COALESCE($4::text::jsonb, '[]'::jsonb),
+             COALESCE($5::text::jsonb, '[]'::jsonb),
+             COALESCE($6::text::jsonb, '[]'::jsonb),
+             now())
      ON CONFLICT (id) DO UPDATE
-        SET github_user = EXCLUDED.github_user, origin_url = EXCLUDED.origin_url,
-            intro = EXCLUDED.intro, build_points = EXCLUDED.build_points, updated_at = now()`,
-    input.githubUser,
-    input.originUrl,
-    input.intro,
-    JSON.stringify(input.buildPoints),
+        SET github_user  = COALESCE($1, about_content.github_user),
+            origin_url   = COALESCE($2, about_content.origin_url),
+            intro        = COALESCE($3, about_content.intro),
+            build_points = COALESCE($4::text::jsonb, about_content.build_points),
+            repos        = COALESCE($5::text::jsonb, about_content.repos),
+            lang_bar     = COALESCE($6::text::jsonb, about_content.lang_bar),
+            updated_at   = now()`,
+    input.githubUser ?? null,
+    input.originUrl ?? null,
+    input.intro ?? null,
+    json(input.buildPoints),
+    json(input.repos),
+    json(input.langBar),
+  );
+}
+
+// ───────────────────── 访问统计(R8;表归 metrics 服务)─────────────────────
+//
+// 【为什么统计 SQL 在 mcp 而不是 metrics】`visits` 的 schema 与写入路径归 metrics
+// 服务(agent/migrations/004_metrics.up.sql + metrics/store.ts),这里只读它。
+// 与 trace 服务只读 agent 的 `trace_events` 是同一个先例:表的归属在一处,
+// 读它的服务各自写自己的 store,不跨服务 import 内部实现;需要共用的原语
+// (这里是「站点时区的今天」)下沉到 shared/。
+//
+// 【口径】`visits` 是 (day, path, visitor) 的计数行:
+//   pv = SUM(hits);uv = COUNT(DISTINCT visitor)。
+// visitor 的哈希输入里含日期(见 metrics/visitor.ts),所以**跨天的 visitor
+// 不可比** —— 区间总量只能给「各日 UV 之和」,对外叫 visitorDays 而不是 UV,
+// 免得那个数被读成「多少个人」。
+//
+// 【区间边界由 JS 给】不用 SQL 的 CURRENT_DATE:那取数据库会话的时区(容器默认
+// UTC),而落库的 day 是站点时区(UTC+8)算的 —— 混用会让区间在跨日附近错开一天。
+
+export interface DailyPoint {
+  /** YYYY-MM-DD(站点时区) */
+  day: string;
+  pv: number;
+  uv: number;
+}
+
+export interface TrafficOverview {
+  from: string;
+  to: string;
+  pageviews: number;
+  /** 各日 UV 之和,**不是**去重人数(见上方口径说明) */
+  visitorDays: number;
+  /** 只含有数据的日子;没有访问的那天不会出现在数组里 */
+  daily: DailyPoint[];
+}
+
+export async function trafficOverview(days: number): Promise<TrafficOverview> {
+  const from = siteDayAgo(days - 1);
+  const daily = await db.rawQueryAll<DailyPoint>(
+    `SELECT to_char(day, 'YYYY-MM-DD') AS day,
+            SUM(hits)::int AS pv,
+            COUNT(DISTINCT visitor)::int AS uv
+       FROM visits
+      WHERE day >= $1::date
+      GROUP BY day
+      ORDER BY day`,
+    from,
+  );
+  return {
+    from,
+    to: siteDay(),
+    pageviews: daily.reduce((a, d) => a + d.pv, 0),
+    visitorDays: daily.reduce((a, d) => a + d.uv, 0),
+    daily,
+  };
+}
+
+export interface TrafficSlice {
+  key: string;
+  pv: number;
+  visitorDays: number;
+}
+
+/** 路径分布。`/*` 是归一不出来的路径的常量桶(metrics/path.ts)。 */
+export async function trafficPaths(days: number, limit: number): Promise<TrafficSlice[]> {
+  return db.rawQueryAll<TrafficSlice>(
+    `SELECT path AS key, SUM(hits)::int AS pv, COUNT(DISTINCT visitor)::int AS "visitorDays"
+       FROM visits
+      WHERE day >= $1::date
+      GROUP BY path
+      ORDER BY pv DESC, key
+      LIMIT $2`,
+    siteDayAgo(days - 1),
+    limit,
+  );
+}
+
+/** UA 摘要分布(`<浏览器族>/<平台族>`;原始 UA 从不落库)。 */
+export async function trafficAgents(days: number): Promise<TrafficSlice[]> {
+  return db.rawQueryAll<TrafficSlice>(
+    `SELECT ua AS key, SUM(hits)::int AS pv, COUNT(DISTINCT visitor)::int AS "visitorDays"
+       FROM visits
+      WHERE day >= $1::date
+      GROUP BY ua
+      ORDER BY pv DESC, key`,
+    siteDayAgo(days - 1),
   );
 }
 
