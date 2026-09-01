@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { statsBar, suggestions } from "@/lib/demo-data";
 import {
   askStream,
@@ -14,6 +14,7 @@ import { openTraceStream } from "@/lib/trace-api";
 import { toChainView, toLifecycleNodes, toTimelineTurns } from "@/lib/trace-view";
 import type { ChatItem, TraceEvent } from "@/lib/types";
 import { GhostButton } from "@/components/ui";
+import { Markdown } from "@/components/Markdown";
 import { mono } from "@/lib/styles";
 import { TimelineView } from "./TimelineView";
 import { ChainView } from "./ChainView";
@@ -101,17 +102,29 @@ function ToolChip({ name, preview, dur, error }: { name: string; preview: string
   );
 }
 
-function renderInline(text: string) {
-  // `code` 片段 → 行内代码样式
-  const parts = text.split(/`([^`]+)`/g);
-  return parts.map((p, i) =>
-    i % 2 === 1 ? (
-      <span key={i} style={{ ...mono(12), background: "var(--bg-subtle)", borderRadius: 4, padding: "1px 5px" }}>{p}</span>
-    ) : (
-      <span key={i}>{p}</span>
-    ),
+/**
+ * 助手回复 = 完整 markdown,不是纯文本。
+ *
+ * 早先这里只把 `code` 片段换成行内代码样式、其余原样塞进一个 div,于是模型给出的
+ * 标题 / 列表 / 表格 / 代码围栏全以源码形式糊成一段——换行也没了(容器没开
+ * white-space)。渲染器直接复用 Notes 的 <Markdown>,排版与画板 2c 同一套,
+ * 聊天区不另立一份样式(规则 7)。
+ *
+ * memo 是必需的而不是优化:流式期间每一帧都要重建 items 数组,不 memo 的话
+ * **本会话已完成的每一条**助手消息都会跟着重新解析一遍 markdown(O(n²))。
+ * text 不变就不重渲染,只有正在流的那条会重新解析。
+ *
+ * minWidth:0 让代码围栏/宽表在自己的容器里横向滚动,而不是把聊天列撑宽
+ * (ChatPane 是 flex column,子项默认 min-width:auto)。
+ * md-chat 见 globals.css:只抹掉首个块的上外边距,气泡间距由 ChatPane 的 gap 给。
+ */
+const AssistantMessage = memo(function AssistantMessage({ text }: { text: string }) {
+  return (
+    <div className="md-chat" style={{ minWidth: 0 }}>
+      <Markdown headingIds={false}>{text}</Markdown>
+    </div>
   );
-}
+});
 
 function ChatPane({ items }: { items: ChatItem[] }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -134,11 +147,7 @@ function ChatPane({ items }: { items: ChatItem[] }) {
         if (item.kind === "tool" && item.tool) {
           return <ToolChip key={i} {...item.tool} />;
         }
-        return (
-          <div key={i} style={{ fontSize: 14, lineHeight: 1.7 }}>
-            {renderInline(item.text ?? "")}
-          </div>
-        );
+        return <AssistantMessage key={i} text={item.text ?? ""} />;
       })}
     </div>
   );
@@ -303,10 +312,16 @@ export function Workbench() {
     // 首个 delta 到达时才建助手气泡(避免先渲染一个空行),之后每个 delta 就地替换它。
     // 「是否首帧」在调用点定死,不在 setItems 更新函数里读可变量——更新函数由 React
     // 择时执行,读到的会是变更后的值。
+    //
+    // 服务端 delta 是**逐 token** 发的(apps/api/agent/ask.ts),一条长回复几千帧;
+    // 助手气泡改渲染 markdown 之后,一帧一次 setItems 就等于一帧解析一遍整篇正文。
+    // 这里按动画帧合帧:攒在 assistant 里,一帧最多提交一次,渲染开销与 token 速率脱钩。
+    // 帧回调在页面隐藏时不跑,所以每个出口都要先 flushNow() 把攒下的文本落地。
     let assistant = "";
     let started = false;
-    const onDelta = (text: string) => {
-      assistant += text;
+    let pending = false;
+    let frame = 0;
+    const commit = () => {
       const snapshot = assistant;
       const first = !started;
       started = true;
@@ -316,20 +331,36 @@ export function Workbench() {
           : [...prev.slice(0, -1), { kind: "assistant", text: snapshot }],
       );
     };
+    const flushNow = () => {
+      if (frame) { cancelAnimationFrame(frame); frame = 0; }
+      if (pending) { pending = false; commit(); }
+    };
+    const onDelta = (text: string) => {
+      assistant += text;
+      pending = true;
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; flushNow(); });
+    };
 
     askStream(
       { prompt, sessionId: sessionId ?? undefined },
       {
         onSession: setSessionId,
         onDelta,
-        onError: (message) => setItems((prev) => [...prev, { kind: "assistant", text: message }]),
+        // 先把在途文本落地再追加错误行:否则后到的 flush 会以「就地替换末项」的
+        // 语义把这条错误消息顶掉。
+        onError: (message) => {
+          flushNow();
+          setItems((prev) => [...prev, { kind: "assistant", text: message }]);
+        },
       },
     )
       .catch((err) => {
         console.error("ask failed:", err);
+        flushNow();
         setItems((prev) => [...prev, { kind: "assistant", text: askErrorText(err) }]);
       })
       .finally(() => {
+        flushNow();
         setStreaming(false);
         refreshSessions();
       });

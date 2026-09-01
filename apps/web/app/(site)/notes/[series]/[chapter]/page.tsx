@@ -1,11 +1,11 @@
 // 文章阅读页(设计稿画板 2c)。正文以标准 markdown 从 notes 服务取回,
-// 由 components/notes/Markdown 映射到画板既有的排版(规则 7)。
+// 由 components/Markdown 映射到画板既有的排版(规则 7)。
 import Link from "next/link";
 import { api, notFoundOnBadRoute } from "@/lib/api";
 import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
 import { isoDate, readingMinutes } from "@/lib/time";
-import { Markdown, extractToc } from "@/components/notes/Markdown";
+import { Markdown, extractToc } from "@/components/Markdown";
 
 export const dynamic = "force-dynamic";
 
