@@ -124,16 +124,20 @@ docker compose up -d                   # 3) 再起 api / web / caddy
 
 ## 6. 上线前检查单
 
-- [ ] gitleaks 扫描仓库无密钥
-- [ ] `.env` 权限 600;`docker compose config` 无明文 key 泄漏到镜像
-- [ ] api 容器:非 root、read_only、无 docker.sock、`cap_drop ALL`、`pids_limit`、mem_limit 生效(`docker inspect` 逐项核)
-- [ ] **最终运行镜像**内无 node、只有 bun(`docker run --rm --entrypoint sh <img> -c 'node --version'` 应失败)。注:web 镜像的 builder 阶段本来就有 node/npm,这里查的是 runner 阶段产物
-- [ ] `/spike/*` 全部 404(R1 验证脚手架不得进公网镜像;`--services` 白名单已在构建期挡住)
+> **每个环境各过一遍**,不是过一次就完。130 预发的留证见
+> [`rounds/round-10/checklist.md`](../rounds/round-10/checklist.md)(R10,SHA `5c98b3e`,1–11 全绿);
+> 生产在 R11 重跑同一份。下面括号里的**判据**是 R9/R10 实测校准过的,照着核不会误判。
+
+- [ ] gitleaks 扫描仓库无密钥。**两条都要跑**:`gitleaks dir <repo>`(工作区)与 `gitleaks git <repo>`(历史),期望均为 `no leaks found`。判据由仓库根的 [`.gitleaks.toml`](../.gitleaks.toml) 定义(排除构建产物与 gitignored 的本地密钥文件,并按**具体的值**放行脱敏测试的假密钥字面量——不按文件放行,否则那两个文件会变成盲区)。**不带这个配置裸跑会报十几条全是噪音的命中**;改动这个配置后要跑一次证伪探针(往几处各插一行新的真实形状 key,确认都被抓到),做法见 [`rounds/round-10/checklist.md`](../rounds/round-10/checklist.md) §1
+- [ ] `.env` 权限 600;`docker compose config` 无明文 key 泄漏到镜像。判据:把 `.env` 里的密钥值逐个拿去比对 `docker history --no-trunc` 与镜像的 `Config.{Env,Cmd,Entrypoint,Labels}`,期望命中 **0**;密钥只应出现在**容器**的运行期 env 里
+- [ ] api 容器:非 root、read_only、无 docker.sock、`cap_drop ALL`、`pids_limit`、mem_limit 生效(`docker inspect` 逐项核)。docker.sock 要对**全机所有运行中容器**扫一遍挂载源,不只是本 compose 的四个
+- [ ] **最终运行镜像**内无 node、只有 bun。**判据见 [`deploy-environments.md`](deploy-environments.md) 冒烟清单第 12 条**(`node -p "process.versions.bun"` 有值 + 真实 `node`/`nodejs` 二进制不存在 + `dpkg -l` 无 `nodejs` 包)。~~`node --version` 应失败~~ **别用这条**:`oven/bun` 基座自带一个指向 bun 的 `node` 软链,它确实会以退出码 1 失败,但报的是 `Missing script to execute … Node.js-compatible REPL` —— 一句会让人得出相反结论的错误信息。注:web 镜像的 builder 阶段本来就有 node/npm,这里查的是 runner 阶段产物
+- [ ] `/spike/*` 全部 404(R1 验证脚手架不得进公网镜像;`--services` 白名单已在构建期挡住)。**同时跑一组正式端点作对照**——全站都 404 时这条会假通过
 - [ ] `IMAGE_TAG` 是 git SHA 而非 latest;该 SHA 与预发验过的完全一致
 - [ ] 迁移已带外施加且版本可追溯;空库直起会 500 的坑已规避
-- [ ] postgres 仅在 `back` 内部网段可达(caddy/web 连不上)
-- [ ] `/api/mcp` 无 token / 错 token 全拒且有审计记录;可选 IP 白名单
-- [ ] SSE 事件流抽查:无 Authorization/api-key 字段
-- [ ] SSE 优雅关闭:`docker compose stop api` 时客户端收到明确断流而非静默挂起
+- [ ] postgres 仅在 `back` 内部网段可达(caddy/web 连不上)。**域名 NXDOMAIN 不够**,还要按容器 IP 直连 5432 也不通
+- [ ] `/api/mcp` 无 token / 错 token / 格式不对的 token / **未认证的** GET 全拒(401)且有审计记录;三种 401 的响应体必须**完全一致**、不回显失败原因。注:带**正确** token 的 GET 是 **405**,不是 401(认证闸在方法校验之前)。可选 IP 白名单
+- [ ] SSE 事件流抽查:无 Authorization/api-key 字段。**判据是结构化的**——遍历每帧 JSON 看有没有凭据形状的**键**;`grep -i authorization` 会命中对话正文里的那个英文单词(R10 实测 7 次全是误报)
+- [ ] SSE 优雅关闭:`docker compose stop api` 时客户端**在停机同刻(+0s)拿到确定的终止**而非挂到超时。**别钉死 curl 退出码**(R9 见 `18`、R10 见 `0`,取决于断开落在响应分块的哪个位置)
 - [ ] 限额:小额度演练超限路径(拒新会话 + 前端提示)
 - [ ] 备案号已挂 footer

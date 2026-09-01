@@ -20,7 +20,7 @@
 | **R7** | 沙箱与配额落地(只读工具组 · agent_ro · daily_quota,消费 R6 配置表) | ✅ 已完成([任务卡](rounds/round-07/round-07.md),12 项验收全过;codex 三轮共 6 条 findings(1×P1 · 4×P2 · 1×P3)**全部采纳整改**,末轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ✅ 已完成([任务卡](rounds/round-08/round-08.md),15 项验收全过;codex 三轮共 3 条 findings(P1/P2/P3 各一)全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ✅ 已完成([任务卡](rounds/round-09/round-09.md) · [冒烟留证](rounds/round-09/smoke.md)),18 项验收全过,130 预发可用;**所有者裁定本轮不走 codex 审查**(过程与残留风险见任务卡「代码审查」段)。同日按 `docs/notes-content-spec.md` 经 MCP 入库 13 系列 / 205 章节 / 103 配图 | 2026-09-01 |
-| **R10** | 安全加固 + 上线前检查单逐项 | ⬜ | — |
+| **R10** | 安全加固 + 上线前检查单逐项 | ✅ 已完成([任务卡](rounds/round-10/round-10.md) · [检查单留证](rounds/round-10/checklist.md)),检查单 1–11 项在 130(SHA `5c98b3e`)全绿;**所有者裁定本轮不做限额演练(引 R9 留证)与 pg 备份**,不做安全响应头与 IP 白名单(均记 BACKLOG) | 2026-09-01 |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
 ## 里程碑
@@ -197,10 +197,30 @@
 
 ### R10 — 安全加固与上线检查单
 
-- `docs/security.md` §「上线前检查单」逐项过并留证:gitleaks / .env 权限 / 容器约束 / admin 强认证 / SSE 抽查 / 限额演练
+- ~~`docs/security.md` §~~ **`docs/deploy-cn-lightweight.md` §6**「上线前检查单」逐项过并留证:gitleaks / .env 权限 / 容器约束 / admin 强认证 / SSE 抽查 / 限额演练(检查单实际在 cn-lightweight 那篇,security.md 里没有这一节)
 - 备份:Postgres 每日 pg_dump(本机 + 异地)脚本与恢复演练
 - 可选:/admin IP 白名单(Caddy 层)
 - 验收:检查单全绿,证据回填任务卡
+
+> **落地补记(2026-09-01,与上面计划的三处偏离,详见[任务卡](rounds/round-10/round-10.md)与[检查单留证](rounds/round-10/checklist.md))**
+>
+> 1. **所有者裁定砍掉两项,本轮收敛成纯验证轮**:限额演练**不重跑**(R9 `smoke.md` §5 已在同一部署
+>    形态下留证,`daily_tokens` / `turn_limit` 双路径 429 + 恢复后立即可用),**pg 备份整项不做**。
+>    备份的代价是显式的:`deploy-environments.md` 与 §3 里「涉及不可逆迁移时先恢复备份」目前是
+>    **悬空引用**,镜像回滚能回代码、回不了数据。已记 BACKLOG,R11 上线前须再裁定一次。
+>    IP 白名单同样不启用(130 是内网预发,源 IP 同网段,白名单在这里没有验证价值),
+>    留 R11 按真实出口 IP 开;Caddyfile 第 45–51 行的模板本轮核对过。
+> 2. **本轮的实际产出是「把检查单的判据修准」,不是「打勾」**:5 条发现里有 3 条是判据本身会误判 ——
+>    ①「镜像内无 node」写的 `node --version 应失败` 会给出相反结论(bun 的 node 兼容层不支持单独的
+>    `--version`,报错却写着 `Node.js-compatible REPL`);②「GET 一律 401」漏了限定,带**正确** token
+>    的 GET 是 **405**;③「SSE 优雅关闭」钉死 `curl exit 18`,而 R10 实测是 `0`(两者都对,差别只在
+>    断开落在响应分块的哪个位置,要判的是「停机同刻终止」)。三条已就地改进 `docs/`。
+>    另外新增 `.gitleaks.toml`:裸跑 gitleaks 会报 15 条(全是构建产物与**刻意写成假密钥的测试夹具**),
+>    「每次要人眼过一遍 15 条」正是真泄漏藏得住的地方,把判据钉死后这项的期望值才是 0。
+> 3. **两条加固被裁定出本轮,写进 BACKLOG**:①全站**一个安全响应头都没有**(Caddyfile 与
+>    next.config.ts 均未设 nosniff / Referrer-Policy / X-Frame-Options);②130 上留着一份明文
+>    LLM key(`~/deploy/.llm-key`,R9 残留,与 security.md §3「唯一来源是加密入库」不一致)——
+>    扩散面已查清只有这一份,**没有当场删**(删了要回 provider 控制台重取,是所有者的东西)。
 
 ### R11 — 生产部署上线
 
@@ -208,6 +228,7 @@
 - 服务器初始化(`docs/security.md` §5 基线:仅密钥登录 / 防火墙 / fail2ban / 自动安全更新)
 - docker compose 部署;域名解析 + ICP 备案流程(`docs/deploy-cn-lightweight.md` §1)+ Caddy 自动 TLS;备案号挂 footer
 - 上线冒烟 + 首日观察(限额、内存、日志)
+- **R10 交接过来的四条**(逐条给结论,不要漏):①检查单在生产**重跑一遍**(R10 只证了 130,判据已修准,见 `rounds/round-10/checklist.md`);②`/api/mcp` 的 Caddy IP 白名单**按真实出口 IP 启用**(模板在 `deploy/Caddyfile` 第 45–51 行);③写生产 LLM provider 时 key **直接贴进 MCP 调用,不落盘**(130 上那份 `.llm-key` 就是这么留下的);④**安全响应头**与 **pg 备份**在上线前再裁定一次(两条都在 BACKLOG,备份那条决定了「不可逆迁移出错」有没有兜底)
 
 ## 轮次外事项
 
