@@ -104,9 +104,15 @@ services:
       # **必须含 scheme**:备案通过前 130 预发只有明文 HTTP,写死 https 会让整份
       # 订阅源指向一个没在听的端点(codex review 2026-08-31 P2)。R5
       - SITE_ORIGIN=${SITE_ORIGIN:?}
-      # R6 落地 agent_ro 只读工具连接、R7 落地 admin/LLM 配置时,
-      # 在 infra-config.json 的 secrets 段增声明后再在此处补对应变量。
-      # 高危工具双闸之一(默认不设):XRAY_UNLOCK_DANGEROUS_TOOLS
+      # R7 的 agent_ro 只读角色**不需要任何变量**:它是 NOLOGIN 角色,由应用连接在
+      # 事务里 SET LOCAL ROLE 临时降权(docs/security.md §1 第 2 层的落地补记),
+      # 没有第二套连接串、也没有第二份口令。角色与授权由迁移 004 建,
+      # 因此 deploy/migrate.sh 必须在起 api 之前跑完(本来就是既定顺序)。
+      #
+      # 高危工具双闸之一,**默认不设**(设了也只是开了第一闸,还要 tool_config 那半):
+      #   XRAY_UNLOCK_DANGEROUS_TOOLS=1
+      # 当前注册表里没有任何 dangerous 工具,所以这个变量目前没有用武之地。
+      # 需要新增变量时,先在 infra-config.json 的 secrets 段增声明再在此处补。
     expose:
       - "4000"
     networks: [front, back]

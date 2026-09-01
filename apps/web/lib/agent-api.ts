@@ -23,13 +23,20 @@ export async function getSession(
   return client.agent.getSession(id);
 }
 
-/** `/agent/ask` 的非 2xx 响应(409 并发 / 429 容量 / 400 校验 / 5xx)。 */
+/**
+ * `/agent/ask` 的非 2xx 响应(409 并发 / 429 容量或限额 / 400 校验 / 5xx)。
+ *
+ * `code` 是服务端给的机器可读标识(R7):同为 429,「并发会话数满」与「今日额度用完」
+ * 对访客是两句不同的话。`message` 只用于调试,展示文案一律由前端按 status/code 决定。
+ */
 export class AskError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "AskError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -78,13 +85,15 @@ export async function askStream(
 
   if (!resp.ok || !resp.body) {
     let detail = `request failed (${resp.status})`;
+    let code: string | undefined;
     try {
-      const body = (await resp.json()) as { error?: string };
+      const body = (await resp.json()) as { error?: string; code?: string };
       if (body?.error) detail = body.error;
+      if (typeof body?.code === "string") code = body.code;
     } catch {
       /* 非 JSON 响应体,用默认文案 */
     }
-    throw new AskError(resp.status, detail);
+    throw new AskError(resp.status, detail, code);
   }
 
   const reader = resp.body.getReader();

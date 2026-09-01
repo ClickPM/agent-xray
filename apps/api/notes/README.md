@@ -1,6 +1,6 @@
 # notes 服务
 
-教程库查询、RSS(R5)与正文配图供图(R6);pi 只读工具组待 R7(2026-08-31 轮次对调)。
+教程库查询、RSS(R5)与正文配图供图(R6)。pi 的只读工具组在 **agent 服务**(R7,见文末)。
 
 ## 已实现(R5)
 
@@ -34,9 +34,16 @@ R5 的 `tools/notes-sync` 管道与 sync-notes skill 已随 R6 删除(存量数�
   唯一可靠的区分是扩展名。Next 的数组式 `rewrites` 属 afterFiles,在**动态路由之前**生效 ——
   写成 `/notes/:series/:file` 会把文章页一并劫走。
 
-## 待实现(R7,原 R6)
+## pi 只读工具组在哪(R7 落地,**不在本服务**)
 
-- **pi 只读工具组**(`defineTool`):`notes_list_series` / `notes_get_chapter` / `notes_search`
-  - 连接串用 `AGENT_RO_DATABASE_URL`(`agent_ro` 角色,仅 SELECT `notes_*` 三张表)
-    —— pi 可读教程、物理上不可改(`docs/security.md` §1 第 2 层)
-  - 授权语句在建表之后补(顺序见 ROUNDS.md R9)
+`notes_list_series` / `notes_get_chapter` / `notes_search` 实现在
+[`apps/api/agent/tools.ts`](../agent/tools.ts),取数走 [`agent/ro-db.ts`](../agent/ro-db.ts)
+的 `agent_ro` 只读角色。
+
+**为什么不放在 notes 服务里**:工具的注册点在 agent 服务的 `createAgentSession`,
+而 Encore 的服务之间不直接 import 对方目录。跨服务读表沿用 R4 定下的口径 ——
+**只读、不拥有 schema、各自持自己的 db 句柄**(trace 读 agent 的表就是这么做的)。
+把实现放这里、再让 agent 去 import,才是把两个服务连成一个。
+
+本服务对这三张表的读写口径不受影响:前端查询走 `series.ts`,agent 走 `agent_ro`,
+写面在 mcp 服务。三条路各自独立。

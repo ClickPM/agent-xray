@@ -10,6 +10,10 @@
 // 错误口径(docs/security.md §2,消化 rounds/BACKLOG.md 两条 R2 遗留):
 // SSE 只出固定文案,provider / 数据库的原始错误一律只进服务端日志——
 // 上游报错常带端点、模型名甚至请求头片段,不允许出服务端。
+//
+// 非 2xx 的 JSON 体是 `{error, code?}`(R7 加 code):`error` 只供调试,
+// 访客文案由前端按 status/code 分档。限额拒绝走 429 + code
+// (daily_tokens / daily_cost / turn_limit),见 `quota.ts`。
 import { api } from "encore.dev/api";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -23,6 +27,7 @@ import {
   type RuntimeSession,
 } from "./runtime";
 import { previewText, safeErrorText } from "./events";
+import { checkQuota, recordUsage, usdToMicros } from "./quota";
 import { sse, sseComment, SSE_HEADERS } from "../shared/sse";
 import {
   appendMessage,
@@ -51,9 +56,17 @@ interface AskBody {
   prompt: string;
 }
 
-function fail(resp: ServerResponse, status: number, error: string): void {
+/**
+ * 非 2xx 响应。
+ *
+ * `code` 是给前端**分档文案**用的机器可读标识(R7 新增)。为什么不靠 HTTP 状态分档:
+ * 「并发会话数满」与「今日额度用完」都是 429,但对访客是完全不同的两句话
+ * (一句是「等会儿再来」,一句是「明天再来」)。`error` 仍然只是给日志/调试看的,
+ * 前端不展示它——服务端文案与展示文案的分工是 R3 定下的。
+ */
+function fail(resp: ServerResponse, status: number, error: string, code?: string): void {
   resp.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
-  resp.end(JSON.stringify({ error }));
+  resp.end(JSON.stringify(code ? { error, code } : { error }));
 }
 
 /** 读取并解析 JSON 请求体;超限直接断开,避免把内存交给调用方决定。 */
@@ -171,6 +184,28 @@ export const ask = api.raw(
     const isNew = !sessionId;
     const id = sessionId ?? randomUUID();
 
+    // 【限额闸排在建会话之前】(docs/security.md §1 第 4 层)超限时不该先把一个 pi 会话
+    // 建起来再拒:那既白占一个并发名额,又要在拒绝路径上多一次 dispose。
+    //
+    // 拒绝体里**只出 code,不出数字**:`daily token limit reached (12345/10000)` 这种
+    // 文本会把站点的限额配置告诉每一个撞上它的访客。具体数字只进服务端日志,
+    // 访客看到的文案由前端按 code 决定(与 R3 定下的「服务端不供展示文案」一致)。
+    //
+    // 判定本身失败(库读不到)回 500,不静默放行也不静默拒绝——库都读不到的话
+    // 下一步的消息落库同样会失败,500 是诚实的答案。
+    try {
+      const denial = await checkQuota({ isNew, sessionId: id });
+      if (denial) {
+        console.warn(`quota denied for session ${id}: ${denial.detail}`);
+        fail(resp, 429, "quota exceeded", denial.reason);
+        return;
+      }
+    } catch (err) {
+      console.error(`quota check failed: ${safeErrorText(err)}`);
+      fail(resp, 500, "internal error");
+      return;
+    }
+
     // acquireSession 返回即代表本请求**已持有**该会话(busy 在其内部同步置位),
     // 从这里往下的每条路径都必须释放。同会话并发与容量耗尽在其内部判定后抛出。
     let rec: RuntimeSession;
@@ -225,6 +260,10 @@ export const ask = api.raw(
     // 失败的一轮当成功报 done,访客看到「什么都没发生」。判据取助手 message_end 的
     // stopReason,原文只留服务端日志。
     let turnErrorDetail: string | undefined;
+    // 本轮用量(R7 限额计数)。一轮可能有**多条**助手消息——开了工具之后
+    // 「助手 → 工具 → 助手」是常态,每一段都各有一次 provider 调用,必须逐条累加。
+    let turnTokens = 0;
+    let turnCostMicros = 0;
     const unsubscribe = rec.session.subscribe((event) => {
       if (event.type === "message_update") {
         const e = (event as { assistantMessageEvent?: { type?: string; delta?: string } })
@@ -236,10 +275,26 @@ export const ask = api.raw(
         return;
       }
       if (event.type === "message_end") {
-        const m = (event as { message?: { role?: string; stopReason?: string; errorMessage?: string } })
-          .message;
+        const m = (
+          event as {
+            message?: {
+              role?: string;
+              stopReason?: string;
+              errorMessage?: string;
+              usage?: { totalTokens?: number; cost?: { total?: number } };
+            };
+          }
+        ).message;
         if (m?.role === "assistant" && (m.stopReason === "error" || m.stopReason === "aborted")) {
           turnErrorDetail = m.errorMessage || m.stopReason;
+        }
+        // provider 不报价(自定义中转端点常见)时 cost 缺失 —— token 照记、费用记 0。
+        // 费用限额在那种配置下不起作用,这是配置的性质,不是这里的缺陷。
+        if (m?.role === "assistant" && m.usage) {
+          if (typeof m.usage.totalTokens === "number") turnTokens += m.usage.totalTokens;
+          if (typeof m.usage.cost?.total === "number") {
+            turnCostMicros += usdToMicros(m.usage.cost.total);
+          }
         }
       }
     });
@@ -277,6 +332,11 @@ export const ask = api.raw(
         sse(resp, "done", { sessionId: id });
       }
     } finally {
+      // 用量计数是**尽力而为**的资源闸,不是账单:失败只记日志,绝不把已经完成的
+      // 一轮报成失败(docs/security.md §1 第 4 层;理由写在 quota.ts 的 recordUsage)。
+      await recordUsage(turnTokens, turnCostMicros).catch((err) =>
+        console.error(`record usage failed for session ${id}: ${safeErrorText(err)}`),
+      );
       await flushTraceEvents(rec).catch((err) =>
         console.error(`flushTraceEvents failed for session ${id}: ${safeErrorText(err)}`),
       );
