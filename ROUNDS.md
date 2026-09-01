@@ -19,7 +19,7 @@
 | **R6** | MCP 管理服务(无状态 2026-07-28:notes 内容/About/LLM 多 provider/工具启停;/admin 与 R5 管道退役) | ✅ 已完成([任务卡](rounds/round-06/round-06.md),10 项验收全过;codex 五轮共 18 条 findings,16 条采纳整改、1 条实跑证伪不采纳、1 条写明理由记 BACKLOG,末轮零 P1,缺陷门禁 PASS) | 2026-08-31 |
 | **R7** | 沙箱与配额落地(只读工具组 · agent_ro · daily_quota,消费 R6 配置表) | ✅ 已完成([任务卡](rounds/round-07/round-07.md),12 项验收全过;codex 三轮共 6 条 findings(1×P1 · 4×P2 · 1×P3)**全部采纳整改**,末轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ✅ 已完成([任务卡](rounds/round-08/round-08.md),15 项验收全过;codex 三轮共 3 条 findings(P1/P2/P3 各一)全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
-| **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ⬜ | — |
+| **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ✅ 已完成([任务卡](rounds/round-09/round-09.md) · [冒烟留证](rounds/round-09/smoke.md)),18 项验收全过,130 预发可用;**所有者裁定本轮不走 codex 审查**(过程与残留风险见任务卡「代码审查」段)。同日按 `docs/notes-content-spec.md` 经 MCP 入库 13 系列 / 205 章节 / 103 配图 | 2026-09-01 |
 | **R10** | 安全加固 + 上线前检查单逐项 | ⬜ | — |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
@@ -172,6 +172,28 @@
 - **SSE 冒烟**(R3/R4 已就绪,可以做了):正式端点 `POST /agent/ask` 与 `GET /trace/stream` 均已落地并进白名单。冒烟内容:心跳 15s、断线重连 `afterSeq` 回放、`docker compose stop api` 时客户端收到明确断流而非静默挂起、SSE 脱敏抽查。**另需复测两条 R4 挂起的限制**(见 `rounds/BACKLOG.md`):Caddy + 自托管镜像的真实拓扑下能否拿到 SSE 客户端断开信号——若能,`/trace/stream` 的让位机制与 `MAX_STREAM_MS` 硬上界都可以放宽甚至退役
 - 回滚演练:`IMAGE_TAG` 换回上一 SHA + `up -d` 真跑一次
 - 验收:130 上从干净环境按文档一次部署成功,且回滚演练通过
+
+> **落地补记(2026-09-01,与上面计划的四处偏离,详见任务卡)**
+>
+> 1. **开工第一个卡点是 web 镜像根本构建不出来**:`apps/web/Dockerfile` 的
+>    `COPY --from=builder /app/public ./public` 在 R6 把配图搬进 Postgres、删掉整个 public/ 之后
+>    就指向了一个不存在的路径。R6 之后没人再构建过 web 镜像,所以「R9 才第一次真构建」正好把它翻出来。
+>    删掉那行即可(自托管字体走 `.next/static/media`,不经 public/)。
+> 2. **字体自托管按所有者裁定并进 R9**(BACKLOG 的 R-BUN P1-4,原标「R9 或 R10」),
+>    顺带解决回滚演练缺真实代码差异的问题 —— 本轮提交刻意拆成 v1(构建修复 + `dev.ps1 ship`)
+>    与 v2(字体自托管),升级与回滚都有肉眼可验的差别,而不是两个内容相同只差 tag 的镜像。
+> 3. **断连信号复测给出否定结论**:BACKLOG 里三条(R3 一条 / R4 两条)都挂着「等 R9 在真实拓扑下
+>    复测,能拿到断开信号就放宽」。实测**拿不到** —— 开满 8 条 `trace/stream` 后 `kill -9` 掉全部
+>    客户端,第 9 条仍 429。加一层 Caddy 不改变 Encore 网关不传导断开这件事。
+>    **让位机制与 `MAX_STREAM_MS` 上界都要留着**,三条 BACKLOG 全部保持打开。
+> 4. **多出一份 `docs/notes-content-spec.md`**:所有者中途给了 `D:	mpgent-xray-notes`
+>    (211 篇 md + 56 图,是 vault 原导出而非标准化内容)并裁定「先给一份修改要求,
+>    我让 AI 处理后再发」。全量内容入库不在本轮 —— 那会重新造一遍 R6 已退役的 notes-sync 改写管线。
+>    R9 只发了验收所需的样本(四分类 + 系列 `r9-smoke` + 2 篇 + 1 图 + About),真实内容到位时清掉。
+>
+> 另:「最终运行镜像里不含 node」这句话要加限定 —— `oven/bun` 基座自带一个**指向 bun 的
+> `node` 软链**,`command -v node` 会命中它。结论仍成立,判据已改(CLAUDE.md 规则 11 与
+> `docs/deploy-environments.md` 冒烟清单第 12 条)。
 
 ### R10 — 安全加固与上线检查单
 

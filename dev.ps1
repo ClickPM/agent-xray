@@ -17,6 +17,8 @@
 #       .\dev.ps1 gen       encore gen client -> apps\web\lib\api-client.ts
 #       .\dev.ps1 db <名>   encore db shell <数据库名>
 #       .\dev.ps1 build     构建 api + web 生产镜像(tag = git 短 SHA)
+#       .\dev.ps1 ship <host> [sha]
+#                           把镜像与四件部署资产传到服务器(save -o / scp / load -i)
 #       .\dev.ps1 skills    把 .claude\skills 镜像到 .agents\skills(给 codex 审查者用)
 #       .\dev.ps1 wt-clean [名字|all] [--force]
 #                           清理 .claude\worktrees 残留(不带参数 = 只列不动;坑的说明见函数注释)
@@ -167,6 +169,60 @@ switch ($Cmd) {
         Write-Host "  传输(勿在 PowerShell 用 `"docker save | ssh docker load`" 管道直传,二进制会被重编码破坏):"
         Write-Host "    docker save -o xray-$sha.tar $apiTag $webTag"
         Write-Host "    scp xray-$sha.tar <host>:~  然后  ssh <host> docker load -i xray-$sha.tar"
+        Write-Host "  或直接: .\dev.ps1 ship <host>"
+    }
+    "ship" {
+        # 把镜像 + 四件部署资产送到服务器(R9)。文档里那段手工流程漏一步就会出事:
+        # 漏 migrate.sh → 服务器上无法迁移;走 PowerShell 管道 → 二进制 tar 被文本
+        # 重编码破坏;漏 mkdir → 多文件 scp 直接失败。固化成一条命令。
+        #
+        # **不传 .env**:它按环境独立、含密钥、永不出本机(deploy/.env.example 里
+        # 有生成方式)。服务器上首次部署时由所有者手工 cp + 填。
+        $shipHost = $args[0]
+        if (-not $shipHost) { throw "用法:.\dev.ps1 ship <host> [sha];host 是 ssh 目标(别名或 user@ip)" }
+        $sha = if ($args[1]) { $args[1] } else { (& git -C $repoRoot rev-parse --short HEAD).Trim() }
+        if (-not $sha) { throw "拿不到 git SHA" }
+
+        $registry = if ($env:IMAGE_REGISTRY) { $env:IMAGE_REGISTRY } else { "local" }
+        $apiTag = "$registry/xray-api:$sha"
+        $webTag = "$registry/xray-web:$sha"
+        foreach ($t in @($apiTag, $webTag)) {
+            & docker image inspect $t 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "本机没有镜像 $t,先跑 .\dev.ps1 build" }
+        }
+
+        $tar = Join-Path $env:TEMP "xray-$sha.tar"
+        Write-Host "==> docker save → $tar"
+        & docker save -o $tar $apiTag $webTag
+        if ($LASTEXITCODE -ne 0) { throw "docker save 失败" }
+        $mb = [math]::Round((Get-Item $tar).Length / 1MB, 1)
+        Write-Host "    $mb MB"
+
+        Write-Host "==> scp 镜像与部署资产 → $shipHost"
+        & ssh $shipHost "mkdir -p ~/deploy"
+        if ($LASTEXITCODE -ne 0) { throw "ssh $shipHost 不通" }
+        # 二进制走 scp 文件,绝不用 PowerShell 管道(PS 5.1 对原生命令管道按文本
+        # 重编码,tar 会被破坏,远端 load 报 unexpected EOF)
+        & scp $tar "${shipHost}:~/"
+        if ($LASTEXITCODE -ne 0) { throw "scp 镜像失败" }
+        & scp "$repoRoot\deploy\docker-compose.yml" "$repoRoot\deploy\Caddyfile" `
+              "$repoRoot\deploy\migrate.sh" "$repoRoot\deploy\.env.example" "${shipHost}:~/deploy/"
+        if ($LASTEXITCODE -ne 0) { throw "scp 部署资产失败" }
+        & ssh $shipHost "chmod +x ~/deploy/migrate.sh"
+
+        Write-Host "==> docker load(远端)"
+        & ssh $shipHost "docker load -i ~/xray-$sha.tar && rm -f ~/xray-$sha.tar"
+        if ($LASTEXITCODE -ne 0) { throw "远端 docker load 失败(tar 已保留在 ~/xray-$sha.tar 供排查)" }
+        Remove-Item $tar -Force
+
+        Write-Host ""
+        Write-Host "已送达。接下来在 $shipHost 上(顺序不能颠倒,见 docs/deploy-environments.md):"
+        Write-Host "  cd ~/deploy"
+        Write-Host "  cp .env.example .env && chmod 600 .env   # 首次;IMAGE_TAG=$sha"
+        Write-Host "  docker compose stop api web              # 仅升级时"
+        Write-Host "  docker compose up -d --wait postgres"
+        Write-Host "  ./migrate.sh"
+        Write-Host "  docker compose up -d"
     }
     "skills" {
         # 把 .claude\skills 镜像到 .agents\skills。

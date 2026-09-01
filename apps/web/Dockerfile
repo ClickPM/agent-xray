@@ -36,9 +36,12 @@ RUN groupadd -g 10001 app && useradd -u 10001 -g 10001 -m -s /usr/sbin/nologin a
 
 COPY --from=builder --chown=10001:10001 /app/.next/standalone ./
 COPY --from=builder --chown=10001:10001 /app/.next/static ./.next/static
-# public/ 自 R5 起有内容:notes 正文里的图片(tools/notes-sync 压缩后的 WebP/SVG,
-# 约 6.5MB)。漏掉这行的表现是页面正常、图片全 404。
-COPY --from=builder --chown=10001:10001 /app/public ./public
+# 这里**故意没有** `COPY /app/public ./public`。R5 时 public/ 装着 notes 正文配图,
+# R6 按所有者裁定把图片搬进 Postgres 并删掉了整个目录 —— 那行 COPY 从此指向一个
+# 不存在的路径,`docker build` 直接失败(R9 开工构建时实测,是本轮第一个卡点)。
+# 自托管字体走 next/font/local,产物在 .next/static/media 里,由上一行带进来。
+# 将来若真要往 public/ 放静态资源,把这行加回来(并确认目录已存在):
+#   COPY --from=builder --chown=10001:10001 /app/public ./public
 
 USER 10001:10001
 EXPOSE 3000

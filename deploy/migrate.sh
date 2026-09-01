@@ -157,7 +157,10 @@ for dir in "${MIG_DIRS[@]}"; do
     # 锁 key 为任取的项目常数,随事务结束自动释放,不需要手动解锁。
     {
       echo "BEGIN;"
-      echo "SELECT pg_advisory_xact_lock(823567001);"
+      # PERFORM 而不是 SELECT:后者会让 psql 把锁函数的返回值当结果集打印出来
+      # (每个迁移一个空的 "pg_advisory_xact_lock" 表格),把真正的进度行淹掉。
+      # R9 在 130 上首次执行 6 个迁移时看到这堆噪音,纯观感问题,行为不变。
+      echo 'DO $lock$ BEGIN PERFORM pg_advisory_xact_lock(823567001); END $lock$;'
       echo 'DO $mig$ BEGIN'
       echo "  IF (SELECT COALESCE(MAX(version), 0) FROM schema_migrations) <> $current THEN"
       echo "    RAISE EXCEPTION '并发迁移: schema_migrations 当前版本与预期 $current 不符,另一执行者可能正在迁移';"
