@@ -7,60 +7,73 @@ import {
   appendMessage,
   appendTraceEvents,
   createSession,
+  deleteSession,
   deriveTitle,
   getSession,
   listMessages,
   listSessions,
   listTraceEvents,
   maxTraceSeq,
+  sessionOwnedBy,
   upsertMessage,
   type NewTraceEvent,
 } from "./store";
 import {
   createSession as createSessionEndpoint,
+  deleteSession as deleteSessionEndpoint,
   getSession as getSessionEndpoint,
   listSessions as listSessionsEndpoint,
 } from "./sessions";
+import { ensureVisitor, type Visitor } from "./visitor";
+import { hashVisitorToken, VISITOR_COOKIE } from "../shared/visitor-cookie";
+
+/** 没有任何请求头 = 一个第一次来的访客(`ensureVisitor` 会发一个新身份)。 */
+const NO_HEADERS = { cookie: undefined, proto: undefined };
+
+/** 每个用例一个干净的访客;归属相关的断言都以它为准(R-VISITOR)。 */
+let visitor: Visitor;
 
 beforeEach(async () => {
   await db.exec`DELETE FROM sessions`;
+  await db.exec`DELETE FROM visitors`;
+  visitor = await ensureVisitor(NO_HEADERS);
 });
 
 describe("sessions", () => {
   it("创建/单查/列表(最近活跃倒序)", async () => {
-    const a = await createSession();
-    const b = await createSession();
+    const a = await createSession(visitor.id);
+    const b = await createSession(visitor.id);
     expect(a.id).not.toBe(b.id);
     expect(a.title).toBe("");
 
-    const got = await getSession(a.id);
+    const got = await getSession(a.id, visitor.id);
     expect(got?.id).toBe(a.id);
-    expect(await getSession("00000000-0000-0000-0000-000000000000")).toBeNull();
+    expect(await getSession("00000000-0000-0000-0000-000000000000", visitor.id)).toBeNull();
 
     // b 追加消息后应排到列表首位
     await appendMessage(b.id, "user", "hi");
-    const list = await listSessions();
+    const list = await listSessions(visitor.id);
     expect(list.map((s) => s.id)).toEqual([b.id, a.id]);
-    expect(await listSessions(1)).toHaveLength(1);
+    expect(await listSessions(visitor.id, 1)).toHaveLength(1);
   });
 
   it("传入 id 建会话(spike/R3 复用运行时会话 id)", async () => {
     const id = "11111111-2222-4333-8444-555555555555";
-    const row = await createSession(id);
+    const row = await createSession(visitor.id, id);
     expect(row.id).toBe(id);
   });
 });
 
 describe("messages", () => {
   it("seq 连续追加;首条用户消息派生标题且不被后续覆盖", async () => {
-    const s = await createSession();
+    const s = await createSession(visitor.id);
     const longFirstLine = "帮我查上海→东京的低价航线," + "对比细节".repeat(10); // 54 字符,确定触发截断
     const m0 = await appendMessage(s.id, "user", longFirstLine + "\n第二行不进标题");
     const m1 = await appendMessage(s.id, "assistant", "好的,我来查询。");
     const m2 = await appendMessage(s.id, "user", "换成大阪呢?");
     expect([m0.seq, m1.seq, m2.seq]).toEqual([0, 1, 2]);
 
-    const after = await getSession(s.id);
+    const after = await getSession(s.id, visitor.id);
     expect(after?.title).toBe(deriveTitle(longFirstLine));
     expect(after?.title).toHaveLength(41); // 40 字符 + 省略号
     expect(after?.title).not.toContain("第二行");
@@ -73,7 +86,7 @@ describe("messages", () => {
   });
 
   it("payload JSONB 语义:jsonb_typeof 为 object 且 -> 可查(规则 4 回归)", async () => {
-    const s = await createSession();
+    const s = await createSession(visitor.id);
     await appendMessage(s.id, "tool", "", {
       tool: { name: "notes_search", preview: '{"q":"pi"}', error: false },
     });
@@ -108,7 +121,7 @@ describe("trace_events", () => {
   ];
 
   it("批量落库、按 seq 回放、jsonb 类型与时间戳往返", async () => {
-    const s = await createSession();
+    const s = await createSession(visitor.id);
     const base = Date.now();
     await appendTraceEvents(s.id, mkEvents(base));
 
@@ -130,7 +143,7 @@ describe("trace_events", () => {
   });
 
   it("重复 flush 幂等(ON CONFLICT DO NOTHING)", async () => {
-    const s = await createSession();
+    const s = await createSession(visitor.id);
     const events = mkEvents(Date.now());
     await appendTraceEvents(s.id, events);
     await appendTraceEvents(s.id, events);
@@ -141,7 +154,7 @@ describe("trace_events", () => {
 
 describe("级联删除", () => {
   it("删会话连带清消息与轨迹", async () => {
-    const s = await createSession();
+    const s = await createSession(visitor.id);
     await appendMessage(s.id, "user", "hello");
     await appendTraceEvents(s.id, [
       { seq: 0, eventType: "agent_start", mode: "notify", timestamp: Date.now(), data: { type: "agent_start" } },
@@ -153,24 +166,55 @@ describe("级联删除", () => {
 });
 
 describe("端点", () => {
-  it("创建 → 列表 → 单查(含历史消息)", async () => {
+  // 【端点层能测到什么、测不到什么】处理函数是直接调用的,没有真实 HTTP 请求上下文,
+  // 所以 `currentRequest()` 拿不到 Cookie 头 —— 在这一层每个调用都是「**一个没有
+  // cookie 的访客**」。这恰好是最该被钉死的一档:没有身份的人看到的必须是一个空站点。
+  // 跨访客的正向隔离(A 看不到 B 的、但看得到自己的)在上面的 store 层用例里测,
+  // 那里才是承载归属判据的地方;端到端两个浏览器互不可见是任务卡的人工验收项。
+
+  it("创建会话:发放身份、把会话挂到它名下,并回一条 Set-Cookie", async () => {
     const created = await createSessionEndpoint();
-    expect(new Date(created.createdAt).getTime()).toBeGreaterThan(0);
-
-    await appendMessage(created.id, "user", "端点回放测试");
-    const got = await getSessionEndpoint({ id: created.id });
-    expect(got.session.id).toBe(created.id);
-    expect(got.session.title).toBe("端点回放测试");
-    expect(got.messages).toEqual([
-      expect.objectContaining({ seq: 0, role: "user", content: "端点回放测试" }),
-    ]);
-
-    const list = await listSessionsEndpoint({ limit: 10 });
-    expect(list.sessions.map((s) => s.id)).toContain(created.id);
+    expect(new Date(created.session.createdAt).getTime()).toBeGreaterThan(0);
+    // `visitorCookie` 必须是**一整条 Set-Cookie 字符串**。它要是变成了对象,说明
+    // 那个字段被写回了类型别名 / `Cookie<>` 形态 —— 那会让 token 明文进响应体
+    // (见 sessions.ts 顶部那段注释,encore 1.57.13 实测)
+    expect(typeof created.visitorCookie).toBe("string");
+    expect(created.visitorCookie).toContain("HttpOnly");
+    expect(created.visitorCookie).toContain("SameSite=Lax");
+    expect(created.visitorCookie).toContain(`Max-Age=${24 * 60 * 60}`);
+    // 明文 token 只出现在 Set-Cookie 里;库里存的是它的 sha256
+    const token = created.visitorCookie.slice(`${VISITOR_COOKIE}=`.length).split(";")[0];
+    const hash = hashVisitorToken(token);
+    const owner = await db.rawQueryRow<{ id: string }>(
+      `SELECT id FROM visitors WHERE token_hash = $1`,
+      hash,
+    );
+    expect(owner).not.toBeNull();
+    expect(await sessionOwnedBy(created.session.id, owner!.id)).toBe(true);
   });
 
-  it("非 UUID → invalid_argument;未知会话 → not_found", async () => {
+  it("没有 cookie:列表为空、单查 not_found、删除 not_found", async () => {
+    const mine = await createSession(visitor.id);
+    await appendMessage(mine.id, "user", "别人看不到这句");
+
+    // 认不出身份 ≠ 报错:一个没建过会话的访客看到的就该是空站点
+    expect(await listSessionsEndpoint({ limit: 10 })).toEqual({ sessions: [] });
+
+    await expect(getSessionEndpoint({ id: mine.id })).rejects.toSatisfy(
+      (e) => e instanceof APIError && String(e.code) === "not_found",
+    );
+    await expect(deleteSessionEndpoint({ id: mine.id })).rejects.toSatisfy(
+      (e) => e instanceof APIError && String(e.code) === "not_found",
+    );
+    // 删除失败必须是真的没删
+    expect(await sessionOwnedBy(mine.id, visitor.id)).toBe(true);
+  });
+
+  it("非 UUID → invalid_argument;未知会话 → not_found(与「不是你的」同一个回答)", async () => {
     await expect(getSessionEndpoint({ id: "not-a-uuid" })).rejects.toSatisfy(
+      (e) => e instanceof APIError && String(e.code) === "invalid_argument",
+    );
+    await expect(deleteSessionEndpoint({ id: "not-a-uuid" })).rejects.toSatisfy(
       (e) => e instanceof APIError && String(e.code) === "invalid_argument",
     );
     await expect(
@@ -179,9 +223,54 @@ describe("端点", () => {
   });
 });
 
+describe("访客隔离(R-VISITOR)", () => {
+  it("列表 / 单查 / 归属判定都只认自己的会话", async () => {
+    const other = await ensureVisitor(NO_HEADERS);
+    const mine = await createSession(visitor.id);
+    const theirs = await createSession(other.id);
+    await appendMessage(mine.id, "user", "我的");
+    await appendMessage(theirs.id, "user", "别人的");
+
+    expect((await listSessions(visitor.id)).map((s) => s.id)).toEqual([mine.id]);
+    expect((await listSessions(other.id)).map((s) => s.id)).toEqual([theirs.id]);
+
+    expect(await getSession(theirs.id, visitor.id)).toBeNull();
+    expect((await getSession(mine.id, visitor.id))?.id).toBe(mine.id);
+    expect(await sessionOwnedBy(theirs.id, visitor.id)).toBe(false);
+  });
+
+  it("存量无归属会话(visitor_id IS NULL)对所有人不可见", async () => {
+    const legacy = await createSession(null);
+    expect(await getSession(legacy.id, visitor.id)).toBeNull();
+    expect(await sessionOwnedBy(legacy.id, visitor.id)).toBe(false);
+    expect((await listSessions(visitor.id)).map((s) => s.id)).not.toContain(legacy.id);
+  });
+
+  it("删除:只删得掉自己的,级联清空消息与轨迹", async () => {
+    const other = await ensureVisitor(NO_HEADERS);
+    const mine = await createSession(visitor.id);
+    const theirs = await createSession(other.id);
+    await appendMessage(mine.id, "user", "要被删掉的");
+    await appendTraceEvents(mine.id, [
+      { seq: 0, eventType: "agent_start", mode: "notify", timestamp: Date.now(), data: {} },
+    ]);
+
+    // 不是自己的:删不掉,且对方数据完好
+    expect(await deleteSession(theirs.id, visitor.id)).toBe(false);
+    expect(await sessionOwnedBy(theirs.id, other.id)).toBe(true);
+
+    expect(await deleteSession(mine.id, visitor.id)).toBe(true);
+    expect(await getSession(mine.id, visitor.id)).toBeNull();
+    expect(await listMessages(mine.id)).toHaveLength(0);
+    expect(await listTraceEvents(mine.id)).toHaveLength(0);
+    // 重复删除是 false 而不是异常(前端连点两次不该炸)
+    expect(await deleteSession(mine.id, visitor.id)).toBe(false);
+  });
+});
+
 describe("turn 级去重键(R3 幂等落库)", () => {
   it("同一 seq 重复 upsert 只更新内容,不追加重复消息", async () => {
-    const s = await createSession();
+    const s = await createSession(visitor.id);
     const user = await appendMessage(s.id, "user", "问题");
 
     const first = await upsertMessage(s.id, user.seq + 1, "assistant", "回答");
@@ -197,7 +286,7 @@ describe("turn 级去重键(R3 幂等落库)", () => {
   });
 
   it("seq 被别的角色占用时不改写他人消息,返回 null", async () => {
-    const s = await createSession();
+    const s = await createSession(visitor.id);
     const user = await appendMessage(s.id, "user", "问题");
 
     expect(await upsertMessage(s.id, user.seq, "assistant", "覆盖尝试")).toBeNull();
@@ -205,16 +294,16 @@ describe("turn 级去重键(R3 幂等落库)", () => {
   });
 
   it("upsert 刷新 last_active_at,冲突失败时不刷新", async () => {
-    const s = await createSession();
-    const before = (await getSession(s.id))!.lastActiveAt;
+    const s = await createSession(visitor.id);
+    const before = (await getSession(s.id, visitor.id))!.lastActiveAt;
     await upsertMessage(s.id, 0, "assistant", "第一条");
-    expect((await getSession(s.id))!.lastActiveAt).toBeGreaterThanOrEqual(before);
+    expect((await getSession(s.id, visitor.id))!.lastActiveAt).toBeGreaterThanOrEqual(before);
   });
 });
 
 describe("轨迹 seq 续接(会话重建)", () => {
   it("空会话返回 -1,有事件返回最大 seq", async () => {
-    const s = await createSession();
+    const s = await createSession(visitor.id);
     expect(await maxTraceSeq(s.id)).toBe(-1);
 
     const events: NewTraceEvent[] = [3, 7, 5].map((seq) => ({

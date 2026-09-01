@@ -147,6 +147,24 @@
       待确认后 `shred -u ~/deploy/.llm-key ~/deploy/asset.b64 ~/deploy/asset.name`。
       **R11 别把这个做法带进生产**:key 直接贴进 MCP 调用,不要先落盘 (2026-09-01)
 
+- [ ] R-VISITOR **cookie 的合规告知未做**:`xr_visitor` 是「为提供服务所必需」的技术性 cookie
+      (不跟踪、不跨站、不给第三方,口径见 `docs/security.md` §6),但站点上没有任何一句话告诉访客
+      它的存在。要不要放一句告知、放在哪(footer 一行 / 关于页一段 / 备案要求的形态),
+      属所有者与备案侧的裁定,不在本轮范围 —— 本轮**刻意没做** cookie 同意横幅,那属于
+      设计稿没有的功能(规则 8) (2026-09-01)
+- [ ] R-VISITOR **生成客户端在非浏览器上下文会对 `Set-Cookie` 调 `mustBeSet`**:
+      `encore gen client` 为响应头字段生成的是 `if (!BROWSER) { rtn.visitorCookie =
+      mustBeSet("Header \`set-cookie\`", resp.headers.getSetCookie()[0]) }`。浏览器侧被 `!BROWSER`
+      跳过(浏览器本来也读不到 Set-Cookie),所以当前**没有影响**;但只要将来有人从 Next 的
+      **服务端**(SSR / route handler)调 `client.agent.*`,一个没带 cookie 的请求就会抛
+      `DataLoss`,而不是拿到空列表。`listSessions` 的字段明明是可选的,生成器仍然发了 `mustBeSet`
+      ——属上游生成器缺陷。真要从服务端调这些端点时,绕法是别用生成客户端、直接 fetch (2026-09-01)
+- [ ] R-VISITOR **`visits` 表的保留期现在有落点了**:BACKLOG 里那条「R8 `visits` 没有保留期与清理」
+      当时的理由是「定时清理是新机制」。本轮已经为会话保留期建了一个进程内定时器
+      (`apps/api/agent/purge.ts`,自托管镜像不执行 Encore CronJob)。若将来要给 `visits` 加保留期,
+      在那里加一条 `DELETE FROM visits WHERE day < …` 即可,不需要再引入机制 ——
+      注意它会改变历史趋势的可查范围,仍需所有者裁定保留多久 (2026-09-01)
+
 ## 功能提案(需所有者裁定)
 
 (空)

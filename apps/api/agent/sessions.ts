@@ -1,7 +1,18 @@
 // R2:会话创建 / 续接 / 列表端点(ROUNDS.md R2 明文范围)。
 // 对话流本身(POST /agent/ask SSE)是 R3,本文件不涉及。
-import { api, APIError, Query } from "encore.dev/api";
+//
+// R-VISITOR:全部端点按访客归属过滤,并新增删除端点。约束来源 docs/security.md §6
+// 的 R-VISITOR 补记。三条口径贯穿本文件:
+//   1. 读路径只**认领**已有 cookie(`resolveVisitor`),从不发新的;只有会真的建会话的
+//      `createSession` 用 `ensureVisitor`。理由见 visitor.ts 文件头。
+//   2. 归属不匹配一律 `not_found`,不回 403 —— 403 等于确认「这个 id 存在」。
+//   3. 每条响应都把 cookie 重发一次,24h 窗口靠这个滑动。
+import { api, APIError, type Header, type Query } from "encore.dev/api";
+// 副作用 import:启动保留期清理定时器(自托管镜像不执行 Encore CronJob,见 purge.ts)
+import "./purge";
+import { disposeSession, getRuntimeSession } from "./runtime";
 import * as store from "./store";
+import { ensureVisitor, headersOfTyped, resolveVisitor } from "./visitor";
 
 export interface SessionSummary {
   id: string;
@@ -20,6 +31,26 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+// 【关于下面每个响应接口里的 `visitorCookie: Header<string, "Set-Cookie">`】
+//
+// **这个类型必须逐处内联写全,不能抽成 `type VisitorCookie = Header<…>` 再复用。**
+// 实测(encore 1.57.13 + bun):Encore 的静态解析器**不穿透类型别名**,一旦写成别名,
+// 它就把这个字段当成普通响应体字段 —— 不发 `Set-Cookie` 头,而是把值序列化进 JSON。
+// 用 `Cookie<>` 写别名时后果最严重,响应体会变成:
+//
+//     {"session":{…},"visitorCookie":{"httpOnly":true,"maxAge":86400,"value":"<明文 token>"}}
+//
+// 即:①浏览器没收到 Set-Cookie,访客身份永远建立不起来;②身份 token 明文进响应体,
+// 页面里任何 JS 都读得到,`httpOnly:true` 成了一句写在 JSON 里的空话。
+// **这是静默失败**:编译过、请求 200、字段也在,只有抓响应头才看得出来。
+// 改动这几个字段之后必须实跑一次 `curl -i`(任务卡验收 #5)。
+//
+// 【为什么用 `Header<"Set-Cookie">` 而不是内联的 `Cookie<>`】两者内联时都工作正常
+// (实测)。选前者是因为 cookie 属性只能有一个来源:`shared/visitor-cookie.ts` 的
+// `buildSetCookie` —— 两条 `api.raw`(`/agent/ask`、`/trace/stream`)只能拼字符串,
+// 用 `Cookie<>` 就等于让同一个 cookie 的属性在两处各写一遍,漂掉一个 `httpOnly`
+// 在浏览器里是看不出来的(后一个 Set-Cookie 直接覆盖前一个)。
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const toIso = (ms: number) => new Date(ms).toISOString();
@@ -33,11 +64,25 @@ function toSummary(row: store.SessionRow): SessionSummary {
   };
 }
 
-/** 创建会话(标题留空,由首条用户消息派生)。 */
+interface CreateSessionResponse {
+  session: SessionSummary;
+  visitorCookie: Header<string, "Set-Cookie">;
+}
+
+/**
+ * 创建会话(标题留空,由首条用户消息派生)。
+ *
+ * **这是两个会发放新访客身份的地方之一**(另一个是 `/agent/ask` 建新会话时)。
+ * 会话必然属于某个访客,所以这里用 `ensureVisitor` 而不是 `resolveVisitor`。
+ */
 export const createSession = api(
   { expose: true, method: "POST", path: "/agent/sessions" },
-  async (): Promise<SessionSummary> => {
-    return toSummary(await store.createSession());
+  async (): Promise<CreateSessionResponse> => {
+    const visitor = await ensureVisitor(headersOfTyped());
+    return {
+      session: toSummary(await store.createSession(visitor.id)),
+      visitorCookie: visitor.setCookie,
+    };
   },
 );
 
@@ -48,15 +93,23 @@ interface ListSessionsRequest {
 
 interface ListSessionsResponse {
   sessions: SessionSummary[];
+  visitorCookie?: Header<string, "Set-Cookie">;
 }
 
-/** 会话列表,按最近活跃倒序(工作台左栏)。 */
+/**
+ * 会话列表,按最近活跃倒序(工作台左栏)。**只有本访客的**。
+ *
+ * 没有可认领的 cookie 时返回空列表而不是错误:一个没建过会话的访客看到的
+ * 就该是「一个空站点」,而不是「你未登录」——站点没有登录这个概念。
+ */
 export const listSessions = api(
   { expose: true, method: "GET", path: "/agent/sessions" },
   async (req: ListSessionsRequest): Promise<ListSessionsResponse> => {
     const limit = Math.min(Math.max(req.limit ?? 50, 1), 200);
-    const rows = await store.listSessions(limit);
-    return { sessions: rows.map(toSummary) };
+    const visitor = await resolveVisitor(headersOfTyped());
+    if (!visitor) return { sessions: [] };
+    const rows = await store.listSessions(visitor.id, limit);
+    return { sessions: rows.map(toSummary), visitorCookie: visitor.setCookie };
   },
 );
 
@@ -68,16 +121,20 @@ interface GetSessionResponse {
   session: SessionSummary;
   /** 会话内历史消息,按 seq 有序(刷新后恢复对话) */
   messages: ChatMessage[];
+  visitorCookie: Header<string, "Set-Cookie">;
 }
 
-/** 续接:单会话 + 历史消息回放。 */
+/** 续接:单会话 + 历史消息回放。只能取到本访客自己的会话。 */
 export const getSession = api(
   { expose: true, method: "GET", path: "/agent/sessions/:id" },
   async (req: GetSessionRequest): Promise<GetSessionResponse> => {
     if (!UUID_RE.test(req.id)) {
       throw APIError.invalidArgument("id must be a UUID");
     }
-    const row = await store.getSession(req.id);
+    const visitor = await resolveVisitor(headersOfTyped());
+    // 没有身份 = 不拥有任何会话。与「会话不存在」同一个回答,不另设一档
+    if (!visitor) throw APIError.notFound(`session ${req.id} not found`);
+    const row = await store.getSession(req.id, visitor.id);
     if (!row) throw APIError.notFound(`session ${req.id} not found`);
     const messages = await store.listMessages(req.id);
     return {
@@ -88,6 +145,56 @@ export const getSession = api(
         content: m.content,
         createdAt: toIso(m.createdAt),
       })),
+      visitorCookie: visitor.setCookie,
     };
+  },
+);
+
+interface DeleteSessionRequest {
+  id: string;
+}
+
+interface DeleteSessionResponse {
+  visitorCookie: Header<string, "Set-Cookie">;
+}
+
+/**
+ * 删除本访客的一个会话(R-VISITOR;所有者裁定新增,设计稿没有这个入口)。
+ *
+ * 硬删,`messages` / `trace_events` 由外键级联清掉 —— 这是隐私功能,
+ * 「删了但还在库里」不满足访客按下那个按钮时的预期(store.deleteSession)。
+ *
+ * 删不到(不存在 / 不是本访客的)一律 `not_found`:与 `getSession` 同一个口径,
+ * 不让删除端点变成一个「这个 id 存在吗」的探测器。
+ *
+ * 【顺序敏感:先判归属,再动运行时会话,最后删库行】
+ *   - 归属必须排在最前:否则任何人都能拿一个别人的 id 把对方内存里的 pi 会话 dispose 掉,
+ *     那是一条不需要任何凭据的拒绝服务。
+ *   - 运行时会话必须先 dispose 再删库行:`disposeSession` 会把在途轨迹**排干落库**,
+ *     反过来做的话那次 flush 撞上已被级联删掉的 `sessions` 行,外键失败刷一屏错误日志。
+ *   - 正在回复中(`busy`)一律拒绝而不是硬删:那一轮的助手消息正等着写进这张表,
+ *     删了只会让访客看到一句「本轮回复未能保存」。回 409,与 `/agent/ask` 的并发口径一致。
+ */
+export const deleteSession = api(
+  { expose: true, method: "DELETE", path: "/agent/sessions/:id" },
+  async (req: DeleteSessionRequest): Promise<DeleteSessionResponse> => {
+    if (!UUID_RE.test(req.id)) {
+      throw APIError.invalidArgument("id must be a UUID");
+    }
+    const visitor = await resolveVisitor(headersOfTyped());
+    if (!visitor) throw APIError.notFound(`session ${req.id} not found`);
+    if (!(await store.sessionOwnedBy(req.id, visitor.id))) {
+      throw APIError.notFound(`session ${req.id} not found`);
+    }
+
+    const rec = getRuntimeSession(req.id);
+    if (rec?.busy) throw APIError.aborted("session is already streaming");
+    if (rec) await disposeSession(rec);
+
+    // 到这里还删不到只有一种可能:另一条请求刚把它删了。回 404 是诚实的答案。
+    if (!(await store.deleteSession(req.id, visitor.id))) {
+      throw APIError.notFound(`session ${req.id} not found`);
+    }
+    return { visitorCookie: visitor.setCookie };
   },
 );

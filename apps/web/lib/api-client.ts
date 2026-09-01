@@ -16,7 +16,7 @@ export const Local: BaseURL = "http://localhost:4000"
  * Environment returns a BaseURL for calling the cloud environment with the given name.
  */
 export function Environment(name: string): BaseURL {
-    return `https://${name}-qpquw.encr.app`
+    return `https://${name}-936eu.encr.app`
 }
 
 /**
@@ -29,7 +29,7 @@ export function PreviewEnv(pr: number | string): BaseURL {
 const BROWSER = typeof globalThis === "object" && ("window" in globalThis);
 
 /**
- * Client is an API client for the qpquw Encore application.
+ * Client is an API client for the 936eu Encore application.
  */
 export default class Client {
     public readonly about: about.ServiceClient
@@ -175,12 +175,23 @@ export namespace agent {
         createdAt: string
     }
 
+    export interface CreateSessionResponse {
+        session: SessionSummary
+        visitorCookie: string
+    }
+
+    export interface DeleteSessionResponse {
+        visitorCookie: string
+    }
+
     export interface GetSessionResponse {
         session: SessionSummary
         /**
          * 会话内历史消息,按 seq 有序(刷新后恢复对话)
          */
         messages: ChatMessage[]
+
+        visitorCookie: string
     }
 
     export interface ListSessionsRequest {
@@ -192,6 +203,7 @@ export namespace agent {
 
     export interface ListSessionsResponse {
         sessions: SessionSummary[]
+        visitorCookie?: string
     }
 
     export interface SessionSummary {
@@ -215,6 +227,7 @@ export namespace agent {
             this.baseClient = baseClient
             this.ask = this.ask.bind(this)
             this.createSession = this.createSession.bind(this)
+            this.deleteSession = this.deleteSession.bind(this)
             this.getSession = this.getSession.bind(this)
             this.listSessions = this.listSessions.bind(this)
         }
@@ -225,24 +238,71 @@ export namespace agent {
 
         /**
          * 创建会话(标题留空,由首条用户消息派生)。
+         * 
+         * **这是两个会发放新访客身份的地方之一**(另一个是 `/agent/ask` 建新会话时)。
+         * 会话必然属于某个访客,所以这里用 `ensureVisitor` 而不是 `resolveVisitor`。
          */
-        public async createSession(): Promise<SessionSummary> {
+        public async createSession(): Promise<CreateSessionResponse> {
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI("POST", `/agent/sessions`)
-            return await resp.json() as SessionSummary
+
+            //Populate the return object from the JSON body and received headers
+            const rtn = await resp.json() as CreateSessionResponse
+            if (!BROWSER) {
+                rtn.visitorCookie = mustBeSet("Header `set-cookie`", resp.headers.getSetCookie()[0])
+            }
+            return rtn
         }
 
         /**
-         * 续接:单会话 + 历史消息回放。
+         * 删除本访客的一个会话(R-VISITOR;所有者裁定新增,设计稿没有这个入口)。
+         * 
+         * 硬删,`messages` / `trace_events` 由外键级联清掉 —— 这是隐私功能,
+         * 「删了但还在库里」不满足访客按下那个按钮时的预期(store.deleteSession)。
+         * 
+         * 删不到(不存在 / 不是本访客的)一律 `not_found`:与 `getSession` 同一个口径,
+         * 不让删除端点变成一个「这个 id 存在吗」的探测器。
+         * 
+         * 【顺序敏感:先判归属,再动运行时会话,最后删库行】
+         * - 归属必须排在最前:否则任何人都能拿一个别人的 id 把对方内存里的 pi 会话 dispose 掉,
+         * 那是一条不需要任何凭据的拒绝服务。
+         * - 运行时会话必须先 dispose 再删库行:`disposeSession` 会把在途轨迹**排干落库**,
+         * 反过来做的话那次 flush 撞上已被级联删掉的 `sessions` 行,外键失败刷一屏错误日志。
+         * - 正在回复中(`busy`)一律拒绝而不是硬删:那一轮的助手消息正等着写进这张表,
+         * 删了只会让访客看到一句「本轮回复未能保存」。回 409,与 `/agent/ask` 的并发口径一致。
+         */
+        public async deleteSession(id: string): Promise<DeleteSessionResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("DELETE", `/agent/sessions/${encodeURIComponent(id)}`)
+
+            //Populate the return object from the JSON body and received headers
+            const rtn = await resp.json() as DeleteSessionResponse
+            if (!BROWSER) {
+                rtn.visitorCookie = mustBeSet("Header `set-cookie`", resp.headers.getSetCookie()[0])
+            }
+            return rtn
+        }
+
+        /**
+         * 续接:单会话 + 历史消息回放。只能取到本访客自己的会话。
          */
         public async getSession(id: string): Promise<GetSessionResponse> {
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI("GET", `/agent/sessions/${encodeURIComponent(id)}`)
-            return await resp.json() as GetSessionResponse
+
+            //Populate the return object from the JSON body and received headers
+            const rtn = await resp.json() as GetSessionResponse
+            if (!BROWSER) {
+                rtn.visitorCookie = mustBeSet("Header `set-cookie`", resp.headers.getSetCookie()[0])
+            }
+            return rtn
         }
 
         /**
-         * 会话列表,按最近活跃倒序(工作台左栏)。
+         * 会话列表,按最近活跃倒序(工作台左栏)。**只有本访客的**。
+         * 
+         * 没有可认领的 cookie 时返回空列表而不是错误:一个没建过会话的访客看到的
+         * 就该是「一个空站点」,而不是「你未登录」——站点没有登录这个概念。
          */
         public async listSessions(params: ListSessionsRequest): Promise<ListSessionsResponse> {
             // Convert our params into the objects we need for the request
@@ -252,7 +312,13 @@ export namespace agent {
 
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI("GET", `/agent/sessions`, undefined, {query})
-            return await resp.json() as ListSessionsResponse
+
+            //Populate the return object from the JSON body and received headers
+            const rtn = await resp.json() as ListSessionsResponse
+            if (!BROWSER) {
+                rtn.visitorCookie = mustBeSet("Header `set-cookie`", resp.headers.getSetCookie()[0])
+            }
+            return rtn
         }
     }
 }
@@ -479,6 +545,21 @@ function makeRecord<K extends string | number | symbol, V>(record: Record<K, V |
     return record as Record<K, V>
 }
 
+
+// mustBeSet will throw an APIError with the Data Loss code if value is null or undefined
+function mustBeSet<A>(field: string, value: A | null | undefined): A {
+    if (value === null || value === undefined) {
+        throw new APIError(
+            500,
+            {
+                code: ErrCode.DataLoss,
+                message: `${field} was unexpectedly ${value}`, // ${value} will create the string "null" or "undefined"
+            },
+        )
+    }
+    return value
+}
+
 function encodeWebSocketHeaders(headers: Record<string, string>) {
     // url safe, no pad
     const base64encoded = btoa(JSON.stringify(headers))
@@ -677,7 +758,7 @@ class BaseClient {
         // Add User-Agent header if the script is running in the server
         // because browsers do not allow setting User-Agent headers to requests
         if (!BROWSER) {
-            this.headers["User-Agent"] = "qpquw-Generated-TS-Client (Encore/v1.57.13)";
+            this.headers["User-Agent"] = "936eu-Generated-TS-Client (Encore/v1.57.13)";
         }
 
         this.requestInit = options.requestInit ?? {};

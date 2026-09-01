@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { statsBar, suggestions } from "@/lib/demo-data";
 import {
   askStream,
+  deleteSession,
   getSession,
   listSessions,
   relativeTime,
@@ -40,19 +41,31 @@ function askErrorText(err: unknown): string {
   return "请求失败了,请稍后再试。";
 }
 
+/**
+ * 会话列表(画板 1a)。
+ *
+ * 【与设计稿的唯一差异:每行的删除按钮】R-VISITOR 所有者裁定新增(设计稿 1a–1e
+ * 没有删除入口,CLAUDE.md 规则 8)。为把对画板的偏离压到最小:
+ *   - 复用全站唯一的按钮语汇 `GhostButton`,不新增任何样式变量与组件(规则 7);
+ *   - 绝对定位在行的右上角,**不占布局宽度** —— 不 hover 时这一行与画板一字不差;
+ *   - 二次确认用浏览器原生 `confirm`,不自造弹层。
+ */
 function SessionSidebar({
   sessions,
   selected,
   onSelect,
   onNew,
   onRefresh,
+  onDelete,
 }: {
   sessions: SessionSummary[];
   selected: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
   onRefresh: () => void;
+  onDelete: (id: string) => void;
 }) {
+  const [hovered, setHovered] = useState<string | null>(null);
   return (
     <div style={{ width: 260, flex: "none", background: "var(--bg-panel)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 10px", borderBottom: "1px solid var(--border)" }}>
@@ -70,12 +83,24 @@ function SessionSidebar({
           <div
             key={s.id}
             onClick={() => onSelect(s.id)}
-            style={{ padding: "7px 10px", borderRadius: 6, background: selected === s.id ? "var(--bg-selected)" : "transparent", cursor: "pointer" }}
-            onMouseEnter={(e) => { if (selected !== s.id) e.currentTarget.style.background = "var(--bg-hover)"; }}
-            onMouseLeave={(e) => { if (selected !== s.id) e.currentTarget.style.background = "transparent"; }}
+            style={{ position: "relative", padding: "7px 10px", borderRadius: 6, background: selected === s.id ? "var(--bg-selected)" : "transparent", cursor: "pointer" }}
+            onMouseEnter={(e) => { setHovered(s.id); if (selected !== s.id) e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { setHovered(null); if (selected !== s.id) e.currentTarget.style.background = "transparent"; }}
           >
             <div style={{ fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.title || "新会话"}</div>
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{relativeTime(s.lastActiveAt)}</div>
+            {hovered === s.id && (
+              <div
+                style={{ position: "absolute", top: 6, right: 6 }}
+                onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
+              >
+                <GhostButton height={20} style={{ width: 20, padding: 0, borderRadius: 5 }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </GhostButton>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -298,6 +323,31 @@ export function Workbench() {
     setPanel("timeline");
   }, [streaming]);
 
+  /**
+   * 删除会话(R-VISITOR)。服务端只删得掉本访客自己的,删不到一律 404。
+   *
+   * 失败不弹错误框,只刷新列表 —— 刷完之后界面显示的就是服务端的真实状态
+   * (会话还在 = 真的没删掉),比多一个只能点「确定」的提示框更有用。
+   * 流式进行中不收删除:那一轮的助手消息正等着落库,服务端也会回 409。
+   *
+   * 删的正好是当前打开的那个会话时先切回空状态,否则右栏会挂在一个已经不存在的
+   * 会话上不断重连轨迹流(而那条流现在只会回 404)。
+   */
+  const removeSession = useCallback(
+    (id: string) => {
+      if (streaming) return;
+      const title = sessions.find((s) => s.id === id)?.title || "新会话";
+      if (!window.confirm(`删除会话「${title}」?对话内容与轨迹会一并删除,不可恢复。`)) return;
+      deleteSession(id)
+        .catch((err) => console.error("delete session failed:", err))
+        .finally(() => {
+          if (sessionId === id) startNew();
+          refreshSessions();
+        });
+    },
+    [streaming, sessions, sessionId, startNew, refreshSessions],
+  );
+
   const send = useCallback(() => {
     const prompt = draft.trim();
     // 历史加载未回来时不收发送:此时 items 已被清空,若在这里作废加载结果,
@@ -374,6 +424,7 @@ export function Workbench() {
         onSelect={openSession}
         onNew={startNew}
         onRefresh={refreshSessions}
+        onDelete={removeSession}
       />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         {/* 会话顶栏 */}

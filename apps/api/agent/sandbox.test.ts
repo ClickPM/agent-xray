@@ -372,14 +372,14 @@ describe("第 4 层 · 每日限额与单会话轮数(ROUNDS.md R7 验收:超限
     // 按「带了 id 就算续接」判定的话每日限额会被整体绕过
     await seedLimits({ tokens: 10 });
     await recordUsage(50, 0);
-    const empty = await createSession();
+    const empty = await createSession(null);
     expect((await checkQuota(empty.id))?.reason).toBe("daily_tokens");
   });
 
   it("每日超限只拦新对话,已开始的会话靠 turn 上限兜住", async () => {
     await seedLimits({ tokens: 10, turns: 3 });
     await recordUsage(50, 0);
-    const s = await createSession();
+    const s = await createSession(null);
     await appendMessage(s.id, "user", "第一轮");
     // 已经开始的会话:每日额度已超,但仍放行(docs/security.md §1 第 4 层的原文口径)
     expect(await checkQuota(s.id)).toBeNull();

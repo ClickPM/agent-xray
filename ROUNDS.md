@@ -3,7 +3,13 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;2026-08-31 修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1e + 2a–2e(共 10 块)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01 两次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1e + 2a–2e(共 10 块)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+>
+> **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
+> 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
+> 交互取对画板偏离最小的形态(行 hover 露一个复用 `GhostButton` 的 ×,绝对定位不占布局宽度,
+> 二次确认用浏览器原生 `confirm`),不 hover 时该行与画板一字不差。同轮引入的**访客 cookie**
+> 不是功能而是安全约束,口径写在 `docs/security.md` §6(规则 9:先改文档再改代码)。
 
 ## 进度表
 
@@ -21,6 +27,7 @@
 | **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ✅ 已完成([任务卡](rounds/round-08/round-08.md),15 项验收全过;codex 三轮共 3 条 findings(P1/P2/P3 各一)全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ✅ 已完成([任务卡](rounds/round-09/round-09.md) · [冒烟留证](rounds/round-09/smoke.md)),18 项验收全过,130 预发可用;**所有者裁定本轮不走 codex 审查**(过程与残留风险见任务卡「代码审查」段)。同日按 `docs/notes-content-spec.md` 经 MCP 入库 13 系列 / 205 章节 / 103 配图 | 2026-09-01 |
 | **R10** | 安全加固 + 上线前检查单逐项 | ✅ 已完成([任务卡](rounds/round-10/round-10.md) · [检查单留证](rounds/round-10/checklist.md)),检查单 1–11 项在 130(SHA `5c98b3e`)全绿;**所有者裁定本轮不做限额演练(引 R9 留证)与 pg 备份**,不做安全响应头与 IP 白名单(均记 BACKLOG) | 2026-09-01 |
+| **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | 🔵 进行中([任务卡](rounds/round-visitor/round-visitor.md)) | — |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
 ## 里程碑
@@ -222,12 +229,43 @@
 >    LLM key(`~/deploy/.llm-key`,R9 残留,与 security.md §3「唯一来源是加密入库」不一致)——
 >    扩散面已查清只有这一份,**没有当场删**(删了要回 provider 控制台重取,是所有者的东西)。
 
+### R-VISITOR — 访客会话隔离(插在 R11 之前的加固轮;所有者裁定 2026-09-01)
+
+> 沿用 R-BUN 的「命名轮」先例:不属于 R0–R11 的线性序列。ICP 备案未下来、生产尚未开站,
+> 是做这件事代价最小的时间点 —— 生产库还是空的,保留期规则可以直接生效。
+
+**开工时的实际状态比「缺个 cookie」严重**:`sessions` 表没有任何归属列,`GET /agent/sessions`
+是**全站**列表 —— 任何访客打开 Runtime 就能看到所有人的会话标题,点进去能读全文;
+`GET /trace/stream?sessionId=` 也只校验会话存在,轨迹面板里是完整的 prompt 与回复。
+站点公开可访问,这在上线前必须堵掉,且必须同时覆盖 agent 与 trace 两个服务。
+
+- 迁移 007:`visitors`(token 只存 sha256 / 24h 滑动 `expires_at`)+ `sessions.visitor_id`(可为 NULL,
+  存量会话因此对所有人不可见)+ 归属索引
+- cookie `xr_visitor`:HttpOnly / SameSite=Lax / Path=/ / Max-Age 86400,`Secure` 跟 `X-Forwarded-Proto`
+  走(备案期是 HTTP,写死 Secure 会让浏览器静默丢弃整个 cookie)。**只在会话被创建时发放**,
+  读路径只认领 —— 否则 `GET /agent/sessions` 就是个无认证的建行入口
+- 归属过滤覆盖:会话列表 / 单查 / 续接提问 / 删除 / 轨迹流。不匹配一律 `not_found` 而非 403
+- 保留期:会话最后活跃满 3 天硬删(级联 messages / trace_events),访客行过期满 3 天删。
+  **不能用 Encore `CronJob`**(自托管镜像不执行 cron),落点是进程内 `unref` 定时器
+- 会话删除(所有者裁定新增,见上面的功能边界修订):`DELETE /agent/sessions/:id` + 前端 hover ×
+- 文档先行(规则 9):`docs/security.md` §6 加 R-VISITOR 补记,§4/§6 里「无 cookie」的措辞收窄到
+  「管理面无 cookie」「打点侧无 cookie」
+
+> **本轮最值得记住的实测**:Encore 的静态解析器**不穿透类型别名**。把响应 cookie 字段写成
+> `type VisitorCookie = Cookie<string, "xr_visitor">` 再复用,Encore 会**静默**把它当成普通响应体字段 ——
+> 不发 `Set-Cookie`,而是把整个 cookie 对象(含**明文 token**)序列化进 JSON:
+> `{"session":{…},"visitorCookie":{"httpOnly":true,…,"value":"<明文>"}}`。编译过、请求 200、字段也在,
+> 只有抓响应头才看得出来。内联写全就正常。最终选 `Header<string, "Set-Cookie">` 而不是内联的
+> `Cookie<>`,是为了让 cookie 属性只有 `buildSetCookie` 一个来源 —— 两条 `api.raw` 只能拼字符串,
+> 用 `Cookie<>` 等于让同一个 cookie 的属性在两处各写一遍。
+
 ### R11 — 生产部署上线
 
 - 前置:生产服务器采购完成,所有者提供 SSH 入口与密钥
 - 服务器初始化(`docs/security.md` §5 基线:仅密钥登录 / 防火墙 / fail2ban / 自动安全更新)
 - docker compose 部署;域名解析 + ICP 备案流程(`docs/deploy-cn-lightweight.md` §1)+ Caddy 自动 TLS;备案号挂 footer
 - 上线冒烟 + 首日观察(限额、内存、日志)
+- **R-VISITOR 交接过来的一条**:`/agent/ask` **新建会话**那条分支的「首帧带 `Set-Cookie`」在本机跑不到(本机没配 LLM provider,`acquireSession` 先抛 503),必须在配了真 provider 的环境实跑一次 —— 判据是新访客首次提问的 200 响应头里有 `Set-Cookie: xr_visitor=…; HttpOnly; SameSite=Lax`,且刷新页面后左栏能看到那个会话。理由与残留风险见 `rounds/round-visitor/round-visitor.md`「本轮实测」§3
 - **R10 交接过来的四条**(逐条给结论,不要漏):①检查单在生产**重跑一遍**(R10 只证了 130,判据已修准,见 `rounds/round-10/checklist.md`);②`/api/mcp` 的 Caddy IP 白名单**按真实出口 IP 启用**(模板在 `deploy/Caddyfile` 第 45–51 行);③写生产 LLM provider 时 key **直接贴进 MCP 调用,不落盘**(130 上那份 `.llm-key` 就是这么留下的);④**安全响应头**与 **pg 备份**在上线前再裁定一次(两条都在 BACKLOG,备份那条决定了「不可逆迁移出错」有没有兜底)
 
 ## 轮次外事项

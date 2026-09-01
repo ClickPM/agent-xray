@@ -10,9 +10,18 @@ const API_BASE = "/api";
 
 const client = new Client(API_BASE);
 
-export type SessionSummary = Awaited<ReturnType<typeof client.agent.createSession>>;
+// 类型从**列表**端点的元素派生,不从 createSession 派生:R-VISITOR 之后
+// createSession 的响应是 `{session, visitorCookie}`,不再是一个裸的 SessionSummary。
+export type SessionSummary = Awaited<
+  ReturnType<typeof client.agent.listSessions>
+>["sessions"][number];
 export type ChatMessage = Awaited<ReturnType<typeof client.agent.getSession>>["messages"][number];
 
+/**
+ * 会话列表。R-VISITOR 起服务端只回**本访客**的会话(身份是一个 HttpOnly cookie,
+ * 由服务端发放与续期);没有身份时回空列表,不是错误 —— 站点没有登录这个概念。
+ * cookie 是同源请求自动带的,这里不需要也不应该碰它。
+ */
 export async function listSessions(limit = 50): Promise<SessionSummary[]> {
   return (await client.agent.listSessions({ limit })).sessions;
 }
@@ -21,6 +30,14 @@ export async function getSession(
   id: string,
 ): Promise<{ session: SessionSummary; messages: ChatMessage[] }> {
   return client.agent.getSession(id);
+}
+
+/**
+ * 删除一个会话(R-VISITOR,所有者裁定新增)。硬删:消息与轨迹一并清掉。
+ * 不是本访客的会话回 404 —— 与「不存在」同一个回答。
+ */
+export async function deleteSession(id: string): Promise<void> {
+  await client.agent.deleteSession(id);
 }
 
 /**

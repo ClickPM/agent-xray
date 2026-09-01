@@ -21,7 +21,8 @@ import type { ServerResponse } from "node:http";
 import { safeErrorText } from "../shared/redact";
 import { sse, sseComment, SSE_HEADERS } from "../shared/sse";
 import { recent, subscribe, type TraceEvent } from "../shared/trace-bus";
-import { listTraceEvents, sessionExists } from "./store";
+import { hashVisitorToken, readVisitorCookie } from "../shared/visitor-cookie";
+import { listTraceEvents, sessionVisibleTo } from "./store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -255,7 +256,7 @@ export const stream = api.raw(
     };
 
     // 【顺序敏感】登记名额必须排在**第一个 await 之前**(codex 复审第 1 轮 P2)。
-    // 放在 sessionExists 之后的话,同一标签页快速切会话(B → C)时两个请求会一起卡在
+    // 放在归属校验之后的话,同一标签页快速切会话(B → C)时两个请求会一起卡在
     // 那次库查询上,谁先返回谁拿到更大的槽位号,让位方向就可能反过来。
     // 提到入口后,槽位号 = 请求到达顺序,让位方向由它定死。
     // 注意这里**只登记不让位**:让位要等会话校验通过(见 supersedeOlderStreams)。
@@ -288,9 +289,12 @@ export const stream = api.raw(
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
-      // 会话必须真实存在(运行时会话可能早已回收,历史轨迹仍可回放)
+      // 会话必须真实存在**且属于本访客**(运行时会话可能早已回收,历史轨迹仍可回放)。
+      // 没带 cookie、cookie 过期、不是本人的会话、以及根本不存在的会话,对调用方
+      // 是同一个 404 —— 区分开来等于把会话 id 变成存在性预言机(docs/security.md §6)。
       try {
-        if (!(await sessionExists(sessionId))) {
+        const token = readVisitorCookie(req.headers.cookie);
+        if (!token || !(await sessionVisibleTo(sessionId, hashVisitorToken(token)))) {
           fail(resp, 404, `session ${sessionId} not found`);
           return;
         }

@@ -86,7 +86,9 @@ R7 落地补记(2026-09-01,`apps/api/agent/quota.ts` + 迁移 `006`):
 > 2026-08-31 所有者裁定:原 `/admin` 后台(画板 3a–3e)整体废弃,唯一管理入口改为**无状态 MCP server**(2026-07-28 规范为目标版本,保留 SDK 向下协商),所有者以 MCP 客户端(Claude Code 等)操作。本节替代原「管理后台(同域 /admin)」全部条款。
 
 - 单管理员;认证 = **静态 bearer token**:高熵随机、服务端只存哈希、经 secret/`.env` 注入,永不入 Git 与日志(solo 维护,不上 OAuth——规范的 authorization 章节为可选项,此为显式取舍)
-- 无 cookie 会话,故无 CSRF 攻击面;仅 HTTPS(Caddy 终止);可选:Caddy 层对 `/api/mcp` 加 IP 白名单
+- **管理面自身**无 cookie 会话(认证只看 `Authorization` 头),故 `/api/mcp` 无 CSRF 攻击面;仅 HTTPS(Caddy 终止);可选:Caddy 层对 `/api/mcp` 加 IP 白名单
+  - R-VISITOR(2026-09-01)起访客侧有一个 cookie(见 §6),但它**只被 agent / trace 两个服务读取**,
+    管理面对它一无所知:带着访客 cookie 打 `/api/mcp` 与不带是同一个结果(401)。本条不受影响
 - 认证失败一律拒绝且不回显细节(是没带、格式不对、还是值不对,对调用方都是同一句 `unauthorized`——差异化文案等于帮猜 token 的人做二分);失败尝试与全部写操作(内容、配置、工具启停)写审计日志
 - **两个面互不触碰**:MCP 服务用全权 DB 角色写库;pi agent 工具仍走 `agent_ro` 只读,且 in-process 进程无 HTTP 类工具、物理上不可达 MCP 端点。`encore gen client` 也显式排除 mcp 服务,浏览器包里不出现管理面的类型化包装
 
@@ -136,10 +138,58 @@ R8 落地补记(2026-09-01,`apps/api/metrics/`):
 - **原始 IP / 原始 UA 只在 `metrics/visitor.ts` 的函数栈里出现过**:不返回、不落库、不进日志。
   `/t` 的 `api.raw` 选项带 `sensitive: true` —— 不设的话 Encore 会把请求头(含 `X-Forwarded-For`)
   原样写进 trace,等于在承诺「不存原始 IP」的同时把它抄进了另一个地方
-- **无 cookie、无 localStorage、无第三方脚本**:前端打点组件(`apps/web/components/Beacon.tsx`)
-  发出的全部信息就是一个站内路径
+- **打点侧无 cookie、无 localStorage、无第三方脚本**:前端打点组件(`apps/web/components/Beacon.tsx`)
+  发出的全部信息就是一个站内路径。**R-VISITOR 起站点有一个访客 cookie,但它与打点完全无关**
+  ——`/t` 不读它、`visits` 表不存它,两套身份不可互相关联(下面 R-VISITOR 补记的第一条)
 - 统计的读面是 MCP 管理面的三个只读 tool(`traffic_overview` / `traffic_paths` / `traffic_agents`),
   没有任何公开的统计查询端点;`agent_ro` 对 `visits` 无权限(§1 第 2 层、§2 已列)
+
+R-VISITOR 落地补记(2026-09-01,`apps/api/agent/visitor.ts` + `shared/visitor-cookie.ts` + 迁移 `007`):
+
+> **本节是访客会话隔离的强约束来源。** 本轮之前站点没有任何访客身份概念:`sessions` 表没有
+> 归属列,`GET /agent/sessions` 是**全站**列表——任何人打开 Runtime 就能看到所有访客的会话标题,
+> 点进去能读全文,`/trace/stream` 还能把对方的 prompt 与回复原样流出来。站点公开可访问,
+> 这在上线前必须堵掉。
+
+- **两套「访客」身份互不相干,别把它们看成一件事**:
+  - `visits.visitor`(§6 上半,R8)= `sha256(salt‖day‖IP网段‖UA摘要)`,**按天轮换、不可跨天串联**,
+    用途只有聚合统计;
+  - `visitors`(本轮,R-VISITOR)= 一条服务端发放的随机 token,用途只有「这些会话是谁的」。
+    它**不含也不派生自** IP、UA、时间以外的任何东西 —— 服务端不知道拿着它的人是谁,
+    只知道「和上次来的是同一个浏览器」。两者之间没有任何字段可以对上,也不允许将来对上
+- **cookie 口径**(`xr_visitor`):
+  - 值 = 32 字节随机数的 base64url;**服务端只存 `sha256` 十六进制**(`visitors.token_hash`,唯一索引)。
+    与 §3 管理面 token 同一套理由:库泄漏拿不到可用于冒充的凭据
+  - 属性:`HttpOnly`(JS 读不到,压掉 XSS 直接偷身份这条路)· `SameSite=Lax`(跨站 POST/DELETE
+    不带 cookie,这就是访客侧 CSRF 的全部防线,足够——写操作只有 `/agent/ask` 与
+    `DELETE /agent/sessions/:id`,都不是 GET)· `Path=/` · `Max-Age=86400`
+  - **`Secure` 按 `X-Forwarded-Proto` 决定,不写死**:备案期站点跑在 HTTP 上,写死 `Secure`
+    会让浏览器**静默丢弃**整个 cookie(表现是每次请求都是新访客、会话列表永远空),
+    而写死不带 `Secure` 又会在拿到证书之后留一个明文可截的身份 cookie。跟着反代告知的
+    协议走,两个阶段都对。**前提与 §6 的 XFF 一样:Caddy 前面没有别的代理**
+- **鉴权口径 = 归属过滤,不是权限判断**:`sessions.visitor_id` 是唯一判据,
+  会话列表 / 单查 / 续接 / 删除 / 轨迹流全部带 `WHERE visitor_id = $当前访客`。
+  - **不匹配一律回 `not_found`,不回 403**:403 等于确认「这个 id 是存在的」,
+    把会话 id 变成一个可探测的存在性预言机。没有 cookie 的调用方看到的是「一个空站点」
+  - `visitor_id` 允许为 NULL(本轮之前建的存量会话),而 `= $1` 永不匹配 NULL ——
+    存量会话因此对**所有人**不可见,不需要在每条查询里额外处理这个状态,也不需要在迁移里删数据
+  - **trace 服务仍然只读**:它按 `sessions ⋈ visitors` 一条 SQL 判归属,不写 `visitors`
+    (续期由 agent 侧的请求承担),`SQLDatabase.named("agent")` 的只读边界不变
+- **发放时机 = 会话被创建时,不是页面被打开时**:`GET /agent/sessions` 只认领已有 cookie,
+  从不发新的。否则 `/agent/sessions` 就成了一个无认证的建行入口,一个 for 循环能把
+  `visitors` 灌成任意大 —— 与 §6 上半 `/t` 那条是同一个教训
+- **24h 是滑动窗口**:每次带 cookie 的 agent 侧请求把 `expires_at` 推到 `now()+24h` 并重发
+  `Set-Cookie`。「连续 24h 不来」才失效;失效后原 token 不再被认领(服务端 `expires_at > now()`
+  是唯一判据,浏览器那边留没留住 cookie 不作数),访客拿到一个全新身份、看不到此前的会话
+- **保留期:会话最后活跃满 3 天硬删**,`messages` / `trace_events` 由外键级联清掉;
+  `visitors` 行在过期满 3 天后一并删除(它对 `sessions` 是 `ON DELETE CASCADE`,而
+  `expires_at ≥ last_active_at` 恒成立,所以级联不会提前带走还没到期的会话)
+  - **清理不能用 Encore `CronJob`**:自托管镜像里没有东西去触发它(cron 由 Encore 平台调用),
+    加了等于留一个永不执行的假清理。落点是 agent 服务里一个 `unref` 的进程内定时器
+    (`apps/api/agent/purge.ts`,每小时一次),单机 compose 形态下只有一个实例
+  - 清理是**尽力而为**的:失败只记日志、下个钟点重来,不阻塞任何请求路径
+- **合规**:该 cookie 是「为提供服务所必需」的技术性 cookie,不做跟踪、不跨站、不给第三方。
+  是否仍需在页面上放一句告知,属所有者与备案侧的裁定,不在本轮范围(已记 `rounds/BACKLOG.md`)
 
 ## 7. 供应链
 
