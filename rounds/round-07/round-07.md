@@ -1,6 +1,6 @@
 # Round 07 — 沙箱与配额落地
 
-> 状态:进行中
+> 状态:已完成(2026-09-01)
 
 ## 目标
 
@@ -24,7 +24,7 @@ pi agent 拿到一组**只读**业务工具,且「即使 prompt injection 完全
 | `apps/api/agent/quota.ts` | 限额判定 `checkQuota` 与用量累加 `recordUsage` |
 | `apps/api/agent/runtime.ts` | `RuntimeConfig`(LLM + 工具集)并进会话指纹;`customTools` + `tools` 白名单;系统提示按实际工具集生成 |
 | `apps/api/agent/ask.ts` | 限额闸(建会话之前)· 逐条助手消息累加 usage · 非 2xx 体加 `code` |
-| `apps/api/agent/sandbox.test.ts` | 21 个用例:两条验收项本身 + 工具行为 + 启停双闸 |
+| `apps/api/agent/sandbox.test.ts` | 27 个用例:两条验收项本身 + 工具行为 + 启停双闸 + 三轮 findings 的针对性回归 |
 | `apps/web/lib/agent-api.ts` · `components/workbench/Workbench.tsx` | `AskError.code` 与限额文案分档(接线改动,零样式改动) |
 | `docs/security.md` §1 三层的落地补记 · `apps/api/agent/README.md` · `apps/api/notes/README.md` · `deploy/docker-compose.yml` 注释 · `ROUNDS.md` | 文档 |
 
@@ -119,7 +119,13 @@ ROUNDS.md 把工具组钉成三个名字,而模型要读一章必须先拿到章
 
 验证:`encore db reset agent` 后重跑全套 —— 迁移干净应用(`role_table_grants` 里 agent_ro 恰好 3 条,即 notes 三张表),9 文件 139 用例全过。
 
-结论:<!-- 复审零 findings 后回填 -->
+### 第 3 轮(复审,范围收窄到整改 diff `--base 2a17687`)
+
+**零 findings。** 原文:"The changes correctly preserve sanitized tool errors while routing them through pi's error path, and the migration narrows role membership without breaking the documented runtime roles. No actionable regression was found in the reviewed diff."
+
+范围按 CLAUDE.md「审查范围」:前两轮全量 `branch diff against main`,第 3 轮起只审上一轮整改后的 diff。
+
+结论:**整改后 PASS**。三轮共 6 条 findings(1×P1 · 4×P2 · 1×P3),**全部采纳整改**,末轮零 findings,缺陷门禁通过。没有一条被以「概率低」「后面会换掉」为由跳过,也没有一条进 BACKLOG。
 
 ## 失败处理
 
@@ -159,6 +165,6 @@ handle.setResponses([
 
 ### 本轮实测数字
 
-- `dev.ps1 test`:9 文件 133 用例全过(R7 新增 21 个,约 +2s)
+- `dev.ps1 test`:9 文件 139 用例全过(R7 新增 27 个,约 +2s);`encore db reset agent` 后从零重跑同样全过
 - faux 闭环单次约 2.2s;工具查询在本机 Postgres 上单次 < 10ms
 - 到达观测者的扩展事件(单次工具轮,去重后 19 种):含 `tool_call` / `tool_execution_start` / `tool_execution_end` / `tool_result` 四种工具事件 —— 轨迹面板拿得到工具轨迹
