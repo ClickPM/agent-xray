@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useEffect, useRef, useState, Fragment } from "react";
 import { barWidth } from "@/lib/trace-view";
 import type { TraceRow, TraceRowDetail, TraceTurn } from "@/lib/types";
 import { mono } from "@/lib/styles";
@@ -79,8 +79,33 @@ function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; on
 /** DevTools 式事件瀑布(画板 1a/1b),消费 /trace/stream 的真实事件投影 */
 export function TimelineView({ turns }: { turns: TraceTurn[] }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // 「贴底跟随」开关。用 ref 不用 state:它每次滚动事件都会重算,进 state 会让整条
+  // 瀑布(最多 MAX_TRACE_EVENTS 行)跟着重渲染一次。
+  const stuck = useRef(true);
+
+  // 新事件到达就跟到底部 —— **但只在用户本来就贴着底时跟**。不加这个条件的话,
+  // 用户往上翻查某一行时会被每一帧新事件一路拽回底部,等于没法看历史事件。
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !stuck.current) return;
+    // 直接赋 scrollTop,不用 scrollTo({behavior:"smooth"}):流式期间事件是逐帧到的,
+    // 平滑动画会被下一次调用不断打断,表现是永远追不上底部还一直在抖。
+    el.scrollTop = el.scrollHeight;
+  }, [turns]);
+
   return (
-    <div style={{ flex: 1, overflow: "auto", padding: "10px 14px" }}>
+    <div
+      ref={scrollRef}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        // 24px 容差:行高不是整数,scrollTop 也可能是小数,严格贴底几乎不成立。
+        // 用户往上滚一点就脱离跟随,再滚回底部自动恢复跟随。
+        stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 24;
+      }}
+      style={{ flex: 1, overflow: "auto", padding: "10px 14px" }}
+    >
       {turns.map((turn) => {
         const rows = turn.rows;
         if (rows.length === 0) return null;

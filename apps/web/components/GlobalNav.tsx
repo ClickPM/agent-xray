@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { CSSProperties } from "react";
+import { XrayMark } from "@/components/XrayMark";
 
 const TABS = [
   { label: "Runtime", href: "/", match: (p: string) => p === "/" },
@@ -45,7 +46,16 @@ export function GlobalNav() {
         background: "var(--bg)", boxSizing: "border-box",
       }}
     >
-      <div style={{ flex: 1, fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>Agent X-Ray</div>
+      {/* logo + 字标。画板 1a 的导航条原本只有字标,所有者 2026-09-01 定稿加 mark
+          并给了导航条实测图(44px 高、mark 20px、与字标间距 9px);这里按那张图实现。
+          mark 用 var(--accent),字标保持 var(--text) —— 与定稿的明暗两版一致。
+          左右两侧仍各占 flex:1,中间的 tab 组因此还在正中,布局没有别的改动。 */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 9 }}>
+        <span style={{ color: "var(--accent)", display: "flex" }}>
+          <XrayMark size={20} />
+        </span>
+        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>Agent X-Ray</div>
+      </div>
       <div
         style={{
           display: "flex", background: "var(--bg-panel)", border: "1px solid var(--border)",
