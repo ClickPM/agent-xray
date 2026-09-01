@@ -52,9 +52,9 @@ function Warn-BunDrift {
 
 # 打进公网镜像的服务白名单。spike 是 R1 验证脚手架(无认证、无限额、真实 LLM 端点),
 # 绝不能进预发/生产镜像;--services 是构建期硬门禁,实测可让 /spike/* 返回 404。
-# ⚠️ R8 新增 metrics 服务时必须在这里补名字(trace 已于 R4、notes 于 R5、mcp 于 R6 补入),
-#    漏补的表现是该服务端点 404,R9 冒烟会抓到。
-$hostedServices = "agent,trace,notes,mcp,system"
+# ⚠️ 新增服务时必须在这里补名字(trace 于 R4、notes 于 R5、mcp 于 R6、
+#    metrics 与 about 于 R8 补入),漏补的表现是该服务端点 404,R9 冒烟会抓到。
+$hostedServices = "agent,trace,notes,mcp,metrics,about,system"
 
 # —— worktree 残留清理 ——
 #

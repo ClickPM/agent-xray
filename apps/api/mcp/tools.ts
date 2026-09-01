@@ -21,6 +21,7 @@ import { configEncryptionKey } from "./secrets";
 import * as store from "./store";
 import { ConflictError, NotFoundError } from "./store";
 import { safeErrorText } from "../shared/redact";
+import { SITE_TZ_LABEL } from "../shared/site-time";
 
 /**
  * slug 口径必须与 `apps/api/notes/series.ts` 的 SLUG_RE 一字不差。
@@ -32,6 +33,27 @@ const slug = z.string().regex(SLUG_RE, "slug 需匹配 ^[a-z0-9][a-z0-9-]{0,63}$
 
 /** 分类圆点色:design token 里的 6 位 hex,不接受任意 CSS 颜色(规则 7 的边界)。 */
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "dot 需为 #RRGGBB");
+
+/**
+ * 空串,或一个**能解析出主机名**的 http(s) 绝对地址。
+ *
+ * 【为什么不能只做前缀匹配】(codex 第 2 轮 P3)`/^https?:\/\//` 会放过
+ * `https://` 与 `http://?x` 这类没有主机的串:它们进得了库,前端照样渲染成
+ * 一个点不开的链接。交给 WHATWG 的 `URL` 解析,坏地址在这里就被拒。
+ *
+ * 协议白名单不能省 —— `new URL("javascript:alert(1)")` 是**能解析成功**的
+ * (protocol=`javascript:`,hostname 为空);两个条件缺一不可。
+ */
+export function isHttpUrl(value: string): boolean {
+  if (value === "") return true;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return (url.protocol === "http:" || url.protocol === "https:") && url.hostname !== "";
+}
 
 /**
  * 附件文件名:`<内容哈希>.<ext>`,不含路径分隔符 —— 它直接进 URL。
@@ -403,7 +425,13 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
 
   server.registerTool(
     "about_get",
-    { title: "读取 About 页内容", description: "GitHub / origin 双链与「本站如何构建」条目。", inputSchema: {} },
+    {
+      title: "读取 About 页内容",
+      description:
+        "About 页(/about)的全部内容:双链、简介、「本站如何构建」条目、公开仓库卡、语言构成条。" +
+        "改之前先读回来 —— about_set 虽是部分更新,但要覆盖某个数组字段时你需要看到它原本的样子。",
+      inputSchema: {},
+    },
     async () =>
       read("about_get", async () => {
         const a = await store.getAbout();
@@ -415,19 +443,120 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
     "about_set",
     {
       title: "更新 About 页内容",
-      description: "整体覆盖(单行表)。前端接线在 R8,本轮只负责内容入库。",
+      description:
+        "About 页(/about)展示的全部内容。**部分更新:省略的字段一律保留库内原值**;" +
+        "清空是显式动作(传 \"\" 或 [])。改一句 intro 不必、也不该把仓库卡重报一遍。" +
+        "写入后前端下次渲染即生效(About 页是 force-dynamic 的 Server Component)。",
       inputSchema: {
-        githubUser: z.string().max(64).default(""),
-        originUrl: z.string().max(512).default(""),
-        intro: z.string().max(1024).default(""),
-        buildPoints: z.array(z.string().max(256)).max(32).default([]),
+        // 【必须按 GitHub 的用户名字符集收紧】这个值会被拼进 https://github.com/<user>
+        // 与 <user>.png 两个地址。放开任意字符的话,一个带 `?` 或 `/` 的值就能把
+        // 头像与主页链接指到别处去 —— 前端只做 URL 拼接,它挡不住这件事。
+        githubUser: z
+          .string()
+          .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/, "需为合法 GitHub 用户名")
+          .or(z.literal(""))
+          .optional()
+          .describe("GitHub 用户名;头像取 https://github.com/<user>.png。空字符串 = 不渲染头部"),
+        // 【必须限定 scheme】这个值直接进 <a href>。不校验的话
+        // `javascript:…` / `data:…` 就是一个所有者自己种下的 XSS ——
+        // React 转义属性值,但它不会替你判断协议。
+        originUrl: z
+          .string()
+          .max(512)
+          .refine(isHttpUrl, "需为带主机名的 http(s) 绝对地址,或空字符串")
+          .optional()
+          .describe("头部 GitHub 按钮旁的第二条外链;空字符串 = 不渲染那个按钮"),
+        intro: z.string().max(1024).optional(),
+        buildPoints: z.array(z.string().max(256)).max(32).optional().describe("「本站如何构建」逐条"),
+        repos: z
+          .array(
+            z.object({
+              // 同样会被拼进 https://github.com/<user>/<name>,按 GitHub 仓库名收紧
+              name: z.string().regex(/^[A-Za-z0-9._-]{1,100}$/, "需为合法 GitHub 仓库名"),
+              lang: z.string().max(32).default(""),
+              dot: hexColor.describe("语言圆点色"),
+              stars: z.number().int().min(0).max(1_000_000).default(0),
+              desc: z.string().max(512).default(""),
+              pushed: z.string().max(32).default("").describe("最近推送的展示文本,如 2026-08-27"),
+            }),
+          )
+          .max(24)
+          .optional()
+          .describe("「公开仓库」卡片(画板 2e);链接由前端按 github.com/<user>/<name> 拼"),
+        langBar: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(32),
+              pct: z.number().min(0).max(100).describe("占比;各项之和不必恰好 100,按给定值渲染"),
+              color: hexColor,
+            }),
+          )
+          .max(12)
+          .optional()
+          .describe("底部语言构成条(画板 2e)"),
       },
     },
     async (args) =>
-      write(ctx, "about_set", "About 内容", async () => {
+      write(ctx, "about_set", `About 内容(${Object.keys(args).join(",") || "无字段"})`, async () => {
         await store.setAbout(args);
-        return { status: "saved" };
+        return { status: "saved", updated: Object.keys(args) };
       }),
+  );
+
+  // ───────────────────── 访问统计(R8)─────────────────────
+  //
+  // 数据来自 metrics 服务的 `POST /t` 打点(自托管、无第三方脚本、无 cookie)。
+  // 画板 3c 的 Traffic 页已随 /admin 废弃,展示面就是下面这三个 tool。
+  //
+  // 三个 tool 共用两条口径,description 里逐个重申过 —— 它们是最容易被读错的地方:
+  //   · visitorDays 是**各日 UV 之和**,不是去重人数(访客标识按天轮换,见
+  //     apps/api/metrics/visitor.ts;这是隐私设计的直接后果,不是实现偷懒)
+  //   · path 是**归一后**的站内路径,`/*` 是归一不出来的那些的常量桶
+
+  server.registerTool(
+    "traffic_overview",
+    {
+      title: "访问概览与按天趋势",
+      description:
+        `区间内的总 PV、各日 UV 之和,以及逐日趋势。日期按站点时区 ${SITE_TZ_LABEL}。` +
+        "**visitorDays 不是去重人数**:访客标识按天轮换(隐私设计,跨天不可关联)," +
+        "所以它是各日 UV 相加。单日的 uv 才是那天的去重访客数。" +
+        "没有访问的日子不会出现在 daily 里。",
+      inputSchema: { days: z.number().int().min(1).max(365).default(30).describe("含今天在内的天数") },
+    },
+    async (args) =>
+      read("traffic_overview", async () => ({
+        timezone: SITE_TZ_LABEL,
+        ...(await store.trafficOverview(args.days)),
+      })),
+  );
+
+  server.registerTool(
+    "traffic_paths",
+    {
+      title: "访问的路径分布",
+      description:
+        "按站内路径聚合的 PV 与各日 UV 之和,PV 倒序。路径是**归一后**的值:" +
+        "`/`、`/notes`、`/notes/<系列>`、`/notes/<系列>/<章节>`、`/about`," +
+        "以及归一不出来的那些的常量桶 `/*`(不存在的 slug、扫描器乱打的地址都落在那里)。",
+      inputSchema: {
+        days: z.number().int().min(1).max(365).default(30),
+        limit: z.number().int().min(1).max(200).default(20),
+      },
+    },
+    async (args) => read("traffic_paths", () => store.trafficPaths(args.days, args.limit)),
+  );
+
+  server.registerTool(
+    "traffic_agents",
+    {
+      title: "访问的客户端分布",
+      description:
+        "按 UA 摘要(`<浏览器族>/<平台族>`,如 Chrome/Windows)聚合。" +
+        "**原始 User-Agent 从不落库**(它本身是高熵指纹),库里只有这个闭集摘要。",
+      inputSchema: { days: z.number().int().min(1).max(365).default(30) },
+    },
+    async (args) => read("traffic_agents", () => store.trafficAgents(args.days)),
   );
 
   // ───────────────────── LLM provider ─────────────────────

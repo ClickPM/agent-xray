@@ -24,7 +24,7 @@
 | `endpoint.ts` | `api.raw` 入口。**先认证再交给 SDK**:未认证的请求不该有机会让服务端构造 server 实例、解析 JSON-RPC |
 | `auth.ts` | bearer 校验。服务端只存 sha256,比较走定长摘要的常数时间比较;失败一律同一句 `unauthorized` |
 | `server.ts` | `createMcpHandler` 装配(每请求一个 `McpServer` 实例)+ `toNodeHandler` 适配 |
-| `tools.ts` | 21 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
+| `tools.ts` | 24 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
 | `store.ts` | 全部 SQL。**明文 LLM key 不出本文件** |
 | `content.ts` | 入库前的派生:字数、章节内容哈希 |
 | `audit.ts` | `mcp_audit` 写入;永不 reject(审计是旁路,不能让已完成的写操作变成 500) |
@@ -33,16 +33,27 @@
 加解密原语在 `apps/api/shared/crypto.ts`——mcp(写)与 agent(读)两个服务都要用,
 按规则 5 由各自的 service 取好 secret 值再传进去,共享库里不出现 `secret()`。
 
-## 工具(21)
+## 工具(24)
 
 - notes 三张表 CRUD:分类 / 系列 / 章节。**入参即标准 markdown,server 只校验不改写**
 - 附件:`notes_asset_put` / `notes_asset_delete` / `notes_assets_list`。存 Postgres,
   由 notes 服务的 `/assets/notes/:series/:file` 供图;对外 URL 保持 `/notes/<系列>/<哈希>.webp`
-- About 内容(`about_get` / `about_set`),前端接线在 R8
+- About 内容(`about_get` / `about_set`)。R8 起前端 `/about` 直接读这张表
+  (`apps/api/about/`),并新增「公开仓库 / 语言构成」两块。
+  **`about_set` 是部分更新**(R8 改口径):省略的字段保留原值,清空是显式动作
+  (传 `""` / `[]`)。原先的整体覆盖在字段涨到 6 个、其中两个是几十行数组之后,
+  会变成一个「只想改一句 intro 却静默清空仓库卡」的接口
 - LLM provider:`llm_providers_list` / `llm_provider_upsert` / `llm_set_default` / `llm_provider_delete`。
   key 加密入库,**任何读回只给掩码**;upsert 是**部分更新**(省略的字段保留原值)
 - 工具启停(`tool_config_list` / `tool_config_set`,高危工具双闸之一)
-- 统计查询 tools 在 R8(数据面就绪后),不在本轮
+- **访问统计(R8)**:`traffic_overview` / `traffic_paths` / `traffic_agents`,只读。
+  数据来自 metrics 服务的 `POST /t` 打点;画板 3c 的 Traffic 页已随 `/admin` 废弃,
+  这三个 tool 就是统计的全部展示面(没有公开的统计查询端点)。
+  聚合 SQL 在 `store.ts`,与 trace 只读 agent 的 `trace_events` 是同一个先例:
+  表归 metrics,读它的服务各自写自己的 store。
+  **两条最容易读错的口径**(每个 tool 的 description 里都重申过):
+  `visitorDays` 是各日 UV 之和、不是去重人数(访客标识按天轮换,隐私设计的直接
+  后果);`path` 是归一后的值,`/*` 是归一不出来的那些的常量桶
 
 ## 两条容易改错的地方
 
