@@ -46,7 +46,15 @@ export interface ListSeriesResponse {
 }
 
 export const listSeries = api(
-  { expose: true, method: "GET", path: "/notes/series" },
+  {
+    expose: true,
+    method: "GET", path: "/notes/series",
+    // 【R-VISITOR】访客 cookie 的 Path 是 `/`,浏览器**直接访问这条路径时会把它一并带来**
+    // (哪怕本端点根本不看它)。不设 sensitive 的话,一个可冒充身份的凭据会进 trace。
+    // 口径见 shared/visitor-cookie.ts 的「Path=/ 的连带义务」与 docs/security.md §6。
+    sensitive: true,
+  },
+
   async (): Promise<ListSeriesResponse> => {
     const rows = await store.listSeriesCards();
     const groups: CategoryGroup[] = [];
@@ -99,7 +107,15 @@ export interface GetSeriesResponse {
 }
 
 export const getSeries = api(
-  { expose: true, method: "GET", path: "/notes/series/:slug" },
+  {
+    expose: true,
+    method: "GET", path: "/notes/series/:slug",
+    // 【R-VISITOR】访客 cookie 的 Path 是 `/`,浏览器**直接访问这条路径时会把它一并带来**
+    // (哪怕本端点根本不看它)。不设 sensitive 的话,一个可冒充身份的凭据会进 trace。
+    // 口径见 shared/visitor-cookie.ts 的「Path=/ 的连带义务」与 docs/security.md §6。
+    sensitive: true,
+  },
+
   async ({ slug }: { slug: string }): Promise<GetSeriesResponse> => {
     assertSlug("slug", slug);
     const series = await store.getSeries(slug);
@@ -151,7 +167,15 @@ export interface GetChapterResponse {
 }
 
 export const getChapter = api(
-  { expose: true, method: "GET", path: "/notes/series/:series/chapters/:chapter" },
+  {
+    expose: true,
+    method: "GET", path: "/notes/series/:series/chapters/:chapter",
+    // 【R-VISITOR】访客 cookie 的 Path 是 `/`,浏览器**直接访问这条路径时会把它一并带来**
+    // (哪怕本端点根本不看它)。不设 sensitive 的话,一个可冒充身份的凭据会进 trace。
+    // 口径见 shared/visitor-cookie.ts 的「Path=/ 的连带义务」与 docs/security.md §6。
+    sensitive: true,
+  },
+
   async ({ series, chapter }: { series: string; chapter: string }): Promise<GetChapterResponse> => {
     assertSlug("series", series);
     assertSlug("chapter", chapter);

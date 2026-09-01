@@ -85,6 +85,27 @@ export function isSecureRequest(raw: string | string[] | undefined): boolean {
   return proto.split(",")[0].trim().toLowerCase() === "https";
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 【Path=/ 的连带义务 —— 新增 `expose: true` 端点时必须读这一段】(codex 复审 P1)
+//
+// `Path=/` 意味着浏览器会把这个 cookie 送到**每一个同源路径**上,包括那些根本不看它的
+// 端点(`/api/notes/*`、`/api/about`、`/health`、`/rss.xml`、正文配图……)。而 Encore 默认
+// 把请求头、响应头与处理函数返回值原样写进 trace —— 于是一个**可冒充身份的凭据**会从
+// 那些无关端点漏进 trace(docs/security.md §6)。
+//
+// 因此本仓库的不变量是:**每一个 `expose: true` 的端点都必须带 `sensitive: true`**,
+// 无论它是否使用访客身份。当前 16 个 expose 端点已全部覆盖(agent 5 · trace 1 · notes 5 ·
+// about 1 · metrics 1 · mcp 1 · system 1)。新增端点漏掉这个标记不会报错、不会失败,
+// 只会安静地把凭据抄进 trace —— 这正是它需要被写成一条不变量而不是逐处判断的原因。
+// 判据(两条数字必须相等)写在 docs/security.md §6,注意 grep 要锚定行首:
+// 直接搜 "expose: true" 会把**本段注释自己**算进去。
+//
+// 【为什么不改成 `Path=/api` 收窄范围】收不掉。codex 点到的那几条(`/api/notes/series`、
+// `/api/about`)本来就在 `/api` 下面,换 Path 一条都挡不住;而它会让直连 `:4000` 的
+// 本地调试(curl 的 cookie jar)悄悄失效,并把 cookie 与反代前缀绑死 —— 前缀一改,
+// 表现是「所有人都变成新访客」而不是任何一处报错。
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * `Set-Cookie` 头。
  *

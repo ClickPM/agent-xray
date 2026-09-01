@@ -6,7 +6,13 @@
 //   1. 读路径只**认领**已有 cookie(`resolveVisitor`),从不发新的;只有会真的建会话的
 //      `createSession` 用 `ensureVisitor`。理由见 visitor.ts 文件头。
 //   2. 归属不匹配一律 `not_found`,不回 403 —— 403 等于确认「这个 id 存在」。
-//   3. 每条响应都把 cookie 重发一次,24h 窗口靠这个滑动。
+//   3. **成功**响应把 cookie 重发一次,24h 窗口靠这个滑动。
+//      错误响应带不了 —— Encore 的 `APIError` 没有响应头这一层(实测,`api/error.ts` 里
+//      没有任何 header 支持),要在 404/409 上重发就得把错误改成 200 加错误字段,那是
+//      更糟的接口。实际影响可以忽略:工作台每次挂载与每轮对话结束都会调用会成功的
+//      `listSessions`(`Workbench.tsx` 的 `refreshSessions`),真实访客的 cookie 一直在续。
+//      仅当一个调用方**连续 24h 只收到错误响应**时,库里的身份还活着而浏览器那份已过期
+//      —— 那是 curl/爬虫的形态,不是访客的。已记 BACKLOG(codex 复审 P2,写明理由不采纳)。
 import { api, APIError, type Header, type Query } from "encore.dev/api";
 // 副作用 import:启动保留期清理定时器(自托管镜像不执行 Encore CronJob,见 purge.ts)
 import "./purge";

@@ -188,6 +188,25 @@ R-VISITOR 落地补记(2026-09-01,`apps/api/agent/visitor.ts` + `shared/visitor-
     加了等于留一个永不执行的假清理。落点是 agent 服务里一个 `unref` 的进程内定时器
     (`apps/api/agent/purge.ts`,每小时一次),单机 compose 形态下只有一个实例
   - 清理是**尽力而为**的:失败只记日志、下个钟点重来,不阻塞任何请求路径
+- **`Path=/` 的连带义务:每一个 `expose: true` 的端点都必须带 `sensitive: true`**
+  (codex 复审 P1)。cookie 送到每一个同源路径,包括根本不看它的端点(`/api/notes/*`、
+  `/api/about`、`/health`、`/rss.xml`、正文配图……);而 Encore 默认把请求头、响应头与
+  处理函数返回值原样写进 trace —— 实测三处都有明文 token。**这是不变量,不是逐处判断**:
+  漏掉标记不会报错、不会失败,只会安静地把凭据抄进 trace。收窄 Path 解决不了(要挡的那些
+  路径本来就在 `/api` 下),且会让 cookie 与反代前缀绑死。判据(两条数字必须相等,当前 16 = 16):
+
+  ```bash
+  grep -rEn "^\s*expose: true,\s*$" apps/api --include=*.ts | grep -v node_modules | wc -l
+  grep -rEn "^\s*sensitive: true,\s*$" apps/api --include=*.ts | grep -v node_modules | wc -l
+  ```
+
+  (**必须用锚定到行首的模式**:直接 `grep "expose: true"` 会把注释里提到这串字的行也算进去,
+  判据就永远对不上 —— `shared/visitor-cookie.ts` 里那段说明本身就有两处)
+- **错误响应不重发 cookie**,这是 Encore 的限制不是疏漏:`APIError` 没有响应头这一层,
+  要在 404/409 上重发就得把错误改成 200 加错误字段。滑动窗口因此靠**成功**响应维持 ——
+  工作台每次挂载与每轮对话结束都会调用会成功的 `listSessions`,真实访客的 cookie 一直在续;
+  只有「连续 24h 只收到错误响应」的调用方会出现库内身份还活着而浏览器那份已过期,
+  那是 curl/爬虫的形态(已记 `rounds/BACKLOG.md`)
 - **合规**:该 cookie 是「为提供服务所必需」的技术性 cookie,不做跟踪、不跨站、不给第三方。
   是否仍需在页面上放一句告知,属所有者与备案侧的裁定,不在本轮范围(已记 `rounds/BACKLOG.md`)
 
