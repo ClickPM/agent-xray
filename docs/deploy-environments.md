@@ -130,10 +130,10 @@
    | 1 | **服务白名单逐项可达** | `agent` / `trace` / `notes` / `mcp` / `metrics` / `about` / `system` 各取一个**正式端点**,全部非 404 |
    | 2 | 已删服务 | `/api/spike/*` 与 `/admin` 全部 404 |
    | 3 | 三 Tab | `/`、`/notes`、`/about` 均 200 且渲染真实数据 |
-   | 4 | MCP 管理面 | 无 token / 错 token / GET 一律 401 且**审计表有 denied 记录**;带 token 的 `server/discover` 返回工具清单 |
+   | 4 | MCP 管理面 | 无 token / 错 token / 格式不对的 token / **未认证的** GET 一律 401,且**审计表有 denied 记录**;带 token 的 `server/discover` 返回工具清单(R10 修准:带**正确** token 的 GET 是 **405** —— 认证闸在方法校验之前,别按 401 去核) |
    | 5 | 正文配图路由 | `/notes/<系列>/<哈希>.webp` → 200 + `ETag`;带 `If-None-Match` 复请求 → 304;同形的文章页地址不被图片路由劫走 |
    | 6 | RSS | `/rss.xml` 与 `/rss/<分类>.xml` 200,条目里的绝对链接用的是 `SITE_ORIGIN`;未知分类 404 |
-   | 7 | **SSE ×2** | `POST /agent/ask` 经 Caddy 流式出字;`GET /trace/stream` 有 15s 心跳、`afterSeq` 断线重连能精确回放;`docker compose stop api` 时客户端**明确断流**(curl exit 18)而非静默挂起 |
+   | 7 | **SSE ×2** | `POST /agent/ask` 经 Caddy 流式出字;`GET /trace/stream` 有 15s 心跳、`afterSeq` 断线重连能精确回放;`docker compose stop api` 时客户端**在停机同刻拿到确定的终止**而非挂到超时(R10 修准:**别钉死退出码**——R9 见 curl `18`、R10 见 `0`,差别只在断开落在响应分块的哪个位置;要判的是「+0s 就结束」) |
    | 8 | SSE 脱敏 | 两条流的原始字节里搜不到明文 key、`Authorization`、`api-key`;`before_provider_headers` 帧只剩 `type` |
    | 9 | 配额 | 把 `dailyTokenLimit` / `maxTurnsPerSession` 调小 → `429` + `code`(`daily_tokens` / `turn_limit`),恢复配置后立即可用 |
    | 10 | `agent_ro` 沙箱 | `SET LOCAL ROLE agent_ro` 后写 notes 三张表全部 `permission denied`;读这三张表成功;读其余任何表 `permission denied` |

@@ -11,7 +11,8 @@
 ## 前置
 
 - ✅ 生产服务器采购完成:腾讯云轻量 lhins-ikjrb7pc,106.54.238.52,Ubuntu 24.04.4 LTS,2 vCPU / 3.6 GiB / 69G(2026-08-28,所有者提供 `ckclaude.pem`)
-- ⬜ compose 部署段依赖 **R9**(镜像构建 + deploy/ 定稿)与 **R10**(`docs/security.md` 上线检查单全绿;M4 止损:不全绿不上生产)
+- ✅ compose 部署段的两个前置轮已收口:**R9**(镜像构建 + deploy/ 定稿 + 130 预发跑通)、**R10**(上线检查单在 130 上 1–11 全绿,留证 [`rounds/round-10/checklist.md`](../round-10/checklist.md);检查单在 **`docs/deploy-cn-lightweight.md` §6**,不在 security.md)。**M4 止损仍然适用于生产**:同一份检查单要在生产**重跑**才算数,R10 证的是预发
+- ⬜ **R10 交接的四条,本轮逐条给结论**:①检查单在生产重跑(判据已按 R10 实测修准,别用旧措辞核);②`/api/mcp` 的 Caddy IP 白名单按**真实出口 IP** 启用(模板在 `deploy/Caddyfile` 第 45–51 行,R10 只核对未启用);③写生产 LLM provider 时 key **直接贴进 MCP 调用、不落盘**(130 上的 `~/deploy/.llm-key` 就是这么留下的,见 BACKLOG);④**安全响应头**与 **pg 备份**上线前再裁定(均在 BACKLOG;备份那条决定「不可逆迁移出错」有没有兜底)
 - ⬜ ICP 备案(所有者操作,周期 1–3 周,见下「所有者 TODO」)
 
 ## 交付物

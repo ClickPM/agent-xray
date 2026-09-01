@@ -1,0 +1,58 @@
+# gitleaks 配置 —— 上线前检查单第 1 条(docs/deploy-cn-lightweight.md §6)的判据定义。
+#
+# 为什么需要这个文件:不带配置直跑,`gitleaks dir` 会报 15 条、`gitleaks git` 会报 7 条,
+# 全部是构建产物与「刻意写成假密钥的测试夹具」。每次都要人眼过一遍 15 条的清单,正是
+# 真泄漏藏得住的地方。这里把「什么不算泄漏」显式钉死,让检查项的期望值变成 **0**。
+#
+# 跑法(本机未装 gitleaks 二进制,走官方镜像):
+#   docker run --rm -v "<repo>:/repo:ro" zricethezav/gitleaks:latest dir /repo --redact --no-banner
+#   docker run --rm -v "<repo>:/repo:ro" zricethezav/gitleaks:latest git /repo --redact --no-banner
+# 两条都必须回 "no leaks found":前者查工作区当前内容,后者查 git 历史(真正的「仓库里有没有密钥」)。
+
+title = "agent-xray gitleaks"
+
+[extend]
+useDefault = true
+
+# ── 1. 构建产物与被 .gitignore 的本地密钥文件 ────────────────────────────────
+# 这些路径**不在 git 里**(见 .gitignore),`git` 扫描根本不会碰到它们;
+# 只有扫文件系统的 `dir` 会读到。把它们排除掉之后两条命令的结论才一致。
+#   - .encore/ .next/ node_modules/ 是构建与依赖产物
+#   - .secrets.local.cue / .env* 里装的是**真密钥**,正因如此它们被 .gitignore 挡在仓库外;
+#     检查项要证明的是「仓库里没有密钥」,不是「这台开发机上没有密钥」
+[[allowlists]]
+description = "构建产物与 gitignored 的本地密钥文件(不进 git,仅 dir 扫描会读到)"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.encore/''',
+  '''(^|/)\.next/''',
+  '''(^|/)\.secrets\.[^/]*\.cue$''',
+  '''(^|/)\.env($|\.)''',
+]
+
+# ── 2. 脱敏测试的假密钥夹具 ─────────────────────────────────────────────────
+# 这两个文件的存在意义就是「往里塞一个像密钥的串,断言它不会出现在输出里」:
+#   - apps/api/agent/events.ts   sanitize 自测(docs/security.md §2)
+#   - apps/api/mcp/mcp.test.ts   加密入库与掩码回读(docs/security.md §3)
+#   - apps/api/spike/events.ts   同一份夹具在 R1 的旧路径;文件已随 spike 在 R4 删除,
+#                                但 `gitleaks git` 扫的是每个 commit 的 patch,历史里还在
+# 删掉夹具等于删掉那两条安全断言,所以这里**按具体的假值放行,不按文件放行**:
+# 下面是 gitleaks 的 allowlist 默认 `regexTarget`(检出的 secret 本身),`^…$` 锚定全串,
+# 只有命中这几个字面量的检出会被放过。
+#
+# 【为什么不写成「路径 + 行内容」的 AND 组合】原本那版用 `paths` + `regexes` +
+# `condition = "AND"`,写完做了一次证伪探针:往这两个文件里各加一行**新的**真实形状的 key
+# —— **没有报警**。也就是说 `condition` 没有按预期收紧,路径一命中就整文件放行了,
+# 那两个文件会变成盲区。改成只按值放行之后,同一组探针立刻被抓到(见 round-10 任务卡)。
+#
+# 残留风险:如果哪天真有一个密钥的值恰好等于下面某个字面量,会被放过 —— 这些串是
+# 手写的、公开在仓库里的,不会是任何真凭据。
+[[allowlists]]
+description = "脱敏/掩码测试里的假密钥字面量(按值放行,不放行整个文件)"
+regexes = [
+  '''^sk-abcdefghij0123456789$''',
+  '''^sk-abcdefghijklmnop$''',
+  '''^sk-0123456789(abcd|efgh|ab)$''',
+  '''^abcdef1234567890$''',
+  '''^SECRET-AUTH-7$''',
+]

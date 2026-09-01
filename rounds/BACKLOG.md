@@ -127,6 +127,26 @@
       但和 130 上的真实配置不一致,照抄 8080 又不改 Caddyfile 就会得到一个连不上的站。
       下次动那个文件时顺手对齐 (2026-09-01)
 
+- [ ] R10 **站点一个安全响应头都没有**:`deploy/Caddyfile` 与 `apps/web/next.config.ts` 均未设
+      `X-Content-Type-Options` / `Referrer-Policy` / `X-Frame-Options`(或 CSP `frame-ancestors`)/
+      `Permissions-Policy`;`docs/security.md` 也没有对应条款。全站唯一带 `nosniff` 的是 R6 为存储型
+      XSS 单独加的供图端点。**所有者 2026-09-01 裁定本轮不做**(不在 R10 拆解内,属新增约束)。
+      建议口径:先只上保守的一组(不含 CSP —— Next.js 的 inline script 需要 nonce 机制,属机制类改动);
+      **HSTS 要等 R11 有 TLS 之后再开**,现在 130 是 http,提前发 HSTS 会把内网 IP 锁进 HTTPS。
+      落地时按规则 9 先补 `docs/security.md` 一节 (2026-09-01)
+- [ ] R10 **Postgres 备份始终没有落地**:`docs/deploy-cn-lightweight.md` §5 写着「每日 `pg_dump` 到
+      本机 + 异地各一份,保留 14 天」,R10 拆解里也有「备份脚本与恢复演练」——**所有者 2026-09-01
+      裁定本轮不做**。代价是显式的:`deploy-environments.md` 第 7 条与 §3 的「涉及不可逆迁移时先恢复
+      备份」目前是**悬空引用**,真出事没有可恢复的东西;镜像回滚只能回代码,回不了数据。
+      R11 上线前须再裁定一次(生产有真实内容之后,这条的性质就变了) (2026-09-01)
+- [ ] R10 **130 上留着一份明文 LLM key**(`~/deploy/.llm-key`,600):R9 用 MCP 写 provider 时落的盘,
+      之后没删。与 `docs/security.md` §3「运行期 LLM 凭据的唯一来源是 `llm_config` 表(密文)」不一致——
+      多一份不受 `ConfigEncryptionKey` 保护的副本,而它对运行毫无用处。扩散面已查:`~/deploy` 其余
+      文件 / `/tmp` / `~/.bash_history` 全 0 命中,库里存的是 79 字节密文(12+51+16,与文档布局吻合)。
+      **没有当场删**——删了下次重写 provider 得回 provider 控制台重取,是所有者的东西。
+      待确认后 `shred -u ~/deploy/.llm-key ~/deploy/asset.b64 ~/deploy/asset.name`。
+      **R11 别把这个做法带进生产**:key 直接贴进 MCP 调用,不要先落盘 (2026-09-01)
+
 ## 功能提案(需所有者裁定)
 
 (空)
