@@ -44,31 +44,78 @@ const SESSION_COLS = `id, title,
   (extract(epoch FROM created_at) * 1000)::double precision AS "createdAt",
   (extract(epoch FROM last_active_at) * 1000)::double precision AS "lastActiveAt"`;
 
-/** 建会话。传 id 时用调用方的(spike/R3 复用运行时会话 id),否则库内生成。 */
-export async function createSession(id?: string): Promise<SessionRow> {
+/**
+ * 建会话。传 id 时用调用方的(spike/R3 复用运行时会话 id),否则库内生成。
+ *
+ * `visitorId` 是归属(R-VISITOR):**建会话是唯一会写它的地方**,此后不再变更。
+ * 传 null 只在测试里出现 —— 生产路径上会话必然由某个访客创建。
+ */
+export async function createSession(visitorId: string | null, id?: string): Promise<SessionRow> {
   const row = await db.rawQueryRow<SessionRow>(
-    `INSERT INTO sessions (id)
-     VALUES (COALESCE($1::uuid, gen_random_uuid()))
+    `INSERT INTO sessions (id, visitor_id)
+     VALUES (COALESCE($1::uuid, gen_random_uuid()), $2::uuid)
      RETURNING ${SESSION_COLS}`,
     id ?? null,
+    visitorId,
   );
   return row!;
 }
 
-export async function getSession(id: string): Promise<SessionRow | null> {
+/**
+ * 单查,**按归属过滤**(R-VISITOR)。
+ *
+ * 【为什么归属不匹配也是「查不到」而不是「无权」】403 等于确认「这个 id 是存在的」,
+ * 把会话 id 变成一个可探测的存在性预言机。调用方分不出「不存在」与「不是你的」,
+ * 这是刻意的(docs/security.md §6)。
+ *
+ * 【`= $2` 天然排除存量无归属会话】本轮之前建的会话 `visitor_id` 是 NULL,
+ * 而 `NULL = 任何值` 不成立 —— 它们对所有人不可见,不需要额外分支。
+ */
+export async function getSession(id: string, visitorId: string): Promise<SessionRow | null> {
   return db.rawQueryRow<SessionRow>(
-    `SELECT ${SESSION_COLS} FROM sessions WHERE id = $1::uuid`,
+    `SELECT ${SESSION_COLS} FROM sessions WHERE id = $1::uuid AND visitor_id = $2::uuid`,
     id,
+    visitorId,
   );
 }
 
-export async function listSessions(limit = 50): Promise<SessionRow[]> {
+/** 归属校验(续接对话 / 轨迹流用)。语义与 getSession 一致,只是不取列。 */
+export async function sessionOwnedBy(id: string, visitorId: string): Promise<boolean> {
+  const row = await db.rawQueryRow<{ ok: number }>(
+    `SELECT 1 AS ok FROM sessions WHERE id = $1::uuid AND visitor_id = $2::uuid`,
+    id,
+    visitorId,
+  );
+  return row !== null;
+}
+
+/** 会话列表:只有本访客的,按最近活跃倒序(走 idx_sessions_visitor_active)。 */
+export async function listSessions(visitorId: string, limit = 50): Promise<SessionRow[]> {
   return db.rawQueryAll<SessionRow>(
     `SELECT ${SESSION_COLS} FROM sessions
+     WHERE visitor_id = $1::uuid
      ORDER BY last_active_at DESC, id
-     LIMIT $1`,
+     LIMIT $2`,
+    visitorId,
     limit,
   );
+}
+
+/**
+ * 删除本访客的一个会话(R-VISITOR,所有者裁定新增;设计稿没有这个入口)。
+ *
+ * 硬删:`messages` / `trace_events` 由外键 ON DELETE CASCADE 一并清掉。不做软删——
+ * 这是一条隐私功能,「删了但还在库里」不满足访客按下那个按钮时的预期。
+ *
+ * 返回是否真的删掉了一行:false 覆盖「不存在」与「不是你的」两种情况,调用方一律回 404。
+ */
+export async function deleteSession(id: string, visitorId: string): Promise<boolean> {
+  const row = await db.rawQueryRow<{ id: string }>(
+    `DELETE FROM sessions WHERE id = $1::uuid AND visitor_id = $2::uuid RETURNING id`,
+    id,
+    visitorId,
+  );
+  return row !== null;
 }
 
 /** 首条用户消息 → 会话标题:取首行、截 40 字符。 */

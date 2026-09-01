@@ -57,7 +57,7 @@ const msg = (seq: number, role: MessageRow["role"], content: string): MessageRow
 
 describe("轨迹待落库队列", () => {
   it("flush 排干队列并入库,按 seq 有序", async () => {
-    const s = await createSession();
+    const s = await createSession(null);
     const rec = fakeRec(s.id);
     rec.pendingFlush.push(ev(0), ev(1), ev(2));
 
@@ -74,7 +74,7 @@ describe("轨迹待落库队列", () => {
     await expect(flushTraceEvents(rec)).rejects.toThrow();
     expect(rec.pendingFlush.map((e) => e.seq)).toEqual([0, 1, 2]);
 
-    await createSession(rec.id); // 「库恢复」
+    await createSession(null, rec.id); // 「库恢复」
     rec.pendingFlush.push(ev(3));
     await flushTraceEvents(rec);
 
@@ -107,7 +107,7 @@ describe("轨迹待落库队列", () => {
 
 describe("会话回收", () => {
   it("dispose 前先排干队列:已采集事件不被回收吞掉", async () => {
-    const s = await createSession();
+    const s = await createSession(null);
     const rec = fakeRec(s.id);
     rec.pendingFlush.push(ev(0), ev(1));
 
@@ -122,7 +122,7 @@ describe("会话回收", () => {
   });
 
   it("dispose 幂等:重复调用不再释放 pi 会话", async () => {
-    const s = await createSession();
+    const s = await createSession(null);
     const disposed = vi.fn();
     const rec = fakeRec(s.id, {
       session: { dispose: disposed } as unknown as RuntimeSession["session"],
@@ -253,7 +253,7 @@ describe("释放与重建的交接(复审 P1 整改)", () => {
     await expect(flushTraceEvents(rec)).rejects.toThrow();
     expect(rec.pendingFlush.map((e) => e.seq)).toEqual([0, 1]); // 未被丢弃
 
-    await createSession(id); // 「库恢复」
+    await createSession(null, id); // 「库恢复」
     await disposeSession(rec);
 
     expect((await listTraceEvents(id)).map((e) => e.seq)).toEqual([0, 1]);
@@ -261,7 +261,7 @@ describe("释放与重建的交接(复审 P1 整改)", () => {
   });
 
   it("dispose 并发调用共享同一个释放过程,pi 会话只释放一次", async () => {
-    const s = await createSession();
+    const s = await createSession(null);
     const disposed = vi.fn();
     const rec = fakeRec(s.id, {
       session: { dispose: disposed } as unknown as RuntimeSession["session"],
@@ -278,7 +278,7 @@ describe("释放与重建的交接(复审 P1 整改)", () => {
   // 释放 promise 一旦落定,本会话的轨迹在库里已完整可查,重建时 maxTraceSeq() 读到的
   // 就是提交后的值,不会复用在途 seq。冷启动本身要 pi + LLM 凭据,不在单测范围。
   it("释放 promise 落定即代表轨迹已提交,maxTraceSeq 可安全用于重建", async () => {
-    const s = await createSession();
+    const s = await createSession(null);
     const rec = fakeRec(s.id);
     rec.pendingFlush.push(ev(0), ev(1), ev(2));
 

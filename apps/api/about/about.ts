@@ -24,7 +24,15 @@ export interface GetAboutResponse {
 }
 
 export const get = api(
-  { expose: true, method: "GET", path: "/about" },
+  {
+    expose: true,
+    method: "GET", path: "/about",
+    // 【R-VISITOR】访客 cookie 的 Path 是 `/`,浏览器**直接访问这条路径时会把它一并带来**
+    // (哪怕本端点根本不看它)。不设 sensitive 的话,一个可冒充身份的凭据会进 trace。
+    // 口径见 shared/visitor-cookie.ts 的「Path=/ 的连带义务」与 docs/security.md §6。
+    sensitive: true,
+  },
+
   async (): Promise<GetAboutResponse> => {
     const a = await store.getAbout();
     return { ...a, updatedAt: a.updatedAt === null ? null : new Date(a.updatedAt).toISOString() };

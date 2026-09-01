@@ -17,10 +17,30 @@ export interface TraceEventRow {
   data: unknown;
 }
 
-export async function sessionExists(sessionId: string): Promise<boolean> {
+/**
+ * 这条轨迹能不能给这个访客看(R-VISITOR)。
+ *
+ * 【为什么判据是「归属」而不是「存在」】本轮之前这里只问「会话存在吗」,于是
+ * `/trace/stream?sessionId=<别人的 id>` 会把对方的 prompt 与回复原样流出来 ——
+ * 轨迹事件里就是完整对话内容,隔离必须覆盖到这条流,不能只做在 agent 侧
+ * (docs/security.md §6)。
+ *
+ * 【为什么在 SQL 里 join 而不是先解析访客再查会话】trace 对 agent 库**只读**,
+ * 不写 `visitors`(滑动续期由 agent 侧的请求承担),这条 SQL 因此不需要
+ * `agent/visitor.ts` 的任何东西,服务间「只读、不拥有 schema、不 import 对方目录」
+ * 的边界(R4 定下)原样保持。
+ *
+ * `expires_at > now()` 与 agent 侧认领 cookie 用的是同一个判据:过期的 token
+ * 在这里也认不出来,访客看不到自己此前的轨迹。
+ */
+export async function sessionVisibleTo(sessionId: string, tokenHash: string): Promise<boolean> {
   const row = await db.rawQueryRow<{ ok: number }>(
-    `SELECT 1 AS ok FROM sessions WHERE id = $1::uuid`,
+    `SELECT 1 AS ok
+       FROM sessions s
+       JOIN visitors v ON v.id = s.visitor_id
+      WHERE s.id = $1::uuid AND v.token_hash = $2 AND v.expires_at > now()`,
     sessionId,
+    tokenHash,
   );
   return row !== null;
 }

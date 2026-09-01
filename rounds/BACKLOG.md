@@ -147,6 +147,42 @@
       待确认后 `shred -u ~/deploy/.llm-key ~/deploy/asset.b64 ~/deploy/asset.name`。
       **R11 别把这个做法带进生产**:key 直接贴进 MCP 调用,不要先落盘 (2026-09-01)
 
+- [ ] R-VISITOR **cookie 的合规告知未做**:`xr_visitor` 是「为提供服务所必需」的技术性 cookie
+      (不跟踪、不跨站、不给第三方,口径见 `docs/security.md` §6),但站点上没有任何一句话告诉访客
+      它的存在。要不要放一句告知、放在哪(footer 一行 / 关于页一段 / 备案要求的形态),
+      属所有者与备案侧的裁定,不在本轮范围 —— 本轮**刻意没做** cookie 同意横幅,那属于
+      设计稿没有的功能(规则 8) (2026-09-01)
+- [ ] R-VISITOR **生成客户端在非浏览器上下文会对 `Set-Cookie` 调 `mustBeSet`**:
+      `encore gen client` 为响应头字段生成的是 `if (!BROWSER) { rtn.visitorCookie =
+      mustBeSet("Header \`set-cookie\`", resp.headers.getSetCookie()[0]) }`。浏览器侧被 `!BROWSER`
+      跳过(浏览器本来也读不到 Set-Cookie),所以当前**没有影响**;但只要将来有人从 Next 的
+      **服务端**(SSR / route handler)调 `client.agent.*`,一个没带 cookie 的请求就会抛
+      `DataLoss`,而不是拿到空列表。`listSessions` 的字段明明是可选的,生成器仍然发了 `mustBeSet`
+      ——属上游生成器缺陷。真要从服务端调这些端点时,绕法是别用生成客户端、直接 fetch (2026-09-01)
+- [ ] R-VISITOR **`visits` 表的保留期现在有落点了**:BACKLOG 里那条「R8 `visits` 没有保留期与清理」
+      当时的理由是「定时清理是新机制」。本轮已经为会话保留期建了一个进程内定时器
+      (`apps/api/agent/purge.ts`,自托管镜像不执行 Encore CronJob)。若将来要给 `visits` 加保留期,
+      在那里加一条 `DELETE FROM visits WHERE day < …` 即可,不需要再引入机制 ——
+      注意它会改变历史趋势的可查范围,仍需所有者裁定保留多久 (2026-09-01)
+- [x] **130 预发的 MCP 管理面走明文 HTTP —— 所有者裁定不修,本条关闭**(2026-09-01)。
+      `.mcp.json` 的 `xray-admin-130` 指向 `http://192.168.100.130/api/mcp`,可复用的高权限
+      bearer token 在局域网上明文传输,与 `docs/security.md` §4「仅 HTTPS(Caddy 终止)」冲突;
+      codex 在一次 working-tree 扫描里报为 P1。**所有者裁定:130 是内网,不管安全问题。**
+      记在这里只为两件事:①后续轮次的审查会反复扫到同一处,有本条即不必再逐轮重新裁定;
+      ②**边界仅限 130 内网** —— R11 的生产管理面在公网上,同样的形态不成立,
+      那里必须是 HTTPS(Caddy 自动 TLS,备案通过后即具备)。
+- [ ] R-VISITOR **错误响应不重发访客 cookie**(codex 复审 P2,**写明理由不采纳**)。
+      `resolveVisitor` 会先把库里的 `expires_at` 推到 `now()+24h`,但随后的
+      `APIError`(404 / 409)带不了 `Set-Cookie` —— Encore 的 `APIError` 没有响应头这一层
+      (实测,`encore.dev/api/error.ts` 里没有任何 header 支持)。**没有干净的修法**:
+      要在错误上重发就得把 404 改成「200 + 错误字段」,那是更糟的接口;为它单开一条
+      `api.raw` 属机制类改动,不在非阻塞 findings 允许的范围(CLAUDE.md 审查边界)。
+      **兜底**:滑动窗口靠成功响应维持,而工作台每次挂载与每轮对话结束都会调用
+      会成功的 `listSessions`(`Workbench.tsx` 的 `refreshSessions`),真实访客一直在续期。
+      **残留风险**:一个**连续 24h 只收到错误响应**的调用方,库内身份还活着而浏览器那份
+      已过期,于是它看不到自己此前的会话(库里那行由保留期清理带走)。那是 curl/爬虫的
+      形态,不是访客的。将来若 Encore 支持在 APIError 上带响应头,这条可以一行修掉 (2026-09-01)
+
 ## 功能提案(需所有者裁定)
 
 (空)

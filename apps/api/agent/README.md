@@ -6,7 +6,24 @@ pi SDK in-process 会话管理、对话流、只读工具组与限额。
 
 - `POST /agent/ask`(`ask.ts`,`api.raw`)—— 创建/续接会话,对话流 SSE ← `session.subscribe()`。
   非 2xx 的 JSON 体是 `{error, code?}`:`error` 只供调试,访客文案由前端按 status/code 分档。
-- `GET /agent/sessions` · `GET /agent/sessions/:id`(`sessions.ts`)—— 会话列表与历史回放。
+- `GET /agent/sessions` · `GET /agent/sessions/:id` · `DELETE /agent/sessions/:id` ·
+  `POST /agent/sessions`(`sessions.ts`)—— 会话列表 / 历史回放 / 删除 / 建空会话。
+
+## 访客隔离(R-VISITOR;`visitor.ts` + `../shared/visitor-cookie.ts`)
+
+约束来源是 `docs/security.md` §6 的 R-VISITOR 补记,那里是口径的正本。本服务的落点:
+
+- **归属列 `sessions.visitor_id`**(迁移 007)是唯一判据。列表 / 单查 / 续接 / 删除全部
+  `WHERE visitor_id = $当前访客`;不匹配一律 `not_found`,**不回 403**(403 等于确认
+  「这个 id 存在」)。存量会话 `visitor_id IS NULL`,`= $1` 永不匹配,天然不可见。
+- **身份只在会话被创建时发放**:`resolveVisitor` 只认领(读路径用),`ensureVisitor` 才发放,
+  且只出现在 `POST /agent/sessions` 与 `/agent/ask` 的新建分支里 —— 读路径也发的话,
+  `GET /agent/sessions` 就成了一个无认证的建行入口。
+- **cookie 属性只有一个来源**:`shared/visitor-cookie.ts` 的 `buildSetCookie`。
+- ⚠️ **`Header<string, "Set-Cookie">` 必须逐处内联写,不能抽类型别名**。Encore 的静态解析器
+  不穿透别名,写成别名会**静默**把它降级成响应体字段(token 明文进 JSON,浏览器收不到
+  Set-Cookie)。详见 `sessions.ts` 顶部那段注释与任务卡实测。
+- **保留期清理在 `purge.ts`**:进程内定时器,不是 Encore `CronJob`(自托管镜像不执行 cron)。
 
 ## 运行时(`runtime.ts`)
 

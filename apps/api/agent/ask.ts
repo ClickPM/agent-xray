@@ -32,9 +32,10 @@ import { sse, sseComment, SSE_HEADERS } from "../shared/sse";
 import {
   appendMessage,
   createSession as createDbSession,
-  getSession as getDbSession,
+  sessionOwnedBy,
   upsertMessage,
 } from "./store";
+import { ensureVisitor, headersOfRaw, resolveVisitor, type Visitor } from "./visitor";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -63,9 +64,22 @@ interface AskBody {
  * 「并发会话数满」与「今日额度用完」都是 429,但对访客是完全不同的两句话
  * (一句是「等会儿再来」,一句是「明天再来」)。`error` 仍然只是给日志/调试看的,
  * 前端不展示它——服务端文案与展示文案的分工是 R3 定下的。
+ *
+ * `setCookie` 是 R-VISITOR 的滑动续期(docs/security.md §6):已认领到身份的请求即便
+ * 被拒,也要把 cookie 带回去 —— 否则一个连着撞限额的访客会因为「拒绝响应不发 cookie」
+ * 而在 24h 后莫名其妙丢掉自己的会话。没有身份时(第一次来 / 已过期)不发,
+ * 拒绝路径永远不发新身份。
  */
-function fail(resp: ServerResponse, status: number, error: string, code?: string): void {
-  resp.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+function fail(
+  resp: ServerResponse,
+  status: number,
+  error: string,
+  code?: string,
+  setCookie?: string,
+): void {
+  const headers: Record<string, string> = { "Content-Type": "application/json; charset=utf-8" };
+  if (setCookie) headers["Set-Cookie"] = setCookie;
+  resp.writeHead(status, headers);
   resp.end(JSON.stringify(code ? { error, code } : { error }));
 }
 
@@ -135,7 +149,13 @@ async function persistAssistant(
 }
 
 export const ask = api.raw(
-  { expose: true, method: "POST", path: "/agent/ask" },
+  {
+    expose: true,
+    method: "POST", path: "/agent/ask",
+    // 访客 cookie 是可冒充身份的凭据,不能进 trace(docs/security.md §6;
+    // Encore 默认把请求头/响应头/返回值写进 trace,三处都有明文 token)
+    sensitive: true,
+  },
   async (req, resp) => {
     // 【客户端断开检测:本环境下拿不到信号,已放弃,勿再按常规写法“修复”】
     //
@@ -167,16 +187,32 @@ export const ask = api.raw(
     }
     const { sessionId, prompt } = parsed.body;
 
-    // 续接:DB 行必须存在(运行时会话可能已被回收,但会话本身得是真的)
+    // 【R-VISITOR:身份在这里只**认领**,不发放】发放推迟到真的要建会话那一刻
+    // (下面的 ensureVisitor)。放在这里的话,一个不带 cookie 的 for 循环即便每次都
+    // 撞上限额被拒,也已经先往 visitors 里灌了一行 —— 与 docs/security.md §6
+    // 「发放时机 = 会话被创建时」是同一条。
+    const reqHeaders = headersOfRaw(req);
+    let visitor: Visitor | null;
+    try {
+      visitor = await resolveVisitor(reqHeaders);
+    } catch (err) {
+      console.error(`resolve visitor failed: ${safeErrorText(err)}`);
+      fail(resp, 500, "internal error");
+      return;
+    }
+
+    // 续接:会话必须存在**且属于本访客**(运行时会话可能已被回收,但会话本身得是真的)。
+    // 没有身份、不是本人的会话、以及根本不存在的会话,对调用方是同一个 404 ——
+    // 区分开来等于把会话 id 变成一个存在性预言机(docs/security.md §6)。
     if (sessionId) {
       try {
-        if (!(await getDbSession(sessionId))) {
-          fail(resp, 404, `session ${sessionId} not found`);
+        if (!visitor || !(await sessionOwnedBy(sessionId, visitor.id))) {
+          fail(resp, 404, `session ${sessionId} not found`, undefined, visitor?.setCookie);
           return;
         }
       } catch (err) {
         console.error(`lookup session failed: ${safeErrorText(err)}`);
-        fail(resp, 500, "internal error");
+        fail(resp, 500, "internal error", undefined, visitor?.setCookie);
         return;
       }
     }
@@ -197,12 +233,12 @@ export const ask = api.raw(
       const denial = await checkQuota(id);
       if (denial) {
         console.warn(`quota denied for session ${id}: ${denial.detail}`);
-        fail(resp, 429, "quota exceeded", denial.reason);
+        fail(resp, 429, "quota exceeded", denial.reason, visitor?.setCookie);
         return;
       }
     } catch (err) {
       console.error(`quota check failed: ${safeErrorText(err)}`);
-      fail(resp, 500, "internal error");
+      fail(resp, 500, "internal error", undefined, visitor?.setCookie);
       return;
     }
 
@@ -213,12 +249,12 @@ export const ask = api.raw(
       rec = await acquireSession(id);
     } catch (err) {
       if (err instanceof SessionBusyError) {
-        fail(resp, 409, "session is already streaming");
+        fail(resp, 409, "session is already streaming", undefined, visitor?.setCookie);
         return;
       }
       if (err instanceof SessionCapacityError) {
         console.warn(err.message);
-        fail(resp, 429, "server is at capacity, try again shortly");
+        fail(resp, 429, "server is at capacity, try again shortly", undefined, visitor?.setCookie);
         return;
       }
       if (err instanceof LlmNotConfiguredError) {
@@ -226,32 +262,44 @@ export const ask = api.raw(
         // **配置缺失**,不是内部错误——回 503 而不是 500,让部署方一眼看出该做什么。
         // 原因只进日志:模型名/端点属于服务端配置,不出服务端。
         console.error(`llm not configured: ${safeErrorText(err)}`);
-        fail(resp, 503, "对话服务尚未配置模型,请稍后再试");
+        fail(resp, 503, "对话服务尚未配置模型,请稍后再试", undefined, visitor?.setCookie);
         return;
       }
       console.error(`acquire agent session failed: ${safeErrorText(err)}`);
-      fail(resp, 500, "internal error");
+      fail(resp, 500, "internal error", undefined, visitor?.setCookie);
       return;
     }
 
     let userSeq: number;
     try {
       if (isNew) {
+        // 【R-VISITOR:身份在这里发放】限额与并发都过了、这个会话确定要被建出来,
+        // 才给没有 cookie 的访客发一个新身份(docs/security.md §6「发放时机」)。
+        visitor = await ensureVisitor(reqHeaders);
         // 会话行建在运行时会话之后:建行失败必须释放 pi 会话,否则它既无 DB 行
         // (轨迹落库会 FK 失败)又长期占着并发名额
-        await createDbSession(id);
+        await createDbSession(visitor.id, id);
       }
       userSeq = (await appendMessage(id, "user", prompt)).seq;
     } catch (err) {
       console.error(`persist user message failed: ${safeErrorText(err)}`);
-      // 先 dispose 再释放 busy:持有期间不会被 sweeper / 逐出并发触碰
-      if (isNew) await disposeSession(rec);
+      // 先 dispose 再释放 busy:持有期间不会被 sweeper / 逐出并发触碰。
+      //
+      // 【为什么续接的会话也要 dispose】(codex 初审 P2)原来只在 `isNew` 时释放,
+      // 理由是「续接失败时什么都没建,没东西要清」。R-VISITOR 之后这条不再成立:
+      // 落库失败的一个真实原因是**这个会话刚被访客自己在另一个标签页删掉了**
+      // (外键指向已不存在的 sessions 行)。那种情况下留着运行时会话 = 一个指向
+      // 已删除数据的 pi 会话占着 MAX_ACTIVE_SESSIONS 里的一个名额直到空闲回收
+      // (15 分钟),期间它的轨迹 flush 每次都会外键失败。代价只是下一轮冷启动一次。
+      await disposeSession(rec);
       rec.busy = false;
-      fail(resp, 500, "internal error");
+      fail(resp, 500, "internal error", undefined, visitor?.setCookie);
       return;
     }
 
-    resp.writeHead(200, SSE_HEADERS);
+    // 滑动续期:成功路径同样要把 cookie 带回去(visitor 此时必然非 null ——
+    // 续接路径在上面认领过,新建路径刚刚发放过)
+    resp.writeHead(200, { ...SSE_HEADERS, ...(visitor ? { "Set-Cookie": visitor.setCookie } : {}) });
     sse(resp, "session", { sessionId: id });
 
     let assistantText = "";

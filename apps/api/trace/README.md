@@ -52,3 +52,13 @@ close/error,`resp.write()` 仍返回 `true`,`destroyed` 恒为 `false`——Enco
 **别改回「逐出最旧的一条」**:那是 R4 最初的设计,实测被证伪——真正在看的连接恰恰是最旧的
 (访客一进来就连上了),各种短命探测/重挂载连接都比它新,按"越老越可能被遗弃"逐出等于
 每次精准掐死唯一活着的观众。启发式在这里是反的。
+
+## 访客隔离(R-VISITOR)
+
+`/trace/stream` 的放行判据从「会话存在吗」改成「**这个访客能看这条轨迹吗**」
+(`store.sessionVisibleTo`):轨迹事件里就是完整的 prompt 与回复,隔离只做在 agent 侧
+等于留着一扇后门。判定是一条 `sessions ⋈ visitors` 的 SQL,cookie 解析走
+`shared/visitor-cookie.ts` 的纯函数 —— 本服务对 agent 库**仍然只读**,不写 `visitors`
+(24h 滑动续期由 agent 侧的请求承担),R4 定下的服务间边界不变。
+
+口径正本在 `docs/security.md` §6 的 R-VISITOR 补记。

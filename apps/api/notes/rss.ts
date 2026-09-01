@@ -12,14 +12,32 @@ const FEED_LIMIT = 30;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export const siteFeed = api.raw(
-  { expose: true, method: "GET", path: "/rss.xml" },
+  {
+    expose: true,
+    method: "GET", path: "/rss.xml",
+    // 【R-VISITOR】这条端点是**浏览器直接访问**的(RSS 链接 / 正文里的图片 URL),
+    // 而访客 cookie 的 Path 是 `/` —— 它会被一并带过来,尽管这里根本不看它。
+    // 不设 sensitive 的话,一个可冒充身份的凭据会随每一次订阅/取图进 trace
+    // (docs/security.md §6)。本端点的 payload(RSS 原文 / 图片字节)进 trace 也无调试价值。
+    sensitive: true,
+  },
+
   async (req, resp) => {
     await writeFeed(req, resp, null);
   },
 );
 
 export const categoryFeed = api.raw(
-  { expose: true, method: "GET", path: "/rss/:file" },
+  {
+    expose: true,
+    method: "GET", path: "/rss/:file",
+    // 【R-VISITOR】这条端点是**浏览器直接访问**的(RSS 链接 / 正文里的图片 URL),
+    // 而访客 cookie 的 Path 是 `/` —— 它会被一并带过来,尽管这里根本不看它。
+    // 不设 sensitive 的话,一个可冒充身份的凭据会随每一次订阅/取图进 trace
+    // (docs/security.md §6)。本端点的 payload(RSS 原文 / 图片字节)进 trace 也无调试价值。
+    sensitive: true,
+  },
+
   async (req, resp) => {
     // Encore 的路径参数不能带 `.xml` 后缀(段内混字面量),所以整段拿下来自己剥。
     // 设计稿定的地址就是 /rss/pm.xml,不改成 /rss/pm。
