@@ -95,6 +95,14 @@ code {
   border-radius: 2px;
 }
 
+/* Runtime 聊天区的助手回复:排版整套复用 components/Markdown(与 Notes 同一份),
+   这里只抹掉首个块级元素的上外边距——气泡之间的距离由 ChatPane 的 gap 负责,
+   markdown 自带的 margin-top 会在它之上再顶开一截。Markdown 的样式是内联写的
+   (与画板逐条对齐),要盖过它只能用 !important;仅此一条。 */
+.md-chat > :first-child {
+  margin-top: 0 !important;
+}
+
 /* 流式行脉动(Timeline 进行中的事件行 / Lifecycle 活跃节点) */
 @keyframes omPulseBg {
   0%,

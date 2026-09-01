@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Agent X-Ray 站点图标「Pulse X」(所有者 2026-09-01 定稿,32×32 栅格)。
+       X 跨 69% / 笔画 4.6,中间切口 5.6 露出脉冲(振幅 ±2.6、笔画 2.0 尖角),
+       背景一道 opacity .3 的扫描线 —— X-Ray 看内核心跳。
+
+       颜色随系统主题切:favicon 由浏览器独立渲染,拿不到页面的 html.dark,
+       只能靠 SVG 内嵌的 prefers-color-scheme。两个色值取自 globals.css 里
+       accent 变量的明暗两态(浅色 #2563eb / 深色 #60a5fa),与定稿里两张
+       标签页实测图一致。
+
+       【注释必须写在根元素里面,不能放文件开头】Next 的 metadata 图片加载器用
+       image-size 探测尺寸,它只在文件起始的一小段里找 svg 根标签;前置一大段
+       注释会把根标签顶出探测窗口,构建直接失败("is not a valid image file")。
+
+       【注释里不能出现连续两个 ASCII 连字符】写 CSS 变量本名(连字符开头)会让
+       XML 解析当场报错、图标全无。所以上面写的是「accent 变量」。
+
+       Next 的 app/icon.svg 约定:构建期自动生成 link rel=icon,无需在 layout.tsx
+       声明。SVG favicon 需 Chrome/Edge/Firefox 或 Safari 16.4+;更老的 Safari
+       不支持,会退回无图标(未做 .ico 兜底)。 -->
+  <style>
+    svg { color: #2563eb }
+    @media (prefers-color-scheme: dark) { svg { color: #60a5fa } }
+  </style>
+  <mask id="cut">
+    <rect width="32" height="32" fill="#fff"/>
+    <rect y="13.2" width="32" height="5.6" fill="#000"/>
+  </mask>
+  <g stroke="currentColor" stroke-width="4.6" mask="url(#cut)">
+    <path d="M5.0 5.0 27.0 27.0"/>
+    <path d="M27.0 5.0 5.0 27.0"/>
+  </g>
+  <path d="M1 16H31" stroke="currentColor" stroke-width="1.8" opacity=".3"/>
+  <path d="M11 16 H13.3 L15 13.4 L17 18.6 L18.7 16 H21" stroke="currentColor" stroke-width="2.0" fill="none"/>
+</svg>

@@ -1,4 +1,6 @@
-// 章节正文渲染:标准 markdown(GFM)→ 设计稿画板 2c 的排版。
+// 标准 markdown(GFM)→ 设计稿画板 2c 的排版。两处在用:Notes 章节正文(画板 2c),
+// 以及 Runtime 工作台聊天区的助手回复(画板 1a)——后者刻意复用同一套排版与节奏,
+// 不另造一份「聊天版 markdown 样式」(CLAUDE.md 规则 7:不新增视觉语言)。
 //
 // 库里存的是 markdown、渲染在前端(所有者裁定 2026-08-31 决策 2)。这里做的事只有一件:
 // 把 markdown 的元素映射到**画板 2c 已有的那套内联样式上**,不引入新的视觉语言
@@ -96,7 +98,12 @@ export function extractToc(md: string): { id: string; text: string }[] {
   return out;
 }
 
-export function Markdown({ children }: { children: string }) {
+/**
+ * @param headingIds 是否给 H2 挂锚点 id(默认挂,给「本章目录」跳转用)。
+ *   聊天区必须传 false:一个会话里会同时渲染多条助手回复,各自从头计数的 slug
+ *   会在同一个文档里撞成重复 id(HTML 非法,锚点跳转与读屏都指到第一条)。
+ */
+export function Markdown({ children, headingIds = true }: { children: string; headingIds?: boolean }) {
   // 与 extractToc 共用同一套 slug + 同名去重规则,两边各自从头计数即可对齐
   const seen = new Map<string, number>();
 
@@ -109,7 +116,7 @@ export function Markdown({ children }: { children: string }) {
         ),
         h2: ({ children }) => (
           <h2
-            id={uniqueId(seen, textOf(children))}
+            id={headingIds ? uniqueId(seen, textOf(children)) : undefined}
             style={{ fontSize: 16, fontWeight: 650, marginTop: 30, marginBottom: 0, scrollMarginTop: 16 }}
           >
             {children}
