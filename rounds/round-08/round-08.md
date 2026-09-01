@@ -1,6 +1,6 @@
 # Round 08 — metrics 打点 + About 真实化 + 统计查询 MCP 工具
 
-> 状态:进行中(codex 第 1 轮 2 条 + 第 2 轮 1 条 findings 全采纳整改,待第 3 轮复审)
+> 状态:已完成(codex 三轮共 3 条 findings 全采纳整改,第 3 轮零 findings,缺陷门禁 PASS)
 
 ## 目标
 
@@ -172,7 +172,15 @@ IP 收敛到网段同时是隐私改进:一台机器手上常有一整个 IPv6 `
 实测经 MCP 直发:`https://` / `http://?x` / `javascript:alert(1)` 三个全部被拒且未入库,
 `https://ok.example.com/x` 正常写入。补 4 条单测(共 147 项通过)。
 
-- 结论:**待第 3 轮复审**(范围收窄为整改 diff,`--base 8112879`,CLAUDE.md「第 3 轮起只审整改 diff」)
+### 第 3 轮 — 零 findings
+
+范围按 CLAUDE.md「第 3 轮起只审整改 diff」收窄为 `--base 8112879`(第 2 轮已审提交)。
+审查结论原文:URL 校验现在正确地要求「可解析的 http(s) 地址 + 主机名」,前端在渲染前
+应用同一份校验,新增用例覆盖了畸形与不安全输入。
+
+- 结论:**整改后 PASS**。三轮共 3 条 findings(1×P1、1×P2、1×P3)**全部采纳整改**,
+  末轮零 findings,**缺陷门禁 PASS**。另有 1 条跨轮次问题(`mcp/audit.ts` 的 XFF 取首段
+  同样可被伪造)按 CLAUDE.md 记 `rounds/BACKLOG.md`,不当场改。
 
 ## 失败处理
 
