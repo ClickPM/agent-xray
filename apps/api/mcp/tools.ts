@@ -35,6 +35,27 @@ const slug = z.string().regex(SLUG_RE, "slug 需匹配 ^[a-z0-9][a-z0-9-]{0,63}$
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "dot 需为 #RRGGBB");
 
 /**
+ * 空串,或一个**能解析出主机名**的 http(s) 绝对地址。
+ *
+ * 【为什么不能只做前缀匹配】(codex 第 2 轮 P3)`/^https?:\/\//` 会放过
+ * `https://` 与 `http://?x` 这类没有主机的串:它们进得了库,前端照样渲染成
+ * 一个点不开的链接。交给 WHATWG 的 `URL` 解析,坏地址在这里就被拒。
+ *
+ * 协议白名单不能省 —— `new URL("javascript:alert(1)")` 是**能解析成功**的
+ * (protocol=`javascript:`,hostname 为空);两个条件缺一不可。
+ */
+export function isHttpUrl(value: string): boolean {
+  if (value === "") return true;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return (url.protocol === "http:" || url.protocol === "https:") && url.hostname !== "";
+}
+
+/**
  * 附件文件名:`<内容哈希>.<ext>`,不含路径分隔符 —— 它直接进 URL。
  *
  * **刻意只收小写**(codex 复审 P2,已用真 Caddy 实测复现):原先带 `i` 标志,
@@ -442,7 +463,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         originUrl: z
           .string()
           .max(512)
-          .refine((v) => v === "" || /^https?:\/\//i.test(v), "需为 http(s) 绝对地址或空字符串")
+          .refine(isHttpUrl, "需为带主机名的 http(s) 绝对地址,或空字符串")
           .optional()
           .describe("头部 GitHub 按钮旁的第二条外链;空字符串 = 不渲染那个按钮"),
         intro: z.string().max(1024).optional(),

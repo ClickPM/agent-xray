@@ -1,6 +1,6 @@
 # Round 08 — metrics 打点 + About 真实化 + 统计查询 MCP 工具
 
-> 状态:进行中(codex 第 1 轮 2 条 findings 全采纳整改,待复审)
+> 状态:进行中(codex 第 1 轮 2 条 + 第 2 轮 1 条 findings 全采纳整改,待第 3 轮复审)
 
 ## 目标
 
@@ -67,13 +67,13 @@
 
 **测试**
 
-- `apps/api/metrics/metrics.test.ts`(23 项)· `apps/api/mcp/mcp.test.ts` 增 About 与统计聚合两段(11 项)
+- `apps/api/metrics/metrics.test.ts`(23 项)· `apps/api/mcp/mcp.test.ts` 增外链校验 / About / 统计聚合三段(15 项)
 
 ## 验收
 
 | # | 检查 | 命令 / 期望 | 结果 |
 |---|---|---|---|
-| 1 | 编译与测试 | `dev.ps1 check` / `dev.ps1 test` 全过 | ✅ 9 files / 143 tests passed(整改后) |
+| 1 | 编译与测试 | `dev.ps1 check` / `dev.ps1 test` 全过 | ✅ 9 files / 147 tests passed(第 2 轮整改后) |
 | 2 | 前端类型与生产构建 | `npx tsc --noEmit`、`npx next build` 无错 | ✅ 构建通过 |
 | 3 | 打点端到端 | 浏览 `/`、`/notes`、`/about` 后 `visits` 有对应计数行 | ✅ 8 PV / 2 visitor / 3 路径 |
 | 4 | **库中无原始 IP** | `SELECT * FROM visits` 只有 32 位 hex 的 `visitor` | ✅ 无任何 IP 形状的值 |
@@ -87,6 +87,7 @@
 | 12 | 前端零 About 硬编码 | `demo-data.ts` 里搜不到 buildPoints / repos / langBar / githubUser | ✅ |
 | 13 | **visitor 取值有界**(审查整改后新增) | 伪造 XFF 首段 ×3 + 换 UA 串 ×4 + 同 /24 换主机位 ×5 = 12 次请求 | ✅ 合并成 1 行 hits=12 |
 | 14 | **只配 originUrl 时链接可见**(同上) | 清空其余字段后页面仍渲染 origin 按钮 | ✅ |
+| 15 | **畸形外链入不了库**(第 2 轮整改后新增) | 经 MCP 直发 `https://` / `http://?x` / `javascript:…` | ✅ 三个全拒且未入库 |
 
 ## 禁止
 
@@ -155,7 +156,23 @@ IP 收敛到网段同时是隐私改进:一台机器手上常有一整个 IPv6 `
 落进两个不同的桶——那正好复活了 P1 要消除的「一个 `/64` 里换地址就能造新行」。
 已改成先展开 `::` 再取前三组并做前导零归一,补了 4 条用例(压缩/未压缩必须同桶)。
 
-- 结论:**待第 2 轮复审**(范围 = 本轮整改 diff,`--base f2b14bf`)
+### 第 2 轮 — 1 条 finding,**采纳整改**(范围仍为 branch diff against main:CLAUDE.md「前两轮全量」)
+
+**[P3] `originUrl` 的前缀匹配放得过 `https://` 与 `http://?x` — `mcp/tools.ts`**
+
+**采纳**。`/^https?:\/\//` 只看开头,`https://`(没有主机)与 `http://?x` 都能通过,
+于是一个点不开的链接进得了库、也渲染得出来。前端 `safeExternal` 是同一份判据,
+所以两道防线一起漏。
+
+整改是**换判据、不是加机制**:交给 WHATWG 的 `URL` 解析,再要求
+`protocol ∈ {http:, https:}` **且** `hostname` 非空。两个条件缺一不可 ——
+`new URL("javascript:alert(1)")` 是**能解析成功**的(protocol=`javascript:`、hostname 为空),
+只判解析成功等于把原来防的 XSS 又放回来。服务端与前端两处同步改(web 与 api 不共享源码,规则 6)。
+
+实测经 MCP 直发:`https://` / `http://?x` / `javascript:alert(1)` 三个全部被拒且未入库,
+`https://ok.example.com/x` 正常写入。补 4 条单测(共 147 项通过)。
+
+- 结论:**待第 3 轮复审**(范围收窄为整改 diff,`--base 8112879`,CLAUDE.md「第 3 轮起只审整改 diff」)
 
 ## 失败处理
 

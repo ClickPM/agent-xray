@@ -23,7 +23,7 @@ import { parseBearer, sha256Hex, verifyAuth } from "./auth";
 import { chapterHash, countWords } from "./content";
 import { db } from "./db";
 import * as store from "./store";
-import { decodeBase64Strict, magicMatches } from "./tools";
+import { decodeBase64Strict, isHttpUrl, magicMatches } from "./tools";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const OTHER_KEY = Buffer.alloc(32, 9).toString("base64");
@@ -385,6 +385,34 @@ describe("库读写(mcp/store)", () => {
     await store.setToolConfig({ name: "notes_search", enabled: false });
     const [t] = await store.listToolConfig();
     expect(t).toMatchObject({ name: "notes_search", enabled: false, dangerous: false, note: "只读" });
+  });
+});
+
+describe("外链校验(mcp/tools,R8)", () => {
+  it("接受带主机名的 http(s) 绝对地址与空串", () => {
+    expect(isHttpUrl("")).toBe(true);
+    expect(isHttpUrl("https://example.com/u")).toBe(true);
+    expect(isHttpUrl("http://example.com")).toBe(true);
+    expect(isHttpUrl("HTTPS://Example.com")).toBe(true);
+  });
+
+  it("**没有主机名的串必须拒**(前缀匹配放得过去,链接却点不开)", () => {
+    // codex 第 2 轮 P3:原实现是 /^https?:\/\// 前缀匹配,这两个都能通过
+    expect(isHttpUrl("https://")).toBe(false);
+    expect(isHttpUrl("http://?x")).toBe(false);
+  });
+
+  it("协议白名单不能省:javascript: 是能被 URL 解析成功的", () => {
+    expect(isHttpUrl("javascript:alert(1)")).toBe(false);
+    expect(isHttpUrl("data:text/html,<script>x</script>")).toBe(false);
+    expect(isHttpUrl("file:///etc/passwd")).toBe(false);
+  });
+
+  it("非绝对地址与畸形串一律拒", () => {
+    expect(isHttpUrl("//evil.com")).toBe(false);
+    expect(isHttpUrl("example.com")).toBe(false);
+    expect(isHttpUrl("https://a b")).toBe(false);
+    expect(isHttpUrl("   ")).toBe(false);
   });
 });
 
