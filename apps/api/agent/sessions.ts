@@ -10,7 +10,7 @@
 import { api, APIError, type Header, type Query } from "encore.dev/api";
 // 副作用 import:启动保留期清理定时器(自托管镜像不执行 Encore CronJob,见 purge.ts)
 import "./purge";
-import { disposeSession, getRuntimeSession } from "./runtime";
+import { claim, disposeSession, getRuntimeSession, SessionBusyError } from "./runtime";
 import * as store from "./store";
 import { ensureVisitor, headersOfTyped, resolveVisitor } from "./visitor";
 
@@ -76,7 +76,15 @@ interface CreateSessionResponse {
  * 会话必然属于某个访客,所以这里用 `ensureVisitor` 而不是 `resolveVisitor`。
  */
 export const createSession = api(
-  { expose: true, method: "POST", path: "/agent/sessions" },
+  {
+    expose: true,
+    method: "POST", path: "/agent/sessions",
+    // 【R-VISITOR】访客 cookie 是**可冒充身份的凭据**,而 Encore 默认把请求头、响应头与
+    // 处理函数的返回值原样写进 trace —— 三处都有明文 token(本轮实测,见任务卡)。
+    // `sensitive: true` 把它们排除出 trace,与 R8 给 `/t` 加它是同一条理由:
+    // 不设的话等于在承诺「凭据不外泄」的同时把它抄进了另一个地方(docs/security.md §6)。
+    sensitive: true,
+  },
   async (): Promise<CreateSessionResponse> => {
     const visitor = await ensureVisitor(headersOfTyped());
     return {
@@ -103,7 +111,12 @@ interface ListSessionsResponse {
  * 就该是「一个空站点」,而不是「你未登录」——站点没有登录这个概念。
  */
 export const listSessions = api(
-  { expose: true, method: "GET", path: "/agent/sessions" },
+  {
+    expose: true,
+    method: "GET", path: "/agent/sessions",
+    // 访客 cookie 不能进 trace,理由见本文件 createSession 上方(docs/security.md §6)
+    sensitive: true,
+  },
   async (req: ListSessionsRequest): Promise<ListSessionsResponse> => {
     const limit = Math.min(Math.max(req.limit ?? 50, 1), 200);
     const visitor = await resolveVisitor(headersOfTyped());
@@ -126,7 +139,12 @@ interface GetSessionResponse {
 
 /** 续接:单会话 + 历史消息回放。只能取到本访客自己的会话。 */
 export const getSession = api(
-  { expose: true, method: "GET", path: "/agent/sessions/:id" },
+  {
+    expose: true,
+    method: "GET", path: "/agent/sessions/:id",
+    // 访客 cookie 不能进 trace,理由见本文件 createSession 上方(docs/security.md §6)
+    sensitive: true,
+  },
   async (req: GetSessionRequest): Promise<GetSessionResponse> => {
     if (!UUID_RE.test(req.id)) {
       throw APIError.invalidArgument("id must be a UUID");
@@ -172,11 +190,25 @@ interface DeleteSessionResponse {
  *     那是一条不需要任何凭据的拒绝服务。
  *   - 运行时会话必须先 dispose 再删库行:`disposeSession` 会把在途轨迹**排干落库**,
  *     反过来做的话那次 flush 撞上已被级联删掉的 `sessions` 行,外键失败刷一屏错误日志。
- *   - 正在回复中(`busy`)一律拒绝而不是硬删:那一轮的助手消息正等着写进这张表,
+ *   - 正在回复中一律拒绝而不是硬删:那一轮的助手消息正等着写进这张表,
  *     删了只会让访客看到一句「本轮回复未能保存」。回 409,与 `/agent/ask` 的并发口径一致。
+ *
+ * 【必须用 `claim()`,不能读一眼 `rec.busy` 就往下走】(codex 初审 P2)
+ * `claim` 是**同步**的检查+置位,与 `/agent/ask` 用的是同一把闸:置位之后那个会话对
+ * 逐出、空闲回收与并发 ask 都不可用。只读 `busy` 的话,另一个标签页的 ask 完全可以在
+ * 「读到 false」与「dispose 完成」之间挤进来认领同一个会话,于是那一轮跑在一个正在被
+ * 释放的 pi 会话上。认领失败 → 409,访客得到的是一句明确的「上一轮还在跑」。
+ *
+ * 认领**不需要在成功路径上释放**:`disposeSession` 之后这条记录已经退出注册表,
+ * `busy` 跟着它一起消失;只有「认领成功但后续步骤抛错」才需要还回去(见下面的 try/catch)。
  */
 export const deleteSession = api(
-  { expose: true, method: "DELETE", path: "/agent/sessions/:id" },
+  {
+    expose: true,
+    method: "DELETE", path: "/agent/sessions/:id",
+    // 访客 cookie 不能进 trace,理由见本文件 createSession 上方(docs/security.md §6)
+    sensitive: true,
+  },
   async (req: DeleteSessionRequest): Promise<DeleteSessionResponse> => {
     if (!UUID_RE.test(req.id)) {
       throw APIError.invalidArgument("id must be a UUID");
@@ -188,8 +220,20 @@ export const deleteSession = api(
     }
 
     const rec = getRuntimeSession(req.id);
-    if (rec?.busy) throw APIError.aborted("session is already streaming");
-    if (rec) await disposeSession(rec);
+    if (rec) {
+      try {
+        claim(rec);
+      } catch (err) {
+        if (err instanceof SessionBusyError) throw APIError.aborted("session is already streaming");
+        throw err;
+      }
+      try {
+        await disposeSession(rec);
+      } catch (err) {
+        rec.busy = false; // 认领了就要还:释放失败时不能把会话永久钉在 busy 上
+        throw err;
+      }
+    }
 
     // 到这里还删不到只有一种可能:另一条请求刚把它删了。回 404 是诚实的答案。
     if (!(await store.deleteSession(req.id, visitor.id))) {

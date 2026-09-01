@@ -85,9 +85,18 @@
 
 <!-- 完成后回填 -->
 
-- 审查方式:codex `/codex:review`(所有者裁定本轮走审查:改的是鉴权边界)
-- findings 处理:
-- 结论:
+- 审查方式:codex `/codex:review --background`(所有者裁定本轮走审查:改的是鉴权边界)。
+  按 CLAUDE.md「审查范围」,前两轮用固定全量范围 `branch diff against main`。
+
+**第 1 轮**(3 条:1×P1 · 2×P2),**全部采纳整改**:
+
+| # | 级别 | findings | 处置 |
+|---|---|---|---|
+| 1 | P1 | 访客 cookie 会进 Encore trace(`Path=/` 让它跟着每一个同源请求走,而收它的端点没设 `sensitive`) | **采纳**。实测证实**比 findings 说的多一处**:trace 里 `request_headers.cookie`、`response_headers.set-cookie`、`response_payload`(Encore 记的是处理函数**返回值**,`visitorCookie` 字段在那里还没被抽成响应头)**三处**都有明文 token。给 5 个 agent 端点 + `/trace/stream` 加 `sensitive: true`;另外给三个**浏览器直达**的 notes 端点(`/rss.xml`、`/rss/:file`、`/assets/notes/…`)也加上 —— 它们根本不看这个 cookie,但 `Path=/` 会把它一并送过去。整改后重抓 trace:请求头/响应头整段消失,两个 payload 都是 `<redacted>` |
+| 2 | P2 | 前端删除失败仍在 `finally` 里 `startNew()`,把**没被删掉**的会话从界面上抹掉 | **采纳**。清空当前会话挪进 `.then()`;并在 `lib/agent-api.ts` 里把 404 当成成功(「它已经不在了」= 删除的目的达成),其余错误(409 / 5xx / 断网)照常抛出、保留选中。原实现与它自己注释里那句「失败只刷新列表」自相矛盾 |
+| 3 | P2 | 删除端点的 `rec.busy` 读检查与异步 `disposeSession` 不原子,并发 ask 能挤进来 | **采纳**。改用 `runtime.claim()` —— 与 `/agent/ask` 同一把**同步**检查+置位的闸,认领失败回 409;认领后若 `disposeSession` 抛错则把 `busy` 还回去。同时改 `ask.ts`:用户消息落库失败时**无论是否新建会话**都释放运行时会话 —— 落库失败的一个真实原因就是「会话刚被自己在另一个标签页删了」,原来只在 `isNew` 时释放会让一个指向已删除数据的 pi 会话占着并发名额直到 15 分钟空闲回收 |
+
+- 结论:<待第 2 轮复审>
 
 ## 失败处理
 

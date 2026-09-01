@@ -234,7 +234,13 @@ function fail(resp: ServerResponse, status: number, error: string): void {
 }
 
 export const stream = api.raw(
-  { expose: true, method: "GET", path: "/trace/stream" },
+  {
+    expose: true,
+    method: "GET", path: "/trace/stream",
+    // 访客 cookie 是可冒充身份的凭据,不能进 trace(docs/security.md §6;
+    // Encore 默认把请求头/响应头/返回值写进 trace,三处都有明文 token)
+    sensitive: true,
+  },
   async (req, resp) => {
     const parsed = parseStreamQuery(new URL(req.url ?? "/", "http://localhost").searchParams);
     if ("error" in parsed) {

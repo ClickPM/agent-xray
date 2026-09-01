@@ -38,7 +38,16 @@ function notFound(resp: ServerResponse): void {
 }
 
 export const asset = api.raw(
-  { expose: true, method: ["GET", "HEAD"], path: "/assets/notes/:series/:file" },
+  {
+    expose: true,
+    method: ["GET", "HEAD"], path: "/assets/notes/:series/:file",
+    // 【R-VISITOR】这条端点是**浏览器直接访问**的(RSS 链接 / 正文里的图片 URL),
+    // 而访客 cookie 的 Path 是 `/` —— 它会被一并带过来,尽管这里根本不看它。
+    // 不设 sensitive 的话,一个可冒充身份的凭据会随每一次订阅/取图进 trace
+    // (docs/security.md §6)。本端点的 payload(RSS 原文 / 图片字节)进 trace 也无调试价值。
+    sensitive: true,
+  },
+
   async (req: IncomingMessage, resp: ServerResponse) => {
     // 路径参数从 URL 自己剥:文件名带 `.webp` 这类后缀,Encore 的路径参数
     // 本身能拿到整段,但这里同时要做形状校验,统一在一处处理更省事

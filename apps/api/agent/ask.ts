@@ -149,7 +149,13 @@ async function persistAssistant(
 }
 
 export const ask = api.raw(
-  { expose: true, method: "POST", path: "/agent/ask" },
+  {
+    expose: true,
+    method: "POST", path: "/agent/ask",
+    // 访客 cookie 是可冒充身份的凭据,不能进 trace(docs/security.md §6;
+    // Encore 默认把请求头/响应头/返回值写进 trace,三处都有明文 token)
+    sensitive: true,
+  },
   async (req, resp) => {
     // 【客户端断开检测:本环境下拿不到信号,已放弃,勿再按常规写法“修复”】
     //
@@ -277,8 +283,15 @@ export const ask = api.raw(
       userSeq = (await appendMessage(id, "user", prompt)).seq;
     } catch (err) {
       console.error(`persist user message failed: ${safeErrorText(err)}`);
-      // 先 dispose 再释放 busy:持有期间不会被 sweeper / 逐出并发触碰
-      if (isNew) await disposeSession(rec);
+      // 先 dispose 再释放 busy:持有期间不会被 sweeper / 逐出并发触碰。
+      //
+      // 【为什么续接的会话也要 dispose】(codex 初审 P2)原来只在 `isNew` 时释放,
+      // 理由是「续接失败时什么都没建,没东西要清」。R-VISITOR 之后这条不再成立:
+      // 落库失败的一个真实原因是**这个会话刚被访客自己在另一个标签页删掉了**
+      // (外键指向已不存在的 sessions 行)。那种情况下留着运行时会话 = 一个指向
+      // 已删除数据的 pi 会话占着 MAX_ACTIVE_SESSIONS 里的一个名额直到空闲回收
+      // (15 分钟),期间它的轨迹 flush 每次都会外键失败。代价只是下一轮冷启动一次。
+      await disposeSession(rec);
       rec.busy = false;
       fail(resp, 500, "internal error", undefined, visitor?.setCookie);
       return;

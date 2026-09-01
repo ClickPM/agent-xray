@@ -330,8 +330,13 @@ export function Workbench() {
    * (会话还在 = 真的没删掉),比多一个只能点「确定」的提示框更有用。
    * 流式进行中不收删除:那一轮的助手消息正等着落库,服务端也会回 409。
    *
-   * 删的正好是当前打开的那个会话时先切回空状态,否则右栏会挂在一个已经不存在的
+   * 删的正好是当前打开的那个会话时切回空状态,否则右栏会挂在一个已经不存在的
    * 会话上不断重连轨迹流(而那条流现在只会回 404)。
+   *
+   * 【切空状态只能放在成功分支,不能放 finally】(codex 初审 P2)放 finally 的话,
+   * 断网 / 500 / 服务端并发回 409 时,一个**根本没被删掉**的会话连同已经读出来的
+   * 对话内容会从界面上消失,与上面那句「失败只刷新列表」自相矛盾。
+   * (404 在 `deleteSession` 里已被当成成功 —— 那种情况它是真的没了。)
    */
   const removeSession = useCallback(
     (id: string) => {
@@ -339,11 +344,11 @@ export function Workbench() {
       const title = sessions.find((s) => s.id === id)?.title || "新会话";
       if (!window.confirm(`删除会话「${title}」?对话内容与轨迹会一并删除,不可恢复。`)) return;
       deleteSession(id)
-        .catch((err) => console.error("delete session failed:", err))
-        .finally(() => {
+        .then(() => {
           if (sessionId === id) startNew();
-          refreshSessions();
-        });
+        })
+        .catch((err) => console.error("delete session failed:", err))
+        .finally(refreshSessions);
     },
     [streaming, sessions, sessionId, startNew, refreshSessions],
   );

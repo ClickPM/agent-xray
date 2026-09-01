@@ -4,7 +4,7 @@
 // 「前后端协议」决策);对话流是 `api.raw` SSE,生成客户端不覆盖,这里用 fetch +
 // ReadableStream 自己解帧。两者共用同一个 `/api` 前缀:dev 由 next.config.ts 的
 // rewrite 转发到 encore :4000,生产由 Caddy 截走(deploy/Caddyfile)。
-import Client from "./api-client";
+import Client, { ErrCode, isAPIError } from "./api-client";
 
 const API_BASE = "/api";
 
@@ -37,7 +37,15 @@ export async function getSession(
  * 不是本访客的会话回 404 —— 与「不存在」同一个回答。
  */
 export async function deleteSession(id: string): Promise<void> {
-  await client.agent.deleteSession(id);
+  try {
+    await client.agent.deleteSession(id);
+  } catch (err) {
+    // 404 = 它已经不在了(别的标签页删过 / cookie 过期换了身份)。删除想要的结果已经达成,
+    // 按成功处理 —— 把「已经没有的东西」报成失败,只会让调用方继续把它当成还在。
+    // 其余错误(409 正在回复 / 5xx / 断网)必须抛出去:那些情况下会话**还在**。
+    if (isAPIError(err) && err.code === ErrCode.NotFound) return;
+    throw err;
+  }
 }
 
 /**
