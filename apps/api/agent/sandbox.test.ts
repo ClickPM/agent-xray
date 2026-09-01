@@ -273,6 +273,21 @@ describe("只读工具的行为", () => {
     expect(parsed.omitted).toBeGreaterThan(0);
   });
 
+  it("查询失败走 pi 的错误路径,且只出固定文案", async () => {
+    // 传一个 Postgres 绑不上的参数,把 execute 内部打失败。
+    // 断言两件事:①抛出(pi 据此置 isError:true,轨迹面板才不会把失败画成成功)
+    //           ②消息是固定文案,不含上游细节
+    const boom = TOOL_REGISTRY.notes_get_chapter.execute(
+      "t1",
+      { series: { nope: true }, chapter: "loop" } as never,
+      undefined,
+      undefined,
+      {} as never,
+    );
+    await expect(boom).rejects.toThrow("查询失败,请稍后再试或换个问法。");
+    await expect(boom).rejects.not.toThrow(/notes_chapters|postgres|select/i);
+  });
+
   it("结果有界:超长正文被截断并标注", () => {
     const long = "x".repeat(20_000);
     const capped = capText(long);

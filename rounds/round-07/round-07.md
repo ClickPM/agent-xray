@@ -108,11 +108,18 @@ ROUNDS.md 把工具组钉成三个名字,而模型要读一章必须先拿到章
 
 四条都是最小改动(改判断 / 加一个 SQL FILTER / 多取一列 / 换一个存在性检查),没有新增机制。
 
-### 第 2 轮(复审)
+### 第 2 轮(复审,仍是全量范围):2 条 findings,**全部采纳整改**
 
-<!-- 完成后回填 -->
+| # | 级别 | finding | 判定 | 整改 |
+|---|---|---|---|---|
+| 1 | P2 | 工具查询失败被 `guarded` 吞成一条**正常**结果:pi 把「execute 正常 resolve」一律当成功,于是 `tool_execution_end` / `tool_result` 的 `isError` 是 false —— 一次超时的查询在轨迹面板上画成一次成功的查询 | **属实,且正打在本站卖点上**。轨迹面板就是这个站存在的理由,它把失败画成成功比少画一格更糟 | `guarded` 改为**抛出固定文案**而不是 return。pi 的 `executePreparedToolCall` 捕获异常后用 `error.message` 造 `createErrorToolResult(...)` 并置 `isError: true`(源码核实)——错误状态对了,给模型的仍是那句不含上游细节的固定文案。补 1 条用例,同时断言"抛出"与"消息里没有表名/SQL 片段" |
+| 2 | P2 | 角色成员判据「能 CONNECT 本库」几乎不筛任何东西:Postgres 默认把 CONNECT 授给 PUBLIC,于是同集群里**别的应用**的登录角色也拿到 agent_ro,而 membership 是集群级的 —— 它们真的多出了「连过来读本库 notes 三张表」这件原本做不到的事 | 属实。第一版那句「授得宽是安全的」只有在「被授角色本来就能读得更多」时才成立,而 CONNECT 这个条件不保证这一点 | 判据换成「**已经能 SELECT 本库的 `sessions` 表**」。选 `sessions` 是因为它是本应用自己的表且 **agent_ro 对它没有任何权限** —— 拿 notes_* 判会绕回自身(授完之后人人都"有权限")。能读 `sessions` 的角色本来就能读比 agent_ro 多得多的东西,这个授权于是**可证明地**不扩大任何权限 |
 
-结论:<!-- 完成后回填 -->
+**关于第 2 条的可观测性,要说清楚**:本机 encore 集群里所有登录角色(encore-read / write / service / admin / migrator / postgres)对 `sessions` 都有 SELECT(实测),所以新旧两版在**这个集群上选出的是同一批角色**,收紧不可观测。判据不是空转的反例是 `agent_ro` 自己:`has_table_privilege('agent_ro','sessions','SELECT')` = false。生产 compose 只有 `app` 一个角色,两版行为也相同。这条整改防的是「同集群里存在只有 CONNECT、没有表权限的角色」那种环境 —— 正是 finding 描述的场景,而本机恰好不具备。
+
+验证:`encore db reset agent` 后重跑全套 —— 迁移干净应用(`role_table_grants` 里 agent_ro 恰好 3 条,即 notes 三张表),9 文件 139 用例全过。
+
+结论:<!-- 复审零 findings 后回填 -->
 
 ## 失败处理
 

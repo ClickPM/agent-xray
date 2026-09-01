@@ -29,7 +29,7 @@ R7 落地补记(2026-09-01,`apps/api/agent/tools.ts` + `runtime.ts`):
 - **`tool_config` 只能开关「已实现的工具」,不能凭名字长出工具**:表里的未知名字在注册阶段被丢弃并记日志。bash / write 这类名字在 `TOOL_REGISTRY` 里**不存在** —— 上面那条「永久禁止」的物理落点是没有实现,不是配置关掉。**实测**:被诱导的模型直接点名 `bash`,pi 回 `Tool bash not found`
 - **`process.env` 的双闸读在注册环节**,不在工具体内:工具本身仍是纯函数。表里 `dangerous=true` 且缺 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` → 不注册(当前注册表没有任何 dangerous 实现,这是给将来准备的闸)
 - **工具集变更 = 会话重建**:工具白名单在 `createAgentSession` 时定格,事后开关对内存里的会话无效。所以它并进 R6 那个 `configFingerprint`,走同一条「配置指纹变了,会话下一轮被重建」的统一规则
-- **工具结果有界**(8000 字符,超出截断并标注)且**异常不外泄**:数据库错误只进服务端日志,给模型的是一句固定文案 —— 工具结果会进模型上下文 → 进轨迹事件 → 经公开的 `/trace/stream` 出去(§2)
+- **工具结果有界**(8000 字符,超出截断并标注)且**异常不外泄**:数据库错误只进服务端日志,给模型的是一句固定文案 —— 工具结果会进模型上下文 → 进轨迹事件 → 经公开的 `/trace/stream` 出去(§2)。**但失败仍要是失败**:固定文案以 `throw` 交给 pi 的错误路径,`tool_result` 的 `isError` 才是 true;`return` 一条普通结果会让轨迹面板把一次超时的查询画成一次成功的查询(codex 复审 P2)
 
 ### 第 2 层 · 数据面只读
 
@@ -38,6 +38,7 @@ R7 落地补记(2026-09-01,`apps/api/agent/tools.ts` + `runtime.ts`):
 
 R7 落地补记(2026-09-01,所有者裁定;`apps/api/agent/ro-db.ts` + 迁移 `004`):
 
+- **成员资格只授给「已经能读本库 `sessions` 表」的角色**:role membership 是**集群级**的,而 Postgres 默认把 CONNECT 授给 PUBLIC —— 按「能连本库」授,同集群里别的应用的角色也会拿到 agent_ro,真的多出「连过来读 notes 三张表」这件原本做不到的事(codex 复审 P2)。用 `sessions` 做判据是因为它是本应用的表且 **agent_ro 对它无权限**(拿 notes_* 判会绕回自身),能读它的角色本来就能读得比 agent_ro 多,授权因而**可证明地**不扩大权限
 - **角色是真的,登录能力没有**:`agent_ro` 建成 `NOLOGIN`,由应用连接在事务里 `SET LOCAL ROLE agent_ro` 临时降权,而不是另开一条 `AGENT_RO_DATABASE_URL` 连接。权限仍由 Postgres 强制(降权后 `current_user` 就是 `agent_ro`,写 notes 表回 `permission denied`),但省掉了一个 pg 驱动依赖、一份角色口令(`.env` / initdb / secret 各一处)和一个 Encore 管不到的第二连接池
 - **换这条路的决定性理由是验收能不能跑**:本机 encore 的库由 CLI 托管,`agent_ro` 的登录口令进不到那套托管配置里,「以 agent_ro 写库必须失败」只能推到部署轮人工核验;而 M2 的止损写的是「R7 沙箱验收不过不得进入任何公网部署轮」。改成 `SET LOCAL ROLE` 之后这条验收进了 `dev.ps1 test`(`apps/api/agent/sandbox.test.ts`)
 - **必须是 `SET LOCAL` 而不是 `SET`**:Encore 的连接是池化的,`SET ROLE` 会留在连接上,归还池子后下一个请求(包括 MCP 管理面的写请求)会继承降权状态。`SET LOCAL` 随事务结束复位

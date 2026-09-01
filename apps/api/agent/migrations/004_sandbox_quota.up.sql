@@ -41,9 +41,20 @@ $$;
 -- 生产 compose 只有 `app` 一个角色,两者同名,所以这个坑只在本机暴露 —— 而本机正是
 -- 验收要跑的地方(见文件头的裁定说明)。
 --
--- 【为什么可以授得这么宽】membership 给的是「**降**到 agent_ro 的能力」,不是任何新权限:
--- agent_ro 的权限集是这些角色的真子集(只有三张表的 SELECT)。授给能连本库的每一个
--- 登录角色,不会让任何角色多做一件它原本做不到的事。
+-- 【授给谁:已经能读本库业务表的角色,一个不多】
+-- membership 给的是「**降**到 agent_ro 的能力」,不是新权限 —— 但这句话只有在
+-- 「被授的角色本来就能读得更多」时才成立。第一版按「能 CONNECT 本库」筛,那条件
+-- 几乎不筛任何东西:Postgres 默认把 CONNECT 授给 PUBLIC,于是同一个集群里**别的应用**
+-- 的登录角色也会被授到 agent_ro —— 而 membership 是集群级的,它们于是真的多出了
+-- 「连过来读本库 notes 三张表」这件原本做不到的事(codex 复审 P2)。
+--
+-- 判据换成 `sessions` 表的 SELECT 权限:
+--   - `sessions` 是本应用自己的表(迁移 001),**agent_ro 对它没有任何权限**,
+--     所以这个判断不会绕回自身(拿 notes_* 来判就成循环了:授完之后人人都"有权限");
+--   - 能读 `sessions` 的角色,本来就能读比 agent_ro 多得多的东西,
+--     再给它一个只能 SELECT 三张 notes 表的身份,**可证明地**不扩大任何权限。
+-- 本机 encore 的 encore-migrator / encore-write / encore-service 等都满足(实测),
+-- 生产 compose 的 `app` 是库主也满足。
 DO $$
 DECLARE
     r record;
@@ -54,7 +65,8 @@ BEGIN
     FOR r IN
         SELECT rolname FROM pg_roles
          WHERE rolcanlogin
-           AND has_database_privilege(rolname, current_database(), 'CONNECT')
+           AND (rolname = current_user
+                OR has_table_privilege(rolname, 'sessions', 'SELECT'))
     LOOP
         EXECUTE format('GRANT agent_ro TO %I', r.rolname);
     END LOOP;

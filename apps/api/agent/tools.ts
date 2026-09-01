@@ -75,19 +75,30 @@ function splitOverflow<T>(rows: T[], limit: number): { rows: T[]; more: boolean 
   return rows.length > limit ? { rows: rows.slice(0, limit), more: true } : { rows, more: false };
 }
 
+/** 工具失败时给模型看的固定文案。**不含任何上游细节**。 */
+const TOOL_FAILURE_TEXT = "查询失败,请稍后再试或换个问法。";
+
 /**
- * 工具执行的统一兜底。
+ * 工具执行的统一兜底:**换掉错误内容,但保留「这是一次失败」这个事实**。
  *
- * **异常绝不能原样返回给模型**:数据库错误文本里可能带连接信息、表结构乃至参数值,
- * 而工具结果会进模型上下文 → 进轨迹事件 → 经公开的 /trace/stream 出去
- * (docs/security.md §2)。原文只进服务端日志且过 `safeErrorText`。
+ * 两条都要成立,少一条就错:
+ *
+ *   - **异常绝不能原样返回给模型**:数据库错误文本里可能带连接信息、表结构乃至参数值,
+ *     而工具结果会进模型上下文 → 进轨迹事件 → 经公开的 `/trace/stream` 出去
+ *     (docs/security.md §2)。原文只进服务端日志且过 `safeErrorText`。
+ *   - **失败必须走 pi 的错误路径**(codex 复审 P2)。第一版是 `return` 一条普通文本结果 ——
+ *     pi 把「execute 正常 resolve」一律当成功,于是 `tool_execution_end` / `tool_result`
+ *     的 `isError` 是 false:一次超时的查询在轨迹面板上显示成一次成功的查询,而轨迹面板
+ *     正是本站的卖点。改成**抛出固定文案**:pi 的 `executePreparedToolCall` 捕获异常后
+ *     用 `error.message` 造 `createErrorToolResult(...)` 并置 `isError: true`(源码核实),
+ *     既拿到了正确的错误状态,给模型的又还是那句固定文案。
  */
 async function guarded(tool: string, run: () => Promise<ToolText>): Promise<ToolText> {
   try {
     return await run();
   } catch (err) {
     console.error(`tool ${tool} failed: ${safeErrorText(err)}`);
-    return textResult("查询失败,请稍后再试或换个问法。", { error: true });
+    throw new Error(TOOL_FAILURE_TEXT);
   }
 }
 
