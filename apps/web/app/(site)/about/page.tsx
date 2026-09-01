@@ -42,8 +42,10 @@ export default async function AboutPage() {
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "40px 32px 64px" }}>
-        {/* 头部 — 仅 GitHub 公开信息,无姓名/公司/经历 */}
-        {(gh || about.intro) && (
+        {/* 头部 — 仅 GitHub 公开信息,无姓名/公司/经历。
+            三项任一有值就渲染:about_set 的每个字段都可省略,只配了 originUrl 的
+            库行是合法状态,漏掉它会让那条链接**永远不出现**(codex 第 1 轮 P2)。 */}
+        {(gh || origin || about.intro) && (
           <div style={{ display: "flex", alignItems: "flex-start", gap: 18 }}>
             {gh && (
               // eslint-disable-next-line @next/next/no-img-element

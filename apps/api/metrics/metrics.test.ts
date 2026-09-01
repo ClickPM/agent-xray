@@ -1,7 +1,8 @@
 // R8 metrics 服务测试。经 `dev.ps1 test` 运行(CLAUDE.md 规则 2)。
 //
 // 覆盖面按「错了会静默」排序:
-//   - 加盐哈希 —— 错了就是把可反推的东西落了库(docs/security.md §6)
+//   - 加盐哈希与它的**有界输入** —— 错了要么把可反推的东西落了库(§6),
+//     要么让 /t 变成一个任何人都能撑爆库的入口(codex 第 1 轮 P1)
 //   - UA 摘要 —— 错了会把高熵指纹当摘要存进去
 //   - 路径归一 —— 错了 `/t` 就成了一个任何人都能往库里灌任意行的入口
 //   - 计数行 upsert —— 错了行数会随刷新次数增长(聚合口径的用例在 mcp/mcp.test.ts)
@@ -10,7 +11,7 @@ import { siteDay, siteDayAgo } from "../shared/site-time";
 import { db } from "./db";
 import { OTHER_BUCKET, classifyPath, resolvePath } from "./path";
 import { recordVisit } from "./store";
-import { clientIp, uaDigest, visitorHash } from "./visitor";
+import { clientIp, ipNetwork, uaDigest, visitorHash } from "./visitor";
 
 const SALT = "test-salt-0123456789";
 const CHROME_WIN =
@@ -19,21 +20,24 @@ const SAFARI_IOS =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
 describe("访客标识(metrics/visitor)", () => {
-  it("同一天同一 IP+UA 稳定,换任一维度就变", () => {
-    const base = visitorHash(SALT, "2026-09-01", "1.2.3.4", CHROME_WIN);
-    expect(visitorHash(SALT, "2026-09-01", "1.2.3.4", CHROME_WIN)).toBe(base);
+  const NET = ipNetwork("1.2.3.4");
+  const UA = uaDigest(CHROME_WIN);
+
+  it("同一天同一网段 + UA 稳定,换任一维度就变", () => {
+    const base = visitorHash(SALT, "2026-09-01", NET, UA);
+    expect(visitorHash(SALT, "2026-09-01", NET, UA)).toBe(base);
     // 换天必须变 —— 这正是「跨天不可关联」这条隐私承诺的实现
-    expect(visitorHash(SALT, "2026-09-02", "1.2.3.4", CHROME_WIN)).not.toBe(base);
-    expect(visitorHash(SALT, "2026-09-01", "1.2.3.5", CHROME_WIN)).not.toBe(base);
-    expect(visitorHash(SALT, "2026-09-01", "1.2.3.4", SAFARI_IOS)).not.toBe(base);
+    expect(visitorHash(SALT, "2026-09-02", NET, UA)).not.toBe(base);
+    expect(visitorHash(SALT, "2026-09-01", ipNetwork("9.9.9.9"), UA)).not.toBe(base);
+    expect(visitorHash(SALT, "2026-09-01", NET, uaDigest(SAFARI_IOS))).not.toBe(base);
     // 换盐必须变,否则盐就是个摆设
-    expect(visitorHash("other-salt", "2026-09-01", "1.2.3.4", CHROME_WIN)).not.toBe(base);
+    expect(visitorHash("other-salt", "2026-09-01", NET, UA)).not.toBe(base);
   });
 
   it("是 128 bit 的 hex,且不含任何原始输入", () => {
-    const h = visitorHash(SALT, "2026-09-01", "203.0.113.7", CHROME_WIN);
+    const h = visitorHash(SALT, "2026-09-01", ipNetwork("203.0.113.7"), UA);
     expect(h).toMatch(/^[0-9a-f]{32}$/);
-    expect(h).not.toContain("203.0.113.7");
+    expect(h).not.toContain("203.0.113");
   });
 
   it("分隔符不能省:拼接歧义会让两组不同输入撞同一个值", () => {
@@ -43,11 +47,66 @@ describe("访客标识(metrics/visitor)", () => {
     );
   });
 
-  it("来源 IP 取 XFF 首段,其次 X-Real-IP,最后 socket", () => {
-    expect(clientIp({ "x-forwarded-for": "9.9.9.9, 10.0.0.1" }, "127.0.0.1")).toBe("9.9.9.9");
+  it("**取 XFF 最后一段**:反代是追加,第一段是请求方自己写的", () => {
+    // codex 第 1 轮 P1:取第一段等于让任何人自选身份 —— 换个假 IP 就是一行新数据
+    expect(clientIp({ "x-forwarded-for": "1.2.3.4, 203.0.113.7" }, "127.0.0.1")).toBe("203.0.113.7");
+    expect(clientIp({ "x-forwarded-for": "203.0.113.7" }, "127.0.0.1")).toBe("203.0.113.7");
+    // 空段不能把真实对端挤掉
+    expect(clientIp({ "x-forwarded-for": "1.2.3.4, 203.0.113.7, " }, "127.0.0.1")).toBe("203.0.113.7");
+    expect(clientIp({ "x-forwarded-for": "  " }, "127.0.0.1")).toBe("127.0.0.1");
     expect(clientIp({ "x-real-ip": "8.8.8.8" }, "127.0.0.1")).toBe("8.8.8.8");
     expect(clientIp({}, "127.0.0.1")).toBe("127.0.0.1");
     expect(clientIp({}, undefined)).toBe("unknown");
+  });
+});
+
+describe("IP 网段收敛(metrics/visitor)", () => {
+  it("IPv4 收到 /24", () => {
+    expect(ipNetwork("203.0.113.7")).toBe("203.0.113.0/24");
+    expect(ipNetwork("203.0.113.250")).toBe("203.0.113.0/24");
+    // 同 /24 内换主机位不产生新桶 —— 这正是行数上界的来源之一
+    expect(ipNetwork("203.0.113.1")).toBe(ipNetwork("203.0.113.2"));
+    expect(ipNetwork("203.0.114.1")).not.toBe(ipNetwork("203.0.113.1"));
+  });
+
+  it("IPv6 收到 /48:一整个 /64 换地址只算一个桶", () => {
+    expect(ipNetwork("2001:db8:1:2::3")).toBe("2001:db8:1::/48");
+    expect(ipNetwork("2001:db8:1:ffff::abcd")).toBe("2001:db8:1::/48");
+    expect(ipNetwork("2001:db8:1:2::3")).toBe(ipNetwork("2001:db8:1:9999::9"));
+    expect(ipNetwork("2001:db8:2:2::3")).not.toBe(ipNetwork("2001:db8:1:2::3"));
+    // 未压缩写法与压缩写法必须落同一个桶
+    expect(ipNetwork("2001:0db8:0001:0002:0000:0000:0000:0003")).toBe("2001:db8:1::/48");
+  });
+
+  it("**`::` 必须先展开再取前三组**(否则主机位会混进桶名)", () => {
+    // 第一版直接 split(":") 取前三段:fe80::1 与 fe80::2 会落进两个桶 ——
+    // 那正好复活了「一个 /64 里换地址就能造新行」(codex 第 1 轮 P1)
+    expect(ipNetwork("fe80::1")).toBe("fe80:0:0::/48");
+    expect(ipNetwork("fe80::1")).toBe(ipNetwork("fe80::2"));
+    expect(ipNetwork("::1")).toBe("0:0:0::/48");
+    expect(ipNetwork("2001:db8::1")).toBe(ipNetwork("2001:db8::ffff"));
+  });
+
+  it("端口 / 方括号 / zone id / IPv4-mapped 都能剥掉", () => {
+    expect(ipNetwork("203.0.113.7:54321")).toBe("203.0.113.0/24");
+    expect(ipNetwork("[2001:db8:1:2::3]:443")).toBe("2001:db8:1::/48");
+    expect(ipNetwork("fe80::1%eth0")).toBe("fe80:0:0::/48");
+    // 同一个人从两条协议栈过来不该被算成两个网段
+    expect(ipNetwork("::ffff:203.0.113.7")).toBe("203.0.113.0/24");
+    expect(ipNetwork("0:0:0:0:0:ffff:203.0.113.7")).toBe("203.0.113.0/24");
+  });
+
+  it("认不出的形状归到有界常量,绝不把原串带进哈希", () => {
+    expect(ipNetwork("")).toBe("unknown");
+    expect(ipNetwork("unknown")).toBe("unknown");
+    expect(ipNetwork("not-an-ip")).toBe("unknown");
+    expect(ipNetwork("999.1.1.1")).toBe("unknown");
+    expect(ipNetwork("2001:zzzz:1::1")).toBe("unknown");
+    expect(ipNetwork("[bad")).toBe("unknown");
+    // 组数不对 / 多个 :: 都不是合法 IPv6
+    expect(ipNetwork("2001:db8:1")).toBe("unknown");
+    expect(ipNetwork("2001::db8::1")).toBe("unknown");
+    expect(ipNetwork("::ffff:999.1.1.1")).toBe("unknown");
   });
 });
 

@@ -13,10 +13,16 @@
 -- 【为什么是计数行而不是一行一次 pageview】
 -- 一行一 pageview 的表在被人对着 `POST /t` 打循环时会无界增长;做成
 -- `(day, path, visitor)` 的计数行之后,同一个访客当天在同一页刷一万次也只是
--- 一行的 hits 变大。行数上界 = 天数 × **站内真实存在的路径数** × 当日访客数
--- (路径由 metrics 服务归一到白名单形状 + 库内存在性校验,见 metrics/path.ts)。
+-- 一行的 hits 变大。
 --
--- 【visitor 是什么】sha256(salt ‖ day ‖ ip ‖ ua) 的 hex 前 32 位。
+-- 【行数上界 = 天数 × 路径数 × visitor 数,而这三项都必须有界】
+-- `/t` 是无认证的公开写入口,主键的每一个分量都是请求方能影响的东西 ——
+-- 任何一项无界,这张表就能被一个 curl 循环撑爆(codex 第 1 轮 P1 就是这么来的:
+-- 当时 visitor 的哈希输入里含**原始 UA 串**,每次换个 User-Agent 就是一行新数据)。
+--   · path    —— 归一到站内已知路由形状 + 库内存在性校验(metrics/path.ts)
+--   · visitor —— 哈希输入全部收敛过:day + IP **网段** + UA **摘要**(metrics/visitor.ts)
+--
+-- 【visitor 是什么】sha256(salt ‖ day ‖ IP网段 ‖ UA摘要) 的 hex 前 32 位。
 -- **day 进哈希输入是刻意的**:同一个人在不同日期得到不同的 visitor,
 -- 跨天无法串成一条访问史 —— 这也意味着「近 30 天 UV」只能是各日 UV 之和
 -- (统计 tool 里叫 visitorDays,不叫 UV,免得被读成「多少个人」)。

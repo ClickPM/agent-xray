@@ -1,6 +1,6 @@
 # Round 08 — metrics 打点 + About 真实化 + 统计查询 MCP 工具
 
-> 状态:进行中(实现与自测完成,待 codex 审查)
+> 状态:进行中(codex 第 1 轮 2 条 findings 全采纳整改,待复审)
 
 ## 目标
 
@@ -29,7 +29,8 @@
 
 - `apps/api/agent/migrations/004_metrics.up.sql` —— `visits` 计数行表 + 按天索引
 - `apps/api/metrics/beacon.ts` —— `POST /t`(`api.raw`,`sensitive: true`,`bodyLimit 1024`)
-- `apps/api/metrics/visitor.ts` —— 加盐哈希 / 来源 IP 取值 / UA 摘要(**原始 IP、UA 的作用域到此为止**)
+- `apps/api/metrics/visitor.ts` —— 加盐哈希 / 来源 IP 取值与网段收敛 / UA 摘要
+  (**原始 IP、UA 的作用域到此为止**;哈希输入必须全部有界,见「代码审查」)
 - `apps/api/metrics/path.ts` —— 路径归一(形状白名单 + 库内存在性校验)
 - `apps/api/metrics/store.ts` · `db.ts` · `secrets.ts`(`MetricsIpSalt`)· `README.md`
 - `apps/api/shared/site-time.ts` —— 站点时区(UTC+8)的自然日;写入方与读取方共用同一个「今天」
@@ -66,13 +67,13 @@
 
 **测试**
 
-- `apps/api/metrics/metrics.test.ts`(18 项)· `apps/api/mcp/mcp.test.ts` 增 About 与统计聚合两段(11 项)
+- `apps/api/metrics/metrics.test.ts`(23 项)· `apps/api/mcp/mcp.test.ts` 增 About 与统计聚合两段(11 项)
 
 ## 验收
 
 | # | 检查 | 命令 / 期望 | 结果 |
 |---|---|---|---|
-| 1 | 编译与测试 | `dev.ps1 check` / `dev.ps1 test` 全过 | ✅ 9 files / 138 tests passed |
+| 1 | 编译与测试 | `dev.ps1 check` / `dev.ps1 test` 全过 | ✅ 9 files / 143 tests passed(整改后) |
 | 2 | 前端类型与生产构建 | `npx tsc --noEmit`、`npx next build` 无错 | ✅ 构建通过 |
 | 3 | 打点端到端 | 浏览 `/`、`/notes`、`/about` 后 `visits` 有对应计数行 | ✅ 8 PV / 2 visitor / 3 路径 |
 | 4 | **库中无原始 IP** | `SELECT * FROM visits` 只有 32 位 hex 的 `visitor` | ✅ 无任何 IP 形状的值 |
@@ -84,6 +85,8 @@
 | 10 | About 部分更新不丢数据 | 只传 `intro` 时 repos / langBar / buildPoints 原样保留 | ✅ 单测覆盖 |
 | 11 | 备案号占位 | `ICP_BEIAN` 未配置无底栏;配置后底部出现并链到工信部 | ✅ 两种情况都实测 |
 | 12 | 前端零 About 硬编码 | `demo-data.ts` 里搜不到 buildPoints / repos / langBar / githubUser | ✅ |
+| 13 | **visitor 取值有界**(审查整改后新增) | 伪造 XFF 首段 ×3 + 换 UA 串 ×4 + 同 /24 换主机位 ×5 = 12 次请求 | ✅ 合并成 1 行 hits=12 |
+| 14 | **只配 originUrl 时链接可见**(同上) | 清空其余字段后页面仍渲染 origin 按钮 | ✅ |
 
 ## 禁止
 
@@ -96,11 +99,63 @@
 
 ## 代码审查
 
-<!-- 完成后回填 -->
+- 审查方式:codex `/codex:review`(`--background`,范围 = branch diff against main)
 
-- 审查方式:
-- findings 处理:
-- 结论:
+### 第 1 轮 — 2 条 findings,**全部采纳整改**
+
+**[P1] `visitor` 的哈希输入含原始 UA,`/api/t` 可被用来无界撑库 — `metrics/visitor.ts`**
+
+**采纳,判定属实且比 finding 描述的更宽**。`visitor` 是 `visits` 主键的一部分,而 `/t` 无认证:
+哈希输入里任何一个分量只要请求方能自由左右,他就能自由制造新行。审查者指出了原始 UA 串
+这一条;复核时发现 **IP 那条同样成立**——`clientIp` 取的是 `X-Forwarded-For` 的**第一段**,
+而 Caddy 的 `reverse_proxy` 是**追加**不是覆盖,所以第一段恰恰是请求方自己写的那个。
+两条合起来:一个 curl 循环就能把 `visits` 撑到磁盘满。路径归一挡不住这个,它只管 path 那一维。
+
+整改口径是**让哈希的每个输入分量都有界**,而不是加限流或行数上限(后者是新机制):
+
+| 分量 | 整改前 | 整改后 | 上界 |
+|---|---|---|---|
+| `day` | 一天一值 | 不变 | 1 |
+| `ua` | **原始 UA 串** | `uaDigest` 闭集 | ≤42 |
+| `ip` | XFF **第一段**的完整地址 | XFF **最后一段** → 收敛到网段(IPv4 `/24` / IPv6 `/48`) | 真实网段数 |
+| `path` | 已有界 | 不变 | 站内路径数 |
+
+取最后一段是因为那一段由我们自己的反代写入;**这条依赖「Caddy 前面没有别的代理」**,
+将来加 CDN / 云 LB 必须改成「从右往左跳过 N 层可信代理」,已写进代码注释与 `docs/security.md` §6。
+IP 收敛到网段同时是隐私改进:一台机器手上常有一整个 IPv6 `/64`,逐个换地址几乎零成本,
+收到 `/48` 之后再怎么换都是同一行。代价是同网段 + 同浏览器族的两位访客会被算成一个人
+——个人站量级下可接受的低估。
+
+**实测复现与验证**(12 次请求,整改前会产生 12 行):
+
+```
+伪造 XFF 首段 ×3(1.1.1.1 / 2.2.2.2 / 3.3.3.3,真实对端同一个)
+换 Chrome 版本号 ×4(同族不同串)
+同 /24 内换主机位 ×5(203.0.113.1 … .5)
+→ 整改后:1 行,hits = 12
+```
+
+**[P2] 只配了 `originUrl` 时头部整块不渲染,那条链接永远不出现 — `about/page.tsx`**
+
+**采纳**。`about_set` 的每个字段都可省略,「只有 originUrl 的库行」是合法状态,而外层守卫
+写的是 `(gh || about.intro)`。改成 `(gh || origin || about.intro)`。
+实测:清空 githubUser / intro / 三个数组、只留 originUrl 后,页面正确渲染 origin 按钮,
+且不出现 GitHub 按钮与 404 头像。
+
+### 顺带记入 BACKLOG(不当场改)
+
+`apps/api/mcp/audit.ts` 的 `remoteOf` 与 `mcp/server.ts` 的 `remoteOfRequest` 也取 XFF 第一段,
+同样可被写入方伪造。影响有界(管理面只有一个使用者、认证不依赖这个头,它只是审计线索),
+属跨轮次问题,按 CLAUDE.md 记 `rounds/BACKLOG.md` 不顺手改。
+
+### 自测抓到的第三个缺陷(不在 findings 里)
+
+写 P1 整改的用例时抓到 `ipNetwork` 的第一版对 IPv6 直接 `split(":")` 取前三组是**错的**:
+`fe80::1` 会切成 `["fe80","","1"]`,把**主机位**当成了网段的一部分,于是 `fe80::1` 与 `fe80::2`
+落进两个不同的桶——那正好复活了 P1 要消除的「一个 `/64` 里换地址就能造新行」。
+已改成先展开 `::` 再取前三组并做前导零归一,补了 4 条用例(压缩/未压缩必须同桶)。
+
+- 结论:**待第 2 轮复审**(范围 = 本轮整改 diff,`--base f2b14bf`)
 
 ## 失败处理
 
@@ -110,7 +165,7 @@
 
 **1. 统计口径的核心取舍:visitor 按天轮换,所以「区间 UV」这个数不存在**
 
-访客标识是 `sha256(salt ‖ day ‖ ip ‖ ua)` 的前 128 bit。把 `day` 放进哈希输入,是为了
+访客标识是 `sha256(salt ‖ day ‖ IP网段 ‖ UA摘要)` 的前 128 bit(输入分量的收敛见「代码审查」第 1 轮 P1)。把 `day` 放进哈希输入,是为了
 让「库整个泄漏也串不出任何人的跨天访问史」成立。直接后果是**跨天的 visitor 不可比**:
 近 30 天只能给「各日 UV 之和」。三个 tool 里它一律叫 `visitorDays` 而不是 UV,
 description 里逐个重申过——一个叫 UV 的字段被读成「多少个人」是迟早的事。
@@ -172,7 +227,18 @@ traffic_agents   → [ {Chrome/Windows, pv 5}, {Edge/Windows, pv 3} ]
 
 与 `SELECT day, path, visitor, ua, hits FROM visits` 逐行核对一致。
 
-**9. 与计划的偏离**
+**9. 审查整改后的口径变化(codex 第 1 轮 P1)**
+
+`visitor` 的哈希输入从 `salt ‖ day ‖ ip ‖ ua` 改成 `salt ‖ day ‖ IP网段 ‖ UA摘要`。
+**这不是「更保守一点」的调整,而是一个安全前提的修复**:`visitor` 是主键的一部分,
+而 `/t` 无认证——哈希输入里只要有一个分量是请求方能自由左右的,这个端点就是一条
+撑爆数据库的通道。原先 UA(原始串)与 IP(XFF 第一段,而 Caddy 是追加不是覆盖)
+两个分量都满足这个条件。
+
+副作用要说清:UV 从此是**按网段 + 浏览器族**去重,不是按设备。同一个 `/24` 里用同款
+浏览器的两位访客会被算成一个人。这是有意的取舍——换来的是「行数上界不由请求方决定」。
+
+**10. 与计划的偏离**
 
 - **新增了两个服务目录**(`metrics` 与 `about`),不是一个。ROUNDS.md 只提到 metrics;
   About 的访客读路径没有合适的落点——放 `notes` 与那个服务的职责不符,放 `system`(健康检查)

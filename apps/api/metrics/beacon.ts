@@ -16,7 +16,7 @@ import { siteDay } from "../shared/site-time";
 import { resolvePath } from "./path";
 import { metricsIpSalt } from "./secrets";
 import { recordVisit } from "./store";
-import { clientIp, uaDigest, visitorHash } from "./visitor";
+import { clientIp, ipNetwork, uaDigest, visitorHash } from "./visitor";
 
 /**
  * 请求体上限。beacon 的体是一个 `{"path":"…"}`,几十字节;这里给 1 KiB。
@@ -110,14 +110,18 @@ export const track = api.raw(
     }
 
     try {
-      const userAgent = headerValue(req.headers["user-agent"]);
       const day = siteDay(new Date());
+      // 【哈希输入的每一分量都必须先收敛到有界取值】(codex 第 1 轮 P1)
+      // 这是个无认证的公开写入口,而 visitor 是主键的一部分:
+      // 把原始 UA 串或请求方自填的 IP 喂进去,等于让任何人自由制造新行。
+      const uaKey = uaDigest(headerValue(req.headers["user-agent"]));
+      const ipNet = ipNetwork(clientIp(req.headers, req.socket?.remoteAddress));
       await recordVisit({
         day,
         path: await resolvePath(path),
-        // 原始 IP / UA 就在这一行里被消费掉,不再向外传递
-        visitor: visitorHash(salt, day, clientIp(req.headers, req.socket?.remoteAddress), userAgent),
-        ua: uaDigest(userAgent),
+        // 原始 IP / UA 到这里已经被收敛掉了,不再向外传递
+        visitor: visitorHash(salt, day, ipNet, uaKey),
+        ua: uaKey,
       });
     } catch (err) {
       console.error(`pageview 打点失败: ${safeErrorText(err)}`);
