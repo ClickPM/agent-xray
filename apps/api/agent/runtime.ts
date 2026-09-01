@@ -10,6 +10,10 @@
 //
 // R6 起 provider / 模型 / key 不再硬编码,全部来自 `llm_config`(经 MCP 管理面维护);
 // 引导 secret `DeepSeekApiKey` 已按所有者裁定彻底移除。见 `llm-config.ts`。
+//
+// R7 起会话可以带**只读业务工具**:实现在 `tools.ts`(纯函数,经 agent_ro 只读角色
+// 读 notes 三张表),启用集合由 `tool_config` 决定。`noTools:'all'` 仍是起点,
+// 启用的工具经 `customTools` + `tools` 白名单显式放行——见 `createRuntimeSession`。
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,13 +28,29 @@ import { dropSession as dropTraceBuffer, publish as publishTrace } from "../shar
 import { ALL_EVENTS, EVENT_MODES, safeErrorText, sanitizeEvent, type EventMode } from "./events";
 import { loadActiveLlmConfig, LlmNotConfiguredError, type ActiveLlmConfig } from "./llm-config";
 import { appendTraceEvents, listMessages, maxTraceSeq, type MessageRow } from "./store";
+import { loadEnabledTools, type EnabledTools } from "./tools";
 
 /** pi 的资源发现(extensions/skills/settings/AGENTS.md)全部指向这个空目录。 */
 const ISOLATED_DIR = join(tmpdir(), "agent-xray-runtime-pi");
 
-const SYSTEM_PROMPT =
+const SYSTEM_PROMPT_BASE =
   "你是 Agent X-Ray 站点上的演示 agent。访客与你对话的同时,页面右侧会实时展示你的内核事件轨迹。" +
-  "请用访客使用的语言简洁作答。你当前没有任何可用工具。";
+  "请用访客使用的语言简洁作答。";
+
+/**
+ * 系统提示按**本次会话实际注册到的工具**收尾。
+ *
+ * R3–R6 这里是写死的一句「你当前没有任何可用工具」;R7 起工具集由 `tool_config`
+ * 决定,写死那句会在工具开着时直接和事实矛盾 —— 模型会据此拒绝去查教程库。
+ */
+function systemPromptFor(toolNames: string[]): string {
+  if (toolNames.length === 0) return `${SYSTEM_PROMPT_BASE}你当前没有任何可用工具。`;
+  return (
+    `${SYSTEM_PROMPT_BASE}你有一组**只读**工具可以查询本站的 Notes 教程库:${toolNames.join("、")}。` +
+    "它们只能读教程内容,不能写任何数据、不能访问服务器或网络。" +
+    "回答与本站教程相关的问题时先用它们查证,不要凭印象编造章节名。"
+  );
+}
 
 // —— 容量与回收参数 ——
 /** 同时活跃的运行时会话上限(内存基线口径见 rounds/round-01)。 */
@@ -59,7 +79,7 @@ function loadPi(): Promise<PiModule> {
 // —— ModelRuntime 单例(隔离路径;凭据不落盘)——
 //
 // 注意这里**不再注册任何凭据**:R6 起 provider / 模型 / key 全部来自 `llm_config`,
-// 由 `refreshLlmConfig()` 在冷启动与每一轮热路径上按需注册。单例本身不带任何模型偏好。
+// 由 `refreshRuntimeConfig()` 在冷启动与每一轮热路径上按需注册。单例本身不带任何模型偏好。
 let runtimePromise: Promise<{ pi: PiModule; modelRuntime: ModelRuntime }> | undefined;
 
 function getPiRuntime() {
@@ -111,6 +131,21 @@ function serializeConfig<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * 一次会话所依赖的**全部**可变配置。
+ *
+ * R6 只有 LLM 一项;R7 起工具集(`tool_config`)也是会话级的 —— pi 的工具白名单在
+ * `createAgentSession` 时定格,事后开关一个工具对已在内存里的会话毫无作用。
+ * 于是它必须和 provider/模型/key 一样并进 `fingerprint`,走 R6 定下的那条统一规则:
+ * **配置指纹变了,会话在下一轮被重建到新配置上**(见 `acquireSession`)。
+ */
+export interface RuntimeConfig {
+  llm: ActiveLlmConfig;
+  tools: EnabledTools;
+  /** LLM 指纹 + 工具集指纹;任一变化都要重建会话 */
+  fingerprint: string;
+}
+
+/**
  * 读当前配置并施加到 ModelRuntime(注册 provider + 装 key),返回这份配置。
  *
  * **不解析模型句柄** —— 那是冷启动才需要的一步(codex 复审 P2:热路径若也做这步,
@@ -132,16 +167,18 @@ function serializeConfig<T>(fn: () => Promise<T>): Promise<T> {
  * 为由,在切 provider 时撤掉上一个的 key。后果是:A 的既有会话下一轮解析不到凭据、
  * 直接失败。撤销由「provider 变了就重建会话」来保证,不靠抽 key。
  */
-function refreshLlmConfig(modelRuntime: ModelRuntime): Promise<ActiveLlmConfig> {
+function refreshRuntimeConfig(modelRuntime: ModelRuntime): Promise<RuntimeConfig> {
   return serializeConfig(async () => {
-    const cfg = await loadActiveLlmConfig();
-    applyProviderConfig(modelRuntime, cfg);
-    if (appliedFingerprint !== cfg.fingerprint) {
-      await modelRuntime.setRuntimeApiKey(cfg.provider, cfg.apiKey);
-      appliedFingerprint = cfg.fingerprint;
-      console.log(`llm config applied: provider=${cfg.provider} model=${cfg.modelId}`);
+    const [llm, tools] = await Promise.all([loadActiveLlmConfig(), loadEnabledTools()]);
+    applyProviderConfig(modelRuntime, llm);
+    if (appliedFingerprint !== llm.fingerprint) {
+      await modelRuntime.setRuntimeApiKey(llm.provider, llm.apiKey);
+      appliedFingerprint = llm.fingerprint;
+      console.log(`llm config applied: provider=${llm.provider} model=${llm.modelId}`);
     }
-    return cfg;
+    // 工具集不需要「施加」到任何进程级单例:它只在建会话时被读一次。
+    // 这里只把它并进指纹,让重建逻辑看得见它变了。
+    return { llm, tools, fingerprint: `${llm.fingerprint}|${tools.fingerprint}` };
   });
 }
 
@@ -203,14 +240,15 @@ export interface RuntimeSession {
   id: string;
   session: AgentSession;
   /**
-   * 会话创建时那份 LLM 配置的指纹(`ActiveLlmConfig.fingerprint`)。
+   * 会话创建时那份配置的指纹(`RuntimeConfig.fingerprint` = LLM + 工具集)。
    *
-   * 会话手里的 `Model` 句柄自带 provider 的端点,事后换不掉(见 refreshLlmConfig),
-   * 所以配置变更只能靠**重建会话**来跟上,而判据就是这个字段。
+   * 会话手里的 `Model` 句柄自带 provider 的端点,事后换不掉(见 refreshRuntimeConfig);
+   * 工具白名单同样在 `createAgentSession` 时定格。两者的配置变更都只能靠**重建会话**
+   * 来跟上,而判据就是这个字段。
    *
    * 【为什么是指纹而不是 provider 名】(codex 第 4 轮 P1)只比名字的话,
    * 「删掉 A → 用新端点/新 key 重建一个同名的 A → 设为默认」这条路上名字没变,
-   * 于是不重建 —— 而 `refreshLlmConfig` 已经把**新 key** 装好了,
+   * 于是不重建 —— 而 `refreshRuntimeConfig` 已经把**新 key** 装好了,
    * 会话下一轮就拿着新凭据打**旧端点**。指纹覆盖 provider / baseUrl / 模型 / key
    * 全部字段,同名重建也会变,这条路径自然被堵上。
    */
@@ -543,8 +581,8 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
   const { pi, modelRuntime } = await getPiRuntime();
   // 配置从库读、逐次施加:所有者经 MCP 换了 provider/模型/key 之后,
   // 下一个新会话就用新配置(验收 ⑥)。未配置时抛 LlmNotConfiguredError → 503。
-  const cfg = await refreshLlmConfig(modelRuntime);
-  const model = resolveModel(modelRuntime, cfg);
+  const cfg = await refreshRuntimeConfig(modelRuntime);
+  const model = resolveModel(modelRuntime, cfg.llm);
 
   const now = Date.now();
   const rec: RuntimeSession = {
@@ -567,7 +605,7 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
     cwd: ISOLATED_DIR,
     agentDir: ISOLATED_DIR,
     settingsManager,
-    systemPromptOverride: () => SYSTEM_PROMPT,
+    systemPromptOverride: () => systemPromptFor(cfg.tools.names),
     extensionFactories: [makeObserver(rec)],
   });
   await loader.reload();
@@ -578,7 +616,17 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
     modelRuntime,
     model,
     thinkingLevel: "low" as CreateAgentSessionOptions["thinkingLevel"],
+    // 【三个参数是一组闸,别只改其中一个】(docs/security.md §1 第 1 层)
+    //   noTools:"all"  —— 起步为零工具。R7 之前它就是全部答案。
+    //   customTools    —— 把本轮启用的业务工具**实现**交给会话。
+    //   tools          —— 显式白名单。pi 的取值是 `options.tools ?? (noTools ? [] : 默认内置)`,
+    //                     给了白名单就**只有**名单里的工具会被激活;名单里只有
+    //                     TOOL_REGISTRY 里的名字,所以 read/bash/edit/write 这些内置工具
+    //                     不可能因为将来某处配置漂移而混进来。
+    // 空数组(所有者把工具全关掉)与 noTools:"all" 等价,不需要额外分支。
     noTools: "all",
+    customTools: cfg.tools.definitions,
+    tools: cfg.tools.names,
     resourceLoader: loader,
     sessionManager: pi.SessionManager.inMemory(ISOLATED_DIR),
     settingsManager,
@@ -626,10 +674,10 @@ export async function acquireSession(sessionId: string): Promise<RuntimeSession>
     // 只要没有别的会话恰好冷启动,就什么都不会发生。
     // 指纹没变时这段只是一次单行索引查询,与一次 LLM 调用相比可以忽略。
     // 认领之后到这里之间必须保证释放:否则一次库故障会把会话永久锁死。
-    let cfg: ActiveLlmConfig;
+    let cfg: RuntimeConfig;
     try {
       const { modelRuntime } = await getPiRuntime();
-      cfg = await refreshLlmConfig(modelRuntime);
+      cfg = await refreshRuntimeConfig(modelRuntime);
     } catch (err) {
       rec.busy = false;
       throw err;
@@ -637,7 +685,8 @@ export async function acquireSession(sessionId: string): Promise<RuntimeSession>
     // 配置没变 —— 凭据已经是最新的,直接用(绝大多数轮次走这里)
     if (rec.configFingerprint === cfg.fingerprint) return rec;
 
-    // 配置变了。会话手里的 `Model` 自带旧 provider 的端点、也定格了旧模型,
+    // 配置变了(provider/模型/key,或 R7 起的工具集)。会话手里的 `Model` 自带旧
+    // provider 的端点、也定格了旧模型,工具白名单同样定格,
     // 事后换不掉,所以唯一能真正跟上的办法是**重建**:
     // 释放 → dispose → 落到下面的冷启动路径,用当前配置重新建一个,
     // 库内历史照常注入,访客这一轮正常继续。空闲回收走的就是这条路径,不是新机制。
@@ -647,14 +696,17 @@ export async function acquireSession(sessionId: string): Promise<RuntimeSession>
     // 解析不出就原地留着旧会话,只有新会话被拒(503)。
     try {
       const { modelRuntime } = await getPiRuntime();
-      resolveModel(modelRuntime, cfg);
+      resolveModel(modelRuntime, cfg.llm);
     } catch (err) {
       console.error(
         `keeping session ${sessionId} on its previous config: ${safeErrorText(err)}`,
       );
       return rec;
     }
-    console.log(`rebuilding session ${sessionId} onto provider ${cfg.provider}/${cfg.modelId}`);
+    console.log(
+      `rebuilding session ${sessionId} onto provider ${cfg.llm.provider}/${cfg.llm.modelId} ` +
+        `tools=[${cfg.tools.fingerprint}]`,
+    );
     rec.busy = false;
     await disposeSession(rec);
   }

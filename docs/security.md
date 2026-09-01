@@ -18,15 +18,32 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 ### 第 1 层 · 工具白名单(MCP 管理面可配)
 
 - `createAgentSession({ noTools: 'all', ... })` 关掉 pi 全部内置工具——bash / read / write / edit / glob 一个不留
-- 业务工具经 `defineTool` 逐个注册,注册集合由 `tool_config` 表的启停配置决定(经 MCP 管理面切换,集成与下线走代码发布)
+- 业务工具逐个注册,注册集合由 `tool_config` 表的启停配置决定(经 MCP 管理面切换,集成与下线走代码发布)
 - 每个工具必须是**纯函数**:不接触文件系统、不 spawn 进程、不读 `process.env`、不做动态 import
 - 执行类内置工具默认**锁定**:开启需「服务器 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1` + MCP 管理面开关」双闸;所有启停操作写审计日志
 - **明文规则:bash / write / 任意代码执行类工具永久禁止进 in-process 进程。** 未来确需执行类能力时,必须独立一次性沙箱容器,不共享本进程
 
+R7 落地补记(2026-09-01,`apps/api/agent/tools.ts` + `runtime.ts`):
+
+- **三个参数是一组闸**:`noTools:"all"` 起步 + `customTools`(本轮启用工具的实现)+ `tools`(显式白名单)。pi 的取值是 `options.tools ?? (noTools ? [] : 默认内置)`,给了白名单就只有名单里的会被激活。**实测**(faux provider 驱动真实 agent loop):`getActiveToolNames()` 与 `getAllTools()` 都只有我们那三个,内置工具一个不出现;工具全关时两者皆空
+- **`tool_config` 只能开关「已实现的工具」,不能凭名字长出工具**:表里的未知名字在注册阶段被丢弃并记日志。bash / write 这类名字在 `TOOL_REGISTRY` 里**不存在** —— 上面那条「永久禁止」的物理落点是没有实现,不是配置关掉。**实测**:被诱导的模型直接点名 `bash`,pi 回 `Tool bash not found`
+- **`process.env` 的双闸读在注册环节**,不在工具体内:工具本身仍是纯函数。表里 `dangerous=true` 且缺 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` → 不注册(当前注册表没有任何 dangerous 实现,这是给将来准备的闸)
+- **工具集变更 = 会话重建**:工具白名单在 `createAgentSession` 时定格,事后开关对内存里的会话无效。所以它并进 R6 那个 `configFingerprint`,走同一条「配置指纹变了,会话下一轮被重建」的统一规则
+- **工具结果有界**(8000 字符,超出截断并标注)且**异常不外泄**:数据库错误只进服务端日志,给模型的是一句固定文案 —— 工具结果会进模型上下文 → 进轨迹事件 → 经公开的 `/trace/stream` 出去(§2)。**但失败仍要是失败**:固定文案以 `throw` 交给 pi 的错误路径,`tool_result` 的 `isError` 才是 true;`return` 一条普通结果会让轨迹面板把一次超时的查询画成一次成功的查询(codex 复审 P2)
+
 ### 第 2 层 · 数据面只读
 
-- 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_*` 表 `SELECT`,对 `llm_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `visits` 无任何权限
+- 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_categories` / `notes_series` / `notes_chapters` 三张表 `SELECT`,对 `llm_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `daily_quota` / `visits` 无任何权限
 - 即使 prompt injection 完全操纵了工具调用,能做的也只有「读教程」
+
+R7 落地补记(2026-09-01,所有者裁定;`apps/api/agent/ro-db.ts` + 迁移 `006`):
+
+- **成员资格只授给「已经能读本库 `sessions` 表」的角色**:role membership 是**集群级**的,而 Postgres 默认把 CONNECT 授给 PUBLIC —— 按「能连本库」授,同集群里别的应用的角色也会拿到 agent_ro,真的多出「连过来读 notes 三张表」这件原本做不到的事(codex 复审 P2)。用 `sessions` 做判据是因为它是本应用的表且 **agent_ro 对它无权限**(拿 notes_* 判会绕回自身),能读它的角色本来就能读得比 agent_ro 多,授权因而**可证明地**不扩大权限
+- **角色是真的,登录能力没有**:`agent_ro` 建成 `NOLOGIN`,由应用连接在事务里 `SET LOCAL ROLE agent_ro` 临时降权,而不是另开一条 `AGENT_RO_DATABASE_URL` 连接。权限仍由 Postgres 强制(降权后 `current_user` 就是 `agent_ro`,写 notes 表回 `permission denied`),但省掉了一个 pg 驱动依赖、一份角色口令(`.env` / initdb / secret 各一处)和一个 Encore 管不到的第二连接池
+- **换这条路的决定性理由是验收能不能跑**:本机 encore 的库由 CLI 托管,`agent_ro` 的登录口令进不到那套托管配置里,「以 agent_ro 写库必须失败」只能推到部署轮人工核验;而 M2 的止损写的是「R7 沙箱验收不过不得进入任何公网部署轮」。改成 `SET LOCAL ROLE` 之后这条验收进了 `dev.ps1 test`(`apps/api/agent/sandbox.test.ts`)
+- **必须是 `SET LOCAL` 而不是 `SET`**:Encore 的连接是池化的,`SET ROLE` 会留在连接上,归还池子后下一个请求(包括 MCP 管理面的写请求)会继承降权状态。`SET LOCAL` 随事务结束复位
+- **同一段事务还叠了 `SET TRANSACTION READ ONLY` 与 `statement_timeout`**:前者挡「工具实现自己写错 SQL」,与角色权限是两道独立的闸;后者是第 4 层「资源滥用」的一部分
+- **后建的表不自动授权**:刻意不设 `ALTER DEFAULT PRIVILEGES`。将来新增内容表要给 agent 看,必须在那次迁移里显式 `GRANT` —— 忘了写的后果是工具读不到(报错、看得见),而不是悄悄多出一张可读的表
 
 ### 第 3 层 · 容器隔离
 
@@ -38,6 +55,16 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 - 外呼型工具(LLM / 生图 / 搜索)的 API key 全部服务端持有,目标域白名单
 - 每日 token + 费用计数(`daily_quota`),超限拒绝新会话;单会话 turn 上限
 - 用户无法借工具把服务器变成任意代理
+
+R7 落地补记(2026-09-01,`apps/api/agent/quota.ts` + 迁移 `006`):
+
+- **限额值与用量分两张表**:值在 R6 的 `llm_config` 默认行(`daily_token_limit` / `daily_cost_limit_cents` / `max_turns_per_session`,**0 = 不限**,经 MCP 改),用量在 `daily_quota`(每轮累加)。变更节奏不同,合表会让「改配置」与「跑对话」抢同一行
+- **日界写死 `Asia/Shanghai`**,不用 UTC 也不依赖服务器 TZ:所有者在境内,「今天的额度」应当在本地零点重置;容器里 TZ 通常是 UTC,依赖它等于让日界随部署环境漂移
+- **费用存 micro-USD(整数)**:provider 回的一轮成本常在 1e-5 美元量级,按分四舍五入会把绝大多数轮次记成 0,累计永远追不上限额。比较时把 cents 换算成 micros
+- **「新会话」的判据是库里有没有轮次(`turns === 0`),不是请求里带没带 `sessionId`**:`POST /agent/sessions` 是**公开**端点、建的是空会话。按「带了 id 就算续接」判定的话,先批量预建会话再逐个带 id 提问,每日限额会被整体绕过(codex 初审 P1 实指)。以轮次为判据,预建的空会话与全新会话落在同一格
+- **「超限拒新会话」的溢出上界是可算的**:限额触发后,最多还有 `MAX_ACTIVE_SESSIONS`(8)个会话各自把 `max_turns_per_session` 的剩余轮数跑完。要收紧就调小 `max_turns_per_session`,不要改成「中途掐断进行中的对话」
+- **计数是尽力而为的资源闸,不是账单**:`recordUsage` 失败只记日志、不重试、不把已完成的一轮报成失败。一轮可能有多条助手消息(开了工具之后「助手 → 工具 → 助手」是常态),必须逐条累加 —— **实测**一次工具轮的两条助手消息各带 `usage`(`totalTokens` 1330 / 1054),只取最后一条会漏掉一半
+- **拒绝体只出 `code` 不出数字**:`429` + `daily_tokens` / `daily_cost` / `turn_limit`。把「已用 12345 / 上限 10000」写进响应等于把站点的限额配置告诉每一个撞上它的访客;数字只进服务端日志
 
 ## 2. 事件流脱敏
 

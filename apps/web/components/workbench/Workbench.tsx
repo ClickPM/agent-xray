@@ -27,6 +27,11 @@ const MAX_TRACE_EVENTS = 5000;
 /** 请求失败时给访客看的固定文案(服务端已把细节挡在日志里,前端只按状态分档)。 */
 function askErrorText(err: unknown): string {
   if (err instanceof AskError) {
+    // R7 限额:与「并发会话数满」同为 429,靠服务端给的 code 分档
+    if (err.code === "daily_tokens" || err.code === "daily_cost") {
+      return "今天的对话额度已经用完了,明天再来吧。";
+    }
+    if (err.code === "turn_limit") return "这个会话的轮数已达上限,新建一个会话继续吧。";
     if (err.status === 409) return "上一轮回复还在进行中,请等它结束再发。";
     if (err.status === 429) return "当前会话数已满,请稍后再试。";
     if (err.status === 404) return "这个会话已不存在,请新建一个会话。";

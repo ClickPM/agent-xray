@@ -17,7 +17,7 @@
 | **R4** | 轨迹流 + 三视图真实化(/trace/stream + sanitize + 回放) | ✅ 已完成([任务卡](rounds/round-04/round-04.md),12 项验收全过(#11 按所有者裁定改为静态核验,镜像实跑冒烟并入 R9);codex 初审 3 条(2×P1)+ 复审三轮 5 条(全 P2)共 8 条 findings,7 条采纳整改、1 条写明理由记 BACKLOG,复审第 4 轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R5** | notes 服务:摄入管线 · 查询端点 · RSS · Notes 页对接 | ✅ 已完成([任务卡](rounds/round-05/round-05.md),8 项验收全过;codex 7 轮共 17 条 findings,15 条采纳整改、2 条所有者裁定不采纳并留兜底,末轮零 findings,缺陷门禁 PASS) | 2026-08-31 |
 | **R6** | MCP 管理服务(无状态 2026-07-28:notes 内容/About/LLM 多 provider/工具启停;/admin 与 R5 管道退役) | ✅ 已完成([任务卡](rounds/round-06/round-06.md),10 项验收全过;codex 五轮共 18 条 findings,16 条采纳整改、1 条实跑证伪不采纳、1 条写明理由记 BACKLOG,末轮零 P1,缺陷门禁 PASS) | 2026-08-31 |
-| **R7** | 沙箱与配额落地(只读工具组 · agent_ro · daily_quota,消费 R6 配置表) | ⬜ | — |
+| **R7** | 沙箱与配额落地(只读工具组 · agent_ro · daily_quota,消费 R6 配置表) | ✅ 已完成([任务卡](rounds/round-07/round-07.md),12 项验收全过;codex 三轮共 6 条 findings(1×P1 · 4×P2 · 1×P3)**全部采纳整改**,末轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ✅ 已完成([任务卡](rounds/round-08/round-08.md),15 项验收全过;codex 三轮共 3 条 findings(P1/P2/P3 各一)全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ⬜ | — |
 | **R10** | 安全加固 + 上线前检查单逐项 | ⬜ | — |
@@ -116,11 +116,23 @@
 
 ### R7 — 沙箱与配额落地(原 R6;`docs/security.md` §1 第 1/2/4 层)
 
-- `defineTool` 只读工具组:`notes_list_series` / `notes_get_chapter` / `notes_search`——纯函数,连接串用 `AGENT_RO_DATABASE_URL`
-- 迁移:`agent_ro` 角色(仅 SELECT notes 表);注册集合按 **R6 已建的 `tool_config`** 启停配置决定
+- 只读工具组:`notes_list_series` / `notes_get_chapter` / `notes_search`——纯函数,取数走 `agent_ro` 只读角色
+- 迁移:`agent_ro` 角色(仅 SELECT notes 三张表);注册集合按 **R6 已建的 `tool_config`** 启停配置决定
 - `daily_quota`:每日 token/费用计数,超限拒新会话;单会话 turn 上限;限额值从 R6 的 `llm_config` 配置读
 - prompt injection 自测清单过一遍(诱导执行/读配置/改数据),结果回填任务卡
 - 验收:以 agent_ro 连接尝试写库必须失败;超限路径有明确拒绝行为
+
+> **落地补记(2026-09-01,与上面计划的两处偏离,详见任务卡)**
+>
+> 1. **`agent_ro` 不用 `AGENT_RO_DATABASE_URL`**(所有者裁定):角色建成 **NOLOGIN**,由应用连接在事务里
+>    `SET LOCAL ROLE agent_ro` 临时降权。权限仍由 Postgres 强制,但省掉一个 pg 驱动依赖、一份角色口令
+>    (`.env`/initdb/secret 各一处)和一个 Encore 管不到的第二连接池。**决定性理由是验收能不能自动跑**:
+>    本机 encore 的库由 CLI 托管,agent_ro 的登录口令进不去,「以 agent_ro 写库必须失败」只能推到部署轮
+>    人工核验——而 M2 的止损正是「R7 沙箱验收不过不得进入任何公网部署轮」。改法之后这条进了 `dev.ps1 test`。
+>    **连带**:下面 R9 的「`docker-entrypoint-initdb.d` 建角色」一项取消(角色由迁移 006 建)。
+> 2. **不用 pi 的 `defineTool()` 运行时导出**,只用它的类型:那是个恒等函数,唯一作用是保住 TypeBox 的泛型推断,
+>    而工具 schema 用的是普通 JSON Schema 对象(pi 校验器显式支持);静态 import 它会把整个 pi 包在 API 启动时
+>    拉进来,破坏 `runtime.ts` 刻意做的惰性加载。
 
 ### R8 — metrics 与 About 真实化 + 统计查询 MCP 工具
 
@@ -151,7 +163,9 @@
 > R-BUN 已把镜像构建、compose 定稿、安全参数、文档四块前移完成(bun 基座、不可变镜像、`infra-config.json`、`cap_drop`/`pids_limit`/网络分段/healthcheck)。R9 只剩「在 130 上真跑一遍 + 补齐尚未落地的部分」。
 
 - 数据库迁移已由 R-BUN 的 `deploy/migrate.sh` 解决(所有者裁定方案一);R9 只需把它纳入部署流程文档与冒烟清单
-- `agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色 + 仅 SELECT `notes_*` 授权(R7 建角色、建表在先授权在后的顺序写进文档)
+- ~~`agent_ro` 初始化:`docker-entrypoint-initdb.d` 建角色~~ —— **本项取消**(R7 落地补记 1):角色是 NOLOGIN、
+  没有口令,由迁移 `006` 连同授权一起建。R9 这边只剩一条既有约束:**`migrate.sh` 必须在起 api 之前跑完**
+  (本来就是既定顺序);冒烟时顺带核一句「以 agent_ro 写库失败」
 - 130 部署流程文档 + 脚本:`dev.ps1 build` → 文件方式传输(`docker save -o` → `scp` → `docker load -i`;**勿在 PowerShell 用管道直传,二进制会被文本重编码破坏**)→ 130 上按**先迁移后起服务**的顺序(`up -d --wait postgres` → `./migrate.sh` → `up -d`),避免「健康检查全绿但业务接口 500」的中间状态;升级另需先 `docker compose stop api web`(见 docs/deploy-environments.md「升级顺序」)
 - 预发全链路验证:三 Tab + `/api/mcp` 管理端点(带 token 实连)+ notes 附件供图路由(Caddy 扩展名分流)+ 限额;安全约束逐项核验(非 root / read_only / `cap_drop ALL` / `pids_limit` / mem_limit / **最终运行镜像**内无 node / postgres 仅 `back` 网段可达)。spike 服务已于 R4 整目录删除,`/spike/*` 不再存在,该项从冒烟清单撤下
 - **服务白名单核验**:`dev.ps1 build` 的 `--services` 是维护热点——冒烟时必须逐个确认**当前已落地的正式 service 端点都可达**(不只是 `/health`),漏改的表现是镜像构建正常、健康检查正常、而该服务端点静默 404
