@@ -1,6 +1,6 @@
 # Round 09 — 容器化与 130 预发部署(docker compose 全链路)
 
-> 状态:进行中(实现与冒烟完成,待 codex 审查)
+> 状态:已完成(18 项验收全过;所有者裁定本轮不走 codex 审查,理由见「代码审查」段)
 
 ## 目标
 
@@ -100,11 +100,21 @@
 
 ## 代码审查
 
-<!-- 完成后回填 -->
-
-- 审查方式:
-- findings 处理:
-- 结论:
+- 审查方式:**未做**。已按 CLAUDE.md 流程发起 `/codex:review --background`(全量 branch diff,
+  前两轮的固定范围),**所有者在运行中裁定停掉并直接合并**(2026-09-01)。
+- 裁定过程:所有者提出「没改代码为什么要审查」;我给出分支 diff 实况反驳 ——
+  914 行新增里约 620 行是文档/任务卡,**代码与脚本约 90 行**,分布在四处:
+  `dev.ps1` 的 `ship` 子命令(+56 行,拼 ssh/scp、远端 `docker load && rm`、失败分支)、
+  `apps/web/app/layout.tsx`(改 `next/font/local`)、`apps/web/Dockerfile`(删失效 COPY)、
+  `deploy/migrate.sh`(advisory lock 一句),并指出 `dev.ps1 ship` 与 `migrate.sh`
+  是最值得被人看一眼的两处(前者拼命令行且要处理含中文的路径,后者在部署必经路径上)。
+  所有者据此仍裁定跳过。
+- findings 处理:无 findings(未产生)。
+- 结论:**本轮无审查记录**。这是与 CLAUDE.md「codex 独立审查 → 缺陷门禁」流程的一次
+  显式偏离,记在此处以免将来被误读成「审查通过」。**残留风险**:
+  `dev.ps1 ship` 与 `migrate.sh` 的改动只经过本轮实跑验证(ship 成功传了两版镜像;
+  migrate.sh 在隔离 compose 工程里从空库重跑了完整 6 个迁移),没有第二双眼睛看过
+  错误分支与边界情况。
 
 ## 失败处理
 
