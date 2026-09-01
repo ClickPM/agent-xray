@@ -12,9 +12,9 @@
 - [x] R-BUN Encore 自托管镜像不执行数据库迁移(运行时无迁移逻辑,`encore db` 也无 migrate 子命令),空库直起则 `/health` 200 但触库端点 500——所有者裁定方案一,已落地 `deploy/migrate.sh`(SQL 取自被部署镜像、`schema_migrations` 与 Encore 同构、单事务、幂等),130 完整 compose 形态实测通过 (2026-08-29)
 - [ ] R-BUN `deploy/migrate.sh` 目前硬编码只认 `agent` 库,遇到别的库名报错停下(不猜)。将来若新增数据库需扩该脚本;含 `CONCURRENTLY` 的迁移会被主动拒绝,该路径尚未实测 (2026-08-29)
 - [x] R-BUN 生产镜像形态下的 **SSE 冒烟无法演练**:两条 SSE 只在 spike 里而 spike 已被 `--services` 排除,正式 `/agent/ask`、`/trace/stream` 要等 R3/R4——两条正式端点已分别在 R3/R4 落地,R9 可以按原计划补冒烟 (2026-08-29)
-- [ ] R-BUN `dev.ps1 build` 的 `--services` 白名单是维护热点(R4 已补 `trace`、R5 已补 `notes`):R6/R8 新增 mcp/metrics 服务时必须同步补名字,漏补表现为该服务端点静默 404。考虑在 R9 冒烟里加一条「已声明服务全部可达」的断言 (2026-08-29)
+- [x] R-BUN `dev.ps1 build` 的 `--services` 白名单是维护热点(R4 补 `trace`、R5 补 `notes`、R6 补 `mcp`、R8 补 `metrics`/`about`):漏补表现为该服务端点静默 404。**R9 已把「七个服务各取一个正式端点、全部非 404」写进 `docs/deploy-environments.md` 冒烟清单第 1 条,并在 130 上逐项跑过**;仍不引入自动服务发现 (2026-08-29)
 - [ ] R-BUN Next dev proxy 对**未百分号编码**的中文 query 返回 400,直连 Encore 同样请求返回 200。浏览器会自动编码故对真实用户影响小,但手写 URL 的脚本/测试会踩 (2026-08-29)
-- [ ] R-BUN **上线前必做(架构评审 P1-4)**:`apps/web/app/layout.tsx:17-21` 从 `fonts.googleapis.com` 加载 JetBrains Mono,是渲染阻塞样式表,境内首访会挂在字体请求超时上(数秒白屏)。改为自托管(`next/font/local` 或 woff2 放 `public/`),视觉零变化;属规则 7 允许的「接线需要的结构性改动」,任务卡写明理由即可。落地时记得在 `apps/web/Dockerfile` 补 `COPY … /app/public ./public`。R9 或 R10 完成 (2026-08-29)
+- [x] R-BUN **上线前必做(架构评审 P1-4)**:`apps/web/app/layout.tsx` 从 `fonts.googleapis.com` 加载 JetBrains Mono,是渲染阻塞样式表,境内首访会挂在字体请求超时上(数秒白屏)——**所有者裁定放 R9,已落地**:改 `next/font/local` 自托管 JetBrains Mono 变量字体的 latin 子集(40.4 KB,`apps/web/app/fonts/`),130 线上实测页面零外部请求、字体由 `/_next/static/media/*.woff2` 供。原条目里「记得补 `COPY … /app/public ./public`」正好说反了:R6 把配图搬进 Postgres、删掉 public/ 之后,**那行让 web 镜像构建直接失败**,R9 把它删了(自托管字体走 `.next/static/media`,不经 public/) (2026-08-29)
 - [ ] R-BUN `next build` 仍以 node 执行(web Dockerfile 的 builder 阶段装 node/npm);runner 阶段已是纯 bun。若要连构建期也去掉 node,需单独验证 Next 构建器在 bun 下的行为 (2026-08-29)
 - [ ] R3 pi SDK **把 provider 失败吞在内部**:key 无效时 `session.prompt()` 正常 resolve,助手消息以 `stopReason:"error"` + 空正文收尾(实测 DeepSeek 401)。`/agent/ask` 已改判据为助手 `message_end` 的 stopReason;若上游改语义需同步。值得向 pi 反馈「provider 错误应有显式事件」 (2026-08-31)
 - [ ] R3 `encore gen client` 产物里的 `Environment()` 域名 slug 随**生成所在目录**变化(主 checkout `936eu` / worktree `r5ugg`),在不同 checkout 重跑 `dev.ps1 gen` 会来回翻。该函数当前无人调用(前端 base 固定 `/api`),仅是 diff 噪音;`encore.app` 的 `id` 补成固定值即可消除,需所有者确认 app id (2026-08-31)
@@ -25,8 +25,10 @@
       (本端 `resp.end()` 之后)才触发且 `writableFinished=true`;`req.socket`/`resp.socket`
       全程无 close/error、`destroyed` 恒为 false。原因是 Encore 网关代理:外部连接断开不
       传导到 JS 运行时拿到的 req/res/socket(encore 1.57.13 + bun)。影响:访客关页面后本轮
-      仍会跑完(数秒 token),会话随即释放。**R9 在 Caddy + 自托管镜像真实拓扑下复测**;
-      若仍无信号,可考虑心跳写失败探测或上游提 issue (2026-08-31)
+      仍会跑完(数秒 token),会话随即释放。
+      **R9 已在 Caddy + 自托管镜像的真实拓扑下复测:仍然拿不到断开信号**(`kill -9` 掉
+      8 条 SSE 客户端后名额一个都不释放,第 9 条仍 429;见 `rounds/round-09/smoke.md` §4)。
+      加一层反代不改变结论,下一步只剩「心跳写失败探测」或向 Encore 上游提 issue (2026-08-31)
 - [x] R6(MCP 管理服务,原 R7 职责)`llm_config` 加密入库落地后,收敛 `.env` 引导键 `DEEPSEEK_API_KEY` 的职责——**所有者 2026-08-31 裁定:彻底移除**。secret 声明、`deploy/infra-config.json` 的 secrets 段、compose 的 `DEEPSEEK_API_KEY` 三处已删;运行期 LLM 凭据唯一来源是 `llm_config`,未配置时 `/agent/ask` 回 503。代价(新环境首次部署后必须先经 MCP 写 provider)已写进 docs/deploy-environments.md 第 5 步 (2026-08-31)
 - [x] R5 `tools/notes-sync` 没有自动化测试。它在 Encore app root 之外,跑不进 `dev.ps1 test` 的门禁;给它单配一个 vitest 又会多出一个「没人会跑」的入口。最该覆盖的是 `obsidian.ts` 的改写器(围栏/行内代码免疫、注释跨行、图片括号配平),本轮这 8 个用例是手工验证的,记录在 round-05 任务卡里——**2026-08-31 所有者裁定废除 R5 管道机制(内容发布改走 MCP,R6 删除该工具),本条随之关闭** (2026-08-31)
 - [x] R5 改写器漏掉「标签里含行内代码」的相对链接:``[`truncate.ts`](repo/packages/…)`` 这种写法会被片段切分拆成 `[` / 代码段 / `](dest)` 三段,链接改写器看不到完整结构,于是原样留下一个会 404 的相对链接。实测剩 6 处(pi/08、pi/09,全指向被拆解仓库的源码路径)——**2026-08-31 所有者裁定:改写器随管道废除退役(MCP 入参即标准 markdown,只校验不改写),本条关闭;存量 6 处 404 链接若需修,经 MCP 直接改正文** (2026-08-31)
@@ -37,8 +39,8 @@
 - [ ] R4 **SSE 连接的名额只能靠超时回收**:客户端断开探测不到(R3 POST / R4 GET 两次实测),
       被遗弃的 `/trace/stream` 连接会占着名额直到 `MAX_STREAM_MS`(5min)。当前靠「同 clientId
       让位 + 单会话 8 / 全站 64 上限」把影响压住,但关掉标签页的访客仍会留一个名额 5 分钟。
-      **R9 在 Caddy + 自托管镜像的真实拓扑下与 R3 那条断连复测一起做**:若那时能拿到断开信号,
-      这两条限制都可以放宽 (2026-08-31)
+      **R9 已复测(真实拓扑),断开仍探测不到 —— 这两条限制不放宽、让位机制不退役**
+      (证据见 `rounds/round-09/smoke.md` §4「断连信号复测」) (2026-08-31)
 - [ ] R4 Timeline 的行时长是「本行首个事件 → 下一行首个事件」的间隔,不是事件自身的处理耗时——
       pi 的扩展事件只带一个时间戳,进程内拿不到真实耗时。当前口径对瀑布图是合理近似,
       若将来要显示真实耗时,需要在观测者里对成对事件(start/end)做配对计时 (2026-08-31)
@@ -47,11 +49,11 @@
       先前那个收到 `superseded` 后停更(刷新或切会话可恢复)。改成「每次页面加载换新 id」能避开
       复制标签页,但会把代价换成更常见的刷新——每刷一次漏一个名额到 5min 超时。两头都占住需要
       「连接代次」这类协议字段,属机制类改动,按缺陷门禁规则不在非阻塞 findings 的整改范围。
-      **与那条「断开探测不到」一起在 R9 真实拓扑下重估**:若届时能拿到断开信号,让位机制整个可以退役 (2026-08-31)
+      **R9 已重估:真实拓扑下断开仍探测不到,让位机制退役不了,本条继续挂着** (2026-08-31)
 - [ ] R4 **快速切会话仍有一个窄窗口能让位错人**(codex 复审 P2 的残留):占名额已提到第一个
       `await` 之前,占槽顺序 = 请求到达顺序,消除了"谁的库查询先返回谁先占槽"这个主因;
       但若网络把两个请求的到达顺序也调换了(B 后于 C 到达),仍会由已经没人读的 B 把 C 让位掉。
-      彻底解决同样需要「连接代次」,与上一条一并在 R9 重估 (2026-08-31)
+      彻底解决同样需要「连接代次」;**R9 已随上一条重估,结论相同(断开探测不到,机制留着)** (2026-08-31)
 - [ ] R4 单会话轨迹超过 `MAX_REPLAY_EVENTS`(5000)时,回放只给最新 5000 条,Timeline 的
       Turn 1 会从中间截断。长会话尚无「按 turn 分页往回翻」的设计,设计稿也没有这个功能;
       需要时进功能提案 (2026-08-31)
@@ -93,7 +95,30 @@
       地址。R8 已把 metrics 侧改成取最后一段(codex 第 1 轮 P1),但没顺手改 audit(跨轮次问题不当场
       改,CLAUDE.md 开发约定)。影响有界:管理面只有一个使用者、认证不依赖这个头,它只是审计线索;
       但「审计里的来源地址可被写入方伪造」这件事本身值得修。改动是一行,连同 `server.ts` 的
-      `remoteOfRequest` 一起(两处同样的逻辑) (2026-09-01)
+      `remoteOfRequest` 一起(两处同样的逻辑)。
+      **R9 在 130 实测补一个重要前提**:经 Caddy 2.11.4 时伪造**打不进来** —— 未配
+      `trusted_proxies` 的 Caddy 会用真实对端 IP **覆盖**(而非追加)不可信的 XFF,审计里记的是
+      `172.20.0.1`;而从 caddy 容器里绕过反代直连 `api:4000` 时,伪造值 `203.0.113.77` 原样进了
+      审计表。即**代码层缺陷属实,当前部署形态下被 Caddy 挡住**,所以不紧急;但**一旦 Caddy 前面
+      再加一层代理、或给 Caddy 配了 `trusted_proxies`,这层保护就没了** —— 修的时候把这个前提
+      一起写进注释 (2026-09-01)
+
+- [ ] R9 **About 头像是页面上仅存的跨境资源**:前端按 `https://github.com/<githubUser>.png` 拼头像地址,
+      130 上实测加载不出(浏览器显示 alt 文本)。字体那条修完之后,这是同一类「境内首访外部依赖」的
+      最后一处。选项:①经 MCP 传一张附件当头像(复用 `notes_assets` 供图链路)②服务端代理并缓存
+      ③保持现状,但让加载失败时不留破图框。属新增接口面/机制,需所有者裁定 (2026-09-01)
+- [ ] R9 **优雅停机时在线的 SSE 收不到 `bye` 帧**:`docker compose stop api` 期间流仍在心跳,
+      直到容器真正停止才在 TCP 层被切断(实测客户端 curl 退出码 18 —— 是明确断流不是静默挂起,
+      浏览器 `EventSource` 会自动重连)。但服务端本可以在关闭钩子里给在线的流补一帧
+      `bye{lastSeq, reason:"shutdown"}`,让客户端拿着 `lastSeq` 精确续连而不是从头猜。
+      属机制类改动(要在 Encore 的 shutdown hook 里遍历 liveSlots),不在缺陷门禁范围 (2026-09-01)
+- [ ] R9 **130 预发上的样本内容要在真实内容到位后清掉**:R9 冒烟经 MCP 发布了四个分类、系列
+      `r9-smoke`、两篇文章与一张配图,About 也写了样本内容。真实内容(按 `docs/notes-content-spec.md`
+      标准化后)入库时一并替换:`notes_series_delete r9-smoke cascade=true` + 重写 `about_set` (2026-09-01)
+- [ ] R9 **`deploy/.env.example` 的 `SITE_ORIGIN` 注释举的是 `:8080` 的例子**,而 R9 按所有者裁定
+      用了 80(`http://192.168.100.130`,Caddyfile 与 compose 零改动)。注释本身没错(备案前两种都行),
+      但和 130 上的真实配置不一致,照抄 8080 又不改 Caddyfile 就会得到一个连不上的站。
+      下次动那个文件时顺手对齐 (2026-09-01)
 
 ## 功能提案(需所有者裁定)
 

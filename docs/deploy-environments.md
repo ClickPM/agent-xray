@@ -17,7 +17,7 @@
 |---|---|---|---|---|
 | 开发 | 本机 Windows | `dev.ps1` → `encore run :4000`;本地 Postgres 由 encore 经 Docker Desktop 管理 | bun(`encore.app` 的 `bun-runtime` 实验位) | 可用(R0 起) |
 | 测试 | 同上 | `dev.ps1 test` → `encore test` → `bun --bun vitest run` | bun | 可用(R-BUN 起) |
-| 预发 | 130 服务器 | docker compose(`deploy/`) | bun(`oven/bun:1.4.0-slim` 基座) | R9 落地 |
+| 预发 | 130 服务器 | docker compose(`deploy/`) | bun(`oven/bun:1.4.0-slim` 基座) | **可用**(R9,2026-09-01 全链路实测通过;`http://192.168.100.130`) |
 | 生产 | 境内轻量服务器 | docker compose,与预发**同一个镜像**(SHA 相同,不重新构建) | bun | R11 |
 
 **运行时与包管理器是两件事:** bun 只做 JS 运行时与脚本执行器;依赖安装仍走 `npm ci` + `package-lock.json`,不切 `bun install`。理由见 [`rounds/round-bun/round-bun.md`](../rounds/round-bun/round-bun.md)「包管理器为何不切」——pi SDK 自带 `npm-shrinkwrap.json` 锁定传递依赖,bun 不读它,切过去等于丢掉这层供应链锁定,而收益为零。
@@ -45,6 +45,15 @@
    scp xray-<sha>.tar <host>:~
    ssh <host> docker load -i xray-<sha>.tar
    ```
+
+   > 上面三步(外加建 `~/deploy`、传四件部署资产、给 `migrate.sh` 补执行位、load 完删远端 tar)
+   > 已固化成一条命令,**平时用它**:
+   >
+   > ```powershell
+   > .\dev.ps1 ship <host> [sha]      # 例:.\dev.ps1 ship 130
+   > ```
+   >
+   > 它刻意**不传 `.env`** —— `.env` 按环境独立、含密钥,永不出本机。
 
    生产按网络情况用同法或私有 registry(registry 流程在 `./migrate.sh` 前先 `docker pull` 对应 api 镜像,迁移要从镜像里取 SQL)。**任何环境都不用 `latest` tag**:compose 里 `${IMAGE_TAG:?}` 挡空值,`migrate.sh` 进一步硬校验 tag 必须是 git SHA。部署资产(`docker-compose.yml` / `Caddyfile` / `migrate.sh` / `.env.example`)首次与变更时随包一起 scp。
 
@@ -114,13 +123,43 @@
 
    内容(文章与配图)同理:库是空的,由所有者经 MCP 发布,或从别的环境 `pg_dump`/`pg_restore` 搬过来。**镜像里不含任何 notes 内容**。
 
-6. **验证**:`/health` + 三 Tab + `/api/mcp`(带 token 实连,无 token 必须 401)+ 正文配图路由(`/notes/<系列>/<哈希>.webp` 应回 200 且带 `ETag`,再带 `If-None-Match` 请求应回 304);并断言 `/spike/*` 全部 404(spike 是 R1 验证脚手架,无认证无限额,`--services` 白名单已在构建期把它挡在镜像外)。
+6. **验证 —— 冒烟清单**(R9 在 130 上逐项跑过,留证在 [`rounds/round-09/smoke.md`](../rounds/round-09/smoke.md)):
 
-   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,system`)白名单决定。R8 落地 `metrics` 时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
+   | # | 检查 | 期望 |
+   |---|---|---|
+   | 1 | **服务白名单逐项可达** | `agent` / `trace` / `notes` / `mcp` / `metrics` / `about` / `system` 各取一个**正式端点**,全部非 404 |
+   | 2 | 已删服务 | `/api/spike/*` 与 `/admin` 全部 404 |
+   | 3 | 三 Tab | `/`、`/notes`、`/about` 均 200 且渲染真实数据 |
+   | 4 | MCP 管理面 | 无 token / 错 token / GET 一律 401 且**审计表有 denied 记录**;带 token 的 `server/discover` 返回工具清单 |
+   | 5 | 正文配图路由 | `/notes/<系列>/<哈希>.webp` → 200 + `ETag`;带 `If-None-Match` 复请求 → 304;同形的文章页地址不被图片路由劫走 |
+   | 6 | RSS | `/rss.xml` 与 `/rss/<分类>.xml` 200,条目里的绝对链接用的是 `SITE_ORIGIN`;未知分类 404 |
+   | 7 | **SSE ×2** | `POST /agent/ask` 经 Caddy 流式出字;`GET /trace/stream` 有 15s 心跳、`afterSeq` 断线重连能精确回放;`docker compose stop api` 时客户端**明确断流**(curl exit 18)而非静默挂起 |
+   | 8 | SSE 脱敏 | 两条流的原始字节里搜不到明文 key、`Authorization`、`api-key`;`before_provider_headers` 帧只剩 `type` |
+   | 9 | 配额 | 把 `dailyTokenLimit` / `maxTurnsPerSession` 调小 → `429` + `code`(`daily_tokens` / `turn_limit`),恢复配置后立即可用 |
+   | 10 | `agent_ro` 沙箱 | `SET LOCAL ROLE agent_ro` 后写 notes 三张表全部 `permission denied`;读这三张表成功;读其余任何表 `permission denied` |
+   | 11 | 容器安全约束 | `docker inspect`:api/web 为 `10001:10001`、`ReadonlyRootfs=true`、`CapDrop=[ALL]`、`PidsLimit`、`Memory`、`no-new-privileges`、tmpfs `noexec` |
+   | 12 | **最终运行镜像无 Node.js** | 见下面的「怎么查才是对的」 |
+   | 13 | 网络分段 | 从 `web` / `caddy` 容器**连不上也解析不到** `postgres`;`api` 可以 |
+   | 14 | 打点与统计 | `POST /t` → 204;`visits` 里只有哈希、无原始 IP;MCP 的 `traffic_*` 结果与打点逐项对得上 |
+   | 15 | migrate.sh 守卫 | `IMAGE_TAG=latest` 被拒;未知参数(如 `--stats`)被拒 |
+
+   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,metrics,about,system`)白名单决定。新增服务时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
    >
-   > 因此冒烟不能只看 `/health`,要**逐个确认当前已落地的正式 service 端点都可达**。本 PR 不引入自动服务发现,这条靠清单与冒烟兜住。
+   > 因此冒烟不能只看 `/health`,要**逐个确认当前已落地的正式 service 端点都可达**(表里第 1 条)。本项目不引入自动服务发现,这条靠清单与冒烟兜住。
 
-   > **SSE ×2 的冒烟要等 R3/R4**:两条 SSE 目前只存在于 spike 里,而 spike 已被正确地排除出镜像;正式的 `/agent/ask` 与 `/trace/stream` 分别在 R3、R4 落地。在那之前**生产镜像里没有任何 SSE 端点**,这一项无法演练——R-BUN 记录的 SSE 通过结果是在 `encore run` 开发形态下取得的,不代表生产镜像形态已验证。不为此人为保留 spike 或新增临时 SSE 端点。
+   > **「镜像里没有 node」怎么查才是对的**(R9 实测):`command -v node` 在 api 与 web 镜像里**都能查到**一个
+   > `/usr/local/bun-node-fallback-bin/node` —— 它是 `oven/bun` 基座自带的**软链,指向 `/usr/local/bin/bun`**,
+   > 存在的意义是让带 `#!/usr/bin/env node` shebang 的脚本落到 bun 上。用它当判据会得出「镜像里有 node」的错误结论。
+   > 正确的判据是问那个 `node` 自己是谁:
+   >
+   > ```bash
+   > docker run --rm --entrypoint sh local/xray-api:<sha> -c 'node -p "process.versions.bun"'   # → 1.4.0
+   > docker run --rm --entrypoint sh local/xray-api:<sha> -c 'ls -l $(command -v node); ls /usr/bin/node /usr/local/bin/node 2>&1'
+   > docker run --rm --entrypoint sh local/xray-api:<sha> -c 'dpkg -l | grep -c "^ii  *nodejs"'  # → 0
+   > ```
+   >
+   > R9 实测三项结论:`node` = 指向 bun 的软链、真实的 `node`/`nodejs` 二进制不存在、`nodejs` 包未安装。
+   > 所以「最终运行镜像里没有 Node.js 运行时」这句成立,只是不能用 `command -v node` 去证。
 
 7. **回滚**:镜像即回滚单元。把 `.env` 的 `IMAGE_TAG` 换回上一个 SHA,`docker compose up -d`。涉及不可逆迁移时先恢复备份(R10 衔接)。
 
