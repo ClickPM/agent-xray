@@ -27,7 +27,7 @@
 | **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ✅ 已完成([任务卡](rounds/round-08/round-08.md),15 项验收全过;codex 三轮共 3 条 findings(P1/P2/P3 各一)全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ✅ 已完成([任务卡](rounds/round-09/round-09.md) · [冒烟留证](rounds/round-09/smoke.md)),18 项验收全过,130 预发可用;**所有者裁定本轮不走 codex 审查**(过程与残留风险见任务卡「代码审查」段)。同日按 `docs/notes-content-spec.md` 经 MCP 入库 13 系列 / 205 章节 / 103 配图 | 2026-09-01 |
 | **R10** | 安全加固 + 上线前检查单逐项 | ✅ 已完成([任务卡](rounds/round-10/round-10.md) · [检查单留证](rounds/round-10/checklist.md)),检查单 1–11 项在 130(SHA `5c98b3e`)全绿;**所有者裁定本轮不做限额演练(引 R9 留证)与 pg 备份**,不做安全响应头与 IP 白名单(均记 BACKLOG) | 2026-09-01 |
-| **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | ✅ 已完成([任务卡](rounds/round-visitor/round-visitor.md)),12 项验收全过;codex 三轮共 6 条 findings(3×P1 · 3×P2),4 条采纳整改、1 条所有者裁定不修(130 内网)、1 条写明理由不采纳记 BACKLOG,第 3 轮零 findings,缺陷门禁 PASS | 2026-09-01 |
+| **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | ✅ 已完成([任务卡](rounds/round-visitor/round-visitor.md) · [130 部署留证](rounds/round-visitor/round-visitor.md#130-预发部署留证2026-09-01)),12 项验收全过;codex 三轮共 6 条 findings(3×P1 · 3×P2),4 条采纳整改、1 条所有者裁定不修(130 内网)、1 条写明理由不采纳记 BACKLOG,第 3 轮零 findings,缺陷门禁 PASS。同日 130 预发升级到 `7cc17fe`(迁移 6→7),8 项冒烟全过,**本机验不了的「新建会话首帧带 Set-Cookie」在 130 上验掉,不再交接给 R11** | 2026-09-01 |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
 ## 里程碑
@@ -265,7 +265,6 @@
 - 服务器初始化(`docs/security.md` §5 基线:仅密钥登录 / 防火墙 / fail2ban / 自动安全更新)
 - docker compose 部署;域名解析 + ICP 备案流程(`docs/deploy-cn-lightweight.md` §1)+ Caddy 自动 TLS;备案号挂 footer
 - 上线冒烟 + 首日观察(限额、内存、日志)
-- **R-VISITOR 交接过来的一条**:`/agent/ask` **新建会话**那条分支的「首帧带 `Set-Cookie`」在本机跑不到(本机没配 LLM provider,`acquireSession` 先抛 503),必须在配了真 provider 的环境实跑一次 —— 判据是新访客首次提问的 200 响应头里有 `Set-Cookie: xr_visitor=…; HttpOnly; SameSite=Lax`,且刷新页面后左栏能看到那个会话。理由与残留风险见 `rounds/round-visitor/round-visitor.md`「本轮实测」§3
 - **R10 交接过来的四条**(逐条给结论,不要漏):①检查单在生产**重跑一遍**(R10 只证了 130,判据已修准,见 `rounds/round-10/checklist.md`);②`/api/mcp` 的 Caddy IP 白名单**按真实出口 IP 启用**(模板在 `deploy/Caddyfile` 第 45–51 行);③写生产 LLM provider 时 key **直接贴进 MCP 调用,不落盘**(130 上那份 `.llm-key` 就是这么留下的);④**安全响应头**与 **pg 备份**在上线前再裁定一次(两条都在 BACKLOG,备份那条决定了「不可逆迁移出错」有没有兜底)
 
 ## 轮次外事项
@@ -277,4 +276,5 @@
 | 日期 | 内容 | 处置 |
 |---|---|---|
 | 2026-09-01 | R9 部署后所有者在 130 上发现两处:① Runtime 聊天区把助手回复当纯文本渲染,模型给的 markdown 全糊成一段;② 站点没有图标文件,浏览器落兜底图标 | 合入 `main`(merge `4b572c1`,含提交 `1d42a91` / `bcc39d6`)。**所有者裁定不走 codex 审查**。130 预发已由 `dbf61ce` 升级到 `4b572c1`(无新迁移,`migrate.sh --status` 停在版本 6),两处修复与三 Tab / 七服务端点 / RSS 均实测正常,流式渲染在 130 上实跑确认 |
+| 2026-09-01 | R-VISITOR 合并后 130 预发升级:`5c98b3e` → `7cc17fe`,迁移 `6 → 7`(007 访客隔离) | 按「先停 api/web、再 `migrate.sh`、后 `up -d`」顺序升级。8 项冒烟全过(留证在[任务卡](rounds/round-visitor/round-visitor.md#130-预发部署留证2026-09-01));**本机验不了的「新建会话首帧带 Set-Cookie」在这里验掉**。存量 12 条冒烟会话迁移后归属为 NULL、对所有访客不可见,由 3 天保留期清掉 |
 | 2026-09-01 | 所有者继续提两处:① 导航条没有 logo;② 右侧 Timeline 不跟随滚动,新事件到了还要手动划 | 合入 `main`(merge `5c98b3e`,含提交 `0f0325b`)。**所有者裁定不走 codex 审查**。logo 按 Pulse X 定稿的导航条实测图实现(44px / mark 20px / gap 9px / accent 明暗两态),`components/XrayMark.tsx` 与 `app/icon.svg` 是同一图形的两份载体、改图形要一起改。Timeline 改为**贴底才跟随**:上翻查看历史时不被新事件拽回,滚回底部自动恢复。130 已升到 `5c98b3e`,三种行为(跟随 / 上翻不被拽 / 回底恢复)在真实事件流下逐项实测 |

@@ -167,3 +167,22 @@
   但从 SSR 调 `client.agent.*` 会抛 `DataLoss` —— 已记 BACKLOG。
 - 开工时发现本机 `next dev` 在服务一个坏掉的构建(`.next/static/chunks` 目录不存在、
   `main-app.js` 404、页面完全不 hydrate),与本轮改动无关,重启后正常。
+
+## 130 预发部署留证(2026-09-01)
+
+`7cc17fe`(main 合并后)本机构建 → `dev.ps1 ship 130` → 按「先停旧版、再迁移、后起新版」升级
+(`docs/deploy-environments.md`)。`5c98b3e` → `7cc17fe`,迁移 `6 → 7`(007 是本轮唯一新迁移)。
+
+| # | 检查 | 结果 |
+|---|---|---|
+| 1 | 三 Tab | `/`、`/notes`、`/about` 全 200 |
+| 2 | 服务端点 | `/api/health`、`/api/agent/sessions`、`/api/about`、`/api/notes/series`、`/rss.xml`、`/rss/<分类>.xml` 全 200;`/api/mcp` 无 token → 401 |
+| 3 | **新建会话首帧带 `Set-Cookie`** | ✅ **本轮唯一在本机验不了的一条,在这里验掉**(130 配了真 provider `cliproxy-dmit`/`gpt-5.6-terra`):新访客首次提问 → `200` + `Set-Cookie: xr_visitor=…; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax`,且真实 LLM 跑完一轮(收到 `event: done`)。**ROUNDS.md 里交接给 R11 的那条可以划掉** |
+| 4 | 存量会话不可见 | 库里 12 条 R9/R10 冒烟遗留会话迁移后 `visitor_id` 全为 NULL,新访客列表返回 **0 条** |
+| 5 | 跨访客隔离 | B(无身份)对 A 的会话:列表 0 条 · 单查 404 · 轨迹流 404 · 续接提问 404 · 删除 404;A 自己:轨迹流 200 · 删除 200 · 重复删 404 |
+| 6 | **读路径不发放身份** | B 只调 `GET /api/agent/sessions`,全程没拿到 cookie,`visitors` 表没有因此长行(=2,只有真正建过会话的那两个) |
+| 7 | 库侧完整性 | `token_hash` 是 64 位 hex(明文不入库)· `expires_at - now() ≈ 24h` · 删除后**孤儿消息 0 / 孤儿轨迹 0**(级联生效) |
+| 8 | 内容零回归 | notes 13 系列 / 205 章节仍在(抽查 `typescript-deep-dive`),RSS 分类源 200 |
+
+**留在 130 上的冒烟痕迹**:1 条属于一次性 curl 身份的会话(2 轮真实 LLM 调用),
+其 cookie 已丢弃,对任何访客不可见,3 天保留期到点自动清掉,不需要人工处理。
