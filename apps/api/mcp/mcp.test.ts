@@ -9,6 +9,7 @@
 //   - About 部分更新 —— 错了改一句 intro 会静默清空七张仓库卡(R8)
 //   - 访问统计聚合 —— 错了统计数字与打点对不上,而没有任何东西会报错(R8)
 import { beforeEach, describe, expect, it } from "vitest";
+import * as z from "zod";
 import { siteDay, siteDayAgo } from "../shared/site-time";
 import {
   DecryptError,
@@ -24,7 +25,7 @@ import { parseBearer, sha256Hex, verifyAuth } from "./auth";
 import { chapterHash, countWords } from "./content";
 import { db } from "./db";
 import * as store from "./store";
-import { decodeBase64Strict, isHttpUrl, magicMatches } from "./tools";
+import { decodeBase64Strict, isHttpUrl, magicMatches, registerTools } from "./tools";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const OTHER_KEY = Buffer.alloc(32, 9).toString("base64");
@@ -687,5 +688,90 @@ describe("websearch provider(mcp/store + shared/websearch-hosts)", () => {
       KEY,
     );
     expect((await store.listWebSearchProviders())[0].toolType).toBe("web_search_2025_08_26");
+  });
+});
+
+// ───────────────────── MCP 工具注册面的入参 schema ─────────────────────
+//
+// 【为什么非要测这一层】本轮踩到的:`.refine(check, (v) => ({message}))` 是 zod 3 的
+// 「函数形式 params」,zod 4.5 **静默忽略**它 —— 不报错、不抛,只是把消息退回成
+// 一句 "Invalid input"。store 层的测试一个都照不到这里,因为它们直接调 store 函数,
+// 根本不过 schema。这里用一个假 server 收下注册配置,再拿真 schema 去 parse。
+describe("websearch 管理 tool 的入参 schema", () => {
+  interface Registered {
+    name: string;
+    config: { inputSchema?: Record<string, z.ZodType> };
+  }
+
+  const registered: Registered[] = [];
+  const fakeServer = {
+    registerTool(name: string, config: Registered["config"]) {
+      registered.push({ name, config });
+    },
+  };
+  registerTools(fakeServer as never, {});
+
+  const schemaOf = (name: string) => {
+    const t = registered.find((r) => r.name === name);
+    expect(t, `${name} 未注册`).toBeDefined();
+    return z.object(t!.config.inputSchema!);
+  };
+
+  it("四个 websearch tool 都注册了", () => {
+    for (const name of [
+      "websearch_providers_list",
+      "websearch_provider_upsert",
+      "websearch_set_default",
+      "websearch_provider_delete",
+    ]) {
+      expect(registered.map((r) => r.name)).toContain(name);
+    }
+  });
+
+  it("baseUrl 被拒时给出**能行动的**理由,而不是一句 Invalid input", () => {
+    const schema = schemaOf("websearch_provider_upsert");
+    const cases: Array<[string, string]> = [
+      ["https://evil.tld", "白名单"],
+      ["https://api.deepseek.com.evil.tld", "白名单"],
+      ["http://api.deepseek.com", "https"],
+      ["https://u:p@api.deepseek.com", "凭据"],
+      ["https://api.deepseek.com?x=1", "query"],
+      ["不是地址", "绝对地址"],
+    ];
+    for (const [url, want] of cases) {
+      const r = schema.safeParse({ provider: "p", baseUrl: url, makeDefault: false });
+      expect(r.success, url).toBe(false);
+      const msg = r.error!.issues.map((i) => i.message).join(" | ");
+      expect(msg, url).toContain(want);
+      expect(msg, url).not.toBe("Invalid input");
+    }
+  });
+
+  it("白名单内的合法 baseUrl 放行", () => {
+    const schema = schemaOf("websearch_provider_upsert");
+    for (const url of ["https://api.deepseek.com", "https://aigateway.variflight.com/api"]) {
+      expect(schema.safeParse({ provider: "p", baseUrl: url, makeDefault: false }).success, url).toBe(true);
+    }
+  });
+
+  it("toolType 只接受 web_search / web_search_YYYY_MM_DD", () => {
+    const schema = schemaOf("websearch_provider_upsert");
+    const parse = (toolType: string) =>
+      schema.safeParse({ provider: "p", toolType, makeDefault: false }).success;
+    expect(parse("web_search")).toBe(true);
+    expect(parse("web_search_2025_08_26")).toBe(true);
+    for (const bad of ["bash", "web_search; drop", "", "websearch"]) expect(parse(bad), bad).toBe(false);
+  });
+
+  it("超时上下界与库的 CHECK 一致(300s / 120s 封顶)", () => {
+    const schema = schemaOf("websearch_provider_upsert");
+    const parse = (o: Record<string, number>) =>
+      schema.safeParse({ provider: "p", makeDefault: false, ...o }).success;
+    expect(parse({ totalTimeoutMs: 300_000 })).toBe(true);
+    expect(parse({ totalTimeoutMs: 300_001 })).toBe(false);
+    expect(parse({ totalTimeoutMs: 9_999 })).toBe(false);
+    expect(parse({ idleTimeoutMs: 120_000 })).toBe(true);
+    expect(parse({ idleTimeoutMs: 120_001 })).toBe(false);
+    expect(parse({ dailySearchLimit: -1 })).toBe(false);
   });
 });

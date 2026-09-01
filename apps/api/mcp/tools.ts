@@ -693,12 +693,20 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           .string()
           .regex(/^[a-z0-9][a-z0-9._-]{0,63}$/, "provider 是自取的标签,如 deepseek / cliproxy-dmit"),
         apiKey: z.string().min(8).max(512).optional().describe("明文;省略 = 保留库内既有 key"),
+        // 【必须是 superRefine,不能是 `.refine(check, (v) => ({message}))`】
+        // 那个「函数形式的 params」是 zod 3 的写法,zod 4.5 **静默忽略**它:
+        // 不报错、不抛,只是把错误消息退回成一句 "Invalid input"(实测)。
+        // 而这里的消息正是这个工具最有用的产出 —— 所有者要靠它知道
+        // 「是 host 不在白名单、是没写 https、还是带了 query」。
         baseUrl: z
           .string()
           .max(512)
-          .refine((v) => checkBaseUrl(v).ok, (v) => ({ message: `baseUrl 不可用:${(checkBaseUrl(v) as { reason: string }).reason}` }))
+          .superRefine((v, ctx) => {
+            const r = checkBaseUrl(v);
+            if (!r.ok) ctx.addIssue({ code: "custom", message: `baseUrl 不可用:${r.reason}` });
+          })
           .optional()
-          .describe("如 https://api.deepseek.com;不能为空(本工具没有内置端点)"),
+          .describe("如 https://api.deepseek.com;host 必须在白名单内(见 websearch_providers_list)"),
         modelId: z.string().min(1).max(128).optional().describe("如 deepseek-v4-flash"),
         toolType: z
           .string()

@@ -97,8 +97,8 @@
 ### 本机门禁(2026-09-01)
 
 - `dev.ps1 check`:通过(迁移 008 施加成功,app 起得来)
-- `dev.ps1 test`:**12 文件 / 248 项全过**(本轮新增 15 项:`websearch.test.ts` 34 项、
-  `sandbox.test.ts` +5、`mcp.test.ts` +9;基线 233)
+- `dev.ps1 test`:**12 文件 / 253 项全过**(本轮新增 20 项:`websearch.test.ts` 35 项、
+  `sandbox.test.ts` +5、`mcp.test.ts` +14;基线 233)
 - `git diff --stat apps/web/` **为空** → 验收 #14(前端零改动)通过
 
 ### 踩到的坑
@@ -111,12 +111,22 @@
    - 修法是**在构造错误的地方就抹掉**(`redactUpstream`),而且要两道:`scrubString` 打通用形态
      (`sk-` 前缀 / `Bearer …`),再叠一道**本次 key 的精确替换** —— 自定义网关的 key 常是纯十六进制,
      通用模式一个都匹配不上。补了一条专门的用例钉住后半道。
-2. **`.secrets.local.cue` 不随 worktree 走**(gitignored)。`loadActiveWebSearchConfig` 要解密,
+2. **zod 4 静默吞掉 `.refine` 的「函数形式 params」**(自查时抓到,没等到审查)。
+   `.refine(check, (v) => ({ message: … }))` 是 zod **3** 的写法;zod 4.5.4 下它
+   **不报错、不抛**,只是把错误消息退回成一句 `"Invalid input"`(bun 实测)。
+   后果是 `websearch_provider_upsert` 拒掉一个坏 baseUrl 时,所有者看到的是
+   「Invalid input」而不是「host 不在白名单 / 没写 https / 带了 query」——
+   而那句理由正是这个 tool 最有用的产出。改用 `superRefine` + `ctx.addIssue`。
+   - **连带补了一层此前完全没有的测试**:`mcp.test.ts` 原来只测 store 函数,
+     一个字都照不到 MCP 的入参 schema。新增用假 server 收下 `registerTools` 的注册配置、
+     再拿**真 schema** 去 parse 的用例组(baseUrl 六种坏形态 / toolType 白名单 /
+     超时上下界与库 CHECK 一致),这类「schema 静默不生效」以后会红。
+3. **`.secrets.local.cue` 不随 worktree 走**(gitignored)。`loadActiveWebSearchConfig` 要解密,
    没有 `ConfigEncryptionKey` 时它会走「解不开 → 返回 null」的分支 —— 正例测不了。
    从主 checkout 拷一份进 worktree 即可(仍不入库)。顺带发现该文件的注释里早就写着
    `apps/api/{mcp,agent,metrics}/secrets.ts`,而 agent 侧此前把声明内联在 `llm-config.ts` 里;
    本轮抽出 `agent/secrets.ts` 之后那句注释才成立。
-3. **`dev.ps1 gen` 的产物有无关漂移,已回退**:`apps/web/lib/api-client.ts` 只变了两处 ——
+4. **`dev.ps1 gen` 的产物有无关漂移,已回退**:`apps/web/lib/api-client.ts` 只变了两处 ——
    app slug(`936eu` → `hvcca`,BACKLOG 里 R3 那条已记:slug 随生成所在 checkout 变)
    与一段 R-VISITOR 时期没跟着重新生成的过期注释。本轮**没有新增任何端点**,
    所以整份回退,不让它污染审查范围。
