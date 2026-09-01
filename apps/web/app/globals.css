@@ -35,7 +35,11 @@
   --cat-frontier: #8b5cf6;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", "Noto Sans Mono", Consolas, ui-monospace, monospace;
+  /* var(--font-jetbrains-mono) 由 app/layout.tsx 的 next/font/local 注入(R9 自托管)。
+     它自己已经展开成「自托管字体 → next 生成的度量对齐回退 → Noto Sans Mono → Consolas
+     → ui-monospace → monospace」,所以这里不再重复那串系统字体;
+     只留一个 "JetBrains Mono" 兼容本机装了同款字体的情况,末尾 monospace 兜底。 */
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", monospace;
 }
 
 html.dark {
