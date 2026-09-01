@@ -27,7 +27,7 @@
 | **R8** | metrics 打点 + About 真实化 + 统计查询 MCP 工具 | ✅ 已完成([任务卡](rounds/round-08/round-08.md),15 项验收全过;codex 三轮共 3 条 findings(P1/P2/P3 各一)全采纳整改,第 3 轮零 findings,缺陷门禁 PASS) | 2026-09-01 |
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ✅ 已完成([任务卡](rounds/round-09/round-09.md) · [冒烟留证](rounds/round-09/smoke.md)),18 项验收全过,130 预发可用;**所有者裁定本轮不走 codex 审查**(过程与残留风险见任务卡「代码审查」段)。同日按 `docs/notes-content-spec.md` 经 MCP 入库 13 系列 / 205 章节 / 103 配图 | 2026-09-01 |
 | **R10** | 安全加固 + 上线前检查单逐项 | ✅ 已完成([任务卡](rounds/round-10/round-10.md) · [检查单留证](rounds/round-10/checklist.md)),检查单 1–11 项在 130(SHA `5c98b3e`)全绿;**所有者裁定本轮不做限额演练(引 R9 留证)与 pg 备份**,不做安全响应头与 IP 白名单(均记 BACKLOG) | 2026-09-01 |
-| **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | 🔵 进行中([任务卡](rounds/round-visitor/round-visitor.md)) | — |
+| **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | ✅ 已完成([任务卡](rounds/round-visitor/round-visitor.md)),12 项验收全过;codex 三轮共 6 条 findings(3×P1 · 3×P2),4 条采纳整改、1 条所有者裁定不修(130 内网)、1 条写明理由不采纳记 BACKLOG,第 3 轮零 findings,缺陷门禁 PASS | 2026-09-01 |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
 ## 里程碑
