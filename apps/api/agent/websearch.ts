@@ -379,8 +379,8 @@ export async function runWebSearch(
       // 上游能在 180s 里把内存吃光。这条闸管的是后者。
       receivedBytes += value?.byteLength ?? 0;
       if (receivedBytes > MAX_RESPONSE_BYTES) {
-        // 直接抛即可:`finally` 会清掉计时器,`ctrl` 随作用域结束。
-        // (原先还先置一个 "oversize" 标记再抛 —— catch 里那条分支永远走不到。)
+        // 只抛,不在这里 abort:**连接的收尾统一在 `finally` 里做**(见那里的注释)。
+        // 上一版这里写过一句「`ctrl` 随作用域结束」——那是错的,离开作用域不取消任何东西。
         throw new WebSearchError("oversize", `上游响应超过 ${MAX_RESPONSE_BYTES} 字节上限`);
       }
       buffer += decoder.decode(value, { stream: true });
@@ -416,6 +416,17 @@ export async function runWebSearch(
       `外呼失败: ${redactUpstream(safeErrorText(err), cfg.apiKey)}`,
     );
   } finally {
+    // 【无论怎么离开这个函数,都要放掉底层连接】(codex 复审第 3 轮 P2)
+    //
+    // 上一轮把超限分支里的 `ctrl.abort()` 删掉时,注释写的是「`ctrl` 随作用域结束」——
+    // **那是错的**:`AbortController` 被 GC 不会取消 fetch,读到一半就抛出去的话,
+    // reader 还锁着、连接还开着,直到服务端自己关或进程退出。白名单内的 provider
+    // 出故障狂推数据时,每次搜索都能积一条这样的连接。
+    //
+    // 收在 `finally` 而不是逐个分支补 abort:分支会长新的(将来多一种中途失败就多一处漏),
+    // 而「离开函数 = 连接一定被放掉」是个不会漏的结构性保证。
+    // 成功路径上流已经读完,这次 abort 是无害的空操作。
+    ctrl.abort();
     if (idleTimer) clearTimeout(idleTimer);
     clearTimeout(totalTimer);
     if (opts.signal) opts.signal.removeEventListener("abort", onAbort);

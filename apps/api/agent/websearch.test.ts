@@ -290,6 +290,35 @@ describe("超时与体积上界", () => {
     });
   });
 
+  it("**离开函数时一定放掉底层连接**(codex 复审第 3 轮 P2)", async () => {
+    // 中途抛出时,reader 还锁着、连接还开着 —— `AbortController` 被 GC **不会**取消 fetch。
+    // 判据取「传给 fetch 的 signal 最终是否 aborted」:真实 fetch 正是靠它断连接的。
+    const signals: AbortSignal[] = [];
+    const spy = (inner: typeof fetch): typeof fetch =>
+      (async (u: string, init?: RequestInit) => {
+        if (init?.signal) signals.push(init.signal);
+        return inner(u as never, init as never);
+      }) as unknown as typeof fetch;
+
+    // ① 超限:在流中途抛出
+    await expect(
+      runWebSearch("q", cfg(), {
+        fetchImpl: spy(streamingFetch(["x".repeat(4 * 1024 * 1024 + 1024)])),
+      }),
+    ).rejects.toMatchObject({ kind: "oversize" });
+    // ② 上游报错:流读完之后抛出
+    await expect(
+      runWebSearch("q", cfg(), {
+        fetchImpl: spy(streamingFetch([sse({ type: "response.failed", response: {} })])),
+      }),
+    ).rejects.toMatchObject({ kind: "upstream_failed" });
+    // ③ 正常成功
+    await runWebSearch("q", cfg(), { fetchImpl: spy(streamingFetch([delta("ok")])) });
+
+    expect(signals).toHaveLength(3);
+    signals.forEach((s, i) => expect(s.aborted, `第 ${i + 1} 条路径没放掉连接`).toBe(true));
+  });
+
   it("**非流式 JSON 也受同一个上界**(codex 初审 P2:res.json() 会整体缓冲)", async () => {
     const huge = `{"output_text":"${"x".repeat(4 * 1024 * 1024 + 1024)}"}`;
     const f = streamingFetch([huge], { contentType: "application/json" });
