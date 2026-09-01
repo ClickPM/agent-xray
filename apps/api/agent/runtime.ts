@@ -705,7 +705,9 @@ export async function acquireSession(sessionId: string): Promise<RuntimeSession>
     }
     console.log(
       `rebuilding session ${sessionId} onto provider ${cfg.llm.provider}/${cfg.llm.modelId} ` +
-        `tools=[${cfg.tools.fingerprint}]`,
+        // 打名字不打指纹:R-WEBSEARCH 起 `tools.fingerprint` 里含 websearch 配置的
+        // sha256,刷进日志既没用又难读(判据仍然是指纹,只是不给人看)
+        `tools=[${cfg.tools.names.join(",")}]`,
     );
     rec.busy = false;
     await disposeSession(rec);

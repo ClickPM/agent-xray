@@ -28,6 +28,7 @@
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ✅ 已完成([任务卡](rounds/round-09/round-09.md) · [冒烟留证](rounds/round-09/smoke.md)),18 项验收全过,130 预发可用;**所有者裁定本轮不走 codex 审查**(过程与残留风险见任务卡「代码审查」段)。同日按 `docs/notes-content-spec.md` 经 MCP 入库 13 系列 / 205 章节 / 103 配图 | 2026-09-01 |
 | **R10** | 安全加固 + 上线前检查单逐项 | ✅ 已完成([任务卡](rounds/round-10/round-10.md) · [检查单留证](rounds/round-10/checklist.md)),检查单 1–11 项在 130(SHA `5c98b3e`)全绿;**所有者裁定本轮不做限额演练(引 R9 留证)与 pg 备份**,不做安全响应头与 IP 白名单(均记 BACKLOG) | 2026-09-01 |
 | **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | ✅ 已完成([任务卡](rounds/round-visitor/round-visitor.md) · [130 部署留证](rounds/round-visitor/round-visitor.md#130-预发部署留证2026-09-01)),12 项验收全过;codex 三轮共 6 条 findings(3×P1 · 3×P2),4 条采纳整改、1 条所有者裁定不修(130 内网)、1 条写明理由不采纳记 BACKLOG,第 3 轮零 findings,缺陷门禁 PASS。同日 130 预发升级到 `7cc17fe`(迁移 6→7),8 项冒烟全过,**本机验不了的「新建会话首帧带 Set-Cookie」在 130 上验掉,不再交接给 R11** | 2026-09-01 |
+| **R-WEBSEARCH** | agent 联网搜索工具(Responses API 网关 · 域白名单 · MCP 配 provider) | 🔵 进行中([任务卡](rounds/round-websearch/round-websearch.md)) | — |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
 ## 里程碑
@@ -258,6 +259,42 @@
 > 只有抓响应头才看得出来。内联写全就正常。最终选 `Header<string, "Set-Cookie">` 而不是内联的
 > `Cookie<>`,是为了让 cookie 属性只有 `buildSetCookie` 一个来源 —— 两条 `api.raw` 只能拼字符串,
 > 用 `Cookie<>` 等于让同一个 cookie 的属性在两处各写一遍。
+
+### R-WEBSEARCH — agent 联网搜索工具(插在 R11 之前的能力轮;所有者裁定 2026-09-01)
+
+> 沿用 R-BUN / R-VISITOR 的「命名轮」先例。**插在上线之前**的理由很直接:
+> 这一轮动的是 agent 的工具集与出网面,上线之后再动等于让生产环境当第一个试验场。
+
+**先说清楚它不违反规则 8**:`design/Agent Runtime Workbench.dc.html:1162` 就画着
+`mkTool('web_search', 'MCP', '外呼', '联网搜索(服务端 key · 域白名单 · 计入日限额)', 'on')`,
+`docs/security.md` §1 开篇与第 4 层也一直写着「后续生图、联网搜索等插件」「外呼型工具(LLM / 生图 / 搜索)」。
+本轮是**补齐既定边界**,不是长新功能;实现口径连括号里那三条都照搬了。
+
+- **协议**:OpenAI 系 Responses API 的服务端内置搜索(`POST {base}/v1/responses`,
+  `tools:[{type:"web_search"}]` + `stream:true`)。**DeepSeek 与自建 AI 网关是同一套协议**,
+  差异只有 baseUrl / modelId / toolType 三个配置字段 —— 一份实现,零分支
+- **不做 Perplexity**(所有者裁定):参考插件里那三个是收费直连,与本站「服务端持凭据 + 域白名单」
+  是另一套取舍;只取插件的第 1 个工具
+- **文档先行**(规则 9):`docs/security.md` 威胁模型加第 5 条(外部内容注入);§1 第 1 层
+  加「工具分两组」表 —— 原文只写了「每个工具必须是纯函数」,而第 4 层同时写着「外呼型工具」,
+  两处此前是矛盾的。本轮把外呼组的**六条附加约束**写死(访客控不到网络原语 / 域白名单 /
+  双计时器 / 计入日限额 / 结果有界且异常不外泄 / 返回内容视为不可信输入)
+- 迁移 008:`websearch_config`(与 `llm_config` 同构但**不合表**)+ `daily_quota.searches` +
+  `web_search` 启停种子(**默认关**)
+- MCP 四个管理 tool:`websearch_providers_list` / `_provider_upsert` / `_set_default` / `_provider_delete`
+- **右栏可见性**(所有者追加要求):一次搜索最长 180s,不上报的话 Timeline 上就是一行干等三分钟。
+  阶段上报走 pi 的 `onUpdate` → `tool_execution_update`(34 事件之一,已在白名单里),
+  Lifecycle 的 `tool_call` / `tool_execution` / `tool_result` 三个节点也随之从 pending 点亮 ——
+  **前端零改动**(三视图本来就是泛型投影),规则 7 完好
+- 验收:域白名单挡得住(含后缀伪装 / 明文 http / 内嵌凭据)· 访客控不到网络原语 ·
+  双计时器与 4 MiB 上界 · 凭据不进错误对象 · 限额原子 · 未配 provider 不注册 ·
+  配置变更下一轮生效 · 130 上 DeepSeek 与网关两条配置各跑通一次
+
+> **本轮最值得记住的实测**:测试抓到过一个真 bug —— 上游 4xx 的响应体被原样放进了
+> `WebSearchError.message`,而网关**会把请求头回显进错误体**,于是明文 key 进了错误对象。
+> 只在日志那一行调 `safeErrorText` 是不够的:一个带着凭据的 `Error` 会被传递、被别处 catch、
+> 被将来某个人直接 `console.error(err)`。**凭据要在构造错误的地方就抹掉**,而且通用模式
+> (`sk-` 前缀 / `Bearer`)兜不住纯十六进制的自定义网关 key —— 必须再叠一道本次 key 的精确替换。
 
 ### R11 — 生产部署上线
 

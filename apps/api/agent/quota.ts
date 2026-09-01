@@ -143,3 +143,34 @@ export async function recordUsage(tokens: number, costMicros: number): Promise<v
 export function usdToMicros(usd: number): number {
   return Number.isFinite(usd) ? Math.round(usd * 1_000_000) : 0;
 }
+
+/**
+ * 外呼搜索的每日次数闸(R-WEBSEARCH;docs/security.md §1 第 4 层「计入日限额」)。
+ * 返回 `true` = 已占用一次额度,可以发起搜索;`false` = 今日额度用尽。
+ *
+ * 【为什么是「占额」一步而不是「先查再加」】`web_search` 由模型驱动,同一轮里
+ * 并发多次、多个会话同时调都是正常的。查一次再加一次的写法在两者之间留了个窗口,
+ * 上限于是变成一个「大概是这个数」的软约束 —— 而它存在的意义正是给一个真花钱的
+ * 外呼兜底。这里做成**一条带条件的 UPSERT**:`DO UPDATE … WHERE` 不满足时不更新
+ * 任何行,`RETURNING` 因而为空,超限与否由库的一次原子写决定。
+ *
+ * 【额度在发起前扣,失败也不退】与 `recordUsage` 的「尽力而为」是同一套取舍,
+ * 但方向相反且是刻意的:超时/报错的搜索**照样消耗上游资源**,退额等于让
+ * 一个必然失败的查询可以被无限重试。
+ *
+ * 【为什么不跟 token/费用合一个数】见迁移 008 的注释:那是聊天 provider 的账。
+ */
+export async function reserveSearch(dailySearchLimit: number): Promise<boolean> {
+  const limit = Math.max(0, Math.round(dailySearchLimit));
+  const row = await db.rawQueryRow<{ searches: number }>(
+    // TODAY 是 SQL 表达式不是参数(与 recordUsage 同一个理由,别改成模板插值)
+    `INSERT INTO daily_quota (day, searches) VALUES (${TODAY}, 1)
+     ON CONFLICT (day) DO UPDATE
+       SET searches = daily_quota.searches + 1,
+           updated_at = now()
+       WHERE $1 = 0 OR daily_quota.searches < $1
+     RETURNING searches::double precision AS "searches"`,
+    limit,
+  );
+  return row !== null;
+}

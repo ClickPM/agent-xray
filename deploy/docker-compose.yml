@@ -121,6 +121,12 @@ services:
       #   XRAY_UNLOCK_DANGEROUS_TOOLS=1
       # 当前注册表里没有任何 dangerous 工具,所以这个变量目前没有用武之地。
       # 需要新增变量时,先在 infra-config.json 的 secrets 段增声明再在此处补。
+      #
+      # 联网搜索的目标域白名单**追加**项(R-WEBSEARCH),默认空。
+      # 内置白名单在代码里(shared/websearch-hosts.ts),这个变量只能加不能减 ——
+      # 所以留空是安全的默认,不用 `:?`。websearch 的 API key **不在这里**:
+      # 它经 MCP 加密入库,与 LLM key 共用 CONFIG_ENCRYPTION_KEY。
+      - XRAY_WEBSEARCH_EXTRA_HOSTS=${XRAY_WEBSEARCH_EXTRA_HOSTS:-}
     expose:
       - "4000"
     networks: [front, back]

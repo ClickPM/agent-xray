@@ -22,6 +22,8 @@ import * as store from "./store";
 import { ConflictError, NotFoundError } from "./store";
 import { safeErrorText } from "../shared/redact";
 import { SITE_TZ_LABEL } from "../shared/site-time";
+// 域白名单的判据与 agent 侧是同一份实现(两个面不互相 import,故落在 shared/)
+import { allowedHosts, checkBaseUrl } from "../shared/websearch-hosts";
 
 /**
  * slug 口径必须与 `apps/api/notes/series.ts` 的 SLUG_RE 一字不差。
@@ -644,6 +646,119 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           provider: args.provider,
           status: "deleted",
           warning: r.defaultRemains ? undefined : "已无默认 provider,agent 对话将被拒绝",
+        };
+      }),
+  );
+
+  // ───────────────────── websearch provider(R-WEBSEARCH)─────────────────────
+  //
+  // 与 LLM provider 那组同构。**多出来的那件事是域白名单**:baseUrl 在这里就要过
+  // `checkBaseUrl`,拒得早、错得明白;agent 侧每次外呼前还会再校验一次
+  // (库里可能躺着白名单收紧之前写下的行)—— 两处不是重复,见
+  // `shared/websearch-hosts.ts` 的注释。
+
+  server.registerTool(
+    "websearch_providers_list",
+    {
+      title: "列出联网搜索 provider",
+      description:
+        "`web_search` 工具打的搜索网关配置。**key 只回掩码**(sk-…abcd),明文任何路径都拿不到。",
+      inputSchema: {},
+    },
+    async () =>
+      read("websearch_providers_list", async () => ({
+        allowedHosts: allowedHosts(),
+        providers: (await store.listWebSearchProviders()).map((p) => ({
+          ...p,
+          updatedAt: toIso(p.updatedAt),
+        })),
+      })),
+  );
+
+  server.registerTool(
+    "websearch_provider_upsert",
+    {
+      title: "配置联网搜索 provider",
+      description:
+        "配置 `web_search` 工具打的 **Responses API** 端点(DeepSeek 与自建 AI 网关是同一套协议," +
+        "差异只有 baseUrl / modelId / toolType 三个字段)。apiKey 加密入库,读回只给掩码。" +
+        "**baseUrl 的 host 必须在目标域白名单内**(见 websearch_providers_list 的 allowedHosts)," +
+        "且必须是 https、不带 query/fragment、不内嵌凭据 —— 白名单在代码里,改它要发版。" +
+        "**部分更新:省略的字段一律保留库内原值**;首次配置必须给出 apiKey、baseUrl 与 modelId。" +
+        "第一个配好的 provider 自动成为默认。改动在下一轮生效(会话按配置指纹重建)。" +
+        "**注意**:配好之后还要 `tool_config_set{name:'web_search', enabled:true}` 才会真正注册 —— " +
+        "种子行默认是关的。",
+      inputSchema: {
+        provider: z
+          .string()
+          .regex(/^[a-z0-9][a-z0-9._-]{0,63}$/, "provider 是自取的标签,如 deepseek / cliproxy-dmit"),
+        apiKey: z.string().min(8).max(512).optional().describe("明文;省略 = 保留库内既有 key"),
+        baseUrl: z
+          .string()
+          .max(512)
+          .refine((v) => checkBaseUrl(v).ok, (v) => ({ message: `baseUrl 不可用:${(checkBaseUrl(v) as { reason: string }).reason}` }))
+          .optional()
+          .describe("如 https://api.deepseek.com;不能为空(本工具没有内置端点)"),
+        modelId: z.string().min(1).max(128).optional().describe("如 deepseek-v4-flash"),
+        toolType: z
+          .string()
+          .regex(/^web_search(_[0-9]{4}_[0-9]{2}_[0-9]{2})?$/, "只接受 web_search 或 web_search_YYYY_MM_DD")
+          .optional()
+          .describe("Responses API 的内置工具类型名;DeepSeek 另接受 web_search_2025_08_26"),
+        totalTimeoutMs: z.number().int().min(10_000).max(300_000).optional().describe("总时长硬上限,默认 180000"),
+        idleTimeoutMs: z.number().int().min(5_000).max(120_000).optional().describe("空闲超时,默认 45000;不得大于 totalTimeoutMs"),
+        dailySearchLimit: z.number().int().min(0).optional().describe("每日搜索次数上限;0 = 不限"),
+        makeDefault: z.boolean().default(false),
+      },
+    },
+    async (args) =>
+      // summary 里绝不能带 apiKey:审计表也是「读接口」的一种
+      write(
+        ctx,
+        "websearch_provider_upsert",
+        `websearch provider ${args.provider} model=${args.modelId ?? "(不变)"}`,
+        async () => {
+          const r = await store.upsertWebSearchProvider(args, configEncryptionKey());
+          return {
+            provider: args.provider,
+            status: r.created ? "created" : "updated",
+            apiKeyHint: r.apiKeyHint,
+            isDefault: r.isDefault,
+          };
+        },
+      ),
+  );
+
+  server.registerTool(
+    "websearch_set_default",
+    {
+      title: "切换默认联网搜索 provider",
+      description: "默认 provider 就是 `web_search` 工具实际打的端点。",
+      inputSchema: { provider: z.string().min(1).max(64) },
+    },
+    async (args) =>
+      write(ctx, "websearch_set_default", `默认 websearch provider → ${args.provider}`, async () => {
+        await store.setDefaultWebSearchProvider(args.provider);
+        return { provider: args.provider, status: "default" };
+      }),
+  );
+
+  server.registerTool(
+    "websearch_provider_delete",
+    {
+      title: "删除联网搜索 provider",
+      description:
+        "删掉默认的那个之后,`web_search` 工具**下一轮起不再注册**(站点其余部分不受影响);" +
+        "`tool_config` 里的开关不会被动,配上新 provider 就会自动回来。",
+      inputSchema: { provider: z.string().min(1).max(64) },
+    },
+    async (args) =>
+      write(ctx, "websearch_provider_delete", `删 websearch provider ${args.provider}`, async () => {
+        const r = await store.deleteWebSearchProvider(args.provider);
+        return {
+          provider: args.provider,
+          status: "deleted",
+          warning: r.defaultRemains ? undefined : "已无默认 websearch provider,web_search 工具将不再注册",
         };
       }),
   );

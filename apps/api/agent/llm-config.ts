@@ -10,14 +10,12 @@
 // (docs/architecture.md):trace 服务读 agent 拥有的表也是这么做的——
 // **只读、不拥有 schema、不 import 对方目录**。反过来让 mcp 暴露一个内部端点给
 // agent 调,才是把两个面连起来(docs/security.md §4 要求它们互不触碰)。
-import { secret } from "encore.dev/config";
 import { createHash } from "node:crypto";
 import { decryptSecret } from "../shared/crypto";
 import { db } from "./db";
-
-// CLAUDE.md 规则 5:secret() 只能在 service 目录内声明。mcp 服务另有一份同名声明,
-// 指向的是同一个 app 级 secret,不是第二把密钥。
-const configEncryptionKey = secret("ConfigEncryptionKey");
+// 声明本身在 `./secrets`(CLAUDE.md 规则 5 要求 secret() 在 service 目录内,
+// 但没要求每个消费方各写一遍)。R-WEBSEARCH 起同一把密钥还要解 websearch_config。
+import { configEncryptionKey } from "./secrets";
 
 /** 没有默认 provider(或密钥/密文坏了);ask.ts 据此回 503 而不是 500。 */
 export class LlmNotConfiguredError extends Error {

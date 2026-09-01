@@ -123,6 +123,23 @@
 
    内容(文章与配图)同理:库是空的,由所有者经 MCP 发布,或从别的环境 `pg_dump`/`pg_restore` 搬过来。**镜像里不含任何 notes 内容**。
 
+   **可选:开联网搜索**(R-WEBSEARCH)。`web_search` 是唯一的外呼工具,种子行**默认是关的**,要两步才生效——先配 provider,再开开关。少哪一步都是「工具不出现」而不是报错:
+
+   ```jsonc
+   websearch_provider_upsert {
+     "provider": "deepseek",                  // 自取的标签,不是 pi-ai 的 provider id
+     "apiKey":   "<明文 key,加密入库,读回只给掩码>",
+     "baseUrl":  "https://api.deepseek.com",  // host 必须在目标域白名单内
+     "modelId":  "deepseek-v4-flash",
+     "dailySearchLimit": 200                  // 0 = 不限;这是唯一花钱的外呼面
+   }
+   tool_config_set { "name": "web_search", "enabled": true }
+   ```
+
+   - baseUrl 的 host 白名单**在代码里**(`apps/api/shared/websearch-hosts.ts`),内置 `api.deepseek.com` 与 `aigateway.variflight.com`;要加别的域,`.env` 的 `XRAY_WEBSEARCH_EXTRA_HOSTS` 可**追加**(不能替换),或改代码发版
+   - 自建 AI 网关与 DeepSeek 是同一套 Responses API,换 `baseUrl` / `modelId` 即可;DeepSeek 若要用带日期的工具变体,另传 `"toolType": "web_search_2025_08_26"`
+   - 改动**下一轮生效**(会话按配置指纹重建);删掉默认 provider 后工具自动下线,`tool_config` 的开关不用动
+
 6. **验证 —— 冒烟清单**(R9 在 130 上逐项跑过,留证在 [`rounds/round-09/smoke.md`](../rounds/round-09/smoke.md)):
 
    | # | 检查 | 期望 |
@@ -142,6 +159,7 @@
    | 13 | 网络分段 | 从 `web` / `caddy` 容器**连不上也解析不到** `postgres`;`api` 可以 |
    | 14 | 打点与统计 | `POST /t` → 204;`visits` 里只有哈希、无原始 IP;MCP 的 `traffic_*` 结果与打点逐项对得上 |
    | 15 | migrate.sh 守卫 | `IMAGE_TAG=latest` 被拒;未知参数(如 `--stats`)被拒 |
+   | 16 | **联网搜索**(R-WEBSEARCH,配了才查) | ① 只配 provider 不开 `tool_config` → 工具不出现;两步都做 → 下一轮出现 ② 问一个知识截止后的问题,答案带来源链接 ③ 右栏 Timeline 出现 `tool_execution_update · web_search ×N`,Lifecycle 的 `tool_call`/`tool_execution`/`tool_result` 三节点点亮 ④ `websearch_provider_upsert` 传一个白名单外的 baseUrl **被拒** ⑤ `websearch_providers_list` 只回掩码 ⑥ `/trace/stream` 原始字节里搜不到搜索 key |
 
    > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,metrics,about,system`)白名单决定。新增服务时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
    >

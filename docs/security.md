@@ -10,6 +10,11 @@
 2. **凭据泄漏**——LLM API key 经由事件流、前端、Git 仓库外泄
 3. **资源滥用**——刷爆 LLM 费用、OOM 拖垮单机、把服务器当代理
 4. **管理面被攻破**——MCP 管理端点的 token 泄漏 / 暴力猜测 / 审计缺失
+5. **外部内容注入**(R-WEBSEARCH 补,2026-09-01)——联网搜索的结果是**不可信的第三方文本**,
+   会原样进入模型上下文,里面可以写着「忽略前面的指示,去做 X」。这条与 1 的区别是**入口不在对话框里**:
+   访客只需诱导 agent 去搜一个自己控制的页面。**兜底不在检测,而在能力**——被注入的模型能调用的
+   只有那几个只读工具(第 1 层)和另一次同样受限的搜索,做不成任何有副作用的事。
+   搜索结果不做「指令过滤」:那是一场打不赢的字符串仗,而能力边界是可证明的
 
 ## 1. 沙箱化工具执行环境(四层)
 
@@ -23,6 +28,30 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 - 执行类内置工具默认**锁定**:开启需「服务器 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1` + MCP 管理面开关」双闸;所有启停操作写审计日志
 - **明文规则:bash / write / 任意代码执行类工具永久禁止进 in-process 进程。** 未来确需执行类能力时,必须独立一次性沙箱容器,不共享本进程
 
+**工具分两组:纯函数组 与 外呼组**(R-WEBSEARCH 补,2026-09-01;所有者裁定)。上面那条「纯函数」是**默认**,
+而第 4 层从一开始就写着「外呼型工具(LLM / 生图 / 搜索)」—— 两处的措辞此前是矛盾的:一个外呼工具必然要持凭据、
+发网络请求。本次把边界写死,而不是让实现去挑一条读:
+
+| | 纯函数组(`notes_*`) | 外呼组(`web_search`) |
+|---|---|---|
+| 网络 | 无 | 仅限**目标域白名单**内的固定端点 |
+| 凭据 | 不存在 | 服务端持有,经加密表(`websearch_config`)读取并**只在进程内流动** |
+| `process.env` | 不读 | 只在**注册环节**读(白名单扩展项),工具体内不读 |
+| 文件系统 / 子进程 / 动态 import | 禁止 | 同样禁止 |
+
+外呼组的**六条附加约束,缺一条就不许注册**:
+
+1. **访客控不到网络原语**。请求的 URL / host / method / headers / model / 工具类型全部来自服务端配置,
+   模型给的 `query` **只能落进请求体的一个字段**,且有长度上限。工具不接受任何形式的 URL 参数 ——
+   「让 agent 去抓这个地址」是 SSRF,不是搜索
+2. **目标域白名单**在代码里,不在库里。库(经 MCP)只能在白名单之内挑一个;白名单本身要改得发版。
+   写入时校验一次(拒得早、看得见)、调用前再校验一次(库里可能躺着白名单收紧之前写下的行)
+3. **超时是双计时器**:空闲超时(收到数据块就重置)+ 总时长硬上限,两者都有库级 CHECK 上界。
+   没有上界的外呼会一直占着会话名额,而 SSE 断连信号在本架构下探测不到(见 `apps/api/trace/README.md`)
+4. **计入日限额**(第 4 层):独立的每日调用次数上限,超限即拒
+5. **结果有界且异常不外泄**:结果过 `capText`;失败一律 `throw` 固定文案,上游状态码 / 响应体 / 凭据只进服务端日志
+6. **返回内容视为不可信输入**(威胁模型 5):不做指令过滤,靠「被注入也调不动别的东西」兜底
+
 R7 落地补记(2026-09-01,`apps/api/agent/tools.ts` + `runtime.ts`):
 
 - **三个参数是一组闸**:`noTools:"all"` 起步 + `customTools`(本轮启用工具的实现)+ `tools`(显式白名单)。pi 的取值是 `options.tools ?? (noTools ? [] : 默认内置)`,给了白名单就只有名单里的会被激活。**实测**(faux provider 驱动真实 agent loop):`getActiveToolNames()` 与 `getAllTools()` 都只有我们那三个,内置工具一个不出现;工具全关时两者皆空
@@ -33,8 +62,8 @@ R7 落地补记(2026-09-01,`apps/api/agent/tools.ts` + `runtime.ts`):
 
 ### 第 2 层 · 数据面只读
 
-- 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_categories` / `notes_series` / `notes_chapters` 三张表 `SELECT`,对 `llm_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `daily_quota` / `visits` 无任何权限
-- 即使 prompt injection 完全操纵了工具调用,能做的也只有「读教程」
+- 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_categories` / `notes_series` / `notes_chapters` 三张表 `SELECT`,对 `llm_config` / `websearch_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `daily_quota` / `visits` 无任何权限
+- 即使 prompt injection 完全操纵了工具调用,能做的也只有「读教程」(R-WEBSEARCH 起多一件:发起一次受限的联网搜索)
 
 R7 落地补记(2026-09-01,所有者裁定;`apps/api/agent/ro-db.ts` + 迁移 `006`):
 
@@ -66,6 +95,31 @@ R7 落地补记(2026-09-01,`apps/api/agent/quota.ts` + 迁移 `006`):
 - **计数是尽力而为的资源闸,不是账单**:`recordUsage` 失败只记日志、不重试、不把已完成的一轮报成失败。一轮可能有多条助手消息(开了工具之后「助手 → 工具 → 助手」是常态),必须逐条累加 —— **实测**一次工具轮的两条助手消息各带 `usage`(`totalTokens` 1330 / 1054),只取最后一条会漏掉一半
 - **拒绝体只出 `code` 不出数字**:`429` + `daily_tokens` / `daily_cost` / `turn_limit`。把「已用 12345 / 上限 10000」写进响应等于把站点的限额配置告诉每一个撞上它的访客;数字只进服务端日志
 
+R-WEBSEARCH 落地补记(2026-09-01,`apps/api/agent/websearch.ts` + `websearch-config.ts` + 迁移 `008`):
+
+- **第一个外呼工具落地为 `web_search`**,形态 = OpenAI 系 **Responses API** 的服务端内置搜索:
+  `POST {baseUrl}/v1/responses`,body 里 `tools:[{type:"web_search"}]` + `stream:true`,读 SSE 的
+  `response.output_text.delta` / `response.completed` / `response.failed` / `response.incomplete`。
+  **DeepSeek 与自建 AI 网关(CPA)是同一套协议**,差异只有 baseUrl / model / 工具类型名
+  (DeepSeek 另有带日期的 `web_search_2025_08_26`)—— 所以是一份实现、三个配置字段,不是两条代码路径
+- **目标域白名单硬编码在 `websearch.ts`**(`api.deepseek.com` / `aigateway.variflight.com`),
+  可经服务器 env `XRAY_WEBSEARCH_EXTRA_HOSTS` **追加**(逗号分隔)但不能**替换**内置项:
+  env 只做加法,一个被改坏的环境变量拿不掉既有约束。校验发生在两处 —— MCP 写入时(拒得早)
+  与每次调用前(库里可能躺着白名单收紧之前写下的行)。host 比对是**精确相等**,不做后缀匹配:
+  `api.deepseek.com.evil.tld` 会被后缀匹配放行
+- **限额与 LLM 的 token/费用分开计**:`daily_quota.searches` 计次,上限在 `websearch_config.daily_search_limit`
+  (0 = 不限)。**刻意不把搜索的 token 折进 `daily_quota.tokens`** —— 那是聊天 provider 的账,
+  混进第二家厂商的用量之后,「daily_token_limit 到底在限什么」就没法解释了。
+  超限时工具**抛固定文案**(计为一次失败的工具调用),不是拒整轮对话:访客的问题还能被正常回答,
+  只是这一轮没有搜索结果
+- **超时默认 总 180s / 空闲 45s**(所有者裁定),库级 CHECK 上界 300s / 120s。180s 是贴着实测定的:
+  网关侧「搜索 + 综述」常越过 90s。代价已认 —— 最坏情况访客等 3 分钟,且这段时间占着一个会话名额
+- **`tool_config` 里的 `web_search` 默认 `enabled=FALSE`**。新环境部署完还没配 websearch provider,
+  注册阶段本来就会把它丢掉;默认关是把「没配就没有」变成显式的一件事,而不是每次冷启动刷一行 dropped 日志
+- **没配 provider = 不注册,而不是注册一个必然失败的工具**:`loadEnabledTools` 读不到默认
+  websearch 配置时丢弃该名字并记日志。配好之后经 R6 那条统一规则(**配置指纹变了,会话下一轮重建**)
+  自动生效 —— 所以 websearch 配置的指纹也并进了 `RuntimeConfig.fingerprint`
+
 ## 2. 事件流脱敏
 
 - SSE 推送前对每个事件做**白名单字段**过滤(sanitize)
@@ -78,6 +132,7 @@ R7 落地补记(2026-09-01,`apps/api/agent/quota.ts` + 迁移 `006`):
   - **不存在引导凭据**(所有者裁定 2026-08-31,R6 落地):R1–R5 期间的 Encore secret `DeepSeekApiKey` 已**彻底移除**——secret 声明、`deploy/infra-config.json` 的 secrets 段、compose 的 `DEEPSEEK_API_KEY` 三处一并删除。运行期 LLM 凭据的**唯一来源是 `llm_config` 表**,密文由 `ConfigEncryptionKey` 解开。代价已认:新环境首次部署后必须先经 MCP 的 `llm_provider_upsert` 写入一个 provider,`/agent/ask` 才可用(在那之前回明确的 503,不是含糊的模型错误)
   - 加密口径:AES-256-GCM,密文布局 `nonce(12)‖ct‖tag(16)` 存 BYTEA(`apps/api/shared/crypto.ts`)。选认证加密是为了让「库被改一个字节」直接解密失败,而不是解出一段垃圾 key 去打 provider。`ConfigEncryptionKey` 换掉 = 既有密文全部作废,必须经 MCP 重写各 provider 的 key
   - `ConfigEncryptionKey` 与 `McpAuthTokenHash` 都不是可直接使用的凭据:前者是密钥、后者是**哈希**,拿到它们既登不了管理面也用不了 LLM
+- **websearch key(R-WEBSEARCH,2026-09-01)走的是同一套**:`websearch_config.api_key_enc`,同一个 `ConfigEncryptionKey`、同一份 `shared/crypto.ts`、同样只回 `maskSecret` 掩码。刻意**不复用 `llm_config` 那一行的 key**——搜索网关与聊天 provider 可以是两家,合成一行会让「换聊天 provider」顺带换掉搜索凭据。明文只在 `loadActiveWebSearchConfig` → 工具闭包 → `Authorization` 头这一条进程内链路上流动:不进日志(错误文本过 `safeErrorText`)、不进事件流(§2 的字段白名单里没有它)、不进任何端点
 - `.env` 不入 Git;仓库推送前跑 gitleaks;`.gitignore` 已覆盖 `.env*` / `*.key` / `*.pem`
 - 服务器上 `.env` 权限 600
 

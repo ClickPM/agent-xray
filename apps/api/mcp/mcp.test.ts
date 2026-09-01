@@ -19,6 +19,7 @@ import {
   parseEncryptionKey,
   timingSafeEqualHex,
 } from "../shared/crypto";
+import { allowedHosts, checkBaseUrl } from "../shared/websearch-hosts";
 import { parseBearer, sha256Hex, verifyAuth } from "./auth";
 import { chapterHash, countWords } from "./content";
 import { db } from "./db";
@@ -550,5 +551,141 @@ describe("访问统计聚合(mcp/store,R8)", () => {
     });
     expect(await store.trafficPaths(30, 10)).toEqual([]);
     expect(await store.trafficAgents(30)).toEqual([]);
+  });
+});
+
+// ───────────────────── websearch provider(R-WEBSEARCH)─────────────────────
+
+describe("websearch provider(mcp/store + shared/websearch-hosts)", () => {
+  beforeEach(async () => {
+    await db.exec`DELETE FROM websearch_config`;
+  });
+
+  const base = {
+    provider: "deepseek",
+    apiKey: "sk-0123456789abcd",
+    baseUrl: "https://api.deepseek.com",
+    modelId: "deepseek-v4-flash",
+    makeDefault: false,
+  };
+
+  it("首个自动成为默认,key 只回掩码且库里是密文", async () => {
+    const r = await store.upsertWebSearchProvider(base, KEY);
+    expect(r).toMatchObject({ created: true, apiKeyHint: "sk-…abcd", isDefault: true });
+
+    const listed = await store.listWebSearchProviders();
+    expect(listed[0]).toMatchObject({
+      provider: "deepseek",
+      apiKeyHint: "sk-…abcd",
+      toolType: "web_search",
+      totalTimeoutMs: 180_000,
+      idleTimeoutMs: 45_000,
+      dailySearchLimit: 0,
+      isDefault: true,
+    });
+    // 列表结构里不该出现任何形如明文 key 的字段(docs/security.md §3)
+    expect(JSON.stringify(listed)).not.toContain("0123456789abcd");
+
+    const raw = await db.rawQueryRow<{ enc: Uint8Array }>(
+      `SELECT api_key_enc AS enc FROM websearch_config WHERE provider = 'deepseek'`,
+    );
+    expect(decryptSecret(KEY, raw!.enc)).toBe("sk-0123456789abcd");
+  });
+
+  it("首次写入必须给 apiKey / baseUrl / modelId(这张表没有内置端点可回落)", async () => {
+    for (const missing of ["apiKey", "baseUrl", "modelId"] as const) {
+      const input = { ...base, [missing]: undefined };
+      await expect(store.upsertWebSearchProvider(input, KEY)).rejects.toThrow(store.NotFoundError);
+    }
+  });
+
+  it("部分更新:只改 modelId 不会把超时与限额清零", async () => {
+    await store.upsertWebSearchProvider(
+      { ...base, makeDefault: true, totalTimeoutMs: 120_000, idleTimeoutMs: 30_000, dailySearchLimit: 50 },
+      KEY,
+    );
+    await store.upsertWebSearchProvider(
+      { provider: "deepseek", modelId: "deepseek-v4-pro", makeDefault: false },
+      KEY,
+    );
+    const [p] = await store.listWebSearchProviders();
+    expect(p).toMatchObject({
+      modelId: "deepseek-v4-pro",
+      totalTimeoutMs: 120_000,
+      idleTimeoutMs: 30_000,
+      dailySearchLimit: 50,
+      apiKeyHint: "sk-…abcd",
+    });
+  });
+
+  it("idle > total 在写入前就被拒(给所有者一句能行动的话,不是「详见日志」)", async () => {
+    await store.upsertWebSearchProvider(base, KEY);
+    await expect(
+      store.upsertWebSearchProvider(
+        { provider: "deepseek", idleTimeoutMs: 120_000, totalTimeoutMs: 60_000, makeDefault: false },
+        KEY,
+      ),
+    ).rejects.toThrow(store.ConflictError);
+    // 只给 idle、让它越过库内既有的 total,同样要拒
+    await expect(
+      store.upsertWebSearchProvider(
+        { provider: "deepseek", idleTimeoutMs: 200_000, makeDefault: false },
+        KEY,
+      ),
+    ).rejects.toThrow(store.ConflictError);
+  });
+
+  it("**store.ts 里的超时默认值与迁移 008 的列默认值一致**(重复常量由测试钉住)", async () => {
+    const rows = await db.rawQueryAll<{ column_name: string; column_default: string }>(
+      `SELECT column_name, column_default FROM information_schema.columns
+        WHERE table_name = 'websearch_config'
+          AND column_name IN ('total_timeout_ms', 'idle_timeout_ms')`,
+    );
+    const byCol = Object.fromEntries(rows.map((r) => [r.column_name, parseInt(r.column_default, 10)]));
+    expect(byCol.total_timeout_ms).toBe(store.DEFAULT_TOTAL_TIMEOUT_MS);
+    expect(byCol.idle_timeout_ms).toBe(store.DEFAULT_IDLE_TIMEOUT_MS);
+  });
+
+  it("唯一默认:切换之后旧的那个不再是默认", async () => {
+    await store.upsertWebSearchProvider(base, KEY);
+    await store.upsertWebSearchProvider({ ...base, provider: "gw" }, KEY);
+    await store.setDefaultWebSearchProvider("gw");
+    const listed = await store.listWebSearchProviders();
+    expect(listed.filter((p) => p.isDefault).map((p) => p.provider)).toEqual(["gw"]);
+  });
+
+  it("删不存在的 provider 报 NotFound;删完最后一个如实回 defaultRemains=false", async () => {
+    await expect(store.deleteWebSearchProvider("nope")).rejects.toThrow(store.NotFoundError);
+    await store.upsertWebSearchProvider(base, KEY);
+    expect(await store.deleteWebSearchProvider("deepseek")).toEqual({ defaultRemains: false });
+  });
+
+  it("目标域白名单:写入侧与调用侧用的是同一份判据", () => {
+    expect(checkBaseUrl("https://api.deepseek.com").ok).toBe(true);
+    expect(checkBaseUrl("https://aigateway.variflight.com/api").ok).toBe(true);
+    for (const bad of [
+      "https://evil.tld",
+      "https://api.deepseek.com.evil.tld",
+      "http://api.deepseek.com",
+      "https://u:p@api.deepseek.com",
+      "https://api.deepseek.com?x=1",
+      "not-a-url",
+    ]) {
+      expect(checkBaseUrl(bad).ok, bad).toBe(false);
+    }
+    expect(allowedHosts()).toContain("api.deepseek.com");
+  });
+
+  it("tool_type 的库级 CHECK 挡住任意字符串", async () => {
+    await store.upsertWebSearchProvider(base, KEY);
+    await expect(
+      db.rawExec(`UPDATE websearch_config SET tool_type = 'bash' WHERE provider = 'deepseek'`),
+    ).rejects.toThrow();
+    // 带日期的官方变体要放行(DeepSeek 的 web_search_2025_08_26)
+    await store.upsertWebSearchProvider(
+      { provider: "deepseek", toolType: "web_search_2025_08_26", makeDefault: false },
+      KEY,
+    );
+    expect((await store.listWebSearchProviders())[0].toolType).toBe("web_search_2025_08_26");
   });
 });
