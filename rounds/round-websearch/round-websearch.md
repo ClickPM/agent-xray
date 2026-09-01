@@ -57,7 +57,7 @@
 
 | # | 检查 | 命令 / 期望 |
 |---|---|---|
-| 1 | 编译与测试全绿 | `dev.ps1 check` + `dev.ps1 test` 全过 |
+| 1 | 编译与测试全绿 | `dev.ps1 check` + `dev.ps1 test` 全过,**且 `npx tsc --noEmit` 干净**(复审第 1 轮加:前两者都不跑全量 tsc) |
 | 2 | 迁移 008 可施加且幂等 | 本机 `dev.ps1` 起库自动跑;`deploy/migrate.sh` 在 130 上重跑不报错 |
 | 3 | **域白名单挡得住** | 单测:`https://evil.tld/v1`、`https://api.deepseek.com.evil.tld`、`http://api.deepseek.com`(非 https)、带内嵌凭据的 URL 全部被拒;MCP 写入侧同样拒 |
 | 4 | **访客控不到网络原语** | 静态核验 + 单测:`runWebSearch` 的 URL/headers/model/toolType 只来自配置;`query` 只进 body 的 `input`,且有 300 字上限(schema `maxLength`) |
@@ -83,7 +83,8 @@
 ## 代码审查
 
 - 审查方式:`/codex:review --background`(changes against `main`;前两轮用全量范围)
-- 结论:**第 1 轮 3 条 findings(2×P1 + 1×P2)全部采纳整改**,复审待发
+- 结论:两轮共 5 条 findings(3×P1 + 2×P2)**全部采纳整改**;第 3 轮复审待发
+  (按 CLAUDE.md,第 3 轮起范围收到「上一轮整改 diff」,`--base 0c36322`)
 
 ### 第 1 轮(2026-09-01,基线 `4f338e1`)
 
@@ -101,6 +102,21 @@
 搜索也偶尔能用,只是模型收到一条自相矛盾的高优先级指令,表现为「时灵时不灵」。
 本机门禁与我自己的用例都照不到它,因为它根本不在代码的行为里,在提示词的语义里。
 
+### 第 2 轮(2026-09-02,基线 `0c36322`;仍为全量范围)
+
+| # | 级别 | findings | 核验 | 处理 |
+|---|---|---|---|---|
+| 4 | P1 | `abortCause` 的比较过不了 `tsc --noEmit`(TS2367);「blocks `encore check`/the build」 | **前半属实**:实测 `tsc --noEmit` 报两条 TS2367 —— TS **不追踪闭包里的赋值**,按「初始 null + try 块里那次直接赋值」把变量窄化成 `"oversize" \| null`。**后半不成立**:`dev.ps1 check` 与 `dev.ps1 test` 都是绿的,Encore 的构建也不跑 tsc | **采纳**:改成「掐断时直接存要抛的 `WebSearchError`」,判据变成一次真假判断,不再有字符串比较;顺带去掉了那条**永远走不到**的 `oversize` 分支与重复的消息拼装。整改后 `tsc --noEmit` 干净 |
+| 5 | P2 | `readTextCapped` 读缓冲响应体时不重置空闲计时器 —— 响应头很快、body 慢的上游会在持续有数据的情况下被空闲超时掐掉 | **属实**,且是我上一轮引入 `readTextCapped` 时带进来的(此前 `res.json()` 同样不重置,只是没人看得见) | **采纳**:`readTextCapped(res, onChunk)`,两个调用点都传 `resetIdle`,与 SSE 路径同一套判据 |
+
+**两条都补了回归用例**(`dev.ps1 test` **261 项全过**):非流式响应分块慢送(每块 40ms、
+空闲窗口 60ms)必须成功而不是被自己掐死;`tsc --noEmit` 纳入本轮验收 #1。
+
+**这一轮暴露了一个门禁的洞**:`dev.ps1 check` 与 `dev.ps1 test` **都不跑全量 tsc**。
+不是构建阻塞(Encore 的构建也不跑),但类型错误只能靠 IDE 或人工发现。
+补门禁属新增机制、不在缺陷整改范围,**已记 `rounds/BACKLOG.md` 待所有者裁定**;
+本轮自己每次整改后手动跑 `npx tsc --noEmit`。
+
 ## 失败处理
 
 同一验收项针对性整改后连续 2 次验证仍不过 → 写 `rounds/round-websearch/BLOCKED.md`,停下呼人。
@@ -110,8 +126,9 @@
 ### 本机门禁(2026-09-01)
 
 - `dev.ps1 check`:通过(迁移 008 施加成功,app 起得来)
-- `dev.ps1 test`:**12 文件 / 260 项全过**(本轮新增 27 项;基线 233)。
-  其中 7 项是 codex 第 1 轮 findings 的回归用例,见「代码审查」段
+- `dev.ps1 test`:**12 文件 / 261 项全过**(本轮新增 28 项;基线 233)。
+  其中 9 项是 codex 两轮 findings 的回归用例,见「代码审查」段
+- `npx tsc --noEmit`:干净(复审第 1 轮起纳入验收 —— 前两条命令都不跑全量 tsc)
 - `git diff --stat apps/web/` **为空** → 验收 #14(前端零改动)通过
 
 ### 踩到的坑

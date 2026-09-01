@@ -221,17 +221,36 @@ export async function runWebSearch(
     else opts.signal.addEventListener("abort", onAbort, { once: true });
   }
 
-  let abortCause: "idle" | "total" | "oversize" | null = null;
+  /**
+   * 是**我们**掐断的吗?是的话这里放着要抛的那个错误。
+   *
+   * 【为什么存 Error 而不是一个 "idle" | "total" 的字符串标记】(codex 复审 P1)
+   * 那个写法过不了 `tsc --noEmit`(TS2367):TypeScript **不追踪闭包里的赋值**,
+   * 于是它按「初始值 null + try 块里那次直接赋值」把变量窄化成 `"oversize" | null`,
+   * 再和 `"idle"` / `"total"` 比较就成了「两个类型没有交集」的错误。
+   * 存错误对象之后判据变成一次真假判断,不再有字符串比较,narrowing 怎么算都不出错;
+   * 顺带去掉了「先记一个标记、再在 catch 里照标记重新拼一遍消息」的重复。
+   *
+   * 【为什么 `dev.ps1 check` 没拦住】`encore check` 与 `bun --bun vitest` 都不跑
+   * 全量 tsc(实测两者皆绿而 `tsc --noEmit` 红)。已记 rounds/BACKLOG.md。
+   */
+  let abortReason: WebSearchError | undefined;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   const resetIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      abortCause = "idle";
+      abortReason = new WebSearchError(
+        "idle_timeout",
+        `空闲超时:${Math.round(cfg.idleTimeoutMs / 1000)}s 内上游未推送任何数据`,
+      );
       ctrl.abort();
     }, cfg.idleTimeoutMs);
   };
   const totalTimer = setTimeout(() => {
-    abortCause = "total";
+    abortReason = new WebSearchError(
+      "total_timeout",
+      `总时长超时:超过 ${Math.round(cfg.totalTimeoutMs / 1000)}s 上限`,
+    );
     ctrl.abort();
   }, cfg.totalTimeoutMs);
   resetIdle();
@@ -272,7 +291,7 @@ export async function runWebSearch(
 
     if (!res.ok) {
       // 错误体同样要封顶:一个 4xx 也可以回几百 MB(codex 初审 P2 的同类问题)
-      const body = await readTextCapped(res).catch(() => "");
+      const body = await readTextCapped(res, resetIdle).catch(() => "");
       throw new WebSearchError(
         "http_error",
         `上游 HTTP ${res.status}: ${redactUpstream(body, cfg.apiKey).slice(0, 300)}`,
@@ -286,7 +305,7 @@ export async function runWebSearch(
     // 把容器内存吃光。走同一个带计数的读取器,上界对两条路径一致。
     const ctype = res.headers.get("content-type") ?? "";
     if (!ctype.includes("text/event-stream")) {
-      const raw = await readTextCapped(res);
+      const raw = await readTextCapped(res, resetIdle);
       let data: unknown;
       try {
         data = JSON.parse(raw);
@@ -360,8 +379,8 @@ export async function runWebSearch(
       // 上游能在 180s 里把内存吃光。这条闸管的是后者。
       receivedBytes += value?.byteLength ?? 0;
       if (receivedBytes > MAX_RESPONSE_BYTES) {
-        abortCause = "oversize";
-        ctrl.abort();
+        // 直接抛即可:`finally` 会清掉计时器,`ctrl` 随作用域结束。
+        // (原先还先置一个 "oversize" 标记再抛 —— catch 里那条分支永远走不到。)
         throw new WebSearchError("oversize", `上游响应超过 ${MAX_RESPONSE_BYTES} 字节上限`);
       }
       buffer += decoder.decode(value, { stream: true });
@@ -385,22 +404,9 @@ export async function runWebSearch(
   } catch (err) {
     if (err instanceof WebSearchError) throw err;
     if ((err as { name?: string })?.name === "AbortError") {
-      if (abortCause === "idle") {
-        throw new WebSearchError(
-          "idle_timeout",
-          `空闲超时:${Math.round(cfg.idleTimeoutMs / 1000)}s 内上游未推送任何数据`,
-        );
-      }
-      if (abortCause === "total") {
-        throw new WebSearchError(
-          "total_timeout",
-          `总时长超时:超过 ${Math.round(cfg.totalTimeoutMs / 1000)}s 上限`,
-        );
-      }
-      if (abortCause === "oversize") {
-        throw new WebSearchError("oversize", `上游响应超过 ${MAX_RESPONSE_BYTES} 字节上限`);
-      }
-      // abortCause 为空 = 是外部 signal 取消的(会话被回收),原样抛给调用方
+      // 有 abortReason = 是我们的计时器掐的;没有 = 外部 signal 取消
+      // (会话被回收 / 本轮取消),那种情况原样抛给调用方
+      if (abortReason) throw abortReason;
       throw err;
     }
     // 网络层异常(DNS / TLS / 连接重置)。`safeErrorText` 打通用凭据形态,
@@ -425,8 +431,13 @@ export async function runWebSearch(
  *
  * 超上限**直接抛**而不是截断:一段被砍掉一半的 JSON 解析出来是垃圾,
  * 而"上游回了个不该这么大的东西"本身就是要报出来的事实。
+ *
+ * `onChunk` 用来重置空闲计时器(codex 复审 P2)。空闲计时器在 `fetch` **之前**就起了,
+ * 而这条路径此前一个字都不重置它 —— 一个响应头很快、body 却要流上一分钟的上游
+ * (非流式 JSON 或一个大错误体),会在**持续有数据**的情况下被空闲超时掐掉。
+ * SSE 那条路径本来就每块重置,两条路径的判据必须一致。
  */
-async function readTextCapped(res: Response): Promise<string> {
+async function readTextCapped(res: Response, onChunk?: () => void): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -436,6 +447,7 @@ async function readTextCapped(res: Response): Promise<string> {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      onChunk?.();
       bytes += value?.byteLength ?? 0;
       if (bytes > MAX_RESPONSE_BYTES) {
         throw new WebSearchError("oversize", `上游响应超过 ${MAX_RESPONSE_BYTES} 字节上限`);

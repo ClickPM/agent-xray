@@ -5,6 +5,7 @@
 
 ## 工程
 
+- [ ] R-WEBSEARCH **门禁不做全量类型检查**:`dev.ps1 check`(`encore check`)与 `dev.ps1 test`(`bun --bun vitest`)都不跑 `tsc --noEmit`。R-WEBSEARCH 复审第 1 轮实测:两者全绿而 `tsc --noEmit` 报两条 TS2367(闭包赋值不参与 narrowing)。**不是构建阻塞**(Encore 自己的构建不跑 tsc),但意味着类型错误只能靠 IDE 或人工发现。修法是给 `dev.ps1` 加一个 typecheck 入口或并进 test —— 属新增机制,不在本轮整改范围,记此待所有者裁定 (2026-09-02)
 - [ ] R0 CI(GitHub Actions:web build + api check)——未在任何轮次内,需要时由所有者决定加在哪轮 (2026-08-28)
 - [ ] R0 encore CLI 有更新 v1.57.13 → v1.58.4;升级前先确认对 ticketBookingB2B 项目无影响(同机共用 daemon) (2026-08-28)
 - [x] R11 `docs/deploy-cn-lightweight.md` §3 部署/升级命令写的是服务器上 `docker compose build`,与 CLAUDE.md 规则 10「本机构建后传输」冲突——已在 R-BUN 改为不可变镜像流程(`dev.ps1 build` + save/load + `IMAGE_TAG` 强制 git SHA) (2026-08-28)

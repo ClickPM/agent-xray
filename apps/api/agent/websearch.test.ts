@@ -298,6 +298,20 @@ describe("超时与体积上界", () => {
     });
   });
 
+  it("**非流式响应体分块慢慢来,不该被空闲超时误杀**(codex 复审 P2)", async () => {
+    // 空闲计时器在 fetch **之前**就起了。三块各隔 40ms(总计 120ms)都在 60ms 的
+    // 空闲窗口之外,但每一块都是「有活动」—— 不逐块重置的话这次请求会被自己掐死。
+    const json = '{"output_text":"分块送达的答案"}';
+    const f = streamingFetch([json.slice(0, 10), json.slice(10, 22), json.slice(22)], {
+      gapMs: 40,
+      contentType: "application/json",
+    });
+    const out = await runWebSearch("q", cfg({ idleTimeoutMs: 60, totalTimeoutMs: 5_000 }), {
+      fetchImpl: f,
+    });
+    expect(out.text).toBe("分块送达的答案");
+  });
+
   it("非流式响应不是合法 JSON 时报 upstream_failed,不抛解析异常", async () => {
     const f = streamingFetch(["<html>502 Bad Gateway</html>"], { contentType: "text/html" });
     await expect(runWebSearch("q", cfg(), { fetchImpl: f })).rejects.toMatchObject({
