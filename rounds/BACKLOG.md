@@ -112,9 +112,16 @@
       浏览器 `EventSource` 会自动重连)。但服务端本可以在关闭钩子里给在线的流补一帧
       `bye{lastSeq, reason:"shutdown"}`,让客户端拿着 `lastSeq` 精确续连而不是从头猜。
       属机制类改动(要在 Encore 的 shutdown hook 里遍历 liveSlots),不在缺陷门禁范围 (2026-09-01)
-- [ ] R9 **130 预发上的样本内容要在真实内容到位后清掉**:R9 冒烟经 MCP 发布了四个分类、系列
-      `r9-smoke`、两篇文章与一张配图,About 也写了样本内容。真实内容(按 `docs/notes-content-spec.md`
-      标准化后)入库时一并替换:`notes_series_delete r9-smoke cascade=true` + 重写 `about_set` (2026-09-01)
+- [x] R9 **130 预发上的样本内容要在真实内容到位后清掉** —— **notes 部分已完成**(2026-09-01):
+      所有者按 `docs/notes-content-spec.md` 处理完内容后重新交付,校验 0 错 0 警,经 MCP 发布
+      **13 系列 / 205 章节 / 103 张 WebP 配图**(用时 22s,零失败),冒烟占位系列已
+      `notes_series_delete r9-smoke cascade=true` 删除。**About 仍是 R9 写的样本内容**,
+      等所有者给真实文案后重写 `about_set` (2026-09-01)
+- [ ] R9 **153/205 篇正文首行的一级标题与 `title` 重复**:文章页已经把 `title` 渲染成页面大标题,
+      正文再以 `# <同一标题>` 开头,前端把它降级成 `<h2>`,于是标题连出两遍。属**内容侧**问题
+      (server 只校验不改写),判据是「正文第一个非空行是 `# X` 且 `X == title` → 删掉那行」。
+      已把这条补进 `docs/notes-content-spec.md` §4 第 7 条与 §8 自检清单;修完重新 upsert 即可
+      (幂等,未变的篇目回 `unchanged`) (2026-09-01)
 - [ ] R9 **`deploy/.env.example` 的 `SITE_ORIGIN` 注释举的是 `:8080` 的例子**,而 R9 按所有者裁定
       用了 80(`http://192.168.100.130`,Caddyfile 与 compose 零改动)。注释本身没错(备案前两种都行),
       但和 130 上的真实配置不一致,照抄 8080 又不改 Caddyfile 就会得到一个连不上的站。
