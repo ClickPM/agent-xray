@@ -1,5 +1,5 @@
-// notes 读路径。写路径不在服务里 —— 内容由 tools/notes-sync 从 vault 同步进来
-// (所有者裁定 2026-08-31),这里只读。时间戳统一以 epoch 毫秒进出,端点层转 ISO。
+// notes 读路径。写路径不在本服务里 —— 内容由所有者经 mcp 管理面发布(R6),
+// 这里只读。时间戳统一以 epoch 毫秒进出,端点层转 ISO。
 import { db } from "./db";
 
 /** `x -> epoch ms` 的统一写法,与 agent/store.ts 保持一致 */
@@ -175,4 +175,34 @@ export interface CategoryRow {
 
 export async function getCategory(slug: string): Promise<CategoryRow | null> {
   return db.rawQueryRow<CategoryRow>("SELECT slug, name FROM notes_categories WHERE slug = $1", slug);
+}
+
+// ───────────────────── 正文配图(R6)─────────────────────
+
+export interface AssetRow {
+  contentType: string;
+  bytes: Buffer;
+  etag: string;
+}
+
+/**
+ * 供图读路径。写面在 mcp 服务,这里只读。
+ *
+ * `bytes` 列在驱动侧回的是 Buffer/Uint8Array;统一归一成 Buffer,
+ * 免得 `resp.end(row.bytes)` 在两种形态下走不同的分支。
+ */
+export async function getAsset(seriesSlug: string, name: string): Promise<AssetRow | null> {
+  const row = await db.rawQueryRow<{ contentType: string; bytes: Uint8Array; etag: string }>(
+    `SELECT content_type AS "contentType", bytes, etag
+       FROM notes_assets
+      WHERE series_slug = $1 AND name = $2`,
+    seriesSlug,
+    name,
+  );
+  if (!row) return null;
+  return {
+    contentType: row.contentType,
+    etag: row.etag,
+    bytes: Buffer.isBuffer(row.bytes) ? row.bytes : Buffer.from(row.bytes),
+  };
 }

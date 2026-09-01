@@ -4,9 +4,9 @@
 // 右栏三视图(Timeline / Chain View / Lifecycle Map)在 R4 切到 /api/trace/stream,
 // 对应的演示数据已随之删除,投影逻辑见 lib/trace-view.ts。
 // 这里剩下的是尚未接后端的部分:统计条的 tokens/cost/ctx(R7/R8 计量)、
-// 空状态引导语、About / Admin 两块(R7 / R8)。
+// 空状态引导语,以及 About 页(内容表与管理 tools 已在 R6 落地,前端接线在 R8)。
 // Notes 三块页面已在 R5 切到 /api/notes/*,演示数据随之删除。
-import type { RepoCard, ToolRow } from "./types";
+import type { RepoCard } from "./types";
 
 // 顶栏统计条:events 已由真实轨迹流计数(R4),其余三项等 R7/R8 的计量与限额
 export const statsBar = {
@@ -55,79 +55,5 @@ export const langBar = [
 export const githubUser = "cking000bigdemon";
 
 // ───────────────────── Admin ─────────────────────
-
-export const ovStats = [
-  { value: "342", label: "今日 PV", delta: "↑18%", deltaColor: "#16a34a" },
-  { value: "89", label: "今日 UV", delta: "↑9%", deltaColor: "#16a34a" },
-  { value: "23", label: "新会话", delta: "↑4", deltaColor: "#16a34a" },
-  { value: "148k", label: "tokens", delta: "", deltaColor: "#9ca3af" },
-  { value: "$0.42", label: "费用", delta: "", deltaColor: "#9ca3af" },
-  { value: "6", label: "拦截次数", delta: "↓2", deltaColor: "#ef4444" },
-];
-
-export const ovEvents = [
-  { time: "14:32", badge: "限额", bc: "#b45309", text: "tokens 达到日限额 30%", actor: "—" },
-  { time: "11:07", badge: "工具", bc: "#8b5cf6", text: "web_search 已启用", actor: "admin" },
-  { time: "09:41", badge: "配置", bc: "#2563eb", text: "每日费用上限 $1.00 → $2.00", actor: "admin" },
-  { time: "09:38", badge: "登录", bc: "#6b7280", text: "登录成功 · 116.23.x.x(哈希)", actor: "—" },
-  { time: "昨天", badge: "工具", bc: "#8b5cf6", text: "image_gen 已停用", actor: "admin" },
-];
-
-export const pv7 = [198, 232, 175, 289, 305, 268, 342];
-export const pv30 = [162, 178, 155, 190, 171, 201, 188, 214, 196, 182, 220, 207, 193, 228, 215, 241, 199, 232, 175, 246, 238, 252, 231, 260, 244, 271, 236, 258, 289, 342];
-export const uv30 = pv30.map((v, i) => Math.round(v * 0.31 + (i % 3) * 4));
-
-/** 折线坐标:与设计稿同款算法 */
-export function chartPts(data: number[], W: number, H: number): string {
-  const max = Math.max(...data);
-  const min = Math.min(...data) * 0.85;
-  return data
-    .map(
-      (v, i) =>
-        `${Math.round(15 + (i * (W - 30)) / (data.length - 1))},${Math.round(H - 12 - ((v - min) / (max - min)) * (H - 42))}`,
-    )
-    .join(" ");
-}
-
-export const pageTop = [
-  { path: "/", pv: 186, uv: 61 },
-  { path: "/notes", pv: 64, uv: 38 },
-  { path: "/notes/claude-code-harness", pv: 41, uv: 25 },
-  { path: "/about", pv: 28, uv: 22 },
-  { path: "/notes/pi/03-agent-loop", pv: 23, uv: 17 },
-];
-
-export const trafficSources = [
-  { name: "直接访问", pct: "47%" },
-  { name: "github.com", pct: "22%" },
-  { name: "RSS 阅读器", pct: "14%" },
-  { name: "搜索", pct: "9%" },
-  { name: "其他", pct: "8%" },
-];
-
-export const conversion = [
-  { name: "访客 → 开启会话", value: "26%" },
-  { name: "平均 turns / 会话", value: "4.2" },
-  { name: "平均 events / 会话", value: "38" },
-];
-
-export const toolRows: ToolRow[] = [
-  { name: "notes_list_series", src: "内置", risk: "安全", desc: "列出教程库全部系列(agent_ro 只读角色)", state: "on" },
-  { name: "notes_get_chapter", src: "内置", risk: "安全", desc: "读取指定章节正文(只读)", state: "on" },
-  { name: "notes_search", src: "内置", risk: "安全", desc: "教程库全文检索(只读)", state: "on" },
-  { name: "web_search", src: "MCP", risk: "外呼", desc: "联网搜索(服务端 key · 域白名单 · 计入日限额)", state: "on" },
-  { name: "image_gen", src: "MCP", risk: "外呼", desc: "生图(服务端 key · 计入日限额)", state: "off" },
-  { name: "session_fork_demo", src: "pi extension", risk: "安全", desc: "会话分叉演示扩展", state: "on" },
-  { name: "bash", src: "内置", risk: "高危", desc: "进程内命令执行——永久锁定", state: "locked" },
-  { name: "write_file", src: "内置", risk: "高危", desc: "文件写入——永久锁定", state: "locked" },
-];
-
-export const SRC_COLOR: Record<string, string> = { 内置: "#6b7280", MCP: "#2563eb", "pi extension": "#8b5cf6" };
-export const RISK_COLOR: Record<string, string> = { 安全: "#16a34a", 外呼: "#b45309", 高危: "#ef4444" };
-
-export const toolLog = [
-  { time: "今天 11:07", tool: "web_search", action: "启用", color: "#16a34a" },
-  { time: "昨天 16:20", tool: "image_gen", action: "停用", color: "#6b7280" },
-  { time: "昨天 16:18", tool: "image_gen", action: "启用", color: "#16a34a" },
-  { time: "08-26 10:02", tool: "notes_search", action: "启用", color: "#16a34a" },
-];
+// R6 起 /admin 后台整体废弃(所有者裁定 2026-08-31,画板 3a–3e 作废):管理面改为
+// 无状态 MCP 服务 /api/mcp,没有前端界面。六个页面与它们的演示数据一并删除。

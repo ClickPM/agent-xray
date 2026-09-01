@@ -88,10 +88,5 @@ export interface RepoCard {
   pushed: string;
 }
 
-export interface ToolRow {
-  name: string;
-  src: "内置" | "MCP" | "pi extension";
-  risk: "安全" | "外呼" | "高危";
-  desc: string;
-  state: "on" | "off" | "locked";
-}
+// ToolRow(/admin 工具页的行模型)随 R6 的 /admin 废弃一并删除:
+// 工具启停改由 MCP 的 tool_config_set 维护,没有前端界面。

@@ -8,11 +8,15 @@
     "dev": "encore run",
     "check": "encore check",
     "test": "bun --bun vitest run --passWithNoTests",
-    "gen-client": "encore gen client --output ../web/lib/api-client.ts --env local"
+    "gen-client": "encore gen client --output ../web/lib/api-client.ts --env local --excluded-services mcp"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.3",
-    "encore.dev": "1.57.13"
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "encore.dev": "1.57.13",
+    "hono": "^4.13.5",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

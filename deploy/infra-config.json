@@ -30,6 +30,7 @@
   ],
 
   "secrets": {
-    "DeepSeekApiKey": { "$env": "DEEPSEEK_API_KEY" }
+    "McpAuthTokenHash": { "$env": "MCP_AUTH_TOKEN_HASH" },
+    "ConfigEncryptionKey": { "$env": "CONFIG_ENCRYPTION_KEY" }
   }
 }

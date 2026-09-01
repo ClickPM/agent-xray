@@ -13,6 +13,7 @@
 import { api } from "encore.dev/api";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
+import { LlmNotConfiguredError } from "./llm-config";
 import {
   acquireSession,
   disposeSession,
@@ -183,6 +184,14 @@ export const ask = api.raw(
       if (err instanceof SessionCapacityError) {
         console.warn(err.message);
         fail(resp, 429, "server is at capacity, try again shortly");
+        return;
+      }
+      if (err instanceof LlmNotConfiguredError) {
+        // R6:LLM 凭据只有 llm_config 一个来源(引导 secret 已移除)。没配就是
+        // **配置缺失**,不是内部错误——回 503 而不是 500,让部署方一眼看出该做什么。
+        // 原因只进日志:模型名/端点属于服务端配置,不出服务端。
+        console.error(`llm not configured: ${safeErrorText(err)}`);
+        fail(resp, 503, "对话服务尚未配置模型,请稍后再试");
         return;
       }
       console.error(`acquire agent session failed: ${safeErrorText(err)}`);

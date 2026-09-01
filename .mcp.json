@@ -9,6 +9,13 @@
         "-File",
         ".claude/mcp-encore.ps1"
       ]
+    },
+    "xray-admin": {
+      "type": "http",
+      "url": "http://127.0.0.1:4000/mcp",
+      "headers": {
+        "Authorization": "Bearer ${XRAY_MCP_TOKEN}"
+      }
     }
   }
 }

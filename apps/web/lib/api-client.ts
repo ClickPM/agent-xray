@@ -16,7 +16,7 @@ export const Local: BaseURL = "http://localhost:4000"
  * Environment returns a BaseURL for calling the cloud environment with the given name.
  */
 export function Environment(name: string): BaseURL {
-    return `https://${name}-gbf6c.encr.app`
+    return `https://${name}-k2yas.encr.app`
 }
 
 /**
@@ -29,7 +29,7 @@ export function PreviewEnv(pr: number | string): BaseURL {
 const BROWSER = typeof globalThis === "object" && ("window" in globalThis);
 
 /**
- * Client is an API client for the gbf6c Encore application.
+ * Client is an API client for the k2yas Encore application.
  */
 export default class Client {
     public readonly agent: agent.ServiceClient
@@ -276,11 +276,16 @@ export namespace notes {
 
         constructor(baseClient: BaseClient) {
             this.baseClient = baseClient
+            this.asset = this.asset.bind(this)
             this.categoryFeed = this.categoryFeed.bind(this)
             this.getChapter = this.getChapter.bind(this)
             this.getSeries = this.getSeries.bind(this)
             this.listSeries = this.listSeries.bind(this)
             this.siteFeed = this.siteFeed.bind(this)
+        }
+
+        public async asset(method: "GET" | "HEAD", series: string, file: string, body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/assets/notes/${encodeURIComponent(series)}/${encodeURIComponent(file)}`, body, options)
         }
 
         public async categoryFeed(method: "GET", file: string, body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
@@ -576,7 +581,7 @@ class BaseClient {
         // Add User-Agent header if the script is running in the server
         // because browsers do not allow setting User-Agent headers to requests
         if (!BROWSER) {
-            this.headers["User-Agent"] = "gbf6c-Generated-TS-Client (Encore/v1.57.13)";
+            this.headers["User-Agent"] = "k2yas-Generated-TS-Client (Encore/v1.57.13)";
         }
 
         this.requestInit = options.requestInit ?? {};
