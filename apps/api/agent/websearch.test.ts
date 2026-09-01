@@ -234,6 +234,19 @@ describe("Responses API 事件流解析", () => {
     await expect(runWebSearch("q", cfg(), { fetchImpl: f })).rejects.toMatchObject({ kind: "empty" });
   });
 
+  it("**不跟随重定向**:白名单只校验原始 URL(codex 初审 P1)", async () => {
+    let seenRedirect: string | undefined;
+    const f = (async (_u: string, init?: RequestInit) => {
+      seenRedirect = init?.redirect;
+      return new Response("", { status: 302, headers: { location: "https://evil.tld/x" } });
+    }) as unknown as typeof fetch;
+    await expect(runWebSearch("q", cfg(), { fetchImpl: f })).rejects.toMatchObject({
+      kind: "redirected",
+    });
+    // bun 实测:默认的 follow 会让请求带着 Authorization 头跟到重定向目标
+    expect(seenRedirect).toBe("manual");
+  });
+
   it("网关忽略 stream 参数回普通 JSON 时优雅降级", async () => {
     const f = (async () =>
       new Response(JSON.stringify({ output: messageOut("非流式答案") }), {
@@ -269,11 +282,26 @@ describe("超时与体积上界", () => {
     await expect(p).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("超过 4 MiB 中断", async () => {
+  it("超过 4 MiB 中断(事件流)", async () => {
     // 单块就顶穿上限:空闲计时器管"有没有数据",管不了"数据有多少"
     const f = streamingFetch(["x".repeat(4 * 1024 * 1024 + 1024)]);
     await expect(runWebSearch("q", cfg(), { fetchImpl: f })).rejects.toMatchObject({
       kind: "oversize",
+    });
+  });
+
+  it("**非流式 JSON 也受同一个上界**(codex 初审 P2:res.json() 会整体缓冲)", async () => {
+    const huge = `{"output_text":"${"x".repeat(4 * 1024 * 1024 + 1024)}"}`;
+    const f = streamingFetch([huge], { contentType: "application/json" });
+    await expect(runWebSearch("q", cfg(), { fetchImpl: f })).rejects.toMatchObject({
+      kind: "oversize",
+    });
+  });
+
+  it("非流式响应不是合法 JSON 时报 upstream_failed,不抛解析异常", async () => {
+    const f = streamingFetch(["<html>502 Bad Gateway</html>"], { contentType: "text/html" });
+    await expect(runWebSearch("q", cfg(), { fetchImpl: f })).rejects.toMatchObject({
+      kind: "upstream_failed",
     });
   });
 });

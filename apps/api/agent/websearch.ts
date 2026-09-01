@@ -61,6 +61,7 @@ export class WebSearchError extends Error {
     readonly kind:
       | "not_allowed_host"
       | "bad_base_url"
+      | "redirected"
       | "http_error"
       | "upstream_failed"
       | "idle_timeout"
@@ -250,20 +251,48 @@ export async function runWebSearch(
         stream: true,
       }),
       signal: ctrl.signal,
+      // 【必须关掉自动跟随重定向】(codex 初审 P1)`fetch` 默认 `follow`,
+      // 而白名单只校验了**原始** URL —— 白名单内端点上的一个开放重定向,
+      // 就能把这次请求送到白名单外、甚至内网地址(169.254.169.254 之类),
+      // 目标域白名单当场失效。**bun 实测更糟**:同源重定向下
+      // `Authorization: Bearer …` 会**原样跟着跳过去**。
+      // `manual` 在 bun/undici 下返回真实的 3xx(status 可读、type=default),
+      // 于是下面那个分支能给出确定的错误;`error` 只会抛一个笼统的 TypeError。
+      redirect: "manual",
     });
 
+    // 3xx 要在 `!res.ok` 之前单独判:两者都会走到这里,但原因完全不同,
+    // 混在一起会让「网关配了个重定向」看起来像一次普通的上游报错。
+    if (res.status >= 300 && res.status < 400) {
+      throw new WebSearchError(
+        "redirected",
+        `上游返回 ${res.status} 重定向,已拒绝跟随(目标域白名单只对原始 URL 生效)`,
+      );
+    }
+
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
+      // 错误体同样要封顶:一个 4xx 也可以回几百 MB(codex 初审 P2 的同类问题)
+      const body = await readTextCapped(res).catch(() => "");
       throw new WebSearchError(
         "http_error",
         `上游 HTTP ${res.status}: ${redactUpstream(body, cfg.apiKey).slice(0, 300)}`,
       );
     }
 
-    // 网关若忽略 stream 参数、回一个普通 JSON,按非流式解析(优雅降级,与参考实现一致)
+    // 网关若忽略 stream 参数、回一个普通 JSON,按非流式解析(优雅降级,与参考实现一致)。
+    // 【不能用 `res.json()`】(codex 初审 P2)它把整个响应体缓冲下来再解析,
+    // 完全绕开 MAX_RESPONSE_BYTES —— 那条闸此前只存在于下面的 SSE 读取循环里。
+    // 一个出故障或被攻陷的白名单内 provider,可以在超时窗口内回一个巨大的 JSON
+    // 把容器内存吃光。走同一个带计数的读取器,上界对两条路径一致。
     const ctype = res.headers.get("content-type") ?? "";
     if (!ctype.includes("text/event-stream")) {
-      const data = await res.json();
+      const raw = await readTextCapped(res);
+      let data: unknown;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new WebSearchError("upstream_failed", "上游返回的既不是事件流也不是合法 JSON");
+      }
       return finish(extractText(data), extractCitations(data));
     }
     if (!res.body) throw new WebSearchError("upstream_failed", "流式响应无 body");
@@ -385,6 +414,39 @@ export async function runWebSearch(
     clearTimeout(totalTimer);
     if (opts.signal) opts.signal.removeEventListener("abort", onAbort);
   }
+}
+
+/**
+ * 读完整个响应体,但**带字节上界**。
+ *
+ * `res.text()` / `res.json()` 都是"先全缓冲再说",一个回几百 MB 的上游能直接把
+ * 容器内存吃光 —— 而 `MAX_RESPONSE_BYTES` 此前只管到 SSE 那条路径(codex 初审 P2)。
+ * 非流式响应与错误体都走这里,两条路径的上界因而是同一个数。
+ *
+ * 超上限**直接抛**而不是截断:一段被砍掉一半的 JSON 解析出来是垃圾,
+ * 而"上游回了个不该这么大的东西"本身就是要报出来的事实。
+ */
+async function readTextCapped(res: Response): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let out = "";
+  let bytes = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value?.byteLength ?? 0;
+      if (bytes > MAX_RESPONSE_BYTES) {
+        throw new WebSearchError("oversize", `上游响应超过 ${MAX_RESPONSE_BYTES} 字节上限`);
+      }
+      out += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    // 上界触发时要主动放弃剩下的字节,否则连接会一直挂着把数据读完
+    reader.cancel().catch(() => {});
+  }
+  return out + decoder.decode();
 }
 
 /**

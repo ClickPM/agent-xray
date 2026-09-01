@@ -82,11 +82,24 @@
 
 ## 代码审查
 
-<!-- 完成后回填 -->
+- 审查方式:`/codex:review --background`(changes against `main`;前两轮用全量范围)
+- 结论:**第 1 轮 3 条 findings(2×P1 + 1×P2)全部采纳整改**,复审待发
 
-- 审查方式:待定(默认 `/codex:review`,改动跨 8+ 文件故带 `--background`)
-- findings 处理:
-- 结论:
+### 第 1 轮(2026-09-01,基线 `4f338e1`)
+
+| # | 级别 | findings | 核验 | 处理 |
+|---|---|---|---|---|
+| 1 | P1 | `fetch` 默认跟随重定向,而白名单只校验原始 URL —— 白名单内端点上的开放重定向可把请求送到白名单外/内网 | **属实,且比描述更严重**:bun 实测同源重定向下 `Authorization: Bearer …` **原样跟过去**(见下) | **采纳**:`redirect: "manual"` + 3xx 单独判为 `kind:"redirected"`。判据写进 `docs/security.md` §1 外呼组约束 2 |
+| 2 | P1 | `systemPromptFor` 把 `web_search` 混进「它们不能访问服务器或网络」那句;且 `promptSnippet`/`promptGuidelines` 走 `systemPromptOverride` 后送不到 | **属实**。前半:提示词逐字在说这个联网工具不能联网。后半:pi 源码 `resource-loader.js:383` 是 `override ? override(base) : base`,我们的实现忽略入参 → base 里那两节丢失 | **采纳**:提示词按两组分段;注入防御从 `promptGuidelines` 搬进 `systemPromptFor`,并在工具定义处留注释挡住「再加回去」 |
+| 3 | P2 | 非流式 JSON 走 `res.json()`,整体缓冲、绕开 `MAX_RESPONSE_BYTES` | **属实**,且同一问题还存在于错误体的 `res.text()`(codex 没提到那一处) | **采纳**:抽 `readTextCapped`,流式 / 非流式 / 错误体三条路径共用同一个上界 |
+
+**三条都补了回归用例**(整改后 `dev.ps1 test` **12 文件 / 260 项全过**,较整改前 +7):
+`redirect` 模式与 3xx 拒绝 · 非流式 JSON 的 4 MiB 上界 · 非 JSON 非 SSE 回 `upstream_failed` ·
+`systemPromptFor` 分组四条(含「教程库那一句的名字列表里不许出现 `web_search`」)。
+
+**这一轮 codex 的价值主要在第 2 条**:那是个**不会让任何东西报错**的缺陷 —— 编译过、测试过、
+搜索也偶尔能用,只是模型收到一条自相矛盾的高优先级指令,表现为「时灵时不灵」。
+本机门禁与我自己的用例都照不到它,因为它根本不在代码的行为里,在提示词的语义里。
 
 ## 失败处理
 
@@ -97,8 +110,8 @@
 ### 本机门禁(2026-09-01)
 
 - `dev.ps1 check`:通过(迁移 008 施加成功,app 起得来)
-- `dev.ps1 test`:**12 文件 / 253 项全过**(本轮新增 20 项:`websearch.test.ts` 35 项、
-  `sandbox.test.ts` +5、`mcp.test.ts` +14;基线 233)
+- `dev.ps1 test`:**12 文件 / 260 项全过**(本轮新增 27 项;基线 233)。
+  其中 7 项是 codex 第 1 轮 findings 的回归用例,见「代码审查」段
 - `git diff --stat apps/web/` **为空** → 验收 #14(前端零改动)通过
 
 ### 踩到的坑
@@ -144,4 +157,18 @@
   而不是把 CHECK 冲突变成「详见服务端日志」)。重复常量的一致性**由测试钉住**:
   `mcp.test.ts` 从 `information_schema.columns` 读列默认值比对,漂移就红。
 
-<!-- 130 预发留证 / codex 审查结论待回填 -->
+### codex 第 1 轮实测补记
+
+`fetch` 的三种 `redirect` 模式在 bun 下的实际行为(本地起 http server 实测,
+不是照着规范推的)——这条决定了修法选 `manual` 而不是 `error`:
+
+```
+follow → status 200  body: {"reachedEvil":"/evil","auth":"Bearer sk-secret"}   ← 凭据跟着跳过去了
+manual → status 302  type default                                              ← status 可读,能给确定的错误
+error  → THREW TypeError UnexpectedRedirect ...                                ← 只能拿到一个笼统异常
+```
+
+选 `manual`:`error` 抛出的 TypeError 会掉进通用的 `upstream_failed` 分支,
+「网关配了个重定向」于是看起来像一次普通的上游报错,排查时分不出来。
+
+<!-- 130 预发留证待回填 -->
