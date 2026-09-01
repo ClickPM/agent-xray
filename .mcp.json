@@ -16,6 +16,13 @@
       "headers": {
         "Authorization": "Bearer ${XRAY_MCP_TOKEN}"
       }
+    },
+    "xray-admin-130": {
+      "type": "http",
+      "url": "http://192.168.100.130/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${XRAY_MCP_TOKEN_130}"
+      }
     }
   }
 }

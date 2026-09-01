@@ -31,8 +31,9 @@ rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap
 tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。
               目前为空:R5 的 notes-sync 管线已随 R6 删除,内容发布改走 MCP 管理服务
 .claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
-              + MCP 启动脚本。`.mcp.json` 另注册了 `xray-admin`(指向本站管理面 /mcp,
-              token 走环境变量 XRAY_MCP_TOKEN,不入库);自建 skill sync-notes 已随 R6 删除
+              + MCP 启动脚本。`.mcp.json` 另注册了两个站点管理面:`xray-admin`(本机)
+              与 `xray-admin-130`(130 预发),token 各走各的环境变量、都不入库;
+              自建 skill sync-notes 已随 R6 删除
 .agents/      `.claude/skills` 的镜像,给 codex 审查者用(生成物,`dev.ps1 skills` 同步)。
               实测:codex 只认仓库级 `.agents/skills` 与 `.codex/skills`,**不认 `.claude/skills`**
 dev.ps1       Windows 本地 encore 唯一入口(规则 1)
@@ -109,7 +110,16 @@ cd apps\web; npm run dev   # 前端 next dev :3000
 
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。
-- **站点管理面 `xray-admin` 也在 `.mcp.json` 里**(http → `127.0.0.1:4000/mcp`)。用它维护内容与配置前先 `dev.ps1` 起后端,并把 token 放进环境变量 `XRAY_MCP_TOKEN`(仓库里只有它的 sha256,写在 `apps/api/.secrets.local.cue`;两者的生成方式见 `deploy/.env.example`)。首次使用需在 `claude` 里批准这个项目级 MCP server。
+- **站点管理面在 `.mcp.json` 里注册了两个,别混用**——每个环境一把独立 token,一把只开一扇门:
+
+  | server | 指向 | token 环境变量 | 期望哈希存在哪 |
+  |---|---|---|---|
+  | `xray-admin` | `127.0.0.1:4000/mcp`(本机) | `XRAY_MCP_TOKEN` | `apps/api/.secrets.local.cue` 的 `McpAuthTokenHash` |
+  | `xray-admin-130` | `192.168.100.130/api/mcp`(预发) | `XRAY_MCP_TOKEN_130` | 130 上 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH` |
+
+  用本机那个前先 `dev.ps1` 起后端。仓库里**只有哈希、没有 token 原文**,两者的生成方式见 `deploy/.env.example`。首次使用需在 `claude` 里批准这两个项目级 MCP server。
+- **token 丢了不用慌,轮换即可**(2026-09-01 对 130 实测):服务端只存 sha256,原文不可恢复但可换。流程 = 本机按 `deploy/.env.example` 的 CSPRNG 口径生成新 token → 新哈希写进目标环境的 `MCP_AUTH_TOKEN_HASH` → **`docker compose up -d api` 重建容器**(env 变了 `restart` 不生效)。**`CONFIG_ENCRYPTION_KEY` 绝不能跟着换**,否则 `llm_config` 里的 key 密文全解不开、agent 直接停摆。
+- **`.mcp.json` 的改动要重启会话才生效**,而且 MCP client 连不上时只在会话启动时报一次 `ConnectionRefused`——中途起后端不会自动重连。急着用可以直接对 `/mcp` 发 JSON-RPC(`tools/list` / `tools/call`;注意 `server/discover` 实测回 `Method not found`)。
 - `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;自建的 `sync-notes` 已随 R5 管道废除(R6 删除)。
 - **worktree 用完必须 `dev.ps1 wt-clean` 删,别手删也别只跑 `git worktree remove`**(2026-08-31 实测)。在 `.claude\worktrees\<名字>` 里跑过 encore 之后,该目录会被两处占住:那个会话的 `encore mcp run`(`.claude\mcp-encore.ps1` 把 cwd 设进 `<worktree>\apps\api`,而 `encore.app` 的 `id` 为空、本地 app 只能靠 cwd 定位,换 `--app` 也绕不开),以及**注册过该 app 后同样握着句柄的 encore daemon**——单杀 MCP 无效,必须连 daemon 一起停。表现是 `git worktree remove` 报 `Permission denied`、目录删到一半只剩空壳,登记与磁盘长期不一致(本仓库曾同时积下 r3/r4/r5 三份)。`wt-clean` 把「安全闸 → 杀占用进程 → 停 encore → 强删 → prune → 拉回 daemon」固化成一条命令;仍失败只剩一种可能:**还开着以该 worktree 为根目录的 Claude Code 会话**,关掉那个窗口再重跑。
 - **skill 升级或新增后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。
