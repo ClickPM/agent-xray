@@ -33,7 +33,7 @@
 加解密原语在 `apps/api/shared/crypto.ts`——mcp(写)与 agent(读)两个服务都要用,
 按规则 5 由各自的 service 取好 secret 值再传进去,共享库里不出现 `secret()`。
 
-## 工具(24)
+## 工具(28)
 
 - notes 三张表 CRUD:分类 / 系列 / 章节。**入参即标准 markdown,server 只校验不改写**
 - 附件:`notes_asset_put` / `notes_asset_delete` / `notes_assets_list`。存 Postgres,
@@ -45,6 +45,11 @@
   会变成一个「只想改一句 intro 却静默清空仓库卡」的接口
 - LLM provider:`llm_providers_list` / `llm_provider_upsert` / `llm_set_default` / `llm_provider_delete`。
   key 加密入库,**任何读回只给掩码**;upsert 是**部分更新**(省略的字段保留原值)
+- **websearch provider(R-WEBSEARCH)**:`websearch_providers_list` / `websearch_provider_upsert` /
+  `websearch_set_default` / `websearch_provider_delete`。与 LLM provider 那组同构(同一把
+  `ConfigEncryptionKey`、只回掩码、部分更新、advisory lock),**多一道域白名单**:baseUrl 的 host
+  必须在 `shared/websearch-hosts.ts` 的内置清单(或 env 追加项)之内,且 https、不带 query/fragment、
+  不内嵌凭据 —— 写入时拒,agent 侧每次外呼前再校验一次
 - 工具启停(`tool_config_list` / `tool_config_set`,高危工具双闸之一)
 - **访问统计(R8)**:`traffic_overview` / `traffic_paths` / `traffic_agents`,只读。
   数据来自 metrics 服务的 `POST /t` 打点;画板 3c 的 Traffic 页已随 `/admin` 废弃,
@@ -55,7 +60,7 @@
   `visitorDays` 是各日 UV 之和、不是去重人数(访客标识按天轮换,隐私设计的直接
   后果);`path` 是归一后的值,`/*` 是归一不出来的那些的常量桶
 
-## 两条容易改错的地方
+## 三条容易改错的地方
 
 1. **`subscriptions/listen` 必须保持关闭。** 它是 SDK 自带的,而 Claude Code 一连上来就调
    (2026-08-31 抓包实测:`server/discover` → `subscriptions/listen` → `tools/list`)。
@@ -65,6 +70,13 @@
 2. **附件类型三重一致**:扩展名、`contentType`、文件头魔数。少任何一道,
    一份「声称是 png 的 HTML」就会被供图端点原样出成 `Content-Type: image/png` 之外的东西 ——
    同源下的存储型 XSS。**SVG 永不接受**(它本身就是可执行文档)。
+3. **直接对 `/api/mcp` 发 JSON-RPC 时,2026-07-28 的逐请求契约有四样,缺一样都是 4xx**
+   (R-WEBSEARCH 对 130 实测,每少一样各回一种 `-32602` / `-32020`):
+   `MCP-Protocol-Version: 2026-07-28` 头 · `Mcp-Method` 头(必须等于 body 的 `method`)·
+   `tools/call` 时再加 `Mcp-Name` 头(必须等于 `params.name`)· `params._meta` 里带
+   `io.modelcontextprotocol/protocolVersion` 与 `io.modelcontextprotocol/clientCapabilities`。
+   CLAUDE.md 里「急着用可以直接发 JSON-RPC」那句默认你带齐这四样;MCP 客户端(Claude Code)
+   自己会带,手写 curl 才会踩到。
 
 ## 安全边界
 

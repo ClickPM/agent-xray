@@ -1,6 +1,6 @@
 # Round WEBSEARCH — agent 联网搜索工具(第一个外呼组工具)
 
-> 状态:进行中
+> 状态:已完成(2026-09-02;**所有者裁定不发 130**,四条 130 实跑验收并入下一次预发升级,见「本轮实测」末段)
 >
 > 轮次编号沿用 R-BUN / R-VISITOR 的横切轮命名(非 R0–R11 线性序列的一员)。
 > 插在 R11 之前:上线之后再动 agent 的工具集,等于让生产环境当第一个试验场。
@@ -212,4 +212,32 @@ error  → THREW TypeError UnexpectedRedirect ...                               
 选 `manual`:`error` 抛出的 TypeError 会掉进通用的 `upstream_failed` 分支,
 「网关配了个重定向」于是看起来像一次普通的上游报错,排查时分不出来。
 
-<!-- 130 预发留证待回填 -->
+### 所有者裁定:本轮不构建镜像、不发 130(2026-09-02)
+
+审查门禁关闭后,所有者裁定**直接合并 `main` 并 push origin,不打包、不发 130 验证**。
+于是验收表里四条依赖 130 实跑的项本轮**未执行**,并入下一次预发升级(R11 之前的任一次升级都行):
+
+| # | 未执行的检查 | 届时怎么验 |
+|---|---|---|
+| 2 | `deploy/migrate.sh` 在 130 上施加迁移 008 | `./migrate.sh --status` 应显示 `7 → 8`;重跑为空操作 |
+| 11 | 右栏看得见搜索流程 | Timeline 出现 `tool_execution_update · web_search ×N`;Lifecycle 三节点点亮 |
+| 12 | MCP 四个 `websearch_*` tool 可用 | `tools/list` 从 24 变 28;upsert → list(只回掩码)→ set_default → delete 全通,`mcp_audit` 有记录 |
+| 13 | DeepSeek 与自建网关两条配置都跑得通 | 同一份代码分别配 `api.deepseek.com` 与网关,各搜一次都拿到带来源的答案 |
+
+**为什么这条不是「验收放宽」**:本机能验的都验了(域白名单 / 请求形状 / SSE 解析 / 双计时器 /
+凭据不外泄 / 限额原子 / 注册闸 / 指纹 —— 全在 `dev.ps1 test` 里);剩下四条的本质是
+「真实网关 + 真实 compose 拓扑」,它们在哪一次升级里验都是同一件事。`web_search` 的种子行
+**默认关**、且没配 provider 就不注册,所以这份代码上到任何环境的默认行为与合并前一模一样 ——
+延后验证不引入任何未验证的**默认**路径。
+
+**已经为下一次预发升级备好的东西**(本轮实测,不用再摸):
+
+- 130 当前 `IMAGE_TAG=7cc17fe`、迁移版本 7、四个容器 Up;`ssh 130` 别名可用
+- **2026-07-28 的逐请求契约**(直接对 `/api/mcp` 发 JSON-RPC 时,四样缺一不可,少一样各回一种
+  `-32602` / `-32020`):`MCP-Protocol-Version: 2026-07-28` 头 · `Mcp-Method` 头(=body.method)·
+  `tools/call` 时再加 `Mcp-Name` 头(=params.name)· `params._meta` 里带
+  `io.modelcontextprotocol/protocolVersion` 与 `io.modelcontextprotocol/clientCapabilities`。
+  部署前基线已抓:130 @ `7cc17fe` 的 `tools/list` 共 **24** 个、`websearch_*` 为 0
+- 升级顺序不变:`stop api web` → `up -d --wait postgres` → `./migrate.sh` → `up -d`;
+  然后由所有者经 MCP 跑 `websearch_provider_upsert`(key 只能由所有者本人填)+
+  `tool_config_set{web_search, enabled:true}`,再问一个知识截止之后的问题看右栏
