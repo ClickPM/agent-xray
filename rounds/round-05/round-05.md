@@ -9,7 +9,7 @@ vault `学习分享/` 的 293 篇正文经**一条幂等的同步管线**进入 
 ## 前置
 
 - R2 数据层与 `encore test` 基建已完成(本轮迁移在 `agent` 库上追加 `002`)。
-- vault 位于本机 `D:\variFlight_work\VariFlightWork\学习分享`(独立 git 仓,只读消费,本轮不写它)。
+- vault 位于本机(独立 git 仓,只读消费,本轮不写它;路径不入库)。
 - R3/R4 未完成不阻塞本轮:Notes 与 Runtime 无数据耦合。
 
 ## 所有者裁定(2026-08-31)

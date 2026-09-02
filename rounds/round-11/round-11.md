@@ -351,7 +351,7 @@ www 的证书由 Caddy 在重建后自动签发(`tls-alpn-01`)。
 | 白名单 | 生产 `.env` 补 `XRAY_WEBSEARCH_EXTRA_HOSTS=api.64-186-228-154.sslip.io` 并**重建 api**(env 变了 restart 不生效) |
 
 **白名单这条是必须先做的前置**:生产的 `allowedHosts` 起初只有内置两个
-(`aigateway.variflight.com` / `api.deepseek.com`),网关域名不在其中 —— 不补这一项,
+(`api.deepseek.com` 与当时还在代码里的公司网关域名;后者已于 R-IMAGEGEN 后按所有者裁定从代码删除),网关域名不在其中 —— 不补这一项,
 `websearch_provider_upsert` 会直接拒掉。130 上之所以能用,是因为它的 `.env` 早就设了这个变量。
 
 **全链路验收(至此 R11 的验收 9 补齐)**:
