@@ -22,8 +22,8 @@ import type { ActiveWebSearchConfig } from "./websearch-config";
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 /** 累积正文的字符上限;再往上没有意义(工具结果最终会被 `capText` 砍到 8000)。 */
 const MAX_ANSWER_CHARS = 64 * 1024;
-/** 最多回多少条来源。 */
-const MAX_CITATIONS = 10;
+/** 最多回多少条来源。导出只为 Tools 面板的输出形态说明引用它(R-TOOLS),不是给别人改的。 */
+export const MAX_CITATIONS = 10;
 
 // ───────────────────── 进度上报(右栏三视图的可见性)─────────────────────
 //

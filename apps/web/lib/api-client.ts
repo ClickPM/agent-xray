@@ -220,6 +220,81 @@ export namespace agent {
         lastActiveAt: string
     }
 
+    /**
+     * 面板上一条工具的全部内容。字段集就是白名单:多一个要在 `publicEntry` 里点名。
+     */
+    export interface ToolCatalogEntry {
+        name: string
+        label: string
+        description: string
+        group: ToolGroup
+        /**
+         * 入参 JSON Schema,与工具定义里的**同一份**(测试逐字段钉死)
+         */
+        parameters: ToolParametersSchema
+
+        /**
+         * 输出形态说明
+         */
+        output: string
+
+        /**
+         * 输出形态的补充(上限 / 边界情形)
+         */
+        outputNote?: string
+
+        /**
+         * 执行期间会上报的阶段文案(按顺序);只有会上报进度的工具才有
+         */
+        phases?: string[]
+    }
+
+    export interface ToolCatalogResponse {
+        /**
+         * 按分组顺序:纯函数组 → 外呼组 → 会话绑定组;组内按注册顺序
+         */
+        tools: ToolCatalogEntry[]
+
+        /**
+         * 单个工具结果的字符上限(`capText`),面板脚注「工具结果统一 N 字符上限」用。
+         * 是代码常量不是配置值(不在库里、不在 env 里,设计稿上本来就印着),
+         * 从源头取而不是前端写死 —— 否则它就是「第二个要改的地方」。
+         */
+        resultCharLimit: number
+    }
+
+    /**
+     * 工具分组 = 注册路径(docs/security.md §1「工具分两组」+ R-TITLE 补记的第三档):
+     * pure     —— 在 `TOOL_REGISTRY`(纯函数组:只读 notes 三张表,不联网)
+     * outbound —— 经 `makeWebSearchTool` 构造(外呼组:持服务端凭据打白名单域)
+     * session  —— 在 `SESSION_TOOL_REGISTRY`(会话绑定组:闭包绑定会话 id,只写本会话标题)
+     * 前端按这个值挑分组文案与颜色,**不按工具名**。
+     */
+    export type ToolGroup = "pure" | "outbound" | "session"
+
+    /**
+     * 单个入参的 JSON Schema 子集。**只列本仓库工具实际用到的关键字**:类型不认的关键字进不了
+     * META,也就进不了面板 —— 想用新关键字先扩这里,前端才知道怎么画它。
+     */
+    export interface ToolParamSchema {
+        type: "string" | "integer"
+        description: string
+        minLength?: number
+        maxLength?: number
+        minimum?: number
+        maximum?: number
+    }
+
+    /**
+     * 工具入参 schema:一律 object 且 `additionalProperties: false`(不接受未声明字段)。
+     */
+    export interface ToolParametersSchema {
+        type: "object"
+        properties: { [key: string]: ToolParamSchema }
+        required: string[]
+        additionalProperties: false
+    }
+
     export class ServiceClient {
         private baseClient: BaseClient
 
@@ -230,6 +305,7 @@ export namespace agent {
             this.deleteSession = this.deleteSession.bind(this)
             this.getSession = this.getSession.bind(this)
             this.listSessions = this.listSessions.bind(this)
+            this.listTools = this.listTools.bind(this)
         }
 
         public async ask(method: "POST", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
@@ -268,8 +344,17 @@ export namespace agent {
          * 那是一条不需要任何凭据的拒绝服务。
          * - 运行时会话必须先 dispose 再删库行:`disposeSession` 会把在途轨迹**排干落库**,
          * 反过来做的话那次 flush 撞上已被级联删掉的 `sessions` 行,外键失败刷一屏错误日志。
-         * - 正在回复中(`busy`)一律拒绝而不是硬删:那一轮的助手消息正等着写进这张表,
+         * - 正在回复中一律拒绝而不是硬删:那一轮的助手消息正等着写进这张表,
          * 删了只会让访客看到一句「本轮回复未能保存」。回 409,与 `/agent/ask` 的并发口径一致。
+         * 
+         * 【必须用 `claim()`,不能读一眼 `rec.busy` 就往下走】(codex 初审 P2)
+         * `claim` 是**同步**的检查+置位,与 `/agent/ask` 用的是同一把闸:置位之后那个会话对
+         * 逐出、空闲回收与并发 ask 都不可用。只读 `busy` 的话,另一个标签页的 ask 完全可以在
+         * 「读到 false」与「dispose 完成」之间挤进来认领同一个会话,于是那一轮跑在一个正在被
+         * 释放的 pi 会话上。认领失败 → 409,访客得到的是一句明确的「上一轮还在跑」。
+         * 
+         * 认领**不需要在成功路径上释放**:`disposeSession` 之后这条记录已经退出注册表,
+         * `busy` 跟着它一起消失;只有「认领成功但后续步骤抛错」才需要还回去(见下面的 try/catch)。
          */
         public async deleteSession(id: string): Promise<DeleteSessionResponse> {
             // Now make the actual call to the API
@@ -319,6 +404,16 @@ export namespace agent {
                 rtn.visitorCookie = mustBeSet("Header `set-cookie`", resp.headers.getSetCookie()[0])
             }
             return rtn
+        }
+
+        /**
+         * `GET /agent/tools` —— 工具目录。公开、无需鉴权,与其它访客端点同口径。
+         * 不碰库,所以没有 `sensitive`(响应里本来就没有任何凭据或访客数据可脱敏)。
+         */
+        public async listTools(): Promise<ToolCatalogResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/agent/tools`)
+            return await resp.json() as ToolCatalogResponse
         }
     }
 }

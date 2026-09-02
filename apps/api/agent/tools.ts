@@ -36,15 +36,82 @@ import { db } from "./db";
 import { reserveSearch } from "./quota";
 import { queryAsAgentRo } from "./ro-db";
 import { setSessionTitleAsAgent } from "./title-db";
-import { runWebSearch, WebSearchError } from "./websearch";
+import { MAX_CITATIONS, runWebSearch, WebSearchError, type WebSearchPhase } from "./websearch";
 import { loadActiveWebSearchConfig, type ActiveWebSearchConfig } from "./websearch-config";
 
-/** 单个工具结果的字符上限。超出截断并显式标注,不静默丢尾巴。 */
-const MAX_RESULT_CHARS = 8_000;
+/** 单个工具结果的字符上限。超出截断并显式标注,不静默丢尾巴。导出给 Tools 面板的脚注用。 */
+export const MAX_RESULT_CHARS = 8_000;
 /** 列表类工具单次最多返回多少条。 */
 const MAX_ROWS = 50;
 /** 检索命中的上下文片段长度。 */
 const SNIPPET_CHARS = 160;
+
+// ───────────────────── 工具元信息 META(R-TOOLS) ─────────────────────
+//
+// 【每个工具一份 META 常量,定义由它构造 `{ ...META, execute }`】(所有者裁定 2026-09-02,
+// ROUNDS.md「R-TOOLS」)。Tools 面板(设计稿 1f/1g)要展示名称 / 中文标签 / 描述 /
+// 入参 schema / 输出形态 / 分组。前四样 pi 的 `ToolDefinition` 本来就有,后两样没有 ——
+// 它们才是每次加工具都要人手补的地方。做法不是「端点遍历注册表」那么简单,三条一起才成立:
+//
+//   1. **单一事实源**:展示字段与定义写在同一处,改 schema 必然改 META,面板不可能落后。
+//      **面板永远不是第二个要改的地方。**
+//   2. **分组不写在 META 里**:它由注册路径派生(`catalog.ts`),手写只会写错。
+//   3. **`output` 是必填字段**(TypeScript 强制):漏写是编译不过,不是「面板少一行」——
+//      拦在写工具那一刻,不是发版前。
+//
+// 【META 必须定义在闭包外面】`makeWebSearchTool(cfg)` 的 `cfg` 与 `sessionRename(ctx)` 的
+// `ctx` 在 META 的作用域里根本不存在,所以「description 里插一句每日 N 次」这类泄配置面的
+// 写法**在结构上做不到**,不靠自觉也不靠 grep。今天没人这么写,不代表明年没人写。
+//
+// 【pi 看得到 META 的多余字段吗】`{ ...META, execute }` 会把 output / outputNote / phases
+// 一起摊进定义对象。无害:pi 只按名取字段(`getToolInfo` 取 name/label/description/parameters,
+// pi-ai 的 provider 适配层只取 name/description/parameters,源码核实),多出来的键既不进
+// 系统提示也不进模型请求。
+
+/**
+ * 单个入参的 JSON Schema 子集。**只列本仓库工具实际用到的关键字**:类型不认的关键字进不了
+ * META,也就进不了面板 —— 想用新关键字先扩这里,前端才知道怎么画它。
+ */
+export interface ToolParamSchema {
+  type: "string" | "integer";
+  description: string;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+}
+
+/** 工具入参 schema:一律 object 且 `additionalProperties: false`(不接受未声明字段)。 */
+export interface ToolParametersSchema {
+  type: "object";
+  properties: Record<string, ToolParamSchema>;
+  required: string[];
+  additionalProperties: false;
+}
+
+/**
+ * 一个工具的**常量**部分:前五个字段就是 pi `ToolDefinition` 里除 `execute` 以外模型可见的
+ * 那几个;`output` / `outputNote` / `phases` 是面板专用。
+ *
+ * 这里**不能**出现任何来自 `ActiveWebSearchConfig` / `SessionToolContext` 的值 ——
+ * 不是约定,是它们在这个作用域里拿不到(见上方「META 必须定义在闭包外面」)。
+ */
+export interface ToolMeta {
+  readonly name: string;
+  readonly label: string;
+  readonly description: string;
+  readonly promptSnippet: string;
+  readonly parameters: ToolParametersSchema;
+  /** 输出形态说明(设计稿 1g 的 OUTPUT 段)。**必填**:漏写编译不过。 */
+  readonly output: string;
+  /** 输出形态的补充:上限 / 边界情形(设计稿 1g OUTPUT 段第二行)。 */
+  readonly outputNote?: string;
+  /** 执行期间会经 `onUpdate` 上报的阶段文案,按上报顺序;只有会上报进度的工具才有。 */
+  readonly phases?: readonly string[];
+}
+
+/** 由 META 构造出来的定义:pi 认的那半 + 面板认的那半,两半是同一个对象。 */
+export type MetaToolDefinition = ToolDefinition & ToolMeta;
 
 /** 高危工具的第二道闸:服务器 env(docs/security.md §1 第 1 层「双闸」)。 */
 const DANGEROUS_UNLOCK_ENV = "XRAY_UNLOCK_DANGEROUS_TOOLS";
@@ -169,7 +236,7 @@ interface ChapterListRow {
  * 而模型要读一章必须先知道章节 slug —— 这个「目录」能力总得有个落点。放进本工具是
  * 三个选择里最省的:它本来就是「浏览教程库」的入口,给了系列就往下一层走。
  */
-const notesListSeries: ToolDefinition = {
+const NOTES_LIST_SERIES_META: ToolMeta = {
   name: "notes_list_series",
   label: "教程库索引",
   description:
@@ -184,6 +251,15 @@ const notesListSeries: ToolDefinition = {
     required: [],
     additionalProperties: false,
   },
+  // 字段名与下方 SeriesRow / ChapterListRow 一致;改行结构要一起改这句
+  output:
+    "JSON 文本。列系列时每条含 categorySlug / categoryName / slug / name / description / chapterCount;" +
+    "列章节时每条含 slug / label / title / wordCount",
+  outputNote: `单次最多 ${MAX_ROWS} 条,超出带 more: true`,
+};
+
+const notesListSeries: MetaToolDefinition = {
+  ...NOTES_LIST_SERIES_META,
   async execute(_toolCallId, params) {
     const { category, series } = (params ?? {}) as { category?: string; series?: string };
     return guarded("notes_list_series", async () =>
@@ -241,7 +317,7 @@ interface ChapterRow {
   seriesName: string;
 }
 
-const notesGetChapter: ToolDefinition = {
+const NOTES_GET_CHAPTER_META: ToolMeta = {
   name: "notes_get_chapter",
   label: "读教程章节",
   description:
@@ -256,6 +332,12 @@ const notesGetChapter: ToolDefinition = {
     required: ["series", "chapter"],
     additionalProperties: false,
   },
+  // 与 execute 里拼 `head` 的四行一致
+  output: "一段 markdown —— 首部是标题 / 系列 / 章节 / 摘要 / 原文链接,其后是正文",
+};
+
+const notesGetChapter: MetaToolDefinition = {
+  ...NOTES_GET_CHAPTER_META,
   async execute(_toolCallId, params) {
     const { series, chapter } = params as { series: string; chapter: string };
     return guarded("notes_get_chapter", async () =>
@@ -300,7 +382,7 @@ interface SearchRow {
   contentMd: string;
 }
 
-const notesSearch: ToolDefinition = {
+const NOTES_SEARCH_META: ToolMeta = {
   name: "notes_search",
   label: "检索教程库",
   description: "在本站教程库的标题、摘要与正文里做大小写不敏感的子串检索,返回命中的章节与片段。",
@@ -314,6 +396,13 @@ const notesSearch: ToolDefinition = {
     required: ["query"],
     additionalProperties: false,
   },
+  // 字段名与 execute 里 `hits` 的映射一致
+  output: "JSON 文本,hits 数组每条含 series / seriesName / chapter / title / snippet",
+  outputNote: `snippet 取命中处前后共约 ${SNIPPET_CHARS} 字`,
+};
+
+const notesSearch: MetaToolDefinition = {
+  ...NOTES_SEARCH_META,
   async execute(_toolCallId, params) {
     const { query, limit } = params as { query: string; limit?: number };
     return guarded("notes_search", async () =>
@@ -390,6 +479,56 @@ const SEARCH_TIMEOUT_TEXT = "联网搜索超时,本轮没有拿到结果;请基�
 const SEARCH_FAILURE_TEXT = "联网搜索失败,本轮没有拿到结果;请基于已有知识回答,并说明这一点。";
 
 /**
+ * 阶段 → 面板文案,按上报顺序(设计稿 1g 的 PROGRESS 段)。
+ * 键是 `WebSearchPhase` 的**全集**:websearch.ts 加了阶段而这里不补,编译不过。
+ */
+const WEB_SEARCH_PHASE_LABELS: Readonly<Record<WebSearchPhase, string>> = {
+  request: "发起",
+  accepted: "已受理",
+  searching: "检索中",
+  composing: "综述中",
+};
+
+/**
+ * `web_search` 的常量部分。**这里没有 `cfg`**:它在 `makeWebSearchTool` 的参数里,
+ * 而本常量定义在函数外面 —— 所以 baseUrl / model / 限额这些配置值进不了描述与 schema。
+ * `promptSnippet` 里那句「有每日次数上限」是事实陈述,不是数字;数字永远不出服务端。
+ */
+export const WEB_SEARCH_META: ToolMeta = {
+  name: WEB_SEARCH_TOOL_NAME,
+  label: "联网搜索",
+  description:
+    "联网搜索并返回一段带来源的简明答案(由搜索网关在服务端执行检索与综述)。" +
+    "适合问「最新 / 现在 / 今年」这类超出你已有知识的问题;本站教程库的内容请用 notes_search,不要用本工具。" +
+    "只接受一个自然语言查询,不能指定网址、不能抓取指定页面。",
+  promptSnippet: "web_search —— 联网搜索时事与站外资料(有每日次数上限,省着用)",
+  // 【别在这里加 `promptGuidelines`】(codex 初审 P1)它与 `promptSnippet` 一样,
+  // 只在 pi 拼**默认**系统提示词时才会被用到;而本仓库走的是 `systemPromptOverride`,
+  // 那是**整体替换**(pi 的 resource-loader:`override ? override(base) : base`,
+  // 我们的实现忽略入参),base 里那两节根本不会送达。
+  // 注入防御与用法约束因此写在 `runtime.ts` 的 `systemPromptFor` 里 ——
+  // 放在一个不会被送达的字段里,比不放更糟:它看起来已经做了。
+  // (本对象的 `description` 不受影响:那个走 API 请求的 tools 数组。)
+  parameters: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        minLength: 2,
+        maxLength: MAX_QUERY_CHARS,
+        description: "自然语言查询;不要放网址",
+      },
+    },
+    required: ["query"],
+    additionalProperties: false,
+  },
+  // 与 execute 里拼 `sources` 的格式一致
+  output: "一段正文 + 末尾「来源:」列表(序号 + 标题 + URL)",
+  outputNote: `来源最多 ${MAX_CITATIONS} 条`,
+  phases: Object.values(WEB_SEARCH_PHASE_LABELS),
+};
+
+/**
  * 构造 `web_search` 工具。
  *
  * 【为什么是工厂而不是 `TOOL_REGISTRY` 里的一个常量】它需要凭据、端点、超时与限额 ——
@@ -400,36 +539,11 @@ const SEARCH_FAILURE_TEXT = "联网搜索失败,本轮没有拿到结果;请基�
  * 配置变了就换一份指纹,会话下一轮被重建(见 `loadEnabledTools` 与 runtime.ts)。
  *
  * 明文 key 只活在这个闭包里:不进日志、不进事件流、不进任何返回值。
+ * 导出只为 catalog.test.ts 能拿一份「按真实路径构造出来的定义」与目录逐字段比对。
  */
-function makeWebSearchTool(cfg: ActiveWebSearchConfig): ToolDefinition {
+export function makeWebSearchTool(cfg: ActiveWebSearchConfig): MetaToolDefinition {
   return {
-    name: WEB_SEARCH_TOOL_NAME,
-    label: "联网搜索",
-    description:
-      "联网搜索并返回一段带来源的简明答案(由搜索网关在服务端执行检索与综述)。" +
-      "适合问「最新 / 现在 / 今年」这类超出你已有知识的问题;本站教程库的内容请用 notes_search,不要用本工具。" +
-      "只接受一个自然语言查询,不能指定网址、不能抓取指定页面。",
-    promptSnippet: "web_search —— 联网搜索时事与站外资料(有每日次数上限,省着用)",
-    // 【别在这里加 `promptGuidelines`】(codex 初审 P1)它与 `promptSnippet` 一样,
-    // 只在 pi 拼**默认**系统提示词时才会被用到;而本仓库走的是 `systemPromptOverride`,
-    // 那是**整体替换**(pi 的 resource-loader:`override ? override(base) : base`,
-    // 我们的实现忽略入参),base 里那两节根本不会送达。
-    // 注入防御与用法约束因此写在 `runtime.ts` 的 `systemPromptFor` 里 ——
-    // 放在一个不会被送达的字段里,比不放更糟:它看起来已经做了。
-    // (本对象的 `description` 不受影响:那个走 API 请求的 tools 数组。)
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          minLength: 2,
-          maxLength: MAX_QUERY_CHARS,
-          description: "自然语言查询;不要放网址",
-        },
-      },
-      required: ["query"],
-      additionalProperties: false,
-    },
+    ...WEB_SEARCH_META,
     async execute(_toolCallId, params, signal, onUpdate) {
       const { query } = params as { query: string };
       return guarded(WEB_SEARCH_TOOL_NAME, async () => {
@@ -502,7 +616,7 @@ function truncateTo(s: string, max: number): string {
  * 三处合起来才是全部:`tool_config` 里出现任何不在这三处的名字,
  * 都只会被丢弃并记日志。新增工具 = 改这个文件 + 发一次版,不是改一行配置。
  */
-export const TOOL_REGISTRY: Readonly<Record<string, ToolDefinition>> = Object.freeze({
+export const TOOL_REGISTRY: Readonly<Record<string, MetaToolDefinition>> = Object.freeze({
   [notesListSeries.name]: notesListSeries,
   [notesGetChapter.name]: notesGetChapter,
   [notesSearch.name]: notesSearch,
@@ -571,20 +685,20 @@ export interface SessionToolContext {
   needsTitle: boolean;
 }
 
-export type SessionToolFactory = (ctx: SessionToolContext) => ToolDefinition;
+/**
+ * 会话绑定工具的工厂:调用时绑定会话上下文。`meta` 是它的常量部分 —— Tools 面板从这里取,
+ * 不必为了读一份描述先造一个绑着假会话 id 的工具。
+ */
+export interface SessionToolFactory {
+  (ctx: SessionToolContext): ToolDefinition;
+  readonly meta: ToolMeta;
+}
 
 /**
- * `session_rename`:给**本次**会话起标题(R-TITLE)。
- *
- * 【为什么会话 id 不做入参】这是整个例外能被限住的关键。做成入参的话,接口上就存在
- * 「改另一个访客的会话标题」这句话,拦不拦得住全看服务端校验写没写对;
- * 绑成闭包之后,那句话在这个工具的词汇表里根本不存在(docs/security.md §1 第 1 层补记)。
- *
- * 【为什么写不进去不算失败】重复调用(会话已命名)与会话已被删掉,都返回一条**正常**结果:
- * 它们不是错误,把它们抛出去只会在轨迹面板上画出一个红色的 `isError`,
- * 而访客什么也没做错。真正的失败(库不可用)才走 `guarded` 的错误路径。
+ * `session_rename` 的常量部分。**这里没有 `ctx`**:会话 id 既不是入参也不在描述里,
+ * 面板上看到的这份定义与任何一个会话都无关。
  */
-const sessionRename: SessionToolFactory = (ctx) => ({
+const SESSION_RENAME_META: ToolMeta = {
   name: SESSION_RENAME_TOOL,
   label: "会话命名",
   // description / promptSnippet 与 runtime.ts 的 systemPromptFor 口径一致(命名时机 = 第一轮,
@@ -607,27 +721,47 @@ const sessionRename: SessionToolFactory = (ctx) => ({
     required: ["title"],
     additionalProperties: false,
   },
-  async execute(_toolCallId, params) {
-    const { title } = (params ?? {}) as { title?: unknown };
-    const clean = typeof title === "string" ? sanitizeTitle(title) : "";
-    // 入参不可用是**模型可以改正**的失败:抛出去(pi 据此置 isError:true),
-    // 文案本身就是改正方法。
-    if (!clean) throw new Error(TITLE_EMPTY_TEXT);
-    return guarded(
-      SESSION_RENAME_TOOL,
-      async () => {
-        const changed = await setSessionTitleAsAgent(ctx.sessionId, clean);
-        return changed
-          ? textResult(`已把本会话的标题设为「${clean}」。`, { title: clean, changed: true })
-          : textResult("本会话的标题此前已经设置过,未做更改,不必再次调用。", {
-              title: clean,
-              changed: false,
-            });
-      },
-      TITLE_FAILURE_TEXT,
-    );
-  },
-});
+  output: "一句确认文本",
+  outputNote: "已命名过的会话再次调用返回一条正常结果,不算失败",
+};
+
+/**
+ * `session_rename`:给**本次**会话起标题(R-TITLE)。
+ *
+ * 【为什么会话 id 不做入参】这是整个例外能被限住的关键。做成入参的话,接口上就存在
+ * 「改另一个访客的会话标题」这句话,拦不拦得住全看服务端校验写没写对;
+ * 绑成闭包之后,那句话在这个工具的词汇表里根本不存在(docs/security.md §1 第 1 层补记)。
+ *
+ * 【为什么写不进去不算失败】重复调用(会话已命名)与会话已被删掉,都返回一条**正常**结果:
+ * 它们不是错误,把它们抛出去只会在轨迹面板上画出一个红色的 `isError`,
+ * 而访客什么也没做错。真正的失败(库不可用)才走 `guarded` 的错误路径。
+ */
+const sessionRename: SessionToolFactory = Object.assign(
+  (ctx: SessionToolContext): MetaToolDefinition => ({
+    ...SESSION_RENAME_META,
+    async execute(_toolCallId, params) {
+      const { title } = (params ?? {}) as { title?: unknown };
+      const clean = typeof title === "string" ? sanitizeTitle(title) : "";
+      // 入参不可用是**模型可以改正**的失败:抛出去(pi 据此置 isError:true),
+      // 文案本身就是改正方法。
+      if (!clean) throw new Error(TITLE_EMPTY_TEXT);
+      return guarded(
+        SESSION_RENAME_TOOL,
+        async () => {
+          const changed = await setSessionTitleAsAgent(ctx.sessionId, clean);
+          return changed
+            ? textResult(`已把本会话的标题设为「${clean}」。`, { title: clean, changed: true })
+            : textResult("本会话的标题此前已经设置过,未做更改,不必再次调用。", {
+                title: clean,
+                changed: false,
+              });
+        },
+        TITLE_FAILURE_TEXT,
+      );
+    },
+  }),
+  { meta: SESSION_RENAME_META },
+);
 
 /**
  * 需要在**建会话时**绑定会话上下文的工具。与 `TOOL_REGISTRY` 分成两张表不是洁癖:

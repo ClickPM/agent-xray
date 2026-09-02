@@ -17,6 +17,13 @@ export type SessionSummary = Awaited<
 >["sessions"][number];
 export type ChatMessage = Awaited<ReturnType<typeof client.agent.getSession>>["messages"][number];
 
+// Tools 面板(R-TOOLS)的类型同样只从生成物派生:`group` 是后端的字面量联合,
+// 前端按它挑分组文案与颜色,不按工具名(任务卡「禁止」段)。
+export type ToolCatalog = Awaited<ReturnType<typeof client.agent.listTools>>;
+export type ToolCatalogEntry = ToolCatalog["tools"][number];
+export type ToolGroup = ToolCatalogEntry["group"];
+export type ToolParamSchema = ToolCatalogEntry["parameters"]["properties"][string];
+
 /**
  * 会话列表。R-VISITOR 起服务端只回**本访客**的会话(身份是一个 HttpOnly cookie,
  * 由服务端发放与续期);没有身份时回空列表,不是错误 —— 站点没有登录这个概念。
@@ -46,6 +53,14 @@ export async function deleteSession(id: string): Promise<void> {
     if (isAPIError(err) && err.code === ErrCode.NotFound) return;
     throw err;
   }
+}
+
+/**
+ * 工具目录(R-TOOLS):这个 agent 具备哪些工具、各吃什么参数、吐什么结果。
+ * **静态、与会话无关**,空会话下也有内容;服务端按白名单序列化,不含启停 / 限额 / provider。
+ */
+export async function listTools(): Promise<ToolCatalog> {
+  return client.agent.listTools();
 }
 
 /**

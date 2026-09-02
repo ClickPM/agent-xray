@@ -49,7 +49,7 @@
 | **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | ✅ 已完成([任务卡](rounds/round-visitor/round-visitor.md) · [130 部署留证](rounds/round-visitor/round-visitor.md#130-预发部署留证2026-09-01)),12 项验收全过;codex 三轮共 6 条 findings(3×P1 · 3×P2),4 条采纳整改、1 条所有者裁定不修(130 内网)、1 条写明理由不采纳记 BACKLOG,第 3 轮零 findings,缺陷门禁 PASS。同日 130 预发升级到 `7cc17fe`(迁移 6→7),8 项冒烟全过,**本机验不了的「新建会话首帧带 Set-Cookie」在 130 上验掉,不再交接给 R11** | 2026-09-01 |
 | **R-WEBSEARCH** | agent 联网搜索工具(Responses API 网关 · 域白名单 · MCP 配 provider · DeepSeek 零分支兼容) | ✅ 已完成([任务卡](rounds/round-websearch/round-websearch.md)),本机验收 #1–#10、#14 全过;codex 四轮共 6 条 findings(3×P1 · 3×P2)**全部采纳整改**,第 4 轮零 findings,缺陷门禁 PASS;**所有者裁定本轮不构建镜像、不发 130**(#2/#11/#12/#13 四条 130 实跑验收并入下一次预发升级) | 2026-09-02 |
 | **R-TITLE** | 会话命名工具(`session_rename`:agent 自己给会话起名,轨迹可见,默认开启) | 🔄 已合并 `main`,待 130 预发验收 #1/#7([任务卡](rounds/round-title/round-title.md),8 项验收 6 过、2 项交接 130;codex 五轮共 4 条 findings(2×P1 · 2×P2):2 条 P2 采纳整改,1 条 P1 **所有者裁定不采纳并回滚**(记 BACKLOG),1 条 P1 随回滚作废,末轮零 findings,缺陷门禁 PASS) | — |
-| **R-TOOLS** | Tools 工具面板(右栏第 4 tab:工具名/描述/入参 schema/输出形态,只读) | ⬜ 未开始([任务卡](rounds/round-tools/round-tools.md);设计稿 1f–1g 与原型已就位,与 R11 的先后待所有者裁定) | — |
+| **R-TOOLS** | Tools 工具面板(右栏第 4 tab:工具名/描述/入参 schema/输出形态,只读) | 🔄 进行中([任务卡](rounds/round-tools/round-tools.md);代码与 7 项验收已落地,codex 审查中;与 R11 的先后待所有者裁定) | — |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
 ## 里程碑

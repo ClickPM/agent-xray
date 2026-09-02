@@ -2,7 +2,7 @@
 
 <!-- 命名轮,不属于 R0–R11 线性序列。拆解见 ROUNDS.md「R-TOOLS」。 -->
 
-> 状态:未开始
+> 状态:进行中 —— 代码与验收已落地(2026-09-02,分支 `claude/round-tools-implementation-cd50cb`),codex 审查进行中
 >
 > 与 R11(生产部署上线)的先后**待所有者裁定**:本轮无迁移、无新依赖、不动部署形态,放在上线前后都成立。
 
@@ -22,14 +22,18 @@
 
 ## 交付物
 
-| 文件 | 内容 |
-|---|---|
-| `apps/api/agent/tools.ts` | **每个工具一份 META 常量**(名称 / 中文标签 / 描述 / promptSnippet / 入参 schema / **输出形态说明**),工具定义由它构造(`{...META, execute}`);`execute` 的实现不动 |
-| `apps/api/agent/`(新端点文件) | 只读端点,`expose: true` 且无需鉴权(与其它访客端点同口径),吐上述元信息 |
-| `apps/api/agent/*.test.ts` | 元信息与工具定义一致性测试(见验收 #2)+ 响应不含配置值的断言(见验收 #3) |
-| `apps/web/components/workbench/ToolsPanel.tsx`(名字待定) | Tools 面板组件,逐画板对照 `1f` / `1g` |
-| `apps/web/components/workbench/Workbench.tsx` | tab 数组加第 4 项 `["tools", "Tools"]`,面板分支接上 |
-| `apps/web/lib/api-client.ts` | `dev.ps1 gen` 重新生成(生成物,不手改) |
+| 文件 | 内容 | 落地 |
+|---|---|---|
+| `apps/api/agent/tools.ts` | **每个工具一份 META 常量**(名称 / 中文标签 / 描述 / promptSnippet / 入参 schema / **输出形态说明**),工具定义由它构造(`{...META, execute}`);`execute` 的实现不动 | ✅ `ToolMeta` / `ToolParametersSchema` 类型 + 5 份 META(`NOTES_*_META` ×3、`WEB_SEARCH_META`、`SESSION_RENAME_META`);`output` 必填;`web_search` 的 `phases` 键在 `Record<WebSearchPhase, string>` 上,websearch.ts 加阶段不补文案编译不过 |
+| `apps/api/agent/catalog.ts`(新) | 只读端点,`expose: true` 且无需鉴权(与其它访客端点同口径),吐上述元信息 | ✅ `GET /agent/tools`;`toolCatalog()` 从三条构造路径派生分组;`publicEntry` 白名单序列化(只按名取字段,不 spread) |
+| `apps/api/agent/catalog.test.ts`(新) | 元信息与工具定义一致性测试(见验收 #2)+ 响应不含配置值的断言(见验收 #3) | ✅ 12 个用例,对应验收 #2 / #3 / #6 |
+| `apps/web/components/workbench/ToolsPanel.tsx`(新) | Tools 面板组件,逐画板对照 `1f` / `1g` | ✅ 按后端 `group` 渲染,`Record<ToolGroup, …>` 让「后端多出第四组」变成前端编译错误;约束徽标(`≤64` / `1–128`)从 JSON Schema 边界关键字派生 |
+| `apps/web/components/workbench/Workbench.tsx` | tab 数组加第 4 项 `["tools", "Tools"]`,面板分支接上 | ✅ `PANEL_TABS` 四项;空会话下 Tools 例外于「前三个 tab 都落到 Lifecycle 待命图」 |
+| `apps/web/lib/agent-api.ts` | 类型与调用 | ✅ `listTools()` + 从生成物派生的 `ToolCatalog` / `ToolGroup` / `ToolParamSchema` 类型 |
+| `apps/web/lib/api-client.ts` | `dev.ps1 gen` 重新生成(生成物,不手改) | ✅ 已重生成;仅按 BACKLOG R3 的先例把 app slug 噪音(`936eu`↔`3vpi6`)那两行还原 |
+| `docs/security.md` | §1 第 1 层 R-TOOLS 补记(规则 9):公开的是能力说明,不公开的是配置面,两层落点 | ✅ |
+| `apps/api/agent/README.md` | 端点清单 + 「工具元信息 META」一节(新增工具要动的两处) | ✅ |
+| `.claude/launch.json` | 加 `api` 配置(浏览器验证工具起后端用,`powershell -File dev.ps1`);非产品代码 | ✅ |
 
 **端点不得吐**(所有者裁定,ROUNDS.md R-TOOLS):`execute` 函数本体、`ActiveWebSearchConfig` 的任何字段
 (baseUrl / key / model / provider)、`dailySearchLimit` 与当日用量、`tool_config` 的 `enabled` 状态。
@@ -57,15 +61,15 @@
 
 ## 验收
 
-| # | 检查 | 命令 / 期望 |
-|---|---|---|
-| 1 | 右栏出现第 4 个 tab | 本机 `dev.ps1` + `npm run dev`;tab 条四项,样式/间距/字号/选中态与前三个一致(规则 7:不新造 tab 样式) |
-| 2 | 目录与实现**双向**对齐 | ①**逐字段**:测试从工具定义对象取 `name`/`label`/`description`/`parameters` 与端点吐的元信息比对,不一致即失败(**不靠眼看**);②**集合相等**:目录的 name 集合 == 两个注册表 + `web_search` 的并集,多一个少一个都失败;③**穿过库的兜底**:迁移里 `tool_config` 种下的每个名字都要有 META(新工具必经这两处,漏一处就红) |
-| 3 | 响应不泄配置面 | 对端点响应做 grep:不含 key / baseUrl / model / provider / 限额数字 / `enabled`;`web_search` 的条目在**未配置**时也不暴露配置缺失细节 |
-| 4 | 空会话下也有内容 | 新开一个未发消息的会话,切到 Tools 仍显示完整清单(它不依赖 `events`) |
-| 5 | 逐画板对照 | 列表态对 `1f`、展开态对 `1g`(展开 `web_search`,含四阶段进度说明);分组色 `#6b7280` / `#2563eb` / `#f9c22e` |
-| 6 | 5 个工具齐 | `notes_list_series` · `notes_get_chapter` · `notes_search` · `web_search` · `session_rename`,分三组 |
-| 7 | 测试与类型 | `dev.ps1 test` 全绿;`dev.ps1 gen` 后 `dev.ps1 check` 通过,前端引用生成类型无 `any` 兜底 |
+| # | 检查 | 命令 / 期望 | 结果 |
+|---|---|---|---|
+| 1 | 右栏出现第 4 个 tab | 本机 `dev.ps1` + `npm run dev`;tab 条四项,样式/间距/字号/选中态与前三个一致(规则 7:不新造 tab 样式) | ✅ 本机实测(空会话态与 Tools 选中态各一张截图,见「本轮实测」)。四个 tab 走**同一段**渲染代码(`PANEL_TABS.map`),tab 样式零新增 |
+| 2 | 目录与实现**双向**对齐 | ①**逐字段**:测试从工具定义对象取 `name`/`label`/`description`/`parameters` 与端点吐的元信息比对,不一致即失败(**不靠眼看**);②**集合相等**:目录的 name 集合 == 两个注册表 + `web_search` 的并集,多一个少一个都失败;③**穿过库的兜底**:迁移里 `tool_config` 种下的每个名字都要有 META(新工具必经这两处,漏一处就红) | ✅ `catalog.test.ts`「目录与实现双向对齐」段:①对每条目录项按其 `group` 走**真实构造路径**取定义(`TOOL_REGISTRY[name]` / `SESSION_TOOL_REGISTRY[name](ctx)` / `makeWebSearchTool(假 cfg)`)后 `toEqual`;②集合相等 + 无重名;③`SELECT name FROM tool_config` 逐名断言,且先断言表非空(空表不许空转通过) |
+| 3 | 响应不泄配置面 | 对端点响应做 grep:不含 key / baseUrl / model / provider / 限额数字 / `enabled`;`web_search` 的条目在**未配置**时也不暴露配置缺失细节 | ✅ `catalog.test.ts`「响应不泄配置面」段:一份**每个值独一无二**的假配置(9 个值)逐一 grep 不到、16 个配置面字段名 grep 不到、会话 id grep 不到;每条字段集 ⊆ 8 个白名单键;`web_search` 在 `websearch_config` 为空时照样列出、没有 available/configured/enabled 字段,且与带配置构造出的定义逐字段相等 |
+| 4 | 空会话下也有内容 | 新开一个未发消息的会话,切到 Tools 仍显示完整清单(它不依赖 `events`) | ✅ 本机实测:「未选择会话」态点 Tools,五条全在(截图) |
+| 5 | 逐画板对照 | 列表态对 `1f`、展开态对 `1g`(展开 `web_search`,含四阶段进度说明);分组色 `#6b7280` / `#2563eb` / `#f9c22e` | ✅ 列表态:三组分组头(色点 / 组名 / 组注)+ 卡片(等宽名 / 中文标签 / 组徽标 / 折叠箭头 / 单行省略描述)+ 三行脚注;展开态:全文描述 / INPUT(`query string 必填 2–300` + 描述)/ OUTPUT 两行 / PROGRESS `发起 → 已受理 → 检索中 → 综述中` + `tool_execution_update` 注。色值三个都是设计稿的 |
+| 6 | 5 个工具齐 | `notes_list_series` · `notes_get_chapter` · `notes_search` · `web_search` · `session_rename`,分三组 | ✅ 端点实测响应 5 条、`pure` ×3 / `outbound` ×1 / `session` ×1;测试钉住三组齐全与顺序 |
+| 7 | 测试与类型 | `dev.ps1 test` 全绿;`dev.ps1 gen` 后 `dev.ps1 check` 通过,前端引用生成类型无 `any` 兜底 | ✅ `dev.ps1 test`:**14 文件 291 用例全过**(新增 `catalog.test.ts` 12 个);`dev.ps1 gen` → `dev.ps1 check` 通过;额外跑了 `tsc --noEmit`:`apps/api` 与 `apps/web` 都是 0 错误(门禁不跑 tsc,见 BACKLOG);前端类型全部从生成物派生,无 `any` |
 
 ## 禁止
 
@@ -102,4 +106,32 @@
 
 ## 本轮实测
 
-<!-- 完成后回填:实际数字、踩的坑、与设计/计划的偏离及原因 -->
+### 数字
+
+- `dev.ps1 test`:**14 文件 291 用例全过**(新增 `catalog.test.ts` 12 个;既有 `sandbox.test.ts` / `title.test.ts` 未改一行)。`dev.ps1 check` 通过;`tsc --noEmit` 在 `apps/api`、`apps/web` 各 0 错误
+- 端点实测(本机 `GET /agent/tools`):5 条、三组、响应体里除 schema 边界数字外没有任何数字;`resultCharLimit: 8000`
+- 改动面:后端 2 个新文件(端点 + 测试)+ `tools.ts`(META 抽取)+ `websearch.ts`(1 行:`MAX_CITATIONS` 加 `export`);前端 1 个新组件 + `Workbench.tsx` 3 处 + `agent-api.ts` 1 段 + 生成物;文档 3 处
+- `git diff -w` 核对:五个 `execute` 体、`guarded`、`loadEnabledTools`、`buildSessionTools` **零改动**(`session_rename` 的 execute 因外层多包了一层 `Object.assign` 而整体缩进 +2,`-w` 下为空)
+
+### 派生式是怎么落地的(对照任务卡「派生式」三条)
+
+1. **单一事实源**:五份 META 常量各在自己的工具旁边,定义是 `{ ...META, execute }`。`ToolMeta.output` 必填、`ToolParametersSchema` 只认本仓库用到的六个 JSON Schema 关键字 —— 类型不认的进不了 META
+2. **分组派生**:`catalog.ts` 的 `toolCatalog()` 只做三件事:遍历 `TOOL_REGISTRY` → `pure`、取 `WEB_SEARCH_META` → `outbound`、遍历 `SESSION_TOOL_REGISTRY` 的 `factory.meta` → `session`。**没有 name → group 的表**
+3. **输出形态必填**:`output` 在 `ToolMeta` 上没有 `?`;`outputNote` 里的数字(50 / 160 / 10)全是模板字面量引用 `MAX_ROWS` / `SNIPPET_CHARS` / `MAX_CITATIONS`,常量改了文案跟着改
+4. **META 在闭包外面**:`WEB_SEARCH_META` 是模块常量,`makeWebSearchTool(cfg)` 只是 `{ ...WEB_SEARCH_META, execute }`;`SESSION_RENAME_META` 同理。`catalog.test.ts` 用一份每个值独一无二的假 `cfg` 真的构造了一次工具,再 grep 响应 —— 一个值都没出来
+5. **已知的洞**已写进 `toolCatalog()` 的注释,兜底是测试的双向集合相等(目录 == 两个注册表 + `web_search`;`tool_config` 每个名字都有目录项)
+
+### 踩的坑
+
+1. **worktree 里跑 `dev.ps1 test` 先红 3 条**:`sandbox.test.ts` 外呼组三条报 `ConfigEncryptionKey 未配置`。原因是 `apps/api/.secrets.local.cue` 被 gitignore、只在主 checkout 里,新 worktree 没有;从主 checkout 复制一份后 14/14 全绿。**是环境不是代码**,与本轮改动无关
+2. **Encore 类型化端点支持 `Record<string, T>`**(此前仓库里没用过,实测):生成物变成 `{ [key: string]: ToolParamSchema }`。所以入参 JSON Schema 能**原样**吐出(`properties` 保持对象),不必为了过 Encore 解析器改成数组形态,前端也就不用把它再拼回去
+3. **pi 的 `TSchema` 在 TypeBox v1 里是空接口**(`export interface TSchema {}`),任何对象都可赋值 —— 所以 `ToolMeta.parameters` 用自定义的 `ToolParametersSchema` 接口与 `ToolDefinition.parameters` 交叉时没有冲突。pi-ai 的 provider 适配层只取 `name / description / parameters`(anthropic-messages.js / openai-completions.js 源码核实),META 摊进定义对象的 `output` / `phases` 不会进模型请求
+4. **`dev.ps1 gen` 的 app slug 噪音**再次出现(`936eu` → `3vpi6`,worktree 是另一个本地 app id,BACKLOG R3 已记):只把那两行还原,其余生成内容(含 `deleteSession` 文档注释与源码同步)保留 —— 那是生成物本该有的样子
+
+### 与计划的偏离
+
+- **`makeWebSearchTool` 与 `websearch.ts` 的 `MAX_CITATIONS` 加了 `export`**。前者是让测试能「按真实构造路径」拿一份带假配置的定义与目录逐字段比对,并证明配置值进不了目录;后者是让 `outputNote` 的「来源最多 N 条」引用真实常量。两处实现体一行未动
+- **端点响应多一个字段 `resultCharLimit`**(画板脚注「工具结果统一 8000 字符上限」)。它是代码常量不是配置值(不在库里、不在 env 里,设计稿上本来就印着);前端写死一个 8000 就是「第二个要改的地方」,与本轮要消灭的东西同类。测试把它钉在 `capText` 的真实行为上(N 不截、N+1 截)
+- **`SessionToolFactory` 从函数类型改成「可调用 + `meta`」接口**(`Object.assign(fn, { meta })`):面板要读会话绑定工具的 META,而工厂需要 `ctx` 才能调用 —— 不想为了读一份描述先造一个绑着假会话 id 的工具。`buildSessionTools` 的调用形式 `SESSION_TOOL_REGISTRY[name](ctx)` 不变
+- **`.claude/launch.json` 加了 `api` 项**:浏览器验证工具要起后端(`powershell -File dev.ps1`),此前只有 `web`。非产品代码
+- **分组的中文名 / 组注 / 徽标文案在前端**(`ToolsPanel.tsx` 的 `GROUPS`,按 `group` 键入):任务卡明确允许「按后端给的 group 渲染,三组的色值是固定的」;组名与组注同样是三组的固定属性(设计稿文案),不随工具变。放后端只会让端点多一段与工具无关的静态文案
