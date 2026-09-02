@@ -2,7 +2,7 @@
 
 <!-- 命名轮,先例见 rounds/round-websearch / rounds/round-title;拆解以 ROUNDS.md 的「R-IMAGEGEN」段为准。 -->
 
-> 状态:进行中(2026-09-02 开工)
+> 状态:代码与审查已收口(2026-09-02 开工并当日收口,分支 `claude/agent-xray-image-generation-3c1bb5`,提交 `f0cf072` → `2b57656` → `0612bf2` + 收口提交);**待所有者合并 `main`、发预发 / 生产并配 provider 跑验收 #17 的外呼半边**
 >
 > 参考实现是 pi 的 `image-generation` 扩展(`~/.pi/agent/extensions/image-generation.ts`:
 > 两个工具各打一条生图链路,图片落盘到 workspace,凭据读 `models.json`)。
@@ -116,7 +116,8 @@
 - 审查方式:`/codex:review --background --scope branch`(前两轮全量;第 3 轮起 `--base <上一轮已审提交>`)
 - 审查边界按 CLAUDE.md 带给审查者:只判定缺陷与严重级别,不展开设计方案;非阻塞 findings 只允许最小改动
 - findings 处理:见下表(逐条:核验 → 采纳整改 / 不采纳写明理由)
-- 结论:待第 2 轮复审后回填
+- 结论:**整改后 PASS**。三轮共 3 条 findings(0×P1 · 3×P2)**全部核验属实、全部采纳整改**,没有一条以「概率低」放行;
+  **第 3 轮零 findings**,缺陷门禁关闭(第 3 轮按 CLAUDE.md 收到「上一轮整改 diff」:`--base 2b57656`)
 
 ### 第 1 轮(2026-09-02,基线 `f0cf072`,全量 branch 范围;2 条 findings,0×P1 · 2×P2)
 
@@ -141,6 +142,15 @@
 + 强 ETag + nosniff;带 cookie 与 `If-None-Match` → **304**;**不带 cookie 的条件请求 → 404(不是 304)**,即缓存复验也过归属;
 畸形百分号路径 `%zz.png` 被 Encore 网关先拦成 **400**,到不了 handler(第 1 轮自查加的那层 try/catch 是纵深兜底)。
 `dev.ps1 test` 15 文件 / 373 用例全过,tsc 干净。
+
+### 第 3 轮(2026-09-02,`--base 2b57656` —— 只审上一轮的整改 diff)
+
+**零 findings。** 审查者原文:「将缓存策略改为 `private, no-cache` 会强制浏览器复验,并且归属校验发生在返回 304 之前,
+能够修复同一浏览器更换访客身份后复用旧缓存的问题。未发现此次变更引入新的功能性缺陷。」
+
+**这三轮的共同点值得记一句**:三条 P2 都是「我写的那层防线其实没在防」—— 库级 CHECK 查的是元数据不是字节、
+`.catch(() => "")` 把计时器的判定吞掉、`private` 被我读成了「按用户隔离」。它们全都编译过、测试过、浏览器里也看起来对;
+审查者做的事是把每一条防线的**语义**与它声称要挡的东西对了一遍。
 
 ## 失败处理
 
