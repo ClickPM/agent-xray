@@ -2,7 +2,7 @@
 
 <!-- 命名轮,先例见 rounds/round-bun / rounds/round-visitor;拆解以 ROUNDS.md 的「R-TITLE」段为准。 -->
 
-> 状态:代码与审查已收口,待合并 `main`;验收 #1 / #7 交接 130 预发实测
+> 状态:代码与审查已收口,已合并 `main`(2026-09-02,与 R-WEBSEARCH 合流,迁移改号 009);验收 #1 / #7 交接 130 预发实测
 
 ## 目标
 

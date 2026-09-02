@@ -805,6 +805,243 @@ export async function deleteProvider(provider: string): Promise<{ defaultRemains
   });
 }
 
+// ───────────────────── websearch provider(R-WEBSEARCH)─────────────────────
+//
+// 与上面的 LLM provider 同构:同一把 `ConfigEncryptionKey`、同一个掩码口径、
+// 同一套「省略即保留」的部分更新、同一种 advisory lock 串行化。
+// **刻意没有合表**——理由写在迁移 008 里(列集合只是碰巧相似;合表会把
+// 「唯一默认」的部分唯一索引变成「每个 kind 唯一默认」,那是最容易写错的地方)。
+
+export interface WebSearchProviderRow {
+  provider: string;
+  baseUrl: string;
+  /** **掩码**,不是明文(docs/security.md §3) */
+  apiKeyHint: string;
+  modelId: string;
+  toolType: string;
+  totalTimeoutMs: number;
+  idleTimeoutMs: number;
+  dailySearchLimit: number;
+  isDefault: boolean;
+  /** epoch ms */
+  updatedAt: number;
+}
+
+/** 只回掩码。明文 key 在本模块之外没有任何读路径。 */
+export async function listWebSearchProviders(): Promise<WebSearchProviderRow[]> {
+  return db.rawQueryAll<WebSearchProviderRow>(
+    `SELECT provider, base_url AS "baseUrl", api_key_hint AS "apiKeyHint",
+            model_id AS "modelId", tool_type AS "toolType",
+            total_timeout_ms::double precision   AS "totalTimeoutMs",
+            idle_timeout_ms::double precision    AS "idleTimeoutMs",
+            daily_search_limit::double precision AS "dailySearchLimit",
+            is_default AS "isDefault",
+            ${ms("updated_at", "updatedAt")}
+       FROM websearch_config
+      ORDER BY is_default DESC, provider`,
+  );
+}
+
+export interface UpsertWebSearchProviderInput {
+  provider: string;
+  apiKey?: string;
+  /** 已在 tools 层过 `checkBaseUrl`;这里不再重复校验(判据只有一份) */
+  baseUrl?: string;
+  modelId?: string;
+  toolType?: string;
+  totalTimeoutMs?: number;
+  idleTimeoutMs?: number;
+  dailySearchLimit?: number;
+  makeDefault: boolean;
+}
+
+/**
+ * 两个超时的列默认值。**必须与迁移 008 的 `DEFAULT` 一字不差** ——
+ * 它们在这里只为一件事:算出「这次 upsert 之后生效的值是多少」,好在写入前
+ * 判掉 `idle > total`(见 `upsertWebSearchProvider`)。
+ *
+ * 重复一份常量是有代价的,所以这条一致性由测试钉住,而不是靠注释提醒
+ * (`mcp.test.ts` 从 `information_schema.columns` 读列默认值比对)。
+ */
+export const DEFAULT_TOTAL_TIMEOUT_MS = 180_000;
+export const DEFAULT_IDLE_TIMEOUT_MS = 45_000;
+
+/** 与 `LLM_CONFIG_LOCK` 同款、不同键:两张表的「唯一默认」互不相干,别共用一把锁。 */
+const WEBSEARCH_CONFIG_LOCK = 0x77736331; // 'wsc1'
+async function lockWebSearchProviders(tx: Transaction): Promise<void> {
+  await tx.rawExec(`SELECT pg_advisory_xact_lock($1)`, WEBSEARCH_CONFIG_LOCK);
+}
+
+export async function upsertWebSearchProvider(
+  input: UpsertWebSearchProviderInput,
+  encryptionKeyB64: string,
+): Promise<{ created: boolean; apiKeyHint: string; isDefault: boolean }> {
+  return inTransaction(async (tx) => {
+    await lockWebSearchProviders(tx);
+    const existing = await tx.rawQueryRow<{
+      provider: string;
+      apiKeyHint: string;
+      totalTimeoutMs: number;
+      idleTimeoutMs: number;
+    }>(
+      `SELECT provider, api_key_hint AS "apiKeyHint",
+              total_timeout_ms::double precision AS "totalTimeoutMs",
+              idle_timeout_ms::double precision  AS "idleTimeoutMs"
+         FROM websearch_config WHERE provider = $1`,
+      input.provider,
+    );
+    // 建行时没有「保留原值」可言。**baseUrl 也在必给之列**(与 llm_config 的差别):
+    // 那边省略 base_url 会回落到 pi 内置 provider 的默认端点,这边没有内置端点。
+    if (!existing) {
+      for (const [field, value] of [
+        ["apiKey", input.apiKey],
+        ["baseUrl", input.baseUrl],
+        ["modelId", input.modelId],
+      ] as const) {
+        if (value === undefined) {
+          throw new NotFoundError(
+            `websearch provider ${input.provider} 尚未配置,首次写入必须提供 ${field}`,
+          );
+        }
+      }
+    }
+
+    // 【跨字段约束在这里判,不留给库的 CHECK】库那条 CHECK 是最后一道闸,但它撞上来
+    // 只会变成一句「操作失败,详见服务端日志」(见 tools.ts 的 `write`)——
+    // 而这是一个所有者**改一个数就能自己解决**的输入错误,应当直接说清楚。
+    // 生效值 = 本次给的 ?? 库里的 ?? 列默认值(默认值的唯一真相在迁移 008)。
+    const effTotal = input.totalTimeoutMs ?? existing?.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS;
+    const effIdle = input.idleTimeoutMs ?? existing?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+    if (effIdle > effTotal) {
+      throw new ConflictError(
+        `idleTimeoutMs(${effIdle})不能大于 totalTimeoutMs(${effTotal});` +
+          "空闲上限大于总上限时空闲计时器永远不会先触发",
+      );
+    }
+
+    if (input.makeDefault) {
+      await tx.rawExec(
+        `UPDATE websearch_config SET is_default = FALSE, updated_at = now()
+          WHERE is_default AND provider <> $1`,
+        input.provider,
+      );
+    }
+
+    const hint = input.apiKey === undefined ? existing!.apiKeyHint : maskSecret(input.apiKey);
+
+    if (existing) {
+      const sets: string[] = [];
+      const params: (string | number | boolean | Buffer | null)[] = [input.provider];
+      const set = (col: string, value: string | number | boolean | Buffer | null) => {
+        params.push(value);
+        sets.push(`${col} = $${params.length}`);
+      };
+      if (input.apiKey !== undefined) {
+        set("api_key_enc", encryptSecret(encryptionKeyB64, input.apiKey));
+        set("api_key_hint", hint);
+      }
+      if (input.baseUrl !== undefined) set("base_url", input.baseUrl);
+      if (input.modelId !== undefined) set("model_id", input.modelId);
+      if (input.toolType !== undefined) set("tool_type", input.toolType);
+      if (input.totalTimeoutMs !== undefined) set("total_timeout_ms", input.totalTimeoutMs);
+      if (input.idleTimeoutMs !== undefined) set("idle_timeout_ms", input.idleTimeoutMs);
+      if (input.dailySearchLimit !== undefined) set("daily_search_limit", input.dailySearchLimit);
+      if (input.makeDefault) sets.push("is_default = TRUE");
+      sets.push("updated_at = now()");
+      await tx.rawExec(
+        `UPDATE websearch_config SET ${sets.join(", ")} WHERE provider = $1`,
+        ...params,
+      );
+    } else {
+      // 三个可选参数省略时交给列默认值(180s / 45s / 不限),不在这里复述数字:
+      // 默认值只该有一处真相,而那处是迁移 008。
+      const cols = ["provider", "base_url", "api_key_enc", "api_key_hint", "model_id", "is_default"];
+      const vals: (string | number | boolean | Buffer)[] = [
+        input.provider,
+        input.baseUrl!,
+        encryptSecret(encryptionKeyB64, input.apiKey!),
+        hint,
+        input.modelId!,
+        input.makeDefault,
+      ];
+      const optional: Array<[string, number | string | undefined]> = [
+        ["tool_type", input.toolType],
+        ["total_timeout_ms", input.totalTimeoutMs],
+        ["idle_timeout_ms", input.idleTimeoutMs],
+        ["daily_search_limit", input.dailySearchLimit],
+      ];
+      for (const [col, value] of optional) {
+        if (value === undefined) continue;
+        cols.push(col);
+        vals.push(value);
+      }
+      await tx.rawExec(
+        `INSERT INTO websearch_config (${cols.join(", ")}, updated_at)
+         VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")}, now())`,
+        ...vals,
+      );
+    }
+
+    // 第一个配好的 provider 自动成为默认(与 llm_config 同款,同一个理由:
+    // 「配了却还是不能用」会是个只有读过代码才知道原因的坑)
+    await tx.rawExec(
+      `UPDATE websearch_config SET is_default = TRUE, updated_at = now()
+        WHERE provider = $1 AND NOT EXISTS (SELECT 1 FROM websearch_config WHERE is_default)`,
+      input.provider,
+    );
+
+    const after = await tx.rawQueryRow<{ isDefault: boolean }>(
+      `SELECT is_default AS "isDefault" FROM websearch_config WHERE provider = $1`,
+      input.provider,
+    );
+    return { created: !existing, apiKeyHint: hint, isDefault: after?.isDefault ?? false };
+  });
+}
+
+export async function setDefaultWebSearchProvider(provider: string): Promise<void> {
+  await inTransaction(async (tx) => {
+    await lockWebSearchProviders(tx);
+    const exists = await tx.rawQueryRow<{ provider: string }>(
+      `SELECT provider FROM websearch_config WHERE provider = $1`,
+      provider,
+    );
+    if (!exists) throw new NotFoundError(`websearch provider ${provider} 未配置`);
+    await tx.rawExec(
+      `UPDATE websearch_config SET is_default = FALSE WHERE is_default AND provider <> $1`,
+      provider,
+    );
+    await tx.rawExec(
+      `UPDATE websearch_config SET is_default = TRUE, updated_at = now() WHERE provider = $1`,
+      provider,
+    );
+  });
+}
+
+/**
+ * 删 websearch provider。删掉默认的那个之后 `web_search` 工具**下一轮就不再注册**
+ * (`loadEnabledTools` 读不到配置就丢弃),站点其余部分不受影响 ——
+ * 与删 LLM provider 会让整站不能对话不是一回事,所以这里不需要那种警告。
+ */
+export async function deleteWebSearchProvider(
+  provider: string,
+): Promise<{ defaultRemains: boolean }> {
+  return inTransaction(async (tx) => {
+    // 与 deleteProvider 同款:advisory lock 不像 FOR UPDATE 那样保护既有行不被
+    // 别的事务 DELETE,不加的话一次并发删除能插进 upsert 的「读 existing」与
+    // 「UPDATE」之间,让那次 UPDATE 影响 0 行而 MCP 照样回成功。
+    await lockWebSearchProviders(tx);
+    const done = await tx.rawQueryRow<{ provider: string }>(
+      `DELETE FROM websearch_config WHERE provider = $1 RETURNING provider`,
+      provider,
+    );
+    if (!done) throw new NotFoundError(`websearch provider ${provider} 未配置`);
+    const left = await tx.rawQueryRow<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM websearch_config WHERE is_default`,
+    );
+    return { defaultRemains: (left?.n ?? 0) > 0 };
+  });
+}
+
 // ───────────────────── 工具启停 ─────────────────────
 
 export interface ToolConfigRow {

@@ -5,9 +5,11 @@
 // 「以 agent_ro 连接尝试写库必须失败」与「超限路径有明确拒绝行为」两条,
 // 就是下面 `第 2 层` 与 `第 4 层` 两个 describe。
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { encryptSecret } from "../shared/crypto";
 import { db } from "./db";
 import { queryAsAgentRo } from "./ro-db";
 import { checkQuota, recordUsage } from "./quota";
+import { configEncryptionKey } from "./secrets";
 import {
   loadEnabledTools,
   snippetAround,
@@ -15,6 +17,7 @@ import {
   SESSION_RENAME_TOOL,
   SESSION_TOOL_REGISTRY,
   TOOL_REGISTRY,
+  WEB_SEARCH_TOOL_NAME,
 } from "./tools";
 import { appendMessage, createSession } from "./store";
 
@@ -22,6 +25,34 @@ import { appendMessage, createSession } from "./store";
 const SEED_TOOLS = ["notes_list_series", "notes_get_chapter", "notes_search"];
 /** 迁移 009 种下的会话绑定工具。**复原时不能漏**:漏了等于把默认开启的命名工具关掉。 */
 const SEED_SESSION_TOOLS = [SESSION_RENAME_TOOL];
+
+/**
+ * 复原迁移 006/008/009 的种子(三个只读工具 = 开,`web_search` = 关,`session_rename` = 开)。
+ * 不复原的话,本文件跑完会让本地开发库少掉那几行 —— 表现是「跑过一次测试之后
+ * 本机 agent 就没有工具了」,而没有任何东西会报错。
+ */
+async function restoreToolSeeds() {
+  await db.exec`DELETE FROM tool_config`;
+  for (const name of SEED_TOOLS) {
+    await db.rawExec(
+      `INSERT INTO tool_config (name, enabled, dangerous, note) VALUES ($1, TRUE, FALSE, 'R7 只读工具组')
+       ON CONFLICT (name) DO NOTHING`,
+      name,
+    );
+  }
+  await db.rawExec(
+    `INSERT INTO tool_config (name, enabled, dangerous, note)
+     VALUES ('web_search', FALSE, FALSE, 'R-WEBSEARCH 外呼工具')
+     ON CONFLICT (name) DO NOTHING`,
+  );
+  for (const name of SEED_SESSION_TOOLS) {
+    await db.rawExec(
+      `INSERT INTO tool_config (name, enabled, dangerous, note) VALUES ($1, TRUE, FALSE, 'R-TITLE 会话绑定工具')
+       ON CONFLICT (name) DO NOTHING`,
+      name,
+    );
+  }
+}
 
 async function seedNotes() {
   await db.exec`DELETE FROM notes_chapters`;
@@ -45,24 +76,7 @@ describe("第 1 层 · 工具白名单", () => {
     await db.exec`DELETE FROM tool_config`;
   });
 
-  afterAll(async () => {
-    // 复原迁移 006 / 009 的种子,免得影响随后跑的文件与本地开发库
-    await db.exec`DELETE FROM tool_config`;
-    for (const name of SEED_TOOLS) {
-      await db.rawExec(
-        `INSERT INTO tool_config (name, enabled, dangerous, note) VALUES ($1, TRUE, FALSE, 'R7 只读工具组')
-         ON CONFLICT (name) DO NOTHING`,
-        name,
-      );
-    }
-    for (const name of SEED_SESSION_TOOLS) {
-      await db.rawExec(
-        `INSERT INTO tool_config (name, enabled, dangerous, note) VALUES ($1, TRUE, FALSE, 'R-TITLE 会话绑定工具')
-         ON CONFLICT (name) DO NOTHING`,
-        name,
-      );
-    }
-  });
+  afterAll(restoreToolSeeds);
 
   it("两张注册表里只有三个只读工具 + 一个会话绑定工具,执行类工具根本不存在", () => {
     expect(Object.keys(TOOL_REGISTRY).sort()).toEqual([...SEED_TOOLS].sort());
@@ -127,6 +141,101 @@ describe("第 1 层 · 工具白名单", () => {
     );
     const b = await loadEnabledTools();
     expect(a.fingerprint).not.toBe(b.fingerprint);
+  });
+});
+
+describe("第 1 层 · 外呼组 web_search 的注册闸(R-WEBSEARCH)", () => {
+  async function enableWebSearch() {
+    await db.exec`DELETE FROM tool_config`;
+    await db.rawExec(
+      `INSERT INTO tool_config (name, enabled, dangerous) VALUES ('web_search', TRUE, FALSE)`,
+    );
+  }
+
+  async function configureProvider(over: { baseUrl?: string; modelId?: string } = {}) {
+    await db.exec`DELETE FROM websearch_config`;
+    await db.rawExec(
+      `INSERT INTO websearch_config
+         (provider, base_url, api_key_enc, api_key_hint, model_id, is_default)
+       VALUES ('deepseek', $1, $2, 'sk-…test', $3, TRUE)`,
+      over.baseUrl ?? "https://api.deepseek.com",
+      encryptSecret(configEncryptionKey(), "sk-fake-key-for-tests-0001"),
+      over.modelId ?? "deepseek-v4-flash",
+    );
+  }
+
+  beforeEach(async () => {
+    await db.exec`DELETE FROM websearch_config`;
+  });
+
+  afterAll(async () => {
+    await db.exec`DELETE FROM websearch_config`;
+    await restoreToolSeeds();
+  });
+
+  it("开着开关但没配 provider → 丢弃,不注册一个必然失败的工具", async () => {
+    await enableWebSearch();
+    const enabled = await loadEnabledTools();
+    expect(enabled.names).toEqual([]);
+    expect(enabled.definitions).toEqual([]);
+  });
+
+  it("配好 provider 之后才注册,且工具形状对得上", async () => {
+    await enableWebSearch();
+    await configureProvider();
+    const enabled = await loadEnabledTools();
+    expect(enabled.names).toEqual([WEB_SEARCH_TOOL_NAME]);
+    const [def] = enabled.definitions;
+    expect(def.name).toBe(WEB_SEARCH_TOOL_NAME);
+    // 【访客控不到网络原语】参数面只有一个 query,additionalProperties 关死:
+    // 任何形如 url / host / headers 的入参都进不来(docs/security.md §1 外呼组约束 1)
+    const params = def.parameters as unknown as {
+      properties: Record<string, unknown>;
+      required: string[];
+      additionalProperties: boolean;
+    };
+    expect(Object.keys(params.properties)).toEqual(["query"]);
+    expect(params.required).toEqual(["query"]);
+    expect(params.additionalProperties).toBe(false);
+  });
+
+  it("配好 provider 但开关是关的 → 不注册(两道闸都要过)", async () => {
+    await db.exec`DELETE FROM tool_config`;
+    await db.rawExec(
+      `INSERT INTO tool_config (name, enabled, dangerous) VALUES ('web_search', FALSE, FALSE)`,
+    );
+    await configureProvider();
+    expect((await loadEnabledTools()).names).toEqual([]);
+  });
+
+  it("**改 websearch 配置会改变指纹**(否则「改了不生效」:端点被闭包定格在旧会话里)", async () => {
+    await enableWebSearch();
+    await configureProvider();
+    const a = await loadEnabledTools();
+    await configureProvider({ modelId: "deepseek-v4-pro" });
+    const b = await loadEnabledTools();
+    expect(a.names).toEqual(b.names); // 名字一模一样
+    expect(a.fingerprint).not.toBe(b.fingerprint); // 但配置变了,会话要重建
+  });
+
+  it("密文解不开时只丢这一个工具,不影响其余工具", async () => {
+    await db.exec`DELETE FROM tool_config`;
+    for (const name of ["web_search", "notes_search"]) {
+      await db.rawExec(
+        `INSERT INTO tool_config (name, enabled, dangerous) VALUES ($1, TRUE, FALSE)`,
+        name,
+      );
+    }
+    await db.exec`DELETE FROM websearch_config`;
+    // 用另一把密钥加密 = 运行期解不开(等价于 ConfigEncryptionKey 被换过)
+    await db.rawExec(
+      `INSERT INTO websearch_config
+         (provider, base_url, api_key_enc, api_key_hint, model_id, is_default)
+       VALUES ('broken', 'https://api.deepseek.com', $1, 'sk-…brok', 'm', TRUE)`,
+      encryptSecret(Buffer.alloc(32, 3).toString("base64"), "sk-unreadable"),
+    );
+    const enabled = await loadEnabledTools();
+    expect(enabled.names).toEqual(["notes_search"]);
   });
 });
 

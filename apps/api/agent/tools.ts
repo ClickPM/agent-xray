@@ -2,13 +2,20 @@
 //
 // 三条不可退让的性质,改这个文件前先读一遍:
 //
-//   1. **纯函数**。工具实现只做一件事:经 `queryAsAgentRo` 读 notes 三张表。
-//      不碰文件系统、不 spawn 进程、不读 process.env、不做动态 import、不发任何网络请求。
-//      连接串 / 凭据在这里根本不存在,因而也无从泄漏。
-//      **唯一的例外是 R-TITLE 的 `session_rename`**(docs/security.md §1 第 1/2 层补记):
-//      它经 `setSessionTitleAsAgent` 写库 —— 只写 `sessions` 的 title / title_source 两列、
-//      只写**闭包绑定的那一行会话**(会话 id 不是入参,模型表达不出「改别人的标题」),
-//      写面由 Postgres 的列级授权强制(迁移 009)。上面另外五项对它照常成立。
+//   1. **工具分两组,组内的性质不同,组的边界不许模糊**(R-WEBSEARCH 起,
+//      docs/security.md §1「工具分两组」):
+//        · **纯函数组**(`notes_*`)——只做一件事:经 `queryAsAgentRo` 读 notes 三张表。
+//          不碰文件系统、不 spawn 进程、不读 process.env、不做动态 import、
+//          **不发任何网络请求**。连接串 / 凭据在这里根本不存在,因而也无从泄漏。
+//        · **外呼组**(`web_search`)——持服务端凭据、只打**目标域白名单**内的固定端点。
+//          文件系统 / 子进程 / 动态 import 同样禁止;访客控得到的只有一个 `query` 字段,
+//          控不到 URL / host / headers / model(实现在 `websearch.ts`)。
+//          它**不是**从注册表里查出来的:没有配置就构造不出来,见 `makeWebSearchTool`。
+//        · **会话绑定组**(`session_rename`,R-TITLE;docs/security.md §1 第 1/2 层补记)——
+//          既不是纯函数也不外呼:它经 `setSessionTitleAsAgent` 写库,只写 `sessions` 的
+//          title / title_source 两列、只写**闭包绑定的那一行会话**(会话 id 不是入参,
+//          模型表达不出「改别人的标题」),写面由 Postgres 的列级授权强制(迁移 009)。
+//          文件系统 / 子进程 / process.env / 动态 import / 网络照常全部禁止。
 //   2. **注册集合由 `tool_config` 表决定**,但表里只能「开关已实现的工具」,
 //      不能凭名字长出工具:未知名字在 `loadEnabledTools` 被丢弃并记日志。
 //      bash / write / 任意代码执行类工具在本注册表里**不存在**,这是 CLAUDE.md 规则 9
@@ -26,8 +33,11 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Transaction } from "encore.dev/storage/sqldb";
 import { safeErrorText } from "../shared/redact";
 import { db } from "./db";
+import { reserveSearch } from "./quota";
 import { queryAsAgentRo } from "./ro-db";
 import { setSessionTitleAsAgent } from "./title-db";
+import { runWebSearch, WebSearchError } from "./websearch";
+import { loadActiveWebSearchConfig, type ActiveWebSearchConfig } from "./websearch-config";
 
 /** 单个工具结果的字符上限。超出截断并显式标注,不静默丢尾巴。 */
 const MAX_RESULT_CHARS = 8_000;
@@ -86,6 +96,24 @@ const TOOL_FAILURE_TEXT = "查询失败,请稍后再试或换个问法。";
 const TITLE_FAILURE_TEXT = "标题没能保存,不必重试,请继续回答访客的问题。";
 
 /**
+ * 允许**原样**交给模型的失败文案。
+ *
+ * 只用于「这次失败本身就是一条正常的业务结论」——今日搜索额度用尽、外呼超时。
+ * 文案由本文件写死的常量提供,**永远不含上游细节**,所以它与 `TOOL_FAILURE_TEXT`
+ * 的安全性质完全相同,区别只在于它能让模型选一条更好的后路
+ * (「不能联网了,那就用已有知识回答」而不是「重试一次同样的查询」)。
+ *
+ * 【为什么要一个专门的类型,而不是让 web_search 绕开 `guarded`】绕开就意味着
+ * 那个工具的异常兜底要自己再写一遍,而这正是「漏一处没人会发现」的那类事情。
+ */
+class ToolRefusal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ToolRefusal";
+  }
+}
+
+/**
  * 工具执行的统一兜底:**换掉错误内容,但保留「这是一次失败」这个事实**。
  *
  * 两条都要成立,少一条就错:
@@ -108,6 +136,9 @@ async function guarded(
   try {
     return await run();
   } catch (err) {
+    // 我们自己写死的文案直接放行(仍走 throw,`isError` 仍是 true);
+    // 它已经在抛出点记过日志,这里不重复记。
+    if (err instanceof ToolRefusal) throw err;
     console.error(`tool ${tool} failed: ${safeErrorText(err)}`);
     throw new Error(failureText);
   }
@@ -338,10 +369,137 @@ export function snippetAround(content: string, pos: number, width = SNIPPET_CHAR
   return `${start > 0 ? "…" : ""}${raw}${end < content.length ? "…" : ""}`;
 }
 
+// ───────────────────── 外呼组:web_search ─────────────────────
+
+export const WEB_SEARCH_TOOL_NAME = "web_search";
+
+/** 访客(经模型)能塞进来的最长查询。它只会落进请求体的一个字段,见 websearch.ts。 */
+const MAX_QUERY_CHARS = 300;
+
+/** 单条来源的标题 / URL 截断长度(来源块整体还要给正文让位,见 execute)。 */
+const MAX_CITATION_TITLE = 80;
+const MAX_CITATION_URL = 300;
+
 /**
- * 已实现的**无状态**工具注册表。同一份定义被所有会话共用,实现里没有任何会话上下文。
+ * 三条**写死**的失败文案(经 `ToolRefusal` 原样交给模型)。
+ * 不含任何上游细节,但把「该走哪条后路」说清楚 —— 否则模型的默认反应是
+ * 用同一个查询再搜一次,而那三种情形里重试都不会变好。
+ */
+const SEARCH_QUOTA_TEXT = "今日联网搜索次数已用完,本轮无法联网;请基于已有知识回答,并说明这一点。";
+const SEARCH_TIMEOUT_TEXT = "联网搜索超时,本轮没有拿到结果;请基于已有知识回答,并说明这一点。";
+const SEARCH_FAILURE_TEXT = "联网搜索失败,本轮没有拿到结果;请基于已有知识回答,并说明这一点。";
+
+/**
+ * 构造 `web_search` 工具。
  *
- * `tool_config` 里出现任何既不在本表、也不在 `SESSION_TOOL_REGISTRY` 里的名字,
+ * 【为什么是工厂而不是 `TOOL_REGISTRY` 里的一个常量】它需要凭据、端点、超时与限额 ——
+ * 而那些只有读了库才知道。做成常量就只剩两条路:要么在工具体里读库解密
+ * (工具体从此不再是可测的纯逻辑,且每次调用都解一次密),要么放一个模块级可变量
+ * (于是「当前用的是哪份配置」变成一个没人说得清的进程状态)。工厂把配置**定格在
+ * 会话创建那一刻**,与 pi「工具白名单在 createAgentSession 时定格」的语义正好对齐:
+ * 配置变了就换一份指纹,会话下一轮被重建(见 `loadEnabledTools` 与 runtime.ts)。
+ *
+ * 明文 key 只活在这个闭包里:不进日志、不进事件流、不进任何返回值。
+ */
+function makeWebSearchTool(cfg: ActiveWebSearchConfig): ToolDefinition {
+  return {
+    name: WEB_SEARCH_TOOL_NAME,
+    label: "联网搜索",
+    description:
+      "联网搜索并返回一段带来源的简明答案(由搜索网关在服务端执行检索与综述)。" +
+      "适合问「最新 / 现在 / 今年」这类超出你已有知识的问题;本站教程库的内容请用 notes_search,不要用本工具。" +
+      "只接受一个自然语言查询,不能指定网址、不能抓取指定页面。",
+    promptSnippet: "web_search —— 联网搜索时事与站外资料(有每日次数上限,省着用)",
+    // 【别在这里加 `promptGuidelines`】(codex 初审 P1)它与 `promptSnippet` 一样,
+    // 只在 pi 拼**默认**系统提示词时才会被用到;而本仓库走的是 `systemPromptOverride`,
+    // 那是**整体替换**(pi 的 resource-loader:`override ? override(base) : base`,
+    // 我们的实现忽略入参),base 里那两节根本不会送达。
+    // 注入防御与用法约束因此写在 `runtime.ts` 的 `systemPromptFor` 里 ——
+    // 放在一个不会被送达的字段里,比不放更糟:它看起来已经做了。
+    // (本对象的 `description` 不受影响:那个走 API 请求的 tools 数组。)
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          minLength: 2,
+          maxLength: MAX_QUERY_CHARS,
+          description: "自然语言查询;不要放网址",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+    async execute(_toolCallId, params, signal, onUpdate) {
+      const { query } = params as { query: string };
+      return guarded(WEB_SEARCH_TOOL_NAME, async () => {
+        // 【先占额,再外呼】docs/security.md §1 第 4 层。占不到就明确告诉模型
+        // 「今天不能联网了」,而不是让它以为是一次偶发失败去重试。
+        if (!(await reserveSearch(cfg.dailySearchLimit))) {
+          console.warn(
+            `tool web_search denied: daily search limit reached (limit=${cfg.dailySearchLimit})`,
+          );
+          throw new ToolRefusal(SEARCH_QUOTA_TEXT);
+        }
+
+        let outcome;
+        try {
+          outcome = await runWebSearch(query, cfg, {
+            // 会话被回收 / 本轮被取消时,外呼要跟着断,别让一个没人要的请求
+            // 继续占着上游额度与本进程的一个 socket
+            signal,
+            // 右栏可见性:阶段上报经 pi 的 onUpdate 变成 `tool_execution_update`
+            // 事件(34 事件之一,已在 events.ts 白名单里),Timeline 因而能画出
+            // 「发起 → 检索 → 综述」而不是一行卡三分钟的 tool_execution_start。
+            onProgress: onUpdate
+              ? (p) =>
+                  onUpdate({
+                    content: [{ type: "text", text: `[${p.phase}] ${p.detail}` }],
+                    details: { phase: p.phase },
+                  })
+              : undefined,
+          });
+        } catch (err) {
+          if (err instanceof WebSearchError) {
+            // 上游状态码 / 响应体 / 错误原文只到这里为止(且已过 safeErrorText)
+            console.error(`tool web_search failed (${err.kind}): ${safeErrorText(err.message)}`);
+            const timedOut = err.kind === "idle_timeout" || err.kind === "total_timeout";
+            throw new ToolRefusal(timedOut ? SEARCH_TIMEOUT_TEXT : SEARCH_FAILURE_TEXT);
+          }
+          throw err; // AbortError 等交给 guarded 兜底
+        }
+
+        // 来源块先算好,再把正文截到「剩下的额度」——反过来写的话,
+        // `capText` 会从尾部砍掉整个来源列表,而来源正是这个工具最有价值的产出。
+        const sources =
+          outcome.citations.length > 0
+            ? `\n\n来源:\n${outcome.citations
+                .map(
+                  (c, i) =>
+                    `${i + 1}. ${truncateTo(c.title, MAX_CITATION_TITLE) || "(无标题)"} — ${truncateTo(c.url, MAX_CITATION_URL)}`,
+                )
+                .join("\n")}`
+            : "";
+        const body = capText(outcome.text, Math.max(200, MAX_RESULT_CHARS - sources.length));
+        return textResult(`${body}${sources}`, {
+          provider: cfg.provider,
+          model: cfg.modelId,
+          citations: outcome.citations.length,
+        });
+      });
+    },
+  };
+}
+
+function truncateTo(s: string, max: number): string {
+  const t = s.trim();
+  return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
+
+/**
+ * **纯函数组**的注册表。外呼组不在这里(它构造不出常量,见 `makeWebSearchTool`),
+ * 会话绑定组也不在这里(要等建会话时绑定会话 id,见 `SESSION_TOOL_REGISTRY`)。
+ * 三处合起来才是全部:`tool_config` 里出现任何不在这三处的名字,
  * 都只会被丢弃并记日志。新增工具 = 改这个文件 + 发一次版,不是改一行配置。
  */
 export const TOOL_REGISTRY: Readonly<Record<string, ToolDefinition>> = Object.freeze({
@@ -490,6 +648,13 @@ export interface EnabledTools {
   /** 其中需要绑定会话上下文的工具名;实现由 `buildSessionTools` 在建会话时构造 */
   sessionScoped: string[];
   /** 集合变了就要重建会话(会话的工具集在创建时定格),判据是这个值 */
+  /**
+   * 集合变了就要重建会话(会话的工具集在创建时定格),判据是这个值。
+   *
+   * **不只是名字列表**:`web_search` 的端点 / key / 超时 / 限额被 `makeWebSearchTool`
+   * 定格在闭包里,名字没变而配置变了同样需要重建 —— 所以 websearch 的配置指纹
+   * 也拼在这里。漏了它的表现是「经 MCP 换了搜索端点,已有会话还在打旧的」。
+   */
   fingerprint: string;
 }
 
@@ -526,8 +691,9 @@ let lastLoggedFingerprint: string | undefined;
  * 读 `tool_config` 决定本次会话注册哪些工具。
  *
  * 两道过滤,顺序不能反:
- *   1. **名字必须在两张注册表之一里**(无状态的 `TOOL_REGISTRY` 或会话绑定的
- *      `SESSION_TOOL_REGISTRY`)。表是所有者可写的,而「凭一个名字就注册一个工具」
+ *   1. **名字必须落在三处之一**(无状态的 `TOOL_REGISTRY`、会话绑定的
+ *      `SESSION_TOOL_REGISTRY`,或外呼组的 `web_search` —— 它不在任何表里,由 `makeWebSearchTool`
+ *      按配置构造)。表是所有者可写的,而「凭一个名字就注册一个工具」
  *      这件事根本不存在 —— 落到这里的未知名字只会被丢掉。
  *   2. **dangerous 行需要服务器 env 双闸**。表里置 true 只是第一闸;
  *      没有 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 就不注册(docs/security.md §1 第 1 层)。
@@ -540,18 +706,29 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
     `SELECT name, dangerous FROM tool_config WHERE enabled ORDER BY name`,
   );
   const unlocked = process.env[DANGEROUS_UNLOCK_ENV] === "1";
+
+  // 【只在真的要用时才读 websearch 配置】关着的时候多打一次库、多解一次密,
+  // 都是白花的 —— 而且解密失败会记一行与当前配置无关的错误日志。
+  // 这里连 dangerous 闸一起判:被闸住的话这个名字后面本来就会被丢掉。
+  const webSearchRow = rows.find((r) => r.name === WEB_SEARCH_TOOL_NAME);
+  const webCfg =
+    webSearchRow && !(webSearchRow.dangerous && !unlocked)
+      ? await loadActiveWebSearchConfig()
+      : null;
+
   const names: string[] = [];
-  const stateless: string[] = [];
+  const definitions: ToolDefinition[] = [];
   const sessionScoped: string[] = [];
   const dropped: string[] = [];
   for (const row of rows) {
+    const isWebSearch = row.name === WEB_SEARCH_TOOL_NAME;
     // 【必须是 hasOwn 而不是 `in`】(codex 初审 P3)`in` 会走到 Object.prototype 上:
     // 一个叫 `constructor` 的行(`tool_config_set` 的 snake_case 校验放行它)会被判为
     // 「已实现」,然后把 `Object` 本身当工具定义塞进 customTools —— 那东西没有 execute。
     // 注册表是数据不是原型链。
     const isStateless = Object.hasOwn(TOOL_REGISTRY, row.name);
     const isSessionScoped = Object.hasOwn(SESSION_TOOL_REGISTRY, row.name);
-    if (!isStateless && !isSessionScoped) {
+    if (!isWebSearch && !isStateless && !isSessionScoped) {
       dropped.push(`${row.name}(未实现)`);
       continue;
     }
@@ -559,21 +736,36 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
       dropped.push(`${row.name}(dangerous,缺 ${DANGEROUS_UNLOCK_ENV}=1)`);
       continue;
     }
+    if (isWebSearch) {
+      // 【没配 provider 就不注册,而不是注册一个必然失败的工具】给模型一个
+      // 每次都失败的工具,只会让它反复重试、把轨迹刷满;而「这轮没有这个工具」
+      // 是一个模型天然就会处理的情形。配好之后指纹变化 → 会话下一轮重建。
+      if (!webCfg) {
+        dropped.push(`${row.name}(未配置 websearch provider)`);
+        continue;
+      }
+      names.push(row.name);
+      definitions.push(makeWebSearchTool(webCfg));
+      continue;
+    }
     names.push(row.name);
-    (isStateless ? stateless : sessionScoped).push(row.name);
+    if (isSessionScoped) {
+      // 实现要等建会话时绑定会话 id 才能构造(buildSessionTools),这里只记名字
+      sessionScoped.push(row.name);
+    } else {
+      definitions.push(TOOL_REGISTRY[row.name]);
+    }
   }
-  const fingerprint = names.join(",");
-  // 热路径每轮都会调一次,所以只在集合变化时记一行(含本次被丢弃的名字)
+
+  // 指纹 = 名字集合 + websearch 配置指纹(理由见 EnabledTools.fingerprint 的注释)
+  const fingerprint = `${names.join(",")}|ws:${webCfg?.fingerprint ?? "-"}`;
+  // 热路径每轮都会调一次,所以只在配置变化时记一行(含本次被丢弃的名字)。
+  // **日志里只出名字**:指纹含 websearch 配置的 sha256,刷进日志既没用又难读。
   if (lastLoggedFingerprint !== fingerprint) {
     lastLoggedFingerprint = fingerprint;
     console.log(
-      `agent tools enabled: [${fingerprint}]${dropped.length ? ` dropped: ${dropped.join(", ")}` : ""}`,
+      `agent tools enabled: [${names.join(",")}]${dropped.length ? ` dropped: ${dropped.join(", ")}` : ""}`,
     );
   }
-  return {
-    names,
-    definitions: stateless.map((n) => TOOL_REGISTRY[n]),
-    sessionScoped,
-    fingerprint,
-  };
+  return { names, definitions, sessionScoped, fingerprint };
 }
