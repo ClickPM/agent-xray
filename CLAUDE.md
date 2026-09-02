@@ -119,10 +119,12 @@ cd apps\web; npm run dev   # 前端 next dev :3000
   |---|---|---|---|
   | `xray-admin` | `127.0.0.1:4000/mcp`(本机) | `XRAY_MCP_TOKEN` | `apps/api/.secrets.local.cue` 的 `McpAuthTokenHash` |
   | `xray-admin-130` | `192.168.100.130/api/mcp`(预发) | `XRAY_MCP_TOKEN_130` | 130 上 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH` |
-  | `xray-admin-prod` | `https://kzgai.cloud/api/mcp`(生产) | `XRAY_MCP_TOKEN_PROD` | 生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH` |
+  | `xray-admin-prod` | `https://www.kzgai.cloud/api/mcp`(生产) | `XRAY_MCP_TOKEN_PROD` | 生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH` |
 
   用本机那个前先 `dev.ps1` 起后端。仓库里**只有哈希、没有 token 原文**,生成方式见 `deploy/.env.example`。首次使用需在 `claude` 里批准这三个项目级 MCP server。
-  **`xray-admin-prod` 在 R11 生产部署完成前连不上**(端点还不存在),会话启动时会看到一次 `ConnectionRefused` —— 这是预期,不是配置错。
+  **url 必须写规范主机名 `www.`**:裸域 `kzgai.cloud` 现在 301 跳到 www(R11),
+  而 MCP 客户端不跟随 POST 的重定向 —— 表现是 `requires re-authorization (token expired)`,
+  看起来像 token 坏了,实际是请求根本没到端点(2026-09-02 实测:同一把 token 直连 www 拿得到 28 个工具)。
 - **token 丢了不用慌,轮换即可**(2026-09-01 对 130 实测):服务端只存 sha256,原文不可恢复但可换。流程 = 本机按 `deploy/.env.example` 的 CSPRNG 口径生成新 token → 新哈希写进目标环境的 `MCP_AUTH_TOKEN_HASH` → **`docker compose up -d api` 重建容器**(env 变了 `restart` 不生效)。**`CONFIG_ENCRYPTION_KEY` 绝不能跟着换**,否则 `llm_config` 里的 key 密文全解不开、agent 直接停摆。
 - **注册了但对端不在时,只在会话启动时报一次错**,中途起服务不会自动重连(见下条)。
 - **`.mcp.json` 的改动要重启会话才生效**,而且 MCP client 连不上时只在会话启动时报一次 `ConnectionRefused`——中途起后端不会自动重连。急着用可以直接对 `/mcp` 发 JSON-RPC,但要带齐 2026-07-28 的逐请求契约(`Accept` 同时含 `application/json` 与 `text/event-stream`、`Mcp-Method` 头、`params._meta` 里的 `protocolVersion` 与 `clientCapabilities`;`tools/call` 再加 `Mcp-Name`,细节见 `apps/api/mcp/README.md`「三条容易改错的地方」第 3 条)。**不带 `params._meta` 时 handler 会静默落到 2025-11-25 的 legacy 无状态路径**:`tools/list` / `tools/call` 照常可用、响应变成 SSE 帧,而 `server/discover` 回 `-32601 Method not found`——这不是端点坏了,是请求走错了协议时代(2026-09-02 对 130 实测;R10 留证里带齐契约的 `server/discover` 是通的)。

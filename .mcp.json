@@ -26,7 +26,7 @@
     },
     "xray-admin-prod": {
       "type": "http",
-      "url": "https://kzgai.cloud/api/mcp",
+      "url": "https://www.kzgai.cloud/api/mcp",
       "headers": {
         "Authorization": "Bearer ${XRAY_MCP_TOKEN_PROD}"
       }
