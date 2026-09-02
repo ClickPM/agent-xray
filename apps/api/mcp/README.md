@@ -24,7 +24,7 @@
 | `endpoint.ts` | `api.raw` 入口。**先认证再交给 SDK**:未认证的请求不该有机会让服务端构造 server 实例、解析 JSON-RPC |
 | `auth.ts` | bearer 校验。服务端只存 sha256,比较走定长摘要的常数时间比较;失败一律同一句 `unauthorized` |
 | `server.ts` | `createMcpHandler` 装配(每请求一个 `McpServer` 实例)+ `toNodeHandler` 适配 |
-| `tools.ts` | 28 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
+| `tools.ts` | 32 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
 | `store.ts` | 全部 SQL。**明文 LLM key 不出本文件** |
 | `content.ts` | 入库前的派生:字数、章节内容哈希 |
 | `audit.ts` | `mcp_audit` 写入;永不 reject(审计是旁路,不能让已完成的写操作变成 500) |
@@ -33,7 +33,7 @@
 加解密原语在 `apps/api/shared/crypto.ts`——mcp(写)与 agent(读)两个服务都要用,
 按规则 5 由各自的 service 取好 secret 值再传进去,共享库里不出现 `secret()`。
 
-## 工具(28)
+## 工具(32)
 
 - notes 三张表 CRUD:分类 / 系列 / 章节。**入参即标准 markdown,server 只校验不改写**
 - 附件:`notes_asset_put` / `notes_asset_delete` / `notes_assets_list`。存 Postgres,
@@ -50,6 +50,11 @@
   `ConfigEncryptionKey`、只回掩码、部分更新、advisory lock),**多一道域白名单**:baseUrl 的 host
   必须在 `shared/websearch-hosts.ts` 的内置清单(或 env 追加项)之内,且 https、不带 query/fragment、
   不内嵌凭据 —— 写入时拒,agent 侧每次外呼前再校验一次
+- **imagegen provider(R-IMAGEGEN)**:`imagegen_providers_list` / `imagegen_provider_upsert` /
+  `imagegen_set_default` / `imagegen_provider_delete`。与 websearch 那组同构,白名单是**另一份**
+  (`shared/imagegen-hosts.ts`,判据实现与搜索共用 `shared/outbound-hosts.ts`);多两个字段:
+  `apiStyle`(`images` = `/v1/images/generations`;`chat` = `/v1/chat/completions` 的 data URL)与
+  `imageSize`(只对 images 形态生效,访客控不到)。配好之后同样要 `tool_config_set generate_image true`
 - 工具启停(`tool_config_list` / `tool_config_set`,高危工具双闸之一)
 - **访问统计(R8)**:`traffic_overview` / `traffic_paths` / `traffic_agents`,只读。
   数据来自 metrics 服务的 `POST /t` 打点;画板 3c 的 Traffic 页已随 `/admin` 废弃,

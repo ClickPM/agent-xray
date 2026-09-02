@@ -272,7 +272,8 @@ export namespace agent {
     /**
      * 工具分组 = 注册路径(docs/security.md §1「工具分两组」+ R-TITLE 补记的第三档):
      * pure     —— 在 `TOOL_REGISTRY`(纯函数组:只读 notes 三张表,不联网)
-     * outbound —— 经 `makeWebSearchTool` 构造(外呼组:持服务端凭据打白名单域)
+     * outbound —— 经 `makeWebSearchTool` / `makeGenerateImageTool` 构造(外呼组:持服务端凭据打白名单域;
+     * `generate_image` 同时按会话绑定,但它的**性质**是外呼 —— 分组按「凭据从哪来」判)
      * session  —— 在 `SESSION_TOOL_REGISTRY`(会话绑定组:闭包绑定会话 id,只写本会话标题)
      * 前端按这个值挑分组文案与颜色,**不按工具名**。
      */
@@ -310,6 +311,7 @@ export namespace agent {
             this.createSession = this.createSession.bind(this)
             this.deleteSession = this.deleteSession.bind(this)
             this.getSession = this.getSession.bind(this)
+            this.image = this.image.bind(this)
             this.listSessions = this.listSessions.bind(this)
             this.listTools = this.listTools.bind(this)
         }
@@ -387,6 +389,10 @@ export namespace agent {
                 rtn.visitorCookie = mustBeSet("Header `set-cookie`", resp.headers.getSetCookie()[0])
             }
             return rtn
+        }
+
+        public async image(method: "GET" | "HEAD", file: string, body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/agent/images/${encodeURIComponent(file)}`, body, options)
         }
 
         /**

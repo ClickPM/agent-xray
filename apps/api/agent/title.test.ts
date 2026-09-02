@@ -47,6 +47,7 @@ const RENAME_ONLY: EnabledTools = {
   names: [SESSION_RENAME_TOOL],
   definitions: [],
   sessionScoped: [SESSION_RENAME_TOOL],
+  imageGen: null,
   fingerprint: SESSION_RENAME_TOOL,
 };
 

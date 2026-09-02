@@ -174,3 +174,24 @@ export async function reserveSearch(dailySearchLimit: number): Promise<boolean> 
   );
   return row !== null;
 }
+
+/**
+ * 生图的每日张数闸(R-IMAGEGEN),与 `reserveSearch` 逐字同构:一条带条件的原子 UPSERT,
+ * 发起前扣、失败不退(超时 / 报错的生图照样消耗上游资源,退额等于让一个必然失败的
+ * 请求可以被无限重试)。计数在 `daily_quota.images`,上限在 `imagegen_config.daily_image_limit`。
+ *
+ * 不与 `searches` 合一列:两家上游、两种计价,合起来之后「限的是什么」就说不清了。
+ */
+export async function reserveImage(dailyImageLimit: number): Promise<boolean> {
+  const limit = Math.max(0, Math.round(dailyImageLimit));
+  const row = await db.rawQueryRow<{ images: number }>(
+    `INSERT INTO daily_quota (day, images) VALUES (${TODAY}, 1)
+     ON CONFLICT (day) DO UPDATE
+       SET images = daily_quota.images + 1,
+           updated_at = now()
+       WHERE $1 = 0 OR daily_quota.images < $1
+     RETURNING images::double precision AS "images"`,
+    limit,
+  );
+  return row !== null;
+}

@@ -22,7 +22,10 @@ import * as store from "./store";
 import { ConflictError, NotFoundError } from "./store";
 import { safeErrorText } from "../shared/redact";
 import { SITE_TZ_LABEL } from "../shared/site-time";
-// 域白名单的判据与 agent 侧是同一份实现(两个面不互相 import,故落在 shared/)
+// 域白名单的判据与 agent 侧是同一份实现(两个面不互相 import,故落在 shared/);
+// 搜索与生图各一份清单,刻意不合一(shared/imagegen-hosts.ts 文件头)
+import { allowedImageHosts, checkImageBaseUrl } from "../shared/imagegen-hosts";
+import { magicMatches } from "../shared/image-magic";
 import { allowedHosts, checkBaseUrl } from "../shared/websearch-hosts";
 
 /**
@@ -771,6 +774,133 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       }),
   );
 
+  // ───────────────────── imagegen provider(R-IMAGEGEN)─────────────────────
+  //
+  // 与 websearch provider 那组同构,白名单换成生图那份(`shared/imagegen-hosts.ts`,与搜索的
+  // 清单刻意分开)。多出来的两个字段:协议形态 apiStyle(images / chat)与尺寸 imageSize。
+
+  server.registerTool(
+    "imagegen_providers_list",
+    {
+      title: "列出生图 provider",
+      description:
+        "`generate_image` 工具打的生图网关配置。**key 只回掩码**(sk-…abcd),明文任何路径都拿不到。",
+      inputSchema: {},
+    },
+    async () =>
+      read("imagegen_providers_list", async () => ({
+        allowedHosts: allowedImageHosts(),
+        providers: (await store.listImageGenProviders()).map((p) => ({
+          ...p,
+          updatedAt: toIso(p.updatedAt),
+        })),
+      })),
+  );
+
+  server.registerTool(
+    "imagegen_provider_upsert",
+    {
+      title: "配置生图 provider",
+      description:
+        "配置 `generate_image` 工具打的生图端点。apiStyle 决定协议形态:`images` = OpenAI 图片接口" +
+        "(POST {baseUrl}/v1/images/generations,如 gpt-image-2);`chat` = 对话式生图" +
+        "(POST {baseUrl}/v1/chat/completions,图在 message.images 的 data URL 里,如 gemini-*-image 经兼容网关)。" +
+        "apiKey 加密入库,读回只给掩码。**baseUrl 的 host 必须在生图白名单内**(见 imagegen_providers_list 的 allowedHosts," +
+        "与搜索白名单是两份),且必须是 https、不带 query/fragment、不内嵌凭据。" +
+        "imageSize 只对 images 形态生效(如 1024x1024 / 1536x1024;省略或 auto = 用上游默认);访客控不到尺寸,一次一张。" +
+        "**部分更新:省略的字段一律保留库内原值**;首次配置必须给出 apiKey、baseUrl 与 modelId。" +
+        "第一个配好的 provider 自动成为默认。改动在下一轮生效(会话按配置指纹重建)。" +
+        "**注意**:配好之后还要 `tool_config_set{name:'generate_image', enabled:true}` 才会真正注册 —— 种子行默认是关的。",
+      inputSchema: {
+        provider: z
+          .string()
+          .regex(/^[a-z0-9][a-z0-9._-]{0,63}$/, "provider 是自取的标签,如 cliproxy-dmit / openai"),
+        apiKey: z.string().min(8).max(512).optional().describe("明文;省略 = 保留库内既有 key"),
+        // superRefine 而不是 refine 的函数形式 params:zod 4 静默忽略后者(见 websearch_provider_upsert)
+        baseUrl: z
+          .string()
+          .max(512)
+          .superRefine((v, ctx) => {
+            const r = checkImageBaseUrl(v);
+            if (!r.ok) ctx.addIssue({ code: "custom", message: `baseUrl 不可用:${r.reason}` });
+          })
+          .optional()
+          .describe("如 https://api.openai.com/v1;host 必须在生图白名单内(见 imagegen_providers_list)"),
+        modelId: z.string().min(1).max(128).optional().describe("如 gpt-image-2 / gemini-3.1-flash-image"),
+        apiStyle: z
+          .enum(["images", "chat"])
+          .optional()
+          .describe("协议形态,默认 images;gemini 系经 OpenAI 兼容网关用 chat"),
+        imageSize: z
+          .string()
+          .regex(/^(auto|[0-9]{3,4}x[0-9]{3,4})$/, "imageSize 需形如 1024x1024,或 auto")
+          .nullable()
+          .optional()
+          .describe("images 形态的 size 字段;null / auto = 不发,用上游默认;chat 形态忽略"),
+        totalTimeoutMs: z.number().int().min(10_000).max(300_000).optional().describe("总时长硬上限,默认 180000"),
+        idleTimeoutMs: z
+          .number()
+          .int()
+          .min(5_000)
+          .max(120_000)
+          .optional()
+          .describe("空闲超时(响应头到达后才计),默认 30000;不得大于 totalTimeoutMs"),
+        dailyImageLimit: z.number().int().min(0).optional().describe("每日生图张数上限;0 = 不限"),
+        makeDefault: z.boolean().default(false),
+      },
+    },
+    async (args) =>
+      // summary 里绝不能带 apiKey:审计表也是「读接口」的一种
+      write(
+        ctx,
+        "imagegen_provider_upsert",
+        `imagegen provider ${args.provider} model=${args.modelId ?? "(不变)"}`,
+        async () => {
+          const r = await store.upsertImageGenProvider(args, configEncryptionKey());
+          return {
+            provider: args.provider,
+            status: r.created ? "created" : "updated",
+            apiKeyHint: r.apiKeyHint,
+            isDefault: r.isDefault,
+          };
+        },
+      ),
+  );
+
+  server.registerTool(
+    "imagegen_set_default",
+    {
+      title: "切换默认生图 provider",
+      description: "默认 provider 就是 `generate_image` 工具实际打的端点。",
+      inputSchema: { provider: z.string().min(1).max(64) },
+    },
+    async (args) =>
+      write(ctx, "imagegen_set_default", `默认 imagegen provider → ${args.provider}`, async () => {
+        await store.setDefaultImageGenProvider(args.provider);
+        return { provider: args.provider, status: "default" };
+      }),
+  );
+
+  server.registerTool(
+    "imagegen_provider_delete",
+    {
+      title: "删除生图 provider",
+      description:
+        "删掉默认的那个之后,`generate_image` 工具**下一轮起不再注册**(站点其余部分与已生成的图片不受影响);" +
+        "`tool_config` 里的开关不会被动,配上新 provider 就会自动回来。",
+      inputSchema: { provider: z.string().min(1).max(64) },
+    },
+    async (args) =>
+      write(ctx, "imagegen_provider_delete", `删 imagegen provider ${args.provider}`, async () => {
+        const r = await store.deleteImageGenProvider(args.provider);
+        return {
+          provider: args.provider,
+          status: "deleted",
+          warning: r.defaultRemains ? undefined : "已无默认 imagegen provider,generate_image 工具将不再注册",
+        };
+      }),
+  );
+
   // ───────────────────── 工具启停 ─────────────────────
 
   server.registerTool(
@@ -829,26 +959,8 @@ export function decodeBase64Strict(input: string): Buffer {
  * 文件头校验。声明的 contentType 不等于内容真是那个类型 —— 供图端点会把
  * 库里的 content_type 原样出成响应头,一个「声称是 image/png 的 HTML」就是
  * 同源下的存储型 XSS。魔数是这层的最后一道闸,配合上面的扩展名一致性检查。
+ *
+ * 判据实现在 `shared/image-magic.ts`(R-IMAGEGEN 抽出:生图工具对上游响应做的是同一个判定)。
+ * 这里保留同名导出,让 mcp.test.ts 不用改。
  */
-export function magicMatches(contentType: string, bytes: Buffer): boolean {
-  switch (contentType) {
-    case "image/webp":
-      return (
-        bytes.length >= 12 &&
-        bytes.subarray(0, 4).toString("latin1") === "RIFF" &&
-        bytes.subarray(8, 12).toString("latin1") === "WEBP"
-      );
-    case "image/png":
-      return bytes.length >= 8 && bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a";
-    case "image/jpeg":
-      return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-    case "image/gif":
-      return (
-        bytes.length >= 6 &&
-        (bytes.subarray(0, 6).toString("latin1") === "GIF87a" ||
-          bytes.subarray(0, 6).toString("latin1") === "GIF89a")
-      );
-    default:
-      return false;
-  }
-}
+export { magicMatches };

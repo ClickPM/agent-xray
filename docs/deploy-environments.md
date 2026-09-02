@@ -148,6 +148,25 @@
    - 自建 AI 网关与 DeepSeek 是同一套 Responses API,换 `baseUrl` / `modelId` 即可;DeepSeek 若要用带日期的工具变体,另传 `"toolType": "web_search_2025_08_26"`
    - 改动**下一轮生效**(会话按配置指纹重建);删掉默认 provider 后工具自动下线,`tool_config` 的开关不用动
 
+   **可选:开生图**(R-IMAGEGEN)。`generate_image` 是第二个外呼工具,同样两步、同样默认关。协议形态由 `apiStyle` 决定:
+
+   ```jsonc
+   imagegen_provider_upsert {
+     "provider": "cliproxy-dmit",
+     "apiKey":   "<明文 key,加密入库,读回只给掩码>",
+     "baseUrl":  "https://<生图网关>/v1",       // host 必须在**生图**白名单内(与搜索白名单是两份)
+     "modelId":  "gpt-image-2",
+     "apiStyle": "images",                        // gpt-image-* 用 images;gemini-*-image 经兼容网关用 chat
+     "imageSize": "1024x1024",                    // 只对 images 形态生效;省略 = 上游默认
+     "dailyImageLimit": 50                        // 0 = 不限;每张都是真金白银
+   }
+   tool_config_set { "name": "generate_image", "enabled": true }
+   ```
+
+   - 生图白名单在 `apps/api/shared/imagegen-hosts.ts`(内置 `api.openai.com` / `aigateway.variflight.com`);要加别的域,`.env` 的 `XRAY_IMAGEGEN_EXTRA_HOSTS` 可**追加**(不能替换)——网关域名要在这里**再写一次**,搜索那条的追加项不作数
+   - 生成的图存 Postgres(`generated_images`,随会话级联删除),由 `GET /api/agent/images/<uuid>.<ext>` 按访客归属供图;对话框里的预览是助手回复里的 markdown 图片,前端不用改
+   - 上游必须回**内联**图片数据(`b64_json` / data URL);只回 `url` 的 provider(如 dall-e-3 默认)用不了 —— 本站不抓链接
+
 6. **验证 —— 冒烟清单**(R9 在 130 上逐项跑过,留证在 [`rounds/round-09/smoke.md`](../rounds/round-09/smoke.md)):
 
    | # | 检查 | 期望 |
@@ -155,7 +174,7 @@
    | 1 | **服务白名单逐项可达** | `agent` / `trace` / `notes` / `mcp` / `metrics` / `about` / `system` 各取一个**正式端点**,全部非 404 |
    | 2 | 已删服务 | `/api/spike/*` 与 `/admin` 全部 404 |
    | 3 | 三 Tab | `/`、`/notes`、`/about` 均 200 且渲染真实数据 |
-   | 4 | MCP 管理面 | 无 token / 错 token / 格式不对的 token / **未认证的** GET 一律 401,且**审计表有 denied 记录**;带 token 且带齐 2026-07-28 逐请求契约的 `server/discover` 回 `supportedVersions: ["2026-07-28"]`,`tools/list` 回全部工具(以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准,R-WEBSEARCH 后是 28;**不带 `params._meta` 会落到 legacy 路径,`server/discover` 回 `-32601`,别误判成端点坏了**)(R10 修准:带**正确** token 的 GET 是 **405** —— 认证闸在方法校验之前,别按 401 去核) |
+   | 4 | MCP 管理面 | 无 token / 错 token / 格式不对的 token / **未认证的** GET 一律 401,且**审计表有 denied 记录**;带 token 且带齐 2026-07-28 逐请求契约的 `server/discover` 回 `supportedVersions: ["2026-07-28"]`,`tools/list` 回全部工具(以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准,R-WEBSEARCH 后是 28、R-IMAGEGEN 后是 32;**不带 `params._meta` 会落到 legacy 路径,`server/discover` 回 `-32601`,别误判成端点坏了**)(R10 修准:带**正确** token 的 GET 是 **405** —— 认证闸在方法校验之前,别按 401 去核) |
    | 5 | 正文配图路由 | `/notes/<系列>/<哈希>.webp` → 200 + `ETag`;带 `If-None-Match` 复请求 → 304;同形的文章页地址不被图片路由劫走 |
    | 6 | RSS | `/rss.xml` 与 `/rss/<分类>.xml` 200,条目里的绝对链接用的是 `SITE_ORIGIN`;未知分类 404 |
    | 7 | **SSE ×2** | `POST /agent/ask` 经 Caddy 流式出字;`GET /trace/stream` 有 15s 心跳、`afterSeq` 断线重连能精确回放;`docker compose stop api` 时客户端**在停机同刻拿到确定的终止**而非挂到超时(R10 修准:**别钉死退出码**——R9 见 curl `18`、R10 见 `0`,差别只在断开落在响应分块的哪个位置;要判的是「+0s 就结束」) |
@@ -170,6 +189,7 @@
    | 17 | **HTTP/3**(R11) | `docker run --rm ymuski/curl-http3 curl --http3-only -sS -o /dev/null -w '%{http_version} %{http_code}' https://<域名>/` 回 `3 200`。**本机 curl 是 Schannel 构建、不支持 h3,验不了这条**。三处缺一不可:compose 的 `443:443/udp`(简写 `"443:443"` **只映射 tcp**)、ufw `443/udp`、云控制台 UDP 443。漏了的表现不是报错,是 Caddy 照样广告 `Alt-Svc: h3` 而访客首访白等一次超时 |
    | 18 | **80 无响应 + 规范跳转**(仅生产,R11) | `http://<域名>/` 连不上或空回复,**不得**出现 30x;非规范主机名(`SITE_REDIRECT_FROM`)→ **301** 到 `SITE_ORIGIN`,路径与 query 原样带过;规范主机名自身不被跳转 |
    | 16 | **联网搜索**(R-WEBSEARCH,配了才查) | ① 只配 provider 不开 `tool_config` → 工具不出现;两步都做 → 下一轮出现 ② 问一个知识截止后的问题,答案带来源链接 ③ 右栏 Timeline 出现 `tool_execution_update · web_search ×N`,Lifecycle 的 `tool_call`/`tool_execution`/`tool_result` 三节点点亮 ④ `websearch_provider_upsert` 传一个白名单外的 baseUrl **被拒** ⑤ `websearch_providers_list` 只回掩码 ⑥ `/trace/stream` 原始字节里搜不到搜索 key |
+   | 17 | **生图**(R-IMAGEGEN,配了才查) | ① 两步都做后说「画一张…」,助手回复里**渲染出图片**(不是一行地址);② Timeline 出现 `tool_execution_update · generate_image ×N`(等图期间每 10s 一条「生成中」);③ 换一个没有该访客 cookie 的浏览器直接打开图片地址 → 404;④ `imagegen_provider_upsert` 传搜索白名单里、生图白名单外的 baseUrl **被拒**;⑤ `imagegen_providers_list` 只回掩码;⑥ `/agent/tools` 与 `/trace/stream` 里搜不到 key / baseUrl / model;⑦ 删掉那个会话后图片地址 404 |
 
    > **预检必须走 compose 起容器,别用 `docker run` 手工凑。** R11 上线前用 `docker run -p 443:443/udp …` 做过一次
    > 访问层预检,HTTP/3 是通的;正式 `docker compose up` 之后却不通 —— compose 里根本没写 udp 映射,
@@ -226,4 +246,5 @@
 - **生产 80 不给响应**(`auto_https disable_redirects`),ACME 只走 TLS-ALPN-01,443 是证书续期的唯一命脉(`docs/security.md` §5);130 是明文 `:80`,这条对它是空操作。
 - **udp/443 三处齐**才有 HTTP/3:compose `443:443/udp` + ufw + 云控制台。
 - **`XRAY_WEBSEARCH_EXTRA_HOSTS`**:两个环境都要放 LLM/搜索网关的域名。130 早就设了,生产首次部署漏了它 `websearch_provider_upsert` 会直接拒。
+- **`XRAY_IMAGEGEN_EXTRA_HOSTS`**(R-IMAGEGEN):生图白名单是**另一份清单**(内置 `api.openai.com` / `aigateway.variflight.com`),网关域名要在这里再写一次,否则 `imagegen_provider_upsert` 直接拒。env 变了要**重建 api**(`up -d api`),`restart` 不生效。
 - `.env` 各环境独立,永不入 Git;LLM key 不进镜像,经 `infra-config.json` 的 `{"$env": …}` 在运行时注入。

@@ -11,12 +11,15 @@ import { listTools, toolCatalog, type ToolCatalogEntry, type ToolGroup } from ".
 import { db } from "./db";
 import {
   capText,
+  GENERATE_IMAGE_TOOL,
+  makeGenerateImageTool,
   makeWebSearchTool,
   MAX_RESULT_CHARS,
   SESSION_TOOL_REGISTRY,
   TOOL_REGISTRY,
   WEB_SEARCH_TOOL_NAME,
 } from "./tools";
+import type { ActiveImageGenConfig } from "./imagegen-config";
 import type { ActiveWebSearchConfig } from "./websearch-config";
 
 /**
@@ -35,6 +38,20 @@ const FAKE_CFG: ActiveWebSearchConfig = {
   fingerprint: "fp-fake-9c1d",
 };
 
+/** 同款假配置,给 generate_image(R-IMAGEGEN);每个值同样独一无二 */
+const FAKE_IMG_CFG: ActiveImageGenConfig = {
+  provider: "fake-image-provider-wqz",
+  baseUrl: "https://fake-image-gateway.example/v1",
+  modelId: "fake-image-model-plm",
+  apiStyle: "chat",
+  imageSize: "1776x1777",
+  totalTimeoutMs: 171_000,
+  idleTimeoutMs: 31_000,
+  dailyImageLimit: 3_131,
+  apiKey: "sk-fake-image-key-do-not-leak-2b8c",
+  fingerprint: "fp-fake-image-5e7f",
+};
+
 /** 一个真实形状的会话 id;工具从不把它写进任何可见字段,测试顺便验这一点 */
 const SESSION_ID = "11111111-2222-4333-8444-555555555555";
 
@@ -46,7 +63,11 @@ function definitionFor(entry: ToolCatalogEntry) {
     case "session":
       return SESSION_TOOL_REGISTRY[entry.name]({ sessionId: SESSION_ID, needsTitle: true });
     case "outbound":
-      return entry.name === WEB_SEARCH_TOOL_NAME ? makeWebSearchTool(FAKE_CFG) : undefined;
+      if (entry.name === WEB_SEARCH_TOOL_NAME) return makeWebSearchTool(FAKE_CFG);
+      if (entry.name === GENERATE_IMAGE_TOOL) {
+        return makeGenerateImageTool(FAKE_IMG_CFG, { sessionId: SESSION_ID, needsTitle: false });
+      }
+      return undefined;
   }
 }
 
@@ -78,11 +99,12 @@ describe("目录与实现双向对齐(验收 #2)", () => {
     expect(entry.parameters).not.toBe(def.parameters);
   });
 
-  it("②集合相等:目录 name 集合 == TOOL_REGISTRY ∪ SESSION_TOOL_REGISTRY ∪ {web_search}", () => {
+  it("②集合相等:目录 name 集合 == TOOL_REGISTRY ∪ SESSION_TOOL_REGISTRY ∪ {web_search, generate_image}", () => {
     const expected = [
       ...Object.keys(TOOL_REGISTRY),
       ...Object.keys(SESSION_TOOL_REGISTRY),
       WEB_SEARCH_TOOL_NAME,
+      GENERATE_IMAGE_TOOL,
     ].sort();
     const actual = toolCatalog()
       .map((t) => t.name)
@@ -95,9 +117,9 @@ describe("目录与实现双向对齐(验收 #2)", () => {
     for (const entry of toolCatalog()) {
       const inPure = Object.hasOwn(TOOL_REGISTRY, entry.name);
       const inSession = Object.hasOwn(SESSION_TOOL_REGISTRY, entry.name);
-      const isWeb = entry.name === WEB_SEARCH_TOOL_NAME;
-      const expected: ToolGroup = inPure ? "pure" : inSession ? "session" : isWeb ? "outbound" : "pure";
-      expect([inPure, inSession, isWeb].filter(Boolean)).toHaveLength(1); // 一个名字只走一条路径
+      const isOutbound = entry.name === WEB_SEARCH_TOOL_NAME || entry.name === GENERATE_IMAGE_TOOL;
+      const expected: ToolGroup = inPure ? "pure" : inSession ? "session" : isOutbound ? "outbound" : "pure";
+      expect([inPure, inSession, isOutbound].filter(Boolean)).toHaveLength(1); // 一个名字只走一条路径
       expect(entry.group).toBe(expected);
     }
   });
@@ -133,6 +155,9 @@ describe("响应不泄配置面(验收 #3)", () => {
     for (const value of Object.values(FAKE_CFG)) {
       expect(text).not.toContain(String(value));
     }
+    for (const value of Object.values(FAKE_IMG_CFG)) {
+      expect(text).not.toContain(String(value));
+    }
     expect(text).not.toContain(SESSION_ID);
     // 配置面的字段名本身也不该出现(哪怕值是空的)
     for (const key of [
@@ -145,6 +170,12 @@ describe("响应不泄配置面(验收 #3)", () => {
       "provider",
       "dailySearchLimit",
       "daily_search_limit",
+      "dailyImageLimit",
+      "daily_image_limit",
+      "apiStyle",
+      "api_style",
+      "imageSize",
+      "image_size",
       "totalTimeoutMs",
       "idleTimeoutMs",
       "toolType",
@@ -174,9 +205,24 @@ describe("响应不泄配置面(验收 #3)", () => {
     // 与按真实路径(带配置)构造出来的定义逐字段一致 —— 配置存在与否不改变目录内容
     expect(modelVisible(entry!)).toEqual(modelVisible(makeWebSearchTool(FAKE_CFG)));
   });
+
+  it("generate_image 的条目同样与配置无关,且会话 id 进不了目录(R-IMAGEGEN)", async () => {
+    await db.exec`DELETE FROM imagegen_config`;
+    const entry = toolCatalog().find((t) => t.name === GENERATE_IMAGE_TOOL);
+    expect(entry).toBeDefined();
+    expect(entry!.group).toBe("outbound");
+    for (const key of ["available", "configured", "enabled", "disabled", "status", "sessionId"]) {
+      expect(entry).not.toHaveProperty(key);
+    }
+    expect(modelVisible(entry!)).toEqual(
+      modelVisible(makeGenerateImageTool(FAKE_IMG_CFG, { sessionId: SESSION_ID, needsTitle: false })),
+    );
+    // 唯一入参是 prompt(尺寸 / 张数不是入参:任务卡「范围裁定」)
+    expect(Object.keys(entry!.parameters.properties)).toEqual(["prompt"]);
+  });
 });
 
-describe("五个工具齐、分三组、每条有输出形态(验收 #6)", () => {
+describe("六个工具齐、分三组、每条有输出形态(验收 #6;R-IMAGEGEN 起六个)", () => {
   it("三组都在,组的顺序是 纯函数 → 外呼 → 会话绑定", () => {
     const groups = toolCatalog().map((t) => t.group);
     const firstIndex = (g: ToolGroup) => groups.indexOf(g);
@@ -205,6 +251,8 @@ describe("五个工具齐、分三组、每条有输出形态(验收 #6)", () =>
     for (const entry of toolCatalog()) {
       if (entry.name === WEB_SEARCH_TOOL_NAME) {
         expect(entry.phases).toEqual(["发起", "已受理", "检索中", "综述中"]);
+      } else if (entry.name === GENERATE_IMAGE_TOOL) {
+        expect(entry.phases).toEqual(["发起", "生成中", "已回复", "接收中", "校验解码", "写入图库"]);
       } else {
         expect(entry).not.toHaveProperty("phases");
       }

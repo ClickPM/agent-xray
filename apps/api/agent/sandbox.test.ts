@@ -11,6 +11,8 @@ import { queryAsAgentRo } from "./ro-db";
 import { checkQuota, recordUsage } from "./quota";
 import { configEncryptionKey } from "./secrets";
 import {
+  buildSessionTools,
+  GENERATE_IMAGE_TOOL,
   loadEnabledTools,
   snippetAround,
   capText,
@@ -43,6 +45,12 @@ async function restoreToolSeeds() {
   await db.rawExec(
     `INSERT INTO tool_config (name, enabled, dangerous, note)
      VALUES ('web_search', FALSE, FALSE, 'R-WEBSEARCH 外呼工具')
+     ON CONFLICT (name) DO NOTHING`,
+  );
+  // 迁移 010 的种子(R-IMAGEGEN),同样默认关
+  await db.rawExec(
+    `INSERT INTO tool_config (name, enabled, dangerous, note)
+     VALUES ('generate_image', FALSE, FALSE, 'R-IMAGEGEN 外呼工具')
      ON CONFLICT (name) DO NOTHING`,
   );
   for (const name of SEED_SESSION_TOOLS) {
@@ -236,6 +244,92 @@ describe("第 1 层 · 外呼组 web_search 的注册闸(R-WEBSEARCH)", () => {
     );
     const enabled = await loadEnabledTools();
     expect(enabled.names).toEqual(["notes_search"]);
+  });
+});
+
+describe("第 1 层 · 外呼组 generate_image 的注册闸(R-IMAGEGEN)", () => {
+  async function enableImageGen() {
+    await db.exec`DELETE FROM tool_config`;
+    await db.rawExec(
+      `INSERT INTO tool_config (name, enabled, dangerous) VALUES ('generate_image', TRUE, FALSE)`,
+    );
+  }
+
+  async function configureProvider(over: { modelId?: string; apiStyle?: string } = {}) {
+    await db.exec`DELETE FROM imagegen_config`;
+    await db.rawExec(
+      `INSERT INTO imagegen_config
+         (provider, base_url, api_key_enc, api_key_hint, model_id, api_style, is_default)
+       VALUES ('openai', 'https://api.openai.com/v1', $1, 'sk-…test', $2, $3, TRUE)`,
+      encryptSecret(configEncryptionKey(), "sk-fake-key-for-tests-0002"),
+      over.modelId ?? "gpt-image-2",
+      over.apiStyle ?? "images",
+    );
+  }
+
+  beforeEach(async () => {
+    await db.exec`DELETE FROM imagegen_config`;
+  });
+
+  afterAll(async () => {
+    await db.exec`DELETE FROM imagegen_config`;
+    await restoreToolSeeds();
+  });
+
+  it("开着开关但没配 provider → 丢弃,不注册一个必然失败的工具", async () => {
+    await enableImageGen();
+    const enabled = await loadEnabledTools();
+    expect(enabled.names).toEqual([]);
+    expect(enabled.sessionScoped).toEqual([]);
+    expect(enabled.imageGen).toBeNull();
+  });
+
+  it("配好 provider 之后才注册:名字进 sessionScoped(要绑会话),实现由 buildSessionTools 现构造", async () => {
+    await enableImageGen();
+    await configureProvider();
+    const enabled = await loadEnabledTools();
+    expect(enabled.names).toEqual([GENERATE_IMAGE_TOOL]);
+    expect(enabled.definitions).toEqual([]); // 不是无状态工具
+    expect(enabled.sessionScoped).toEqual([GENERATE_IMAGE_TOOL]);
+    expect(enabled.imageGen?.modelId).toBe("gpt-image-2");
+    const built = buildSessionTools(enabled, { sessionId: "11111111-2222-4333-8444-555555555555", needsTitle: false });
+    expect(built.names).toEqual([GENERATE_IMAGE_TOOL]);
+    expect(built.definitions[0].name).toBe(GENERATE_IMAGE_TOOL);
+    // 明文 key 只活在闭包里:定义对象上找不到它
+    expect(JSON.stringify(built.definitions[0])).not.toContain("sk-fake-key-for-tests-0002");
+  });
+
+  it("配好 provider 但开关是关的 → 不注册(两道闸都要过)", async () => {
+    await db.exec`DELETE FROM tool_config`;
+    await db.rawExec(
+      `INSERT INTO tool_config (name, enabled, dangerous) VALUES ('generate_image', FALSE, FALSE)`,
+    );
+    await configureProvider();
+    expect((await loadEnabledTools()).names).toEqual([]);
+  });
+
+  it("**改 imagegen 配置会改变指纹**(端点 / 协议形态被闭包定格在旧会话里)", async () => {
+    await enableImageGen();
+    await configureProvider();
+    const a = await loadEnabledTools();
+    await configureProvider({ apiStyle: "chat" });
+    const b = await loadEnabledTools();
+    expect(a.names).toEqual(b.names);
+    expect(a.fingerprint).not.toBe(b.fingerprint);
+  });
+
+  it("密文解不开时只丢这一个工具,不影响其余工具", async () => {
+    await db.exec`DELETE FROM tool_config`;
+    for (const name of ["generate_image", "notes_search"]) {
+      await db.rawExec(`INSERT INTO tool_config (name, enabled, dangerous) VALUES ($1, TRUE, FALSE)`, name);
+    }
+    await db.rawExec(
+      `INSERT INTO imagegen_config
+         (provider, base_url, api_key_enc, api_key_hint, model_id, is_default)
+       VALUES ('broken', 'https://api.openai.com/v1', $1, 'sk-…brok', 'm', TRUE)`,
+      encryptSecret(Buffer.alloc(32, 3).toString("base64"), "sk-unreadable"),
+    );
+    expect((await loadEnabledTools()).names).toEqual(["notes_search"]);
   });
 });
 

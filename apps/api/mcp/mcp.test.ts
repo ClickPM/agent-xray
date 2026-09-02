@@ -20,6 +20,7 @@ import {
   parseEncryptionKey,
   timingSafeEqualHex,
 } from "../shared/crypto";
+import { allowedImageHosts, checkImageBaseUrl } from "../shared/imagegen-hosts";
 import { allowedHosts, checkBaseUrl } from "../shared/websearch-hosts";
 import { parseBearer, sha256Hex, verifyAuth } from "./auth";
 import { chapterHash, countWords } from "./content";
@@ -773,5 +774,190 @@ describe("websearch 管理 tool 的入参 schema", () => {
     expect(parse({ idleTimeoutMs: 120_000 })).toBe(true);
     expect(parse({ idleTimeoutMs: 120_001 })).toBe(false);
     expect(parse({ dailySearchLimit: -1 })).toBe(false);
+  });
+});
+
+// ───────────────────── imagegen provider(R-IMAGEGEN)─────────────────────
+
+describe("imagegen provider(mcp/store + shared/imagegen-hosts)", () => {
+  beforeEach(async () => {
+    await db.exec`DELETE FROM imagegen_config`;
+  });
+
+  const base = {
+    provider: "openai",
+    apiKey: "sk-0123456789efgh",
+    baseUrl: "https://api.openai.com/v1",
+    modelId: "gpt-image-2",
+    makeDefault: false,
+  };
+
+  it("首个自动成为默认,key 只回掩码且库里是密文;列默认值 images / NULL / 180s / 30s / 不限", async () => {
+    const r = await store.upsertImageGenProvider(base, KEY);
+    expect(r).toMatchObject({ created: true, apiKeyHint: "sk-…efgh", isDefault: true });
+    const listed = await store.listImageGenProviders();
+    expect(listed[0]).toMatchObject({
+      provider: "openai",
+      apiKeyHint: "sk-…efgh",
+      apiStyle: "images",
+      imageSize: null,
+      totalTimeoutMs: 180_000,
+      idleTimeoutMs: 30_000,
+      dailyImageLimit: 0,
+      isDefault: true,
+    });
+    expect(JSON.stringify(listed)).not.toContain("0123456789efgh");
+    const raw = await db.rawQueryRow<{ enc: Uint8Array }>(
+      `SELECT api_key_enc AS enc FROM imagegen_config WHERE provider = 'openai'`,
+    );
+    expect(decryptSecret(KEY, raw!.enc)).toBe("sk-0123456789efgh");
+  });
+
+  it("首次写入必须给 apiKey / baseUrl / modelId", async () => {
+    for (const missing of ["apiKey", "baseUrl", "modelId"] as const) {
+      await expect(store.upsertImageGenProvider({ ...base, [missing]: undefined }, KEY)).rejects.toThrow(store.NotFoundError);
+    }
+  });
+
+  it("部分更新:只改 modelId 不会把协议形态 / 尺寸 / 超时 / 限额清掉;imageSize 传 null 才清空", async () => {
+    await store.upsertImageGenProvider(
+      { ...base, makeDefault: true, apiStyle: "chat", imageSize: "1536x1024", totalTimeoutMs: 120_000, idleTimeoutMs: 20_000, dailyImageLimit: 50 },
+      KEY,
+    );
+    await store.upsertImageGenProvider({ provider: "openai", modelId: "gpt-image-3", makeDefault: false }, KEY);
+    let [p] = await store.listImageGenProviders();
+    expect(p).toMatchObject({
+      modelId: "gpt-image-3",
+      apiStyle: "chat",
+      imageSize: "1536x1024",
+      totalTimeoutMs: 120_000,
+      idleTimeoutMs: 20_000,
+      dailyImageLimit: 50,
+      apiKeyHint: "sk-…efgh",
+    });
+    await store.upsertImageGenProvider({ provider: "openai", imageSize: null, makeDefault: false }, KEY);
+    [p] = await store.listImageGenProviders();
+    expect(p.imageSize).toBeNull();
+  });
+
+  it("idle > total 在写入前就被拒", async () => {
+    await store.upsertImageGenProvider(base, KEY);
+    await expect(
+      store.upsertImageGenProvider({ provider: "openai", idleTimeoutMs: 120_000, totalTimeoutMs: 60_000, makeDefault: false }, KEY),
+    ).rejects.toThrow(store.ConflictError);
+  });
+
+  it("**store.ts 里的超时默认值与迁移 010 的列默认值一致**(重复常量由测试钉住)", async () => {
+    const rows = await db.rawQueryAll<{ column_name: string; column_default: string }>(
+      `SELECT column_name, column_default FROM information_schema.columns
+        WHERE table_name = 'imagegen_config'
+          AND column_name IN ('total_timeout_ms', 'idle_timeout_ms')`,
+    );
+    const byCol = Object.fromEntries(rows.map((r) => [r.column_name, parseInt(r.column_default, 10)]));
+    expect(byCol.total_timeout_ms).toBe(store.DEFAULT_IMAGE_TOTAL_TIMEOUT_MS);
+    expect(byCol.idle_timeout_ms).toBe(store.DEFAULT_IMAGE_IDLE_TIMEOUT_MS);
+  });
+
+  it("库级 CHECK:api_style 只收 images / chat,image_size 形状受限", async () => {
+    await store.upsertImageGenProvider(base, KEY);
+    await expect(db.rawExec(`UPDATE imagegen_config SET api_style = 'bash' WHERE provider = 'openai'`)).rejects.toThrow();
+    await expect(db.rawExec(`UPDATE imagegen_config SET image_size = '1024x1024; drop' WHERE provider = 'openai'`)).rejects.toThrow();
+    await db.rawExec(`UPDATE imagegen_config SET image_size = 'auto' WHERE provider = 'openai'`);
+  });
+
+  it("唯一默认:切换之后旧的那个不再是默认;删完最后一个如实回 defaultRemains=false", async () => {
+    await store.upsertImageGenProvider(base, KEY);
+    await store.upsertImageGenProvider({ ...base, provider: "gw" }, KEY);
+    await store.setDefaultImageGenProvider("gw");
+    expect((await store.listImageGenProviders()).filter((p) => p.isDefault).map((p) => p.provider)).toEqual(["gw"]);
+    await expect(store.deleteImageGenProvider("nope")).rejects.toThrow(store.NotFoundError);
+    expect(await store.deleteImageGenProvider("gw")).toEqual({ defaultRemains: false });
+  });
+
+  it("目标域白名单:生图那份与搜索那份是两份清单,判据相同", () => {
+    expect(checkImageBaseUrl("https://api.openai.com/v1").ok).toBe(true);
+    expect(checkImageBaseUrl("https://aigateway.variflight.com/api").ok).toBe(true);
+    // 搜索白名单里的 DeepSeek 在生图这边不放行 —— 一个域被列进搜索白名单不等于自动能当生图端点
+    expect(checkBaseUrl("https://api.deepseek.com").ok).toBe(true);
+    expect(checkImageBaseUrl("https://api.deepseek.com").ok).toBe(false);
+    for (const bad of [
+      "https://evil.tld",
+      "https://api.openai.com.evil.tld",
+      "http://api.openai.com",
+      "https://u:p@api.openai.com",
+      "https://api.openai.com?x=1",
+      "not-a-url",
+    ]) {
+      expect(checkImageBaseUrl(bad).ok, bad).toBe(false);
+    }
+    expect(allowedImageHosts()).toContain("api.openai.com");
+  });
+});
+
+describe("imagegen 管理 tool 的入参 schema", () => {
+  interface Registered {
+    name: string;
+    config: { inputSchema?: Record<string, z.ZodType> };
+  }
+  const registered: Registered[] = [];
+  const fakeServer = {
+    registerTool(name: string, config: Registered["config"]) {
+      registered.push({ name, config });
+    },
+  };
+  registerTools(fakeServer as never, {});
+
+  const schemaOf = (name: string) => {
+    const t = registered.find((r) => r.name === name);
+    expect(t, `${name} 未注册`).toBeDefined();
+    return z.object(t!.config.inputSchema!);
+  };
+
+  it("四个 imagegen tool 都注册了;总数 32", () => {
+    for (const name of ["imagegen_providers_list", "imagegen_provider_upsert", "imagegen_set_default", "imagegen_provider_delete"]) {
+      expect(registered.map((r) => r.name)).toContain(name);
+    }
+    expect(registered).toHaveLength(32);
+  });
+
+  it("baseUrl 被拒时给出能行动的理由;搜索白名单里的域在这里也被拒", () => {
+    const schema = schemaOf("imagegen_provider_upsert");
+    const cases: Array<[string, string]> = [
+      ["https://evil.tld", "白名单"],
+      ["https://api.deepseek.com", "白名单"],
+      ["http://api.openai.com", "https"],
+      ["https://u:p@api.openai.com", "凭据"],
+      ["https://api.openai.com?x=1", "query"],
+    ];
+    for (const [url, want] of cases) {
+      const r = schema.safeParse({ provider: "p", baseUrl: url, makeDefault: false });
+      expect(r.success, url).toBe(false);
+      const msg = r.error!.issues.map((i) => i.message).join(" | ");
+      expect(msg, url).toContain(want);
+    }
+    expect(schema.safeParse({ provider: "p", baseUrl: "https://api.openai.com/v1", makeDefault: false }).success).toBe(true);
+  });
+
+  it("apiStyle 只收 images / chat;imageSize 只收 WxH 或 auto(可为 null)", () => {
+    const schema = schemaOf("imagegen_provider_upsert");
+    const parse = (o: Record<string, unknown>) => schema.safeParse({ provider: "p", makeDefault: false, ...o }).success;
+    expect(parse({ apiStyle: "images" })).toBe(true);
+    expect(parse({ apiStyle: "chat" })).toBe(true);
+    expect(parse({ apiStyle: "responses" })).toBe(false);
+    expect(parse({ imageSize: "1024x1024" })).toBe(true);
+    expect(parse({ imageSize: "auto" })).toBe(true);
+    expect(parse({ imageSize: null })).toBe(true);
+    for (const bad of ["big", "1024*1024", "10x10", "1024x1024;x", ""]) expect(parse({ imageSize: bad }), bad).toBe(false);
+  });
+
+  it("超时上下界与库的 CHECK 一致(300s / 120s 封顶)", () => {
+    const schema = schemaOf("imagegen_provider_upsert");
+    const parse = (o: Record<string, number>) => schema.safeParse({ provider: "p", makeDefault: false, ...o }).success;
+    expect(parse({ totalTimeoutMs: 300_000 })).toBe(true);
+    expect(parse({ totalTimeoutMs: 300_001 })).toBe(false);
+    expect(parse({ totalTimeoutMs: 9_999 })).toBe(false);
+    expect(parse({ idleTimeoutMs: 120_000 })).toBe(true);
+    expect(parse({ idleTimeoutMs: 4_999 })).toBe(false);
+    expect(parse({ dailyImageLimit: -1 })).toBe(false);
   });
 });
