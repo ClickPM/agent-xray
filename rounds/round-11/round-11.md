@@ -47,7 +47,7 @@
 | 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ◐ **访问层已在 2026-09-02 预检中打通并留证**(见下「生产访问层预检」):真域名签发成功(`tls-alpn-01`)、本机 curl 未加 `-k` 通过证书校验、六个安全头齐。⬜ 剩「与应用镜像一起再跑一次」——正式部署用的是 compose 的 `deploy_caddy_data` volume,会重新签一次 |
 | 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ⬜ 待 R9/R10 |
 | 10 | 备案号挂 footer | web footer 显示备案号 | ⬜ 待部署。备案号已到手,填生产 `.env` 的 `ICP_BEIAN=苏ICP备2025204887号-2` 即可(**运行期注入**——`SiteFooter` 用 `await connection()` 把渲染推到请求期,不会被烧进构建产物;130 保持留空)。**公安联网备案另算**,见「所有者 TODO」第 6 条 |
-| 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ⬜ 待部署 |
+| 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ◐ **生成与哈希写入已完成**(2026-09-02,所有者本机生成 token、只交哈希);⬜ 剩两项待部署后做:①`XRAY_MCP_TOKEN_PROD` 环境变量与密码管理器留存的确认(所有者);②轮换演练(要 api 起来才验得了 401/200) |
 | 12 | MCP 管理面在生产实连(协议 **2026-07-28**) | `server/discover` 回 `supportedVersions: ["2026-07-28"]` + `serverInfo`,`tools/list` 出 **28** 个工具(R10 留证里的 24 是 R-WEBSEARCH 之前的数,以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准)——请求体形状照 [`rounds/round-10/checklist.md`](../round-10/checklist.md) §9(逐请求四件套缺一样就是 4xx,`_meta` 三键必须在 `params` 里);再经 `.mcp.json` 新增的 `xray-admin-prod` 用 Claude Code 实连一次。**必须早于「写生产 LLM provider」通过**(R6 起无引导密钥,不通则 `/agent/ask` 永远 503);**交接项②的 IP 白名单启用后要复验一次**(白名单先于 token 生效,漏验的表现是 token 明明对却 403) | ⬜ 待部署 |
 
 ## 所有者 TODO(Claude 无法代办)
@@ -194,7 +194,9 @@
 - **三个密钥在服务器上就地 `openssl rand -base64 32` 生成,原文一次都没经过本机或对话** ——
   这是 R10 那条「130 上留了一份明文 `.llm-key`」的反面教材的正面做法
 - 权限 `-rw------- deploy:deploy` ✅
-- ⬜ **差 `MCP_AUTH_TOKEN_HASH`**:token 原文只能在所有者手里生成(见「所有者 TODO」第 4 条),服务端只存 sha256
+- ✅ **`MCP_AUTH_TOKEN_HASH` 已填**(2026-09-02,`47518f5e…a36fed59`,64 位小写 hex):
+  token 原文由所有者在本机按 `deploy/.env.example` 的 CSPRNG 口径生成,**只有哈希交给我写进服务器**,原文一次都没进对话或仓库。
+  写入前脚本卡了一道格式(`^[0-9a-f]{64}$`)—— 格式错的表现是 api 起来后**一律 401 且极难定位**,值得在写入时就拦下
 - ⬜ **差 `IMAGE_TAG`**:等镜像构建后填 git 短 SHA
 - ⚠️ **`CONFIG_ENCRYPTION_KEY` 所有者必须自行备份一份**(`ssh` 上去 `cat ~/deploy/.env` 取)。
   它是 `llm_config` / `websearch_config` 里凭据密文的唯一解开方式;丢了不是「重新生成」而是
