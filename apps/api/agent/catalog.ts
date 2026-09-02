@@ -1,8 +1,8 @@
 // R-TOOLS:Tools 面板的只读目录端点(设计稿 1f/1g;所有者裁定 2026-09-02,ROUNDS.md「R-TOOLS」)。
 //
 // 回答的是「这个 agent 具备什么能力」,与有没有正在运行的会话无关 —— 所以它不读会话、
-// 不读 `tool_config`、不读任何配置表,是一个纯函数端点。目录**静态**:五个工具全列,
-// `web_search` 未配置或被关掉时照样列出(所有者待裁定项,见任务卡「待所有者裁定」)。
+// 不读 `tool_config`、不读任何配置表,是一个纯函数端点。目录**静态**:六个工具全列,
+// `web_search` / `generate_image` 未配置或被关掉时照样列出(所有者待裁定项,见任务卡「待所有者裁定」)。
 //
 // **端点不得吐**(所有者裁定):`execute` 函数、`ActiveWebSearchConfig` 的任何字段
 // (baseUrl / key / model / provider)、`dailySearchLimit` 与当日用量、`tool_config` 的 enabled。
@@ -10,6 +10,7 @@
 // 这里不点名就出不去。catalog.test.ts 对响应做 grep 兜底。
 import { api } from "encore.dev/api";
 import {
+  GENERATE_IMAGE_META,
   MAX_RESULT_CHARS,
   SESSION_TOOL_REGISTRY,
   TOOL_REGISTRY,
@@ -21,7 +22,8 @@ import {
 /**
  * 工具分组 = 注册路径(docs/security.md §1「工具分两组」+ R-TITLE 补记的第三档):
  *   pure     —— 在 `TOOL_REGISTRY`(纯函数组:只读 notes 三张表,不联网)
- *   outbound —— 经 `makeWebSearchTool` 构造(外呼组:持服务端凭据打白名单域)
+ *   outbound —— 经 `makeWebSearchTool` / `makeGenerateImageTool` 构造(外呼组:持服务端凭据打白名单域;
+ *               `generate_image` 同时按会话绑定,但它的**性质**是外呼 —— 分组按「凭据从哪来」判)
  *   session  —— 在 `SESSION_TOOL_REGISTRY`(会话绑定组:闭包绑定会话 id,只写本会话标题)
  * 前端按这个值挑分组文案与颜色,**不按工具名**。
  */
@@ -82,19 +84,21 @@ function publicEntry(meta: ToolMeta, group: ToolGroup): ToolCatalogEntry {
  * 目录:**从三条构造路径派生**,不手工维护(所有者裁定 2026-09-02:面板永远不是第二个要改的地方)。
  *
  *   - `TOOL_REGISTRY` 的每一项 → 纯函数组(定义对象就是 `{ ...META, execute }`,META 在对象上)
- *   - `WEB_SEARCH_META` → 外呼组(它没有注册表:`makeWebSearchTool(cfg)` 没配置就构造不出来,
- *     但 META 是模块常量,不依赖 cfg —— 这正是「未配置时也照样列出、且不暴露配置缺失细节」的来源)
+ *   - `WEB_SEARCH_META` / `GENERATE_IMAGE_META` → 外呼组(它们没有注册表:`makeWebSearchTool(cfg)` /
+ *     `makeGenerateImageTool(cfg, ctx)` 没配置就构造不出来,但 META 是模块常量,不依赖 cfg / ctx ——
+ *     这正是「未配置时也照样列出、且不暴露配置缺失细节」的来源)
  *   - `SESSION_TOOL_REGISTRY` 的每一项 → 会话绑定组(工厂带 `meta`,不用先造一个假会话)
  *
- * 【已知的一个洞,不要假装没有】派生只覆盖它**认识**的构造路径 —— 今天是这三条。将来有人加
- * **第四条**构造路径且不进 META,这里看不见它。兜底不在这里,在 catalog.test.ts 的双向集合相等:
- * 目录的 name 集合必须等于「两个注册表 + web_search」的并集,**且**迁移里 `tool_config` 种下的
- * 每个名字都要有目录项。新工具必经这两处(注册 + 种启停行),漏一处就红。
+ * 【已知的一个洞,不要假装没有】派生只覆盖它**认识**的构造路径 —— 今天是这四条。将来有人加
+ * **第五条**构造路径且不进 META,这里看不见它。兜底不在这里,在 catalog.test.ts 的双向集合相等:
+ * 目录的 name 集合必须等于「两个注册表 + web_search + generate_image」的并集,**且**迁移里
+ * `tool_config` 种下的每个名字都要有目录项。新工具必经这两处(注册 + 种启停行),漏一处就红。
  */
 export function toolCatalog(): ToolCatalogEntry[] {
   return [
     ...Object.values(TOOL_REGISTRY).map((definition) => publicEntry(definition, "pure")),
     publicEntry(WEB_SEARCH_META, "outbound"),
+    publicEntry(GENERATE_IMAGE_META, "outbound"),
     ...Object.values(SESSION_TOOL_REGISTRY).map((factory) => publicEntry(factory.meta, "session")),
   ];
 }

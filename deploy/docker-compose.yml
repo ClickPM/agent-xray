@@ -148,6 +148,9 @@ services:
       # 所以留空是安全的默认,不用 `:?`。websearch 的 API key **不在这里**:
       # 它经 MCP 加密入库,与 LLM key 共用 CONFIG_ENCRYPTION_KEY。
       - XRAY_WEBSEARCH_EXTRA_HOSTS=${XRAY_WEBSEARCH_EXTRA_HOSTS:-}
+      # 生图的目标域白名单**追加**项(R-IMAGEGEN),同上;**另一份清单**
+      # (shared/imagegen-hosts.ts),所有者的网关域名两个变量都要写。
+      - XRAY_IMAGEGEN_EXTRA_HOSTS=${XRAY_IMAGEGEN_EXTRA_HOSTS:-}
     expose:
       - "4000"
     networks: [front, back]

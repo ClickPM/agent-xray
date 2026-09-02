@@ -1042,6 +1042,236 @@ export async function deleteWebSearchProvider(
   });
 }
 
+// ───────────────────── imagegen provider(R-IMAGEGEN)─────────────────────
+//
+// 与 websearch provider 那组逐字同构:同一把 `ConfigEncryptionKey`、同一个掩码口径、
+// 同一套「省略即保留」的部分更新、同一种 advisory lock 串行化、同样**不合表**
+// (理由见迁移 008 / 010)。多出来的两个字段是协议形态 `api_style` 与尺寸 `image_size`。
+
+export interface ImageGenProviderRow {
+  provider: string;
+  baseUrl: string;
+  /** **掩码**,不是明文(docs/security.md §3) */
+  apiKeyHint: string;
+  modelId: string;
+  apiStyle: "images" | "chat";
+  imageSize: string | null;
+  totalTimeoutMs: number;
+  idleTimeoutMs: number;
+  dailyImageLimit: number;
+  isDefault: boolean;
+  /** epoch ms */
+  updatedAt: number;
+}
+
+/** 只回掩码。明文 key 在本模块之外没有任何读路径。 */
+export async function listImageGenProviders(): Promise<ImageGenProviderRow[]> {
+  return db.rawQueryAll<ImageGenProviderRow>(
+    `SELECT provider, base_url AS "baseUrl", api_key_hint AS "apiKeyHint",
+            model_id AS "modelId", api_style AS "apiStyle", image_size AS "imageSize",
+            total_timeout_ms::double precision  AS "totalTimeoutMs",
+            idle_timeout_ms::double precision   AS "idleTimeoutMs",
+            daily_image_limit::double precision AS "dailyImageLimit",
+            is_default AS "isDefault",
+            ${ms("updated_at", "updatedAt")}
+       FROM imagegen_config
+      ORDER BY is_default DESC, provider`,
+  );
+}
+
+export interface UpsertImageGenProviderInput {
+  provider: string;
+  apiKey?: string;
+  /** 已在 tools 层过 `checkImageBaseUrl`;这里不再重复校验(判据只有一份) */
+  baseUrl?: string;
+  modelId?: string;
+  apiStyle?: "images" | "chat";
+  /** null = 清空(用上游默认) */
+  imageSize?: string | null;
+  totalTimeoutMs?: number;
+  idleTimeoutMs?: number;
+  dailyImageLimit?: number;
+  makeDefault: boolean;
+}
+
+/**
+ * 两个超时的列默认值。**必须与迁移 010 的 `DEFAULT` 一字不差**(mcp.test.ts 从
+ * `information_schema.columns` 读列默认值比对),用途与 websearch 那两个常量相同。
+ */
+export const DEFAULT_IMAGE_TOTAL_TIMEOUT_MS = 180_000;
+export const DEFAULT_IMAGE_IDLE_TIMEOUT_MS = 30_000;
+
+/** 与前两把锁同款、不同键:三张表的「唯一默认」互不相干,别共用一把锁。 */
+const IMAGEGEN_CONFIG_LOCK = 0x69676331; // 'igc1'
+async function lockImageGenProviders(tx: Transaction): Promise<void> {
+  await tx.rawExec(`SELECT pg_advisory_xact_lock($1)`, IMAGEGEN_CONFIG_LOCK);
+}
+
+export async function upsertImageGenProvider(
+  input: UpsertImageGenProviderInput,
+  encryptionKeyB64: string,
+): Promise<{ created: boolean; apiKeyHint: string; isDefault: boolean }> {
+  return inTransaction(async (tx) => {
+    await lockImageGenProviders(tx);
+    const existing = await tx.rawQueryRow<{
+      provider: string;
+      apiKeyHint: string;
+      totalTimeoutMs: number;
+      idleTimeoutMs: number;
+    }>(
+      `SELECT provider, api_key_hint AS "apiKeyHint",
+              total_timeout_ms::double precision AS "totalTimeoutMs",
+              idle_timeout_ms::double precision  AS "idleTimeoutMs"
+         FROM imagegen_config WHERE provider = $1`,
+      input.provider,
+    );
+    // 建行时没有「保留原值」可言:这张表没有内置端点可回落,三个字段必给
+    if (!existing) {
+      for (const [field, value] of [
+        ["apiKey", input.apiKey],
+        ["baseUrl", input.baseUrl],
+        ["modelId", input.modelId],
+      ] as const) {
+        if (value === undefined) {
+          throw new NotFoundError(
+            `imagegen provider ${input.provider} 尚未配置,首次写入必须提供 ${field}`,
+          );
+        }
+      }
+    }
+
+    // 跨字段约束在这里判,不留给库的 CHECK(理由同 websearch:给所有者一句能行动的话)
+    const effTotal = input.totalTimeoutMs ?? existing?.totalTimeoutMs ?? DEFAULT_IMAGE_TOTAL_TIMEOUT_MS;
+    const effIdle = input.idleTimeoutMs ?? existing?.idleTimeoutMs ?? DEFAULT_IMAGE_IDLE_TIMEOUT_MS;
+    if (effIdle > effTotal) {
+      throw new ConflictError(
+        `idleTimeoutMs(${effIdle})不能大于 totalTimeoutMs(${effTotal});` +
+          "空闲上限大于总上限时空闲计时器永远不会先触发",
+      );
+    }
+
+    if (input.makeDefault) {
+      await tx.rawExec(
+        `UPDATE imagegen_config SET is_default = FALSE, updated_at = now()
+          WHERE is_default AND provider <> $1`,
+        input.provider,
+      );
+    }
+
+    const hint = input.apiKey === undefined ? existing!.apiKeyHint : maskSecret(input.apiKey);
+
+    if (existing) {
+      const sets: string[] = [];
+      const params: (string | number | boolean | Buffer | null)[] = [input.provider];
+      const set = (col: string, value: string | number | boolean | Buffer | null) => {
+        params.push(value);
+        sets.push(`${col} = $${params.length}`);
+      };
+      if (input.apiKey !== undefined) {
+        set("api_key_enc", encryptSecret(encryptionKeyB64, input.apiKey));
+        set("api_key_hint", hint);
+      }
+      if (input.baseUrl !== undefined) set("base_url", input.baseUrl);
+      if (input.modelId !== undefined) set("model_id", input.modelId);
+      if (input.apiStyle !== undefined) set("api_style", input.apiStyle);
+      if (input.imageSize !== undefined) set("image_size", input.imageSize);
+      if (input.totalTimeoutMs !== undefined) set("total_timeout_ms", input.totalTimeoutMs);
+      if (input.idleTimeoutMs !== undefined) set("idle_timeout_ms", input.idleTimeoutMs);
+      if (input.dailyImageLimit !== undefined) set("daily_image_limit", input.dailyImageLimit);
+      if (input.makeDefault) sets.push("is_default = TRUE");
+      sets.push("updated_at = now()");
+      await tx.rawExec(
+        `UPDATE imagegen_config SET ${sets.join(", ")} WHERE provider = $1`,
+        ...params,
+      );
+    } else {
+      // 可选参数省略时交给列默认值(images / NULL / 180s / 30s / 不限),不在这里复述:
+      // 默认值只该有一处真相,而那处是迁移 010。
+      const cols = ["provider", "base_url", "api_key_enc", "api_key_hint", "model_id", "is_default"];
+      const vals: (string | number | boolean | Buffer | null)[] = [
+        input.provider,
+        input.baseUrl!,
+        encryptSecret(encryptionKeyB64, input.apiKey!),
+        hint,
+        input.modelId!,
+        input.makeDefault,
+      ];
+      const optional: Array<[string, number | string | null | undefined]> = [
+        ["api_style", input.apiStyle],
+        ["image_size", input.imageSize],
+        ["total_timeout_ms", input.totalTimeoutMs],
+        ["idle_timeout_ms", input.idleTimeoutMs],
+        ["daily_image_limit", input.dailyImageLimit],
+      ];
+      for (const [col, value] of optional) {
+        if (value === undefined) continue;
+        cols.push(col);
+        vals.push(value);
+      }
+      await tx.rawExec(
+        `INSERT INTO imagegen_config (${cols.join(", ")}, updated_at)
+         VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")}, now())`,
+        ...vals,
+      );
+    }
+
+    // 第一个配好的 provider 自动成为默认(与另两张表同款,同一个理由)
+    await tx.rawExec(
+      `UPDATE imagegen_config SET is_default = TRUE, updated_at = now()
+        WHERE provider = $1 AND NOT EXISTS (SELECT 1 FROM imagegen_config WHERE is_default)`,
+      input.provider,
+    );
+
+    const after = await tx.rawQueryRow<{ isDefault: boolean }>(
+      `SELECT is_default AS "isDefault" FROM imagegen_config WHERE provider = $1`,
+      input.provider,
+    );
+    return { created: !existing, apiKeyHint: hint, isDefault: after?.isDefault ?? false };
+  });
+}
+
+export async function setDefaultImageGenProvider(provider: string): Promise<void> {
+  await inTransaction(async (tx) => {
+    await lockImageGenProviders(tx);
+    const exists = await tx.rawQueryRow<{ provider: string }>(
+      `SELECT provider FROM imagegen_config WHERE provider = $1`,
+      provider,
+    );
+    if (!exists) throw new NotFoundError(`imagegen provider ${provider} 未配置`);
+    await tx.rawExec(
+      `UPDATE imagegen_config SET is_default = FALSE WHERE is_default AND provider <> $1`,
+      provider,
+    );
+    await tx.rawExec(
+      `UPDATE imagegen_config SET is_default = TRUE, updated_at = now() WHERE provider = $1`,
+      provider,
+    );
+  });
+}
+
+/**
+ * 删 imagegen provider。删掉默认的那个之后 `generate_image` 工具**下一轮就不再注册**
+ * (`loadEnabledTools` 读不到配置就丢弃),站点其余部分不受影响;已生成的图片不受影响
+ * (它们在 generated_images 里,与 provider 无关)。
+ */
+export async function deleteImageGenProvider(
+  provider: string,
+): Promise<{ defaultRemains: boolean }> {
+  return inTransaction(async (tx) => {
+    // 删除也必须进同一把闸(理由见 deleteProvider)
+    await lockImageGenProviders(tx);
+    const done = await tx.rawQueryRow<{ provider: string }>(
+      `DELETE FROM imagegen_config WHERE provider = $1 RETURNING provider`,
+      provider,
+    );
+    if (!done) throw new NotFoundError(`imagegen provider ${provider} 未配置`);
+    const left = await tx.rawQueryRow<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM imagegen_config WHERE is_default`,
+    );
+    return { defaultRemains: (left?.n ?? 0) > 0 };
+  });
+}
+
 // ───────────────────── 工具启停 ─────────────────────
 
 export interface ToolConfigRow {

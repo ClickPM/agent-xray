@@ -32,10 +32,10 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 而第 4 层从一开始就写着「外呼型工具(LLM / 生图 / 搜索)」—— 两处的措辞此前是矛盾的:一个外呼工具必然要持凭据、
 发网络请求。本次把边界写死,而不是让实现去挑一条读:
 
-| | 纯函数组(`notes_*`) | 外呼组(`web_search`) |
+| | 纯函数组(`notes_*`) | 外呼组(`web_search` / `generate_image`) |
 |---|---|---|
 | 网络 | 无 | 仅限**目标域白名单**内的固定端点 |
-| 凭据 | 不存在 | 服务端持有,经加密表(`websearch_config`)读取并**只在进程内流动** |
+| 凭据 | 不存在 | 服务端持有,经加密表(`websearch_config` / `imagegen_config`)读取并**只在进程内流动** |
 | `process.env` | 不读 | 只在**注册环节**读(白名单扩展项),工具体内不读 |
 | 文件系统 / 子进程 / 动态 import | 禁止 | 同样禁止 |
 
@@ -88,9 +88,16 @@ R-TOOLS 补记(2026-09-02,所有者裁定;`apps/api/agent/catalog.ts` + `tools.t
 - **目录静态、不读库**:`web_search` 未配置或被关掉时照样列出,且条目里没有任何「可不可用」字段——这与「不显示启停状态」是同一枚硬币的两面(所有者待裁定项见 ROUNDS.md R-TOOLS)
 - 端点本身不改变四层沙箱的任何一层:工具的注册集合仍由 `tool_config` 决定,目录只是把「已实现的全部」说给访客听
 
+R-IMAGEGEN 补记(2026-09-02,所有者裁定;`apps/api/agent/imagegen.ts` + `image-db.ts` + `images.ts` + 迁移 `010`):
+
+- **外呼组的第二个成员 `generate_image`**,六条附加约束逐条落点:①访客只控 `prompt` 一个字段(`images` 形态落进请求体的 `prompt`,`chat` 形态落进 `messages[0].content`),尺寸是 provider 配置(`image_size`)不是入参;②目标域白名单独立一份(`shared/imagegen-hosts.ts`,内置 `api.openai.com` / `aigateway.variflight.com`,env `XRAY_IMAGEGEN_EXTRA_HOSTS` 只能追加),**判据实现与搜索共用**(`shared/outbound-hosts.ts`),`redirect:"manual"` 照旧;③双计时器,但**空闲计时器只在响应头到达后才起**——生图上游在出图前一个字节都不发,等头那段只受总时长约束;④`daily_quota.images` 计次,上限在 `imagegen_config.daily_image_limit`;⑤响应体 16 MiB、解码后 8 MiB 两道字节上界,失败一律固定文案,错误对象在构造处就抹掉本次 key;⑥**返回的是字节不是文本**,不可信输入的判据换成「是不是图片」:base64 必须合法、**魔数必须是 png / jpeg / webp / gif 之一**,上游声明的 mime 不作数;不是图片就不存、也不给模型
+- **协议形态是 provider 的配置字段**(`api_style`:`images` = `POST {base}/v1/images/generations` → `data[0].b64_json`;`chat` = `POST {base}/v1/chat/completions` → `message.images[0].image_url.url` 的 data URL),不是两个工具。**只收内联图片数据**:上游只回 `url` 时报失败,本进程不去抓那个链接——「让服务器去取一个上游给的地址」与「让 agent 去抓这个地址」是同一类事
+- **它同时是会话绑定的**(与 `session_rename` 同构):图片要归到访客的会话名下,会话 id 在建会话时闭包绑定、不是入参,模型表达不出「往别人的会话里塞图」。写库走第 2 层的 `agent_image` 角色(见下)
+- **模型拿到的是一行 markdown**(`![…](/api/agent/images/<uuid>.<ext>)`),不是图片内容:pi 支持把 `ImageContent` 回给模型,但那是 token 与费用,轨迹事件里也放不下。系统提示要求把这一行**原样**写进回复——对话框里的预览就是助手回复里的 markdown 图片,渲染器(`Markdown.tsx` 的 `img`)本来就有,前端零改动
+
 ### 第 2 层 · 数据面只读
 
-- 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_categories` / `notes_series` / `notes_chapters` 三张表 `SELECT`,对 `llm_config` / `websearch_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `daily_quota` / `visits` 无任何权限
+- 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_categories` / `notes_series` / `notes_chapters` 三张表 `SELECT`,对 `llm_config` / `websearch_config` / `imagegen_config` / `tool_config` / `about_content` / `notes_assets` / `generated_images` / `mcp_audit` / `daily_quota` / `visits` 无任何权限
 - 即使 prompt injection 完全操纵了工具调用,能做的也只有「读教程」(R-WEBSEARCH 起多一件:发起一次受限的联网搜索)
 
 R7 落地补记(2026-09-01,所有者裁定;`apps/api/agent/ro-db.ts` + 迁移 `006`):
@@ -108,6 +115,13 @@ R-TITLE 补记(2026-09-01,所有者裁定;`apps/api/agent/title-db.ts` + 迁移 
 - **写不走 `agent_ro`**(它跑在 `READ ONLY` 事务里,那是它的定义),另起一个同样 **NOLOGIN** 的角色 `agent_title`,授权是**列级**的:`GRANT SELECT (id, title, title_source)` + `GRANT UPDATE (title, title_source) ON sessions`。于是「只能改标题」由 Postgres 强制,不靠工具实现自觉 —— 以该角色改 `sessions.last_active_at`、写 `messages`、删会话、读 `llm_config`,全部 `permission denied`(`apps/api/agent/title.test.ts` 逐条断言,与 R7「以 agent_ro 写库必须失败」是同一形态的验收)
 - 事务里仍是 `SET LOCAL ROLE`(池化连接会把 `SET ROLE` 泄漏给下一个请求,理由同上一条补记),但**不叠 `SET TRANSACTION READ ONLY`** —— 这是沙箱里唯一一段刻意可写的事务;`statement_timeout` 照旧
 - 成员资格的授予口径与迁移 006 相同(只授给「已经能 SELECT `sessions`」的登录角色):能读 `sessions` 的角色本来就能整行改写它,再给它一个只能改两列的身份,**可证明地**不扩大任何权限
+
+R-IMAGEGEN 补记(2026-09-02,所有者裁定;`apps/api/agent/image-db.ts` + 迁移 `010`):
+
+- 本层的写面从「一列半」扩成「一列半 + **一张表的定向 INSERT**」:第三个 NOLOGIN 角色 `agent_image`,授权只有 `INSERT ON generated_images`——没有 SELECT(连自己写的行都读不回来,`RETURNING` 因此不可用,id 在 JS 里生成)、没有 UPDATE / DELETE、对其余任何表无权限。生成的图片只能被**追加**,改不了、删不了、也读不到别人的;读面在 `images.ts`(全权连接,按访客归属过滤)
+- 与 `agent_title` 同一套形态:`SET LOCAL ROLE`、`statement_timeout`、不叠 `READ ONLY`、成员资格只授给「已经能 SELECT `sessions`」的登录角色。**三个角色不合并**:合并成一个之后,「只读」「只能改标题」「只能追加图」三条性质就没有任何一处还能单独成立
+- 外键 `generated_images.session_id → sessions(id)` 的检查由 Postgres 以**被引用表所有者**的身份执行,`agent_image` 不需要、也没有 `sessions` 的 SELECT(测试钉住:以该角色 `SELECT sessions` 是 `permission denied`,INSERT 却能通过外键检查)
+- 上面那句「即使 prompt injection 完全操纵了工具调用,能做的也只有…」从本轮起多一件:往**自己这个会话**里追加一张图(受每日次数限额)。它做不到往别的会话追加(会话 id 不是入参)、做不到读回或删除任何图
 
 ### 第 3 层 · 容器隔离
 
@@ -155,6 +169,13 @@ R-WEBSEARCH 落地补记(2026-09-01,`apps/api/agent/websearch.ts` + `websearch-c
   websearch 配置时丢弃该名字并记日志。配好之后经 R6 那条统一规则(**配置指纹变了,会话下一轮重建**)
   自动生效 —— 所以 websearch 配置的指纹也并进了 `RuntimeConfig.fingerprint`
 
+R-IMAGEGEN 落地补记(2026-09-02,`apps/api/agent/imagegen.ts` + `imagegen-config.ts` + 迁移 `010`):
+
+- **第二个外呼工具 `generate_image`**,上面 R-WEBSEARCH 的每一条对它同样成立(独立白名单 `shared/imagegen-hosts.ts` + env `XRAY_IMAGEGEN_EXTRA_HOSTS` 追加;`daily_quota.images` 计次、上限 `imagegen_config.daily_image_limit`;默认关;没配就不注册;配置指纹并进 `RuntimeConfig.fingerprint`)。**两个白名单刻意不合一**:一个域被列进搜索白名单,不等于它自动可以当生图端点——所有者要显式选;判据实现只有一份(`shared/outbound-hosts.ts`)
+- **超时默认 总 180s / 空闲 30s**,CHECK 上界与搜索同为 300s / 120s。与搜索的一处不同:**空闲计时器在响应头到达后才起**。生图是非流式的,上游出图前不发任何字节,若从发请求那一刻就计空闲,每一次正常的生图都会在 30s 上被自己掐死
+- **一次调用一张图,尺寸由 provider 配置**(`image_size`,可空 = 上游默认,`chat` 形态忽略它)。`n` 恒为 1 —— 多一张图就是多一份上游费用与多一行 8 MiB 上限的 BYTEA,模型要多张就多调几次,每次各占一次额度
+- **图片存 `generated_images`**(BYTEA,`byte_size` 的 CHECK 上界 8 MiB 与代码常量同值、测试钉住),随 `sessions` 级联删除:访客删会话、3 天保留期到期,图一起没了。不落盘(容器根文件系统只读、工具禁止碰文件系统、镜像内不烧内容)
+
 ## 2. 事件流脱敏
 
 - SSE 推送前对每个事件做**白名单字段**过滤(sanitize)
@@ -168,6 +189,7 @@ R-WEBSEARCH 落地补记(2026-09-01,`apps/api/agent/websearch.ts` + `websearch-c
   - 加密口径:AES-256-GCM,密文布局 `nonce(12)‖ct‖tag(16)` 存 BYTEA(`apps/api/shared/crypto.ts`)。选认证加密是为了让「库被改一个字节」直接解密失败,而不是解出一段垃圾 key 去打 provider。`ConfigEncryptionKey` 换掉 = 既有密文全部作废,必须经 MCP 重写各 provider 的 key
   - `ConfigEncryptionKey` 与 `McpAuthTokenHash` 都不是可直接使用的凭据:前者是密钥、后者是**哈希**,拿到它们既登不了管理面也用不了 LLM
 - **websearch key(R-WEBSEARCH,2026-09-01)走的是同一套**:`websearch_config.api_key_enc`,同一个 `ConfigEncryptionKey`、同一份 `shared/crypto.ts`、同样只回 `maskSecret` 掩码。刻意**不复用 `llm_config` 那一行的 key**——搜索网关与聊天 provider 可以是两家,合成一行会让「换聊天 provider」顺带换掉搜索凭据。明文只在 `loadActiveWebSearchConfig` → 工具闭包 → `Authorization` 头这一条进程内链路上流动:不进日志(错误文本过 `safeErrorText`)、不进事件流(§2 的字段白名单里没有它)、不进任何端点
+- **imagegen key(R-IMAGEGEN,2026-09-02)同上**:`imagegen_config.api_key_enc`,同一把密钥、同一份原语、同样只回掩码、同样不与 LLM / 搜索的 key 合行。明文链路是 `loadActiveImageGenConfig` → 工具闭包 → `Authorization` 头;上游把请求头回显进错误体时,`redactSecret` 在构造错误对象那一刻就把本次 key 抹掉(与 R-WEBSEARCH 同一处教训)
 - `.env` 不入 Git;仓库推送前跑 gitleaks;`.gitignore` 已覆盖 `.env*` / `*.key` / `*.pem`
 - 服务器上 `.env` 权限 600
 
@@ -288,6 +310,10 @@ R-VISITOR 落地补记(2026-09-01,`apps/api/agent/visitor.ts` + `shared/visitor-
     协议走,两个阶段都对。**前提与 §6 的 XFF 一样:Caddy 前面没有别的代理**
 - **鉴权口径 = 归属过滤,不是权限判断**:`sessions.visitor_id` 是唯一判据,
   会话列表 / 单查 / 续接 / 删除 / 轨迹流全部带 `WHERE visitor_id = $当前访客`。
+  R-IMAGEGEN(2026-09-02)起多一条:**生成的图片**(`GET /agent/images/:file`)按
+  `generated_images ⋈ sessions` 判归属——地址是 UUID 不可枚举,但「不可枚举」不是授权。
+  `<img>` 是同源 GET,`SameSite=Lax` 的 cookie 会带上;响应 `Cache-Control: private`,
+  不许中间缓存把一个访客的图交给另一个访客
   - **不匹配一律回 `not_found`,不回 403**:403 等于确认「这个 id 是存在的」,
     把会话 id 变成一个可探测的存在性预言机。没有 cookie 的调用方看到的是「一个空站点」
   - `visitor_id` 允许为 NULL(本轮之前建的存量会话),而 `= $1` 永不匹配 NULL ——
@@ -320,7 +346,8 @@ R-VISITOR 落地补记(2026-09-01,`apps/api/agent/visitor.ts` + `shared/visitor-
   ```
 
   (**必须用锚定到行首的模式**:直接 `grep "expose: true"` 会把注释里提到这串字的行也算进去,
-  判据就永远对不上 —— `shared/visitor-cookie.ts` 里那段说明本身就有两处)
+  判据就永远对不上 —— `shared/visitor-cookie.ts` 里那段说明本身就有两处;
+  R-IMAGEGEN 加了 `/agent/images/:file` 之后是 17 = 17)
 - **错误响应不重发 cookie**,这是 Encore 的限制不是疏漏:`APIError` 没有响应头这一层,
   要在 404/409 上重发就得把错误改成 200 加错误字段。滑动窗口因此靠**成功**响应维持 ——
   工作台每次挂载与每轮对话结束都会调用会成功的 `listSessions`,真实访客的 cookie 一直在续;

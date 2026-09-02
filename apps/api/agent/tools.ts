@@ -7,10 +7,12 @@
 //        · **纯函数组**(`notes_*`)——只做一件事:经 `queryAsAgentRo` 读 notes 三张表。
 //          不碰文件系统、不 spawn 进程、不读 process.env、不做动态 import、
 //          **不发任何网络请求**。连接串 / 凭据在这里根本不存在,因而也无从泄漏。
-//        · **外呼组**(`web_search`)——持服务端凭据、只打**目标域白名单**内的固定端点。
-//          文件系统 / 子进程 / 动态 import 同样禁止;访客控得到的只有一个 `query` 字段,
-//          控不到 URL / host / headers / model(实现在 `websearch.ts`)。
-//          它**不是**从注册表里查出来的:没有配置就构造不出来,见 `makeWebSearchTool`。
+//        · **外呼组**(`web_search` / `generate_image`)——持服务端凭据、只打**目标域白名单**内的
+//          固定端点。文件系统 / 子进程 / 动态 import 同样禁止;访客控得到的只有一个文本字段
+//          (`query` / `prompt`),控不到 URL / host / headers / model(实现在 `websearch.ts` /
+//          `imagegen.ts`)。它们**不是**从注册表里查出来的:没有配置就构造不出来,
+//          见 `makeWebSearchTool` / `makeGenerateImageTool`。`generate_image` 同时是会话绑定的
+//          (图片归到本会话名下,经 `agent_image` 角色只能 INSERT,R-IMAGEGEN)。
 //        · **会话绑定组**(`session_rename`,R-TITLE;docs/security.md §1 第 1/2 层补记)——
 //          既不是纯函数也不外呼:它经 `setSessionTitleAsAgent` 写库,只写 `sessions` 的
 //          title / title_source 两列、只写**闭包绑定的那一行会话**(会话 id 不是入参,
@@ -31,9 +33,14 @@
 // 启动时拉进来,破坏 runtime.ts 刻意做的惰性加载。所以这里只用它的**类型**。
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Transaction } from "encore.dev/storage/sqldb";
+import { createHash, randomUUID } from "node:crypto";
 import { safeErrorText } from "../shared/redact";
 import { db } from "./db";
-import { reserveSearch } from "./quota";
+import { insertGeneratedImageAsAgent } from "./image-db";
+import { ImageGenError, MAX_IMAGE_BYTES, runImageGen, type ImageGenPhase } from "./imagegen";
+import { loadActiveImageGenConfig, type ActiveImageGenConfig } from "./imagegen-config";
+import { publicImageUrl } from "./images";
+import { reserveImage, reserveSearch } from "./quota";
 import { queryAsAgentRo } from "./ro-db";
 import { setSessionTitleAsAgent } from "./title-db";
 import { MAX_CITATIONS, runWebSearch, WebSearchError, type WebSearchPhase } from "./websearch";
@@ -610,10 +617,166 @@ function truncateTo(s: string, max: number): string {
   return t.length <= max ? t : `${t.slice(0, max)}…`;
 }
 
+// ───────────────────── 外呼组 + 会话绑定:generate_image(R-IMAGEGEN) ─────────────────────
+
+export const GENERATE_IMAGE_TOOL = "generate_image";
+
+/** 访客(经模型)能塞进来的最长描述。它只会落进请求体的一个字段,见 imagegen.ts。 */
+const MAX_IMAGE_PROMPT_CHARS = 1_000;
+/** markdown 图片的 alt 文本上限:它来自 prompt,会进助手回复与会话历史,不能由模型决定长度。 */
+const MAX_ALT_CHARS = 80;
+
 /**
- * **纯函数组**的注册表。外呼组不在这里(它构造不出常量,见 `makeWebSearchTool`),
- * 会话绑定组也不在这里(要等建会话时绑定会话 id,见 `SESSION_TOOL_REGISTRY`)。
- * 三处合起来才是全部:`tool_config` 里出现任何不在这三处的名字,
+ * 三条**写死**的失败文案(经 `ToolRefusal` 原样交给模型),与 web_search 那三条同一取舍:
+ * 不含任何上游细节,但把「该走哪条后路」说清楚 —— 重试在这三种情形里都不会变好,
+ * 而「编造一个图片地址」是模型在没拿到图时最常见的坏反应,要点名禁止。
+ */
+const IMAGE_QUOTA_TEXT = "今日生图次数已用完,本轮无法生成图片;请如实告知访客,不要重试,也不要编造图片地址。";
+const IMAGE_TIMEOUT_TEXT = "生图超时,本轮没有拿到图片;请如实告知访客,不要用同一描述立刻重试,也不要编造图片地址。";
+const IMAGE_FAILURE_TEXT = "生图失败,本轮没有拿到图片;请如实告知访客,不要编造图片地址。";
+
+/**
+ * 阶段 → 面板文案,按上报顺序(设计稿 1g 的 PROGRESS 段)。
+ * 前五个键是 `ImageGenPhase` 的**全集**(imagegen.ts 加了阶段而这里不补,编译不过);
+ * `saving` 是工具自己在落库前上报的第六段,不在 imagegen.ts 里。
+ */
+const GENERATE_IMAGE_PHASE_LABELS: Readonly<Record<ImageGenPhase | "saving", string>> = {
+  request: "发起",
+  generating: "生成中",
+  accepted: "已回复",
+  receiving: "接收中",
+  decoding: "校验解码",
+  saving: "写入图库",
+};
+
+/**
+ * `generate_image` 的常量部分。**这里没有 `cfg` 也没有 `ctx`**:它们在 `makeGenerateImageTool`
+ * 的参数里,而本常量定义在函数外面 —— baseUrl / model / 限额 / 会话 id 进不了描述与 schema。
+ * `promptSnippet` 里那句「有每日张数上限」是事实陈述,不是数字。
+ *
+ * 【只有一个入参 `prompt`】尺寸是 provider 配置(`image_size`),张数恒为 1(所有者裁定,
+ * 任务卡「范围裁定」):外呼组约束 1 的最严读法 —— 模型给的东西只落进请求体的一个字段。
+ */
+export const GENERATE_IMAGE_META: ToolMeta = {
+  name: GENERATE_IMAGE_TOOL,
+  label: "生成图片",
+  description:
+    "根据一段文字描述生成一张图片(由服务端的生图网关完成),图片保存进当前会话并直接显示在对话里。" +
+    "访客要求画图 / 生成图片 / 出图时使用;一次调用只生成一张,同一个要求不要重复生成。" +
+    "结果里那行 markdown 图片必须原样写进回复,访客才看得到图。",
+  promptSnippet: `${GENERATE_IMAGE_TOOL} —— 按文字描述生成一张图片并显示在对话里(有每日张数上限)`,
+  // 【别在这里加 `promptGuidelines`】理由与 WEB_SEARCH_META 同段:本仓库走 systemPromptOverride,
+  // 那个字段根本不会送达;用法约束写在 runtime.ts 的 systemPromptFor 里。
+  parameters: {
+    type: "object",
+    properties: {
+      prompt: {
+        type: "string",
+        minLength: 1,
+        maxLength: MAX_IMAGE_PROMPT_CHARS,
+        description: "图片内容的文字描述,中英文均可;写清主体、风格、构图,不要放网址",
+      },
+    },
+    required: ["prompt"],
+    additionalProperties: false,
+  },
+  // 与 execute 里拼结果文本的格式一致
+  output: "一句说明 + 一行 markdown 图片(`![描述](/api/agent/images/<id>.<ext>)`),原样写进回复即可显示",
+  outputNote: `每次一张,最大 ${MAX_IMAGE_BYTES / 1024 / 1024} MiB;图片归本会话所有,随会话一起删除`,
+  phases: Object.values(GENERATE_IMAGE_PHASE_LABELS),
+};
+
+/**
+ * prompt → markdown 图片的 alt 文本。取首行、去掉会破坏 markdown 结构的字符(`[]()` 与反引号)、
+ * 控制字符压成空格、截到 MAX_ALT_CHARS;什么都不剩时给一个固定文案。
+ * 它会进助手回复(经 Markdown 渲染成 `<img alt>`)与会话历史,长度与形状不能由模型决定。
+ */
+export function imageAltText(prompt: string): string {
+  const s = (prompt.split(/\r?\n/, 1)[0] ?? "")
+    // 控制字符(含制表符)压成空格;写成 \uXXXX 转义是为了不让编辑器把字面量吞掉(sanitizeTitle 同款)
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/[\[\]()`]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (s === "") return "生成的图片";
+  return s.length > MAX_ALT_CHARS ? `${s.slice(0, MAX_ALT_CHARS)}…` : s;
+}
+
+/**
+ * 构造 `generate_image` 工具。既要凭据(`cfg`,与 `makeWebSearchTool` 同理),又要会话身份
+ * (`ctx`,与 `sessionRename` 同理):图片要归到**本会话**名下,而会话 id 不是入参 ——
+ * 模型表达不出「往别人的会话里塞图」。所以它在 `buildSessionTools` 里按会话构造,
+ * 不在 `loadEnabledTools` 里(那里只记名字与配置)。
+ *
+ * 明文 key 只活在这个闭包里:不进日志、不进事件流、不进任何返回值。
+ * 导出只为 catalog.test.ts 能拿一份「按真实路径构造出来的定义」与目录逐字段比对。
+ */
+export function makeGenerateImageTool(cfg: ActiveImageGenConfig, ctx: SessionToolContext): MetaToolDefinition {
+  return {
+    ...GENERATE_IMAGE_META,
+    async execute(_toolCallId, params, signal, onUpdate) {
+      const { prompt } = params as { prompt: string };
+      return guarded(
+        GENERATE_IMAGE_TOOL,
+        async () => {
+          // 【先占额,再外呼】docs/security.md §1 第 4 层。占不到就明确告诉模型「今天不能生图了」
+          if (!(await reserveImage(cfg.dailyImageLimit))) {
+            console.warn(`tool generate_image denied: daily image limit reached (limit=${cfg.dailyImageLimit})`);
+            throw new ToolRefusal(IMAGE_QUOTA_TEXT);
+          }
+
+          // 右栏可见性:阶段上报经 pi 的 onUpdate 变成 `tool_execution_update` 事件
+          const report = (phase: string, detail: string) =>
+            onUpdate?.({ content: [{ type: "text", text: `[${phase}] ${detail}` }], details: { phase } });
+
+          let image;
+          try {
+            image = await runImageGen(prompt, cfg, {
+              // 会话被回收 / 本轮被取消时,外呼要跟着断
+              signal,
+              onProgress: onUpdate ? (p) => report(p.phase, p.detail) : undefined,
+            });
+          } catch (err) {
+            if (err instanceof ImageGenError) {
+              // 上游状态码 / 响应体 / 错误原文只到这里为止(且已过 safeErrorText)
+              console.error(`tool generate_image failed (${err.kind}): ${safeErrorText(err.message)}`);
+              const timedOut = err.kind === "idle_timeout" || err.kind === "total_timeout";
+              throw new ToolRefusal(timedOut ? IMAGE_TIMEOUT_TEXT : IMAGE_FAILURE_TEXT);
+            }
+            throw err; // AbortError 等交给 guarded 兜底
+          }
+
+          report("saving", `正在把图片写进本会话(${Math.round(image.bytes.length / 1024)} KB)`);
+          // id 在这里生成:agent_image 角色没有 SELECT,库里的 RETURNING 用不了(迁移 010)
+          const id = randomUUID();
+          const etag = createHash("sha256").update(image.bytes).digest("hex");
+          await insertGeneratedImageAsAgent({
+            id,
+            sessionId: ctx.sessionId,
+            contentType: image.contentType,
+            bytes: image.bytes,
+            etag,
+          });
+
+          const url = publicImageUrl(id, image.contentType);
+          return textResult(
+            "图片已生成并保存到本会话。把下面这行 markdown **原样**写进你的回复(不要放进代码块、不要改地址),访客就能直接看到这张图:\n\n" +
+              `![${imageAltText(prompt)}](${url})`,
+            // 【details 里不放 provider / model】它会进 tool_execution_end 的 resultPreview →
+            // 公开的 /trace/stream;R-TOOLS 裁定配置面不公开
+            { imageId: id, contentType: image.contentType, bytes: image.bytes.length },
+          );
+        },
+        IMAGE_FAILURE_TEXT,
+      );
+    },
+  };
+}
+
+/**
+ * **纯函数组**的注册表。外呼组不在这里(它们构造不出常量,见 `makeWebSearchTool` /
+ * `makeGenerateImageTool`),会话绑定组也不在这里(要等建会话时绑定会话 id,见 `SESSION_TOOL_REGISTRY`)。
+ * 四处合起来才是全部:`tool_config` 里出现任何不在这四处的名字,
  * 都只会被丢弃并记日志。新增工具 = 改这个文件 + 发一次版,不是改一行配置。
  */
 export const TOOL_REGISTRY: Readonly<Record<string, MetaToolDefinition>> = Object.freeze({
@@ -781,13 +944,18 @@ export interface EnabledTools {
   definitions: ToolDefinition[];
   /** 其中需要绑定会话上下文的工具名;实现由 `buildSessionTools` 在建会话时构造 */
   sessionScoped: string[];
-  /** 集合变了就要重建会话(会话的工具集在创建时定格),判据是这个值 */
+  /**
+   * `generate_image` 的配置(R-IMAGEGEN)。它既要凭据又要会话身份,所以实现推迟到
+   * `buildSessionTools`;这里先把读好的配置带着走。`sessionScoped` 含它时这个字段必然非空
+   * (`loadEnabledTools` 读不到配置就不会列它)。
+   */
+  imageGen: ActiveImageGenConfig | null;
   /**
    * 集合变了就要重建会话(会话的工具集在创建时定格),判据是这个值。
    *
    * **不只是名字列表**:`web_search` 的端点 / key / 超时 / 限额被 `makeWebSearchTool`
    * 定格在闭包里,名字没变而配置变了同样需要重建 —— 所以 websearch 的配置指纹
-   * 也拼在这里。漏了它的表现是「经 MCP 换了搜索端点,已有会话还在打旧的」。
+   * 也拼在这里(R-IMAGEGEN 起 imagegen 的同理)。漏了它的表现是「经 MCP 换了搜索端点,已有会话还在打旧的」。
    */
   fingerprint: string;
 }
@@ -812,6 +980,14 @@ export function buildSessionTools(
   const definitions = [...enabled.definitions];
   for (const name of enabled.sessionScoped) {
     if (name === SESSION_RENAME_TOOL && !ctx.needsTitle) continue;
+    if (name === GENERATE_IMAGE_TOOL) {
+      // 【R-IMAGEGEN】既要配置又要会话身份,在这里现构造。配置为空不该发生
+      // (loadEnabledTools 读不到配置就不会列它),真发生了就当没这个工具,别注册一个必然失败的
+      if (!enabled.imageGen) continue;
+      names.push(name);
+      definitions.push(makeGenerateImageTool(enabled.imageGen, ctx));
+      continue;
+    }
     names.push(name);
     definitions.push(SESSION_TOOL_REGISTRY[name](ctx));
   }
@@ -825,10 +1001,10 @@ let lastLoggedFingerprint: string | undefined;
  * 读 `tool_config` 决定本次会话注册哪些工具。
  *
  * 两道过滤,顺序不能反:
- *   1. **名字必须落在三处之一**(无状态的 `TOOL_REGISTRY`、会话绑定的
- *      `SESSION_TOOL_REGISTRY`,或外呼组的 `web_search` —— 它不在任何表里,由 `makeWebSearchTool`
- *      按配置构造)。表是所有者可写的,而「凭一个名字就注册一个工具」
- *      这件事根本不存在 —— 落到这里的未知名字只会被丢掉。
+ *   1. **名字必须落在四处之一**(无状态的 `TOOL_REGISTRY`、会话绑定的
+ *      `SESSION_TOOL_REGISTRY`,或外呼组的 `web_search` / `generate_image` —— 它们不在任何表里,
+ *      由 `makeWebSearchTool` / `makeGenerateImageTool` 按配置构造)。表是所有者可写的,
+ *      而「凭一个名字就注册一个工具」这件事根本不存在 —— 落到这里的未知名字只会被丢掉。
  *   2. **dangerous 行需要服务器 env 双闸**。表里置 true 只是第一闸;
  *      没有 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 就不注册(docs/security.md §1 第 1 层)。
  *      注意本注册表目前**没有**任何 dangerous 实现,这段是给将来准备的闸,不是当前路径。
@@ -849,6 +1025,12 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
     webSearchRow && !(webSearchRow.dangerous && !unlocked)
       ? await loadActiveWebSearchConfig()
       : null;
+  // 同一套判断,第二个外呼工具(R-IMAGEGEN)
+  const imageGenRow = rows.find((r) => r.name === GENERATE_IMAGE_TOOL);
+  const imgCfg =
+    imageGenRow && !(imageGenRow.dangerous && !unlocked)
+      ? await loadActiveImageGenConfig()
+      : null;
 
   const names: string[] = [];
   const definitions: ToolDefinition[] = [];
@@ -856,13 +1038,14 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
   const dropped: string[] = [];
   for (const row of rows) {
     const isWebSearch = row.name === WEB_SEARCH_TOOL_NAME;
+    const isImageGen = row.name === GENERATE_IMAGE_TOOL;
     // 【必须是 hasOwn 而不是 `in`】(codex 初审 P3)`in` 会走到 Object.prototype 上:
     // 一个叫 `constructor` 的行(`tool_config_set` 的 snake_case 校验放行它)会被判为
     // 「已实现」,然后把 `Object` 本身当工具定义塞进 customTools —— 那东西没有 execute。
     // 注册表是数据不是原型链。
     const isStateless = Object.hasOwn(TOOL_REGISTRY, row.name);
     const isSessionScoped = Object.hasOwn(SESSION_TOOL_REGISTRY, row.name);
-    if (!isWebSearch && !isStateless && !isSessionScoped) {
+    if (!isWebSearch && !isImageGen && !isStateless && !isSessionScoped) {
       dropped.push(`${row.name}(未实现)`);
       continue;
     }
@@ -882,6 +1065,16 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
       definitions.push(makeWebSearchTool(webCfg));
       continue;
     }
+    if (isImageGen) {
+      // 同上;但实现要等建会话时绑定会话 id(图片归本会话名下),这里只记名字与配置
+      if (!imgCfg) {
+        dropped.push(`${row.name}(未配置 imagegen provider)`);
+        continue;
+      }
+      names.push(row.name);
+      sessionScoped.push(row.name);
+      continue;
+    }
     names.push(row.name);
     if (isSessionScoped) {
       // 实现要等建会话时绑定会话 id 才能构造(buildSessionTools),这里只记名字
@@ -891,15 +1084,15 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
     }
   }
 
-  // 指纹 = 名字集合 + websearch 配置指纹(理由见 EnabledTools.fingerprint 的注释)
-  const fingerprint = `${names.join(",")}|ws:${webCfg?.fingerprint ?? "-"}`;
+  // 指纹 = 名字集合 + 两份外呼配置的指纹(理由见 EnabledTools.fingerprint 的注释)
+  const fingerprint = `${names.join(",")}|ws:${webCfg?.fingerprint ?? "-"}|ig:${imgCfg?.fingerprint ?? "-"}`;
   // 热路径每轮都会调一次,所以只在配置变化时记一行(含本次被丢弃的名字)。
-  // **日志里只出名字**:指纹含 websearch 配置的 sha256,刷进日志既没用又难读。
+  // **日志里只出名字**:指纹含外呼配置的 sha256,刷进日志既没用又难读。
   if (lastLoggedFingerprint !== fingerprint) {
     lastLoggedFingerprint = fingerprint;
     console.log(
       `agent tools enabled: [${names.join(",")}]${dropped.length ? ` dropped: ${dropped.join(", ")}` : ""}`,
     );
   }
-  return { names, definitions, sessionScoped, fingerprint };
+  return { names, definitions, sessionScoped, imageGen: imgCfg, fingerprint };
 }

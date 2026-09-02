@@ -100,6 +100,7 @@ ssh <host> "docker load -i ~/deploy/xray-<sha>.tar && chmod +x ~/deploy/migrate.
 cd ~/deploy && cp .env.example .env && chmod 600 .env    # 首次
 # 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY / METRICS_IP_SALT
 #   / SITE_ADDRESS=<域名> / SITE_REDIRECT_FROM=<裸域> / SITE_ORIGIN=https://www.<域名> / ICP_BEIAN=<备案号>
+#   / XRAY_IMAGEGEN_EXTRA_HOSTS=<生图网关域名>(R-IMAGEGEN;与上一条是两份清单,网关域名两处都写)
 #   / XRAY_WEBSEARCH_EXTRA_HOSTS=<LLM/搜索网关域名>   ← 生产首次部署最容易漏:内置白名单只有两个域,
 #     不补这项 websearch_provider_upsert 直接拒(R11 实测;130 早就设了所以从没暴露)
 # 密钥类三项在服务器上就地 `openssl rand -base64 32` 生成,原文不经本机、不进对话

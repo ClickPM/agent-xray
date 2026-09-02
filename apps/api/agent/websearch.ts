@@ -14,7 +14,8 @@
 //
 // 【本文件不读库、不解密】配置由 `websearch-config.ts` 取好后作参数传进来。
 // 这条边界让本文件可以被纯函数式地测试(注入 fetch),也让「凭据从哪来」只有一个答案。
-import { safeErrorText, scrubString } from "../shared/redact";
+import { readBodyCapped } from "../shared/http-body";
+import { redactSecret, safeErrorText } from "../shared/redact";
 import { checkBaseUrl } from "../shared/websearch-hosts";
 import type { ActiveWebSearchConfig } from "./websearch-config";
 
@@ -440,55 +441,27 @@ export async function runWebSearch(
  * 容器内存吃光 —— 而 `MAX_RESPONSE_BYTES` 此前只管到 SSE 那条路径(codex 初审 P2)。
  * 非流式响应与错误体都走这里,两条路径的上界因而是同一个数。
  *
- * 超上限**直接抛**而不是截断:一段被砍掉一半的 JSON 解析出来是垃圾,
- * 而"上游回了个不该这么大的东西"本身就是要报出来的事实。
- *
  * `onChunk` 用来重置空闲计时器(codex 复审 P2)。空闲计时器在 `fetch` **之前**就起了,
  * 而这条路径此前一个字都不重置它 —— 一个响应头很快、body 却要流上一分钟的上游
  * (非流式 JSON 或一个大错误体),会在**持续有数据**的情况下被空闲超时掐掉。
  * SSE 那条路径本来就每块重置,两条路径的判据必须一致。
+ *
+ * 实现在 `shared/http-body.ts`(R-IMAGEGEN 抽出,两个外呼工具共用);这里只给上界与错误类型。
  */
-async function readTextCapped(res: Response, onChunk?: () => void): Promise<string> {
-  if (!res.body) return "";
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let out = "";
-  let bytes = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      onChunk?.();
-      bytes += value?.byteLength ?? 0;
-      if (bytes > MAX_RESPONSE_BYTES) {
-        throw new WebSearchError("oversize", `上游响应超过 ${MAX_RESPONSE_BYTES} 字节上限`);
-      }
-      out += decoder.decode(value, { stream: true });
-    }
-  } finally {
-    // 上界触发时要主动放弃剩下的字节,否则连接会一直挂着把数据读完
-    reader.cancel().catch(() => {});
-  }
-  return out + decoder.decode();
+function readTextCapped(res: Response, onChunk?: () => void): Promise<string> {
+  return readBodyCapped(res, {
+    maxBytes: MAX_RESPONSE_BYTES,
+    oversize: (max) => new WebSearchError("oversize", `上游响应超过 ${max} 字节上限`),
+    onChunk,
+  });
 }
 
 /**
- * 上游文本 → 可以安全放进**错误对象**的文本。
- *
- * 【为什么不能只靠调用点的 `safeErrorText`】那只保证「写进日志的那一行」是干净的,
- * 而一个带着明文 key 的 `Error` 对象本身会被传递、被别处 catch、被将来某个人
- * 直接 `console.error(err)`。凭据不该活到那一步 —— **在构造错误的地方就抹掉**。
- * (单测:上游把我们的 Authorization 头原样回显进 400 的响应体,实测复现过。)
- *
- * 两道叠着用,顺序无所谓:
- *   - `scrubString` —— 通用形态(sk-/rk-/pk-/sess- 前缀串、`Bearer …`),
- *     连"上游回显的是**别人**的 key"也一起打掉;
- *   - 精确替换本次用的 key —— 形态不符合上面那几个模式的自定义网关 key
- *     (纯十六进制、UUID…)只有这一道能兜住。
+ * 上游文本 → 可以安全放进**错误对象**的文本:通用凭据形态 + 本次 key 的精确替换。
+ * 理由与两道判据写在 `shared/redact.ts` 的 `redactSecret`(R-IMAGEGEN 抽出,两个外呼工具共用)。
  */
 function redactUpstream(text: string, apiKey: string): string {
-  const scrubbed = scrubString(text);
-  return apiKey.length >= 8 ? scrubbed.split(apiKey).join("[redacted]") : scrubbed;
+  return redactSecret(text, apiKey);
 }
 
 /** 空结果要是**失败**而不是一句「没搜到」:后者会被模型当成「确实不存在」。 */

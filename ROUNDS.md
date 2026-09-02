@@ -29,6 +29,15 @@
 > 理由是访客从「看到一次调用」到「想知道这是什么工具」的路径必须最短;内容**只读且静态**,
 > 显示工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组,
 > **不显示**启停状态、日限额与剩余次数、provider 与 model 名(公开即泄服务端配置面)。
+>
+> **2026-09-02 第四次修订(R-IMAGEGEN)**:所有者裁定给 agent 配一个**生图工具** `generate_image`,
+> 并要求**访客在对话框里直接看到生成的图**。工具本身**不是**规则 8 的例外(`docs/security.md` §1 开篇与第 4 层
+> 从第一天起就写着「后续生图、联网搜索等插件」「外呼型工具(LLM / 生图 / 搜索)」,与 R-WEBSEARCH 同为补齐既定边界;
+> Tools 面板按后端目录渲染,新工具自动出现);**对话框预览是例外**——画板 1a–1e 的聊天区没画过图片。
+> 形态取对画板偏离最小的一种:图片以 **markdown 图片**出现在助手回复里,渲染器(`Markdown.tsx`)本来就有 `img`
+> 一项(画板 2c 的正文配图样式,聊天区自 R9 起复用),**前端零改动**、不新造气泡与组件。
+> 图片存 Postgres、随会话级联删除、按访客归属供图(隐私口径写进 `docs/security.md` §6);
+> 端点 / 凭据 / 协议形态 / 限额经 MCP 配置,与 LLM、搜索 provider 同一套形态。
 
 ## 进度表
 
@@ -51,6 +60,8 @@
 | **R-TITLE** | 会话命名工具(`session_rename`:agent 自己给会话起名,轨迹可见,默认开启) | 🔄 已合并 `main`,待 130 预发验收 #1/#7([任务卡](rounds/round-title/round-title.md),8 项验收 6 过、2 项交接 130;codex 五轮共 4 条 findings(2×P1 · 2×P2):2 条 P2 采纳整改,1 条 P1 **所有者裁定不采纳并回滚**(记 BACKLOG),1 条 P1 随回滚作废,末轮零 findings,缺陷门禁 PASS) | — |
 | **R-TOOLS** | Tools 工具面板(右栏第 4 tab:工具名/描述/入参 schema/输出形态,只读) | ✅ 已完成并合并 `main`([任务卡](rounds/round-tools/round-tools.md);7 项验收全过,codex 两轮:1×P2 采纳整改 + 末轮零 findings,缺陷门禁 PASS)。**所有者 2026-09-02 裁定:先于 R11** —— 反正要走一次「构建 → 130 预发验 → 生产发」,带上它就只走一次,生产首发即最终形态;本轮无迁移、无新依赖,130 实跑随 R11 那次预发升级一并验 | 2026-09-02 |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ✅ 已完成([任务卡](rounds/round-11/round-11.md))。站点 **https://www.kzgai.cloud/** 于 2026-09-02 上线(SHA `5bd6ace`):备案号挂 footer、仅 HTTPS(80 无响应)、HTTP/3、六个安全头、裸域 301 到 www;内容从 130 库级拷入 + Encore 系列 22 篇经 MCP 发布;LLM/搜索 provider 不设限额;全链路(对话 / SSE ×2 / web_search / session_rename)生产实跑通过。验收 12 项中 11 项 ✅。**所有者裁定收工时不做四项**:上线检查单在生产重跑 / codex 审查 / token 轮换演练 / 首日观察 —— 代价见任务卡「收工」段 | 2026-09-02 |
+
+| **R-IMAGEGEN** | agent 生图工具(`generate_image`:单工具 · provider 的 `api_style` 分两种协议 · 图片存库按访客归属供图 · 对话框 markdown 预览 · MCP 四个 `imagegen_*`) | 🔄 进行中([任务卡](rounds/round-imagegen/round-imagegen.md)) | — |
 
 ## 里程碑
 
@@ -402,6 +413,38 @@
   ④生产是空库,notes 内容与 About 文案要在上线后经 MCP 重发
 - **R10 交接过来的四条**(②④已于 2026-09-02 裁定:白名单**不启用只靠 token**、安全响应头**上线时加**、
   pg 备份**继续不做**并派生「上线期间不做不可逆迁移」的硬约束;①③仍待部署时执行):①检查单在生产**重跑一遍**(R10 只证了 130,判据已修准,见 `rounds/round-10/checklist.md`);②`/api/mcp` 的 Caddy IP 白名单**按真实出口 IP 启用**(模板在 `deploy/Caddyfile` 第 45–51 行);③写生产 LLM provider 时 key **直接贴进 MCP 调用,不落盘**(130 上那份 `.llm-key` 就是这么留下的);④**安全响应头**与 **pg 备份**在上线前再裁定一次(两条都在 BACKLOG,备份那条决定了「不可逆迁移出错」有没有兜底)
+
+### R-IMAGEGEN — agent 生图工具(上线后的第一个能力轮;所有者裁定 2026-09-02)
+
+> 沿用 R-WEBSEARCH / R-TITLE 的「命名轮」先例。参考实现是 pi 的 `image-generation` 扩展
+> (`~/.pi/agent/extensions/image-generation.ts`:两个工具各打一条生图链路、图片落盘、凭据读 `models.json`),
+> **三处都不能照搬**:本站 provider 是「唯一默认」语义、容器根文件系统只读、凭据只能来自加密表。
+
+**先说清楚它与规则 8 的关系**:工具本身是补齐既定边界(`docs/security.md` 早写着「生图」);
+**对话框预览**是所有者裁定的例外,落点是助手回复里的 markdown 图片 —— 渲染器已有,前端零改动(见头部第四次修订)。
+
+- **一个工具 `generate_image`,协议形态是 provider 的配置字段** `api_style`(`images` = `/v1/images/generations` 的
+  `data[0].b64_json`;`chat` = `/v1/chat/completions` 的 `message.images[0].image_url.url` data URL)。
+  插件的两个工具差异只在线上协议,那是 provider 的属性;本站 provider 表是唯一默认,两个工具等于要同时激活两个 provider
+- **访客只控 `prompt`**:尺寸是 provider 配置(`image_size`),张数恒为 1。外呼组约束 1 的最严读法;
+  `size` 做入参要给 `ToolParametersSchema` 加 `enum`、面板才画得出来,属机制扩面 → 记 BACKLOG 待裁定
+- **图片存 Postgres**(`generated_images`,8 MiB 上界,随 `sessions` 级联删除),**只有生成它的访客看得到**
+  (`GET /agent/images/<uuid>.<ext>` 按 `sessions.visitor_id` 判归属,不匹配 404;`Cache-Control: private`)。
+  `<img>` 是同源 GET,cookie 自动带上,前端不需要做任何事
+- **写库走第三个 NOLOGIN 角色 `agent_image`**(与 R-TITLE 同构):只有 `generated_images` 的 INSERT,
+  没有 SELECT / UPDATE / DELETE;会话 id 闭包绑定不是入参。文档先行(规则 9):`docs/security.md` §1 第 1/2/4 层各一段补记 + §3 + §6
+- **域白名单独立一份**(`shared/imagegen-hosts.ts`,内置 `api.openai.com` / `aigateway.variflight.com`,env
+  `XRAY_IMAGEGEN_EXTRA_HOSTS` 只能追加),判据实现与搜索共用(`shared/outbound-hosts.ts` 工厂);同轮把魔数判定、
+  带上界的响应体读取、本次 key 的精确脱敏三样也抽到 `shared/`,搜索与生图各自调用同一份
+- **双计时器的一处不同**:生图是非流式的,上游出图前一个字节都不发,**空闲计时器只在响应头到达后才起**
+  (默认 总 180s / 空闲 30s,CHECK 上界同搜索);等头期间每 10s 上报一次「生成中」,Timeline 不空转
+- 迁移 010:`imagegen_config` + `daily_quota.images` + `generated_images` + `agent_image` + `generate_image` 种子(**默认关**)。
+  只有 CREATE / ADD COLUMN / GRANT,无不可逆语句(R11「上线期间不做不可逆迁移」)
+- MCP 四个管理 tool:`imagegen_providers_list` / `_provider_upsert` / `_set_default` / `_provider_delete`(28 → 32)
+- 验收:域白名单挡得住(且与搜索白名单分开)· 访客控不到网络原语 · 两种协议都解析正确且只收内联数据 ·
+  等头不受空闲超时约束 · 两道字节上界 · 不是图片就不存 · 凭据不外泄 · 限额原子 · 未配不注册 · 指纹变化 ·
+  `agent_image` 写面限死 · 按归属供图 · 目录对齐 · MCP 四 tool · 前端零改动 · **本机实跑对话框里看得到图**(需所有者凭据)
+- **止损**:回退成本是一条迁移(纯追加)+ 一个工具;真出问题时 `tool_config_set generate_image enabled=false` 当场停用,不需要发版
 
 ## 轮次外事项
 

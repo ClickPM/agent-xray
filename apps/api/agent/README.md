@@ -10,7 +10,10 @@ pi SDK in-process 会话管理、对话流、只读工具组与限额。
   `POST /agent/sessions`(`sessions.ts`)—— 会话列表 / 历史回放 / 删除 / 建空会话。
 - `GET /agent/tools`(`catalog.ts`,R-TOOLS)—— 工具目录(Tools 面板的数据源):名称 / 中文标签 /
   描述 / 入参 JSON Schema / 输出形态 / 分组。**静态、不读库**,与会话无关;白名单序列化,
-  不含 `execute`、websearch 配置、限额、`enabled`(docs/security.md §1 R-TOOLS 补记)。
+  不含 `execute`、websearch / imagegen 配置、限额、`enabled`(docs/security.md §1 R-TOOLS 补记)。
+- `GET /agent/images/<uuid>.<ext>`(`images.ts`,`api.raw`,R-IMAGEGEN)—— `generate_image` 生成的图片。
+  **按访客归属供图**(`generated_images ⋈ sessions` 的 `visitor_id`,不匹配一律 404),`Cache-Control: private`
+  + 强 ETag + nosniff。对外地址带 `/api` 前缀(工具写进 markdown 的就是它),Encore 路由不带 —— 与反代前缀是一个契约。
 
 ## 工具元信息 META(R-TOOLS;`tools.ts`)
 
@@ -19,7 +22,7 @@ pi SDK in-process 会话管理、对话流、只读工具组与限额。
 
 1. **单一事实源**:改 schema 必然改 META,面板永远不是第二个要改的地方。
 2. **分组按注册路径派生**(`catalog.ts` 的 `toolCatalog`):在 `TOOL_REGISTRY` → 纯函数组;
-   经 `makeWebSearchTool` → 外呼组;在 `SESSION_TOOL_REGISTRY` → 会话绑定组。不手写。
+   经 `makeWebSearchTool` / `makeGenerateImageTool` → 外呼组;在 `SESSION_TOOL_REGISTRY` → 会话绑定组。不手写。
 3. **`output` 是 META 的必填字段**:漏写编译不过,拦在写工具那一刻。
 
 META 定义在闭包**外面**:`cfg` / `ctx` 在那个作用域里不存在,配置值在结构上进不了描述与 schema。
@@ -58,9 +61,9 @@ META 定义在闭包**外面**:`cfg` / `ctx` 在那个作用域里不存在,配�
 | 层 | 落点 | 要点 |
 |---|---|---|
 | 1 · 工具白名单 | `tools.ts` + `runtime.ts` | `noTools:"all"` 起步 + `customTools` + `tools` 白名单三个参数一组闸;`TOOL_REGISTRY` 是**已实现工具的全部**,`tool_config` 只能开关它们,未知名字丢弃并记日志;`dangerous` 行另需 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1` |
-| 2 · 数据面只读 | `ro-db.ts` | 工具的唯一取数通道 `queryAsAgentRo`:事务内 `SET TRANSACTION READ ONLY` + `statement_timeout` + `SET LOCAL ROLE agent_ro`。角色只对 notes 三张表有 SELECT |
+| 2 · 数据面只读 | `ro-db.ts` / `title-db.ts` / `image-db.ts` | 工具的唯一取数通道 `queryAsAgentRo`:事务内 `SET TRANSACTION READ ONLY` + `statement_timeout` + `SET LOCAL ROLE agent_ro`。角色只对 notes 三张表有 SELECT。两个刻意可写的例外各有自己的 NOLOGIN 角色:`agent_title`(只改 `sessions` 两列,R-TITLE)、`agent_image`(只 INSERT `generated_images`,R-IMAGEGEN) |
 | 3 · 容器隔离 | `deploy/` | 非 root / `read_only` / `cap_drop ALL` / `mem_limit`,不在本服务 |
-| 4 · 出网管控 | `quota.ts` | 每日 token/费用计数(`daily_quota`)超限拒**新会话**;单会话轮数上限。限额值读 `llm_config` 默认行,0 = 不限 |
+| 4 · 出网管控 | `quota.ts` / `websearch.ts` / `imagegen.ts` | 每日 token/费用计数(`daily_quota`)超限拒**新会话**;单会话轮数上限。限额值读 `llm_config` 默认行,0 = 不限。两个外呼工具各自计次(`searches` / `images`),各自一份目标域白名单(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`),双计时器 + 字节上界 + `redirect:"manual"` |
 
 **改工具相关代码前先读 `tools.ts` 的文件头**:纯函数 / 注册表即全部 / 输出有界三条性质,
 每条都有对应的攻击面,不是风格偏好。

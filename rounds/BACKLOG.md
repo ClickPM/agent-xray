@@ -214,6 +214,19 @@
       修法都不划算:改 R6 那个端点要动 apps/ 并重新构建镜像,在 Caddyfile 里 delete-then-set
       又要赌 Caddy 内部的操作顺序。留着,等下次动这两处任一时顺手清 (2026-09-02)
 
+- [ ] R-IMAGEGEN **`web_search` 把 provider / model / host 名带进了公开的轨迹流**:`makeWebSearchTool` 的结果 `details`
+      含 `provider` 与 `model`,`runWebSearch` 的第一条进度文案含 `hostname` 与 `model=…` —— 两者分别经
+      `tool_execution_end.resultPreview` 与 `tool_execution_update.partialResultPreview` 进 `/trace/stream`(公开)。
+      与 R-TOOLS 的裁定「provider 与 model 名是服务端配置面,公开即泄」不一致。R-IMAGEGEN 的 `generate_image` 已按
+      R-TOOLS 口径实现(details 只有 imageId / contentType / bytes,进度文案不带 host / model);websearch 那两处
+      是跨轮次问题,不当场改。修法是两行:details 去掉那两个字段、进度文案去掉 hostname 与 model (2026-09-02)
+
 ## 功能提案(需所有者裁定)
 
-(空)
+- [ ] R-IMAGEGEN **`generate_image` 是否给访客一个 `size` 入参**(横版 / 竖版 / 方图)。本轮裁定只控 `prompt`、尺寸是
+      provider 配置(`image_size`)—— 外呼组约束 1 的最严读法。要做入参得两处一起动:`ToolParametersSchema` 加 `enum`
+      关键字(pi 的 JSON Schema 校验器支持),`ToolsPanel.tsx` 的约束徽标学会画枚举值(R-TOOLS:面板永远不是第二个
+      要改的地方,所以不能只加 schema 不改面板)。属机制扩面,等所有者裁定 (2026-09-02)
+- [ ] R-IMAGEGEN **画板 1f/1g 的示例工具清单没有 `generate_image`**。面板由后端目录驱动,实际页面会显示它;
+      只是 `design/*.dc.html` 里那份示例数据停在五个工具(R-TOOLS 时的全集)。设计稿是 Claude Design 的导出存档,
+      本轮没有手改;要同步由所有者在画布上加 (2026-09-02)

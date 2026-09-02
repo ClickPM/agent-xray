@@ -28,6 +28,26 @@ export function scrubString(s: string): string {
   return out;
 }
 
+/**
+ * 上游文本 → 可以安全放进**错误对象**的文本(外呼组工具专用;R-WEBSEARCH 抓到的真泄漏)。
+ *
+ * 【为什么不能只靠调用点的 `safeErrorText`】那只保证「写进日志的那一行」是干净的,
+ * 而一个带着明文 key 的 `Error` 对象本身会被传递、被别处 catch、被将来某个人
+ * 直接 `console.error(err)`。凭据不该活到那一步 —— **在构造错误的地方就抹掉**。
+ * (单测:上游把我们的 Authorization 头原样回显进 400 的响应体,实测复现过。)
+ *
+ * 两道叠着用,顺序无所谓:
+ *   - `scrubString` —— 通用形态(sk-/rk-/pk-/sess- 前缀串、`Bearer …`),
+ *     连"上游回显的是**别人**的 key"也一起打掉;
+ *   - 精确替换本次用的 secret —— 形态不符合上面那几个模式的自定义网关 key
+ *     (纯十六进制、UUID…)只有这一道能兜住。太短的 secret 不做精确替换:
+ *     一个 3 字符的串会把正常文本打成筛子,而那样的 key 本来就不该存在。
+ */
+export function redactSecret(text: string, secret: string): string {
+  const scrubbed = scrubString(text);
+  return secret.length >= 8 ? scrubbed.split(secret).join("[redacted]") : scrubbed;
+}
+
 export function truncate(s: string, max = MAX_STRING): string {
   return s.length > max ? s.slice(0, max) + `…[+${s.length - max} chars]` : s;
 }
