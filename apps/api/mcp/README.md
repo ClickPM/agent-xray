@@ -24,7 +24,7 @@
 | `endpoint.ts` | `api.raw` 入口。**先认证再交给 SDK**:未认证的请求不该有机会让服务端构造 server 实例、解析 JSON-RPC |
 | `auth.ts` | bearer 校验。服务端只存 sha256,比较走定长摘要的常数时间比较;失败一律同一句 `unauthorized` |
 | `server.ts` | `createMcpHandler` 装配(每请求一个 `McpServer` 实例)+ `toNodeHandler` 适配 |
-| `tools.ts` | 24 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
+| `tools.ts` | 28 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
 | `store.ts` | 全部 SQL。**明文 LLM key 不出本文件** |
 | `content.ts` | 入库前的派生:字数、章节内容哈希 |
 | `audit.ts` | `mcp_audit` 写入;永不 reject(审计是旁路,不能让已完成的写操作变成 500) |
@@ -70,13 +70,18 @@
 2. **附件类型三重一致**:扩展名、`contentType`、文件头魔数。少任何一道,
    一份「声称是 png 的 HTML」就会被供图端点原样出成 `Content-Type: image/png` 之外的东西 ——
    同源下的存储型 XSS。**SVG 永不接受**(它本身就是可执行文档)。
-3. **直接对 `/api/mcp` 发 JSON-RPC 时,2026-07-28 的逐请求契约有四样,缺一样都是 4xx**
-   (R-WEBSEARCH 对 130 实测,每少一样各回一种 `-32602` / `-32020`):
-   `MCP-Protocol-Version: 2026-07-28` 头 · `Mcp-Method` 头(必须等于 body 的 `method`)·
-   `tools/call` 时再加 `Mcp-Name` 头(必须等于 `params.name`)· `params._meta` 里带
-   `io.modelcontextprotocol/protocolVersion` 与 `io.modelcontextprotocol/clientCapabilities`。
-   CLAUDE.md 里「急着用可以直接发 JSON-RPC」那句默认你带齐这四样;MCP 客户端(Claude Code)
-   自己会带,手写 curl 才会踩到。
+3. **直接对 `/api/mcp` 发 JSON-RPC 时,要带齐 2026-07-28 的逐请求契约**(2026-09-02 对 130
+   逐项实测,每少一样各回一种错):
+   `Accept` 同时含 `application/json` 与 `text/event-stream`(缺了 `-32000 Not Acceptable`)·
+   `Mcp-Method` 头(必须等于 body 的 `method`,缺了 `-32020`)· `tools/call` 时再加 `Mcp-Name` 头
+   (必须等于 `params.name`,缺了 `-32020`)· `params._meta` 里带 `io.modelcontextprotocol/protocolVersion`
+   与 `io.modelcontextprotocol/clientCapabilities`(少任一键 `-32602 Invalid _meta envelope`)。
+   `MCP-Protocol-Version: 2026-07-28` 头是客户端该带的,但**缺了不会被拒**(`server/discover` 与
+   `tools/call` 都实测通),真正切换协议时代的是 `params._meta`。
+   **整个 `_meta` 都不带时 handler 不报错,而是静默落到 2025-11-25 的 legacy 无状态路径**:
+   `tools/list` / `tools/call` 照常可用、响应变成 SSE 帧(`event: message`),而 `server/discover`
+   回 `-32601 Method not found`——CLAUDE.md 早先记的「server/discover 不可用」就是这么来的,
+   不是端点坏了。MCP 客户端(Claude Code)自己会带齐,手写 curl 才会踩到。
 
 ## 安全边界
 

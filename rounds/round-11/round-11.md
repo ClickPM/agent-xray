@@ -20,6 +20,7 @@
 - 服务器安全基线配置(远端 `/etc/ssh/sshd_config.d/60-xray-hardening.conf`、`/etc/fail2ban/jail.d/sshd.local`、`/etc/apt/apt.conf.d/20auto-upgrades`、`/etc/docker/daemon.json`、ufw 规则)——记录见本卡「本轮实测」
 - 本机 SSH 入口:`~/.ssh/ckclaude.pem` + `~/.ssh/config` 别名 `agent-xray-prod`(ubuntu 管理用)/ `deploy@106.54.238.52`(部署用)
 - (R9/R10 后)生产 compose 部署执行记录 + 上线冒烟记录,回填本卡
+- 生产 MCP 管理面凭据:服务器只有 sha256(`~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`),token 原文只在所有者密码管理器 + 本机用户级环境变量 `XRAY_MCP_TOKEN_PROD`;`.mcp.json` 新增 `xray-admin-prod` 条目(备案通过前 url 走 `http://106.54.238.52:8080/api/mcp`,通过后换 `https://kzgai.cloud/api/mcp`)。**留存这一步是 R9 的教训**:130 那把 token 部署时没留存、不可恢复,2026-09-01 只能整体轮换一次
 
 ## 验收
 
@@ -33,14 +34,18 @@
 | 6 | deploy 用户可密钥登录并操作 docker | `ssh deploy@106.54.238.52 docker ps` 成功 | ✅ 2026-08-28 |
 | 7 | ICP 备案通过,域名 A 记录解析到服务器 | 备案号下发;`dig <域名>` 指向 106.54.238.52 | ◐ 解析已生效(2026-08-28,`kzgai.cloud`/`www` 境内外 DNS 均指向服务器,`域名:8080` 实测 HTTP 200;`域名:80` 被备案拦截切断=预期);⬜ 备案审核中 |
 | 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ⬜ 待 R9/R10 |
-| 9 | 生产 compose 全链路冒烟 | 三 Tab + /admin + SSE ×2 + 限额,按 R9 预发同口径 | ⬜ 待 R9/R10 |
+| 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ⬜ 待 R9/R10 |
 | 10 | 备案号挂 footer | web footer 显示备案号 | ⬜ 待备案下发 |
+| 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ⬜ 待部署 |
+| 12 | MCP 管理面在生产实连(协议 **2026-07-28**) | `server/discover` 回 `supportedVersions: ["2026-07-28"]` + `serverInfo`,`tools/list` 出 **28** 个工具(R10 留证里的 24 是 R-WEBSEARCH 之前的数,以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准)——请求体形状照 [`rounds/round-10/checklist.md`](../round-10/checklist.md) §9(逐请求四件套缺一样就是 4xx,`_meta` 三键必须在 `params` 里);再经 `.mcp.json` 新增的 `xray-admin-prod` 用 Claude Code 实连一次。**必须早于「写生产 LLM provider」通过**(R6 起无引导密钥,不通则 `/agent/ask` 永远 503);**交接项②的 IP 白名单启用后要复验一次**(白名单先于 token 生效,漏验的表现是 token 明明对却 403) | ⬜ 待部署 |
 
 ## 所有者 TODO(Claude 无法代办)
 
 1. ~~腾讯云控制台防火墙放行 80/443/8080~~ ✅ 2026-08-28 所有者已放行,外网实测三端口均可达
 2. **域名购买 + ICP 个人备案**:✅ 域名 `kzgai.cloud` 已购(腾讯云,`.cloud` 有工信部信管函〔2018〕367号批复);备案 2026-08-28 已提交审核——服务名称「个人知识分享站」,类目「其他,博客/个人空间」,备注按「个人非经营性技术博客、无 UGC、无前置审批内容」口径;⬜ 等审核结果(腾讯云初审 1–2 天 → 管局 1–3 周)
 3. 备案通过前 80/443 被云厂商拦截 → 期间自测走 `IP:8080`
+4. **生产 MCP token 原文存进密码管理器**(验收 11):服务端只存 sha256,原文丢了不能找回、只能轮换。轮换时 `CONFIG_ENCRYPTION_KEY` **绝不能跟着换**——换了 `llm_config` 里的 LLM key 密文全部解不开,agent 立刻停摆,得把每个 provider 的 key 经 `llm_provider_upsert` 重写一遍
+5. **提供 Caddy IP 白名单要放行的真实出口 IP**(R10 交接项②):启用后非白名单来源访问 `/api/mcp` 一律 403,与 token 是否正确无关;家宽出口 IP 会漂,需要确认是固定 IP 还是接受「漂了就改 Caddyfile」
 
 ## 禁止
 
