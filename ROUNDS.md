@@ -10,6 +10,15 @@
 > 交互取对画板偏离最小的形态(行 hover 露一个复用 `GhostButton` 的 ×,绝对定位不占布局宽度,
 > 二次确认用浏览器原生 `confirm`),不 hover 时该行与画板一字不差。同轮引入的**访客 cookie**
 > 不是功能而是安全约束,口径写在 `docs/security.md` §6(规则 9:先改文档再改代码)。
+>
+> **2026-09-01 第二次修订(R-TITLE)**:所有者裁定给 agent 配一个**会话命名工具** `session_rename`,
+> 默认开启。设计稿画板 1a–1e 里会话列表本来就有标题(现在的标题是「首条用户消息的首行截 40 字」),
+> 所以**前端零改动、无新界面**;新增的是「标题由谁写」这条通路,属规则 8 的例外,理由是
+> 「首行截断在真实对话里几乎总是 `hi` / `你好` 这类无信息量的开场白,会话列表因此不可用」。
+> 形态由所有者裁定为 **agent 工具**而不是服务端旁路生成:本站的卖点是右侧内核轨迹,
+> 命名过程必须**在 Timeline 里看得见**(`tool_call · session_rename`)。
+> 工具会写库,与 `docs/security.md` §1 第 1/2 层的「纯函数 / 数据面只读」相抵,
+> 已按规则 9 先改文档(两处 R-TITLE 补记)再改代码。
 
 ## 进度表
 
@@ -29,6 +38,7 @@
 | **R10** | 安全加固 + 上线前检查单逐项 | ✅ 已完成([任务卡](rounds/round-10/round-10.md) · [检查单留证](rounds/round-10/checklist.md)),检查单 1–11 项在 130(SHA `5c98b3e`)全绿;**所有者裁定本轮不做限额演练(引 R9 留证)与 pg 备份**,不做安全响应头与 IP 白名单(均记 BACKLOG) | 2026-09-01 |
 | **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | ✅ 已完成([任务卡](rounds/round-visitor/round-visitor.md) · [130 部署留证](rounds/round-visitor/round-visitor.md#130-预发部署留证2026-09-01)),12 项验收全过;codex 三轮共 6 条 findings(3×P1 · 3×P2),4 条采纳整改、1 条所有者裁定不修(130 内网)、1 条写明理由不采纳记 BACKLOG,第 3 轮零 findings,缺陷门禁 PASS。同日 130 预发升级到 `7cc17fe`(迁移 6→7),8 项冒烟全过,**本机验不了的「新建会话首帧带 Set-Cookie」在 130 上验掉,不再交接给 R11** | 2026-09-01 |
 | **R-WEBSEARCH** | agent 联网搜索工具(Responses API 网关 · 域白名单 · MCP 配 provider · DeepSeek 零分支兼容) | ✅ 已完成([任务卡](rounds/round-websearch/round-websearch.md)),本机验收 #1–#10、#14 全过;codex 四轮共 6 条 findings(3×P1 · 3×P2)**全部采纳整改**,第 4 轮零 findings,缺陷门禁 PASS;**所有者裁定本轮不构建镜像、不发 130**(#2/#11/#12/#13 四条 130 实跑验收并入下一次预发升级) | 2026-09-02 |
+| **R-TITLE** | 会话命名工具(`session_rename`:agent 自己给会话起名,轨迹可见,默认开启) | 🔄 已合并 `main`,待 130 预发验收 #1/#7([任务卡](rounds/round-title/round-title.md),8 项验收 6 过、2 项交接 130;codex 五轮共 4 条 findings(2×P1 · 2×P2):2 条 P2 采纳整改,1 条 P1 **所有者裁定不采纳并回滚**(记 BACKLOG),1 条 P1 随回滚作废,末轮零 findings,缺陷门禁 PASS) | — |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
 ## 里程碑
@@ -295,6 +305,39 @@
 > 只在日志那一行调 `safeErrorText` 是不够的:一个带着凭据的 `Error` 会被传递、被别处 catch、
 > 被将来某个人直接 `console.error(err)`。**凭据要在构造错误的地方就抹掉**,而且通用模式
 > (`sk-` 前缀 / `Bearer`)兜不住纯十六进制的自定义网关 key —— 必须再叠一道本次 key 的精确替换。
+
+### R-TITLE — 会话命名工具(插在 R11 之前的小轮;所有者裁定 2026-09-01)
+
+> 沿用 R-BUN / R-VISITOR 的「命名轮」先例:不属于 R0–R11 的线性序列。放在上线前做的理由是
+> 它只改 agent 侧一条通路、不动部署形态,而生产库还是空的 —— 迁移 009 落在没有存量数据的库上。
+
+**问题**:`sessions.title` 现在由 `store.deriveTitle` 派生(首条用户消息取首行、截 40 字)。
+真实对话的第一句几乎总是 `hi` / `你好` / `在吗`,于是左栏会话列表全是同一个词,点进去才知道是哪一段。
+参考实现是 pi 的 `auto-session-title` 扩展(首条输入后另起一个 `--no-tools` 子进程起标题)。
+
+**形态裁定**:不照搬「服务端旁路生成」,改成**给 agent 一个工具**。理由是本站的卖点就是右侧内核轨迹——
+命名过程要在 Timeline 里以 `tool_call · session_rename` 看得见;顺带还省掉一条独立的 LLM 出网路径
+(标题由本轮对话顺产,token 落在既有 `daily_quota` 计数里)。代价已认:模型偶尔不调用,那时标题
+退回现在的首行截断,不比现状差。
+
+- 迁移 009:`sessions.title_source`(`derived` | `agent`,默认 `derived`)· NOLOGIN 角色 `agent_title`
+  + **列级**授权(只有 `sessions` 的 `title` / `title_source` 两列可写)· `tool_config` 种下
+  `session_rename` 且 **enabled = TRUE**(所有者可经 MCP `tool_config_set` 关掉)
+- `apps/api/agent/tools.ts`:新增**会话绑定**工具注册表 —— 工具定义在建会话时按当前会话 id
+  闭包绑死,入参只有一个 `title`;既有三个只读工具的注册路径与语义不变
+- `apps/api/agent/title-db.ts`:写通道(`SET LOCAL ROLE agent_title` + `statement_timeout`),
+  与 `ro-db.ts` 同构但**不是** `READ ONLY` 事务
+- `runtime.ts`:冷启动查一次「本会话是否还需要命名」,已命名的会话**不注册**这个工具;
+  系统提示按实际注册到的工具生成(现有那句「它们只能读教程内容,不能写任何数据」不能再一刀切)
+- `docs/security.md` §1 第 1/2 层补记(规则 9 先行):纯函数与只读两条约束的**唯一例外**及其边界
+- 前端**零改动**:标题在会话列表里本来就渲染,每轮对话结束的 `refreshSessions()` 会带回新标题
+
+- 验收:①新会话首轮结束后左栏标题不再是首行截断,且右侧 Timeline 有 `tool_call · session_rename`
+  一行、入参预览就是那个标题;②同一会话第二轮不再改标题(冷启动不注册 + SQL 双闸);
+  ③以 `agent_title` 角色改 `sessions` 其他列 / 写 `messages` / 删会话 / 读 `llm_config` 全部失败;
+  ④经 MCP `tool_config_set` 关掉后新会话不再有这个工具,标题回落首行截断;⑤`dev.ps1 test` 全绿
+- **止损**:回退成本是一条迁移与一个工具;真出问题时 `tool_config_set session_rename enabled=false`
+  即可当场停用,不需要发版
 
 ### R11 — 生产部署上线
 

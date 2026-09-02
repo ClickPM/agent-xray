@@ -118,6 +118,27 @@ export async function deleteSession(id: string, visitorId: string): Promise<bool
   return row !== null;
 }
 
+/**
+ * 这个会话还需要 agent 命名吗?(R-TITLE)
+ *
+ * 「只命名一次」的第一道闸:已命名的会话在冷启动时**根本不注册** `session_rename`
+ * (第二道闸是 `title-db.ts` 里的 `WHERE title_source = 'derived'`)。
+ *
+ * 【查不到行 = 需要命名】不是容错,是正常路径:`/agent/ask` 新建会话时,
+ * `acquireSession()`(会话冷启动、要在这里决定注册哪些工具)跑在 `createDbSession()`
+ * **之前** —— 那一刻这行还不存在,而它恰恰是最需要被命名的那个会话。
+ *
+ * 这里刻意**不**按归属过滤:调用方(runtime 冷启动)拿到的 id 已经过 `ask.ts` 的归属校验,
+ * 而这个函数只回答一个布尔值、不返回任何会话内容,不构成越权读取面。
+ */
+export async function sessionNeedsTitle(id: string): Promise<boolean> {
+  const row = await db.rawQueryRow<{ titleSource: string }>(
+    `SELECT title_source AS "titleSource" FROM sessions WHERE id = $1::uuid`,
+    id,
+  );
+  return row === null || row.titleSource === "derived";
+}
+
 /** 首条用户消息 → 会话标题:取首行、截 40 字符。 */
 export function deriveTitle(content: string): string {
   const firstLine = content.trim().split("\n", 1)[0].trim();

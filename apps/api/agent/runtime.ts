@@ -27,8 +27,20 @@ import type {
 import { dropSession as dropTraceBuffer, publish as publishTrace } from "../shared/trace-bus";
 import { ALL_EVENTS, EVENT_MODES, safeErrorText, sanitizeEvent, type EventMode } from "./events";
 import { loadActiveLlmConfig, LlmNotConfiguredError, type ActiveLlmConfig } from "./llm-config";
-import { appendTraceEvents, listMessages, maxTraceSeq, type MessageRow } from "./store";
-import { loadEnabledTools, WEB_SEARCH_TOOL_NAME, type EnabledTools } from "./tools";
+import {
+  appendTraceEvents,
+  listMessages,
+  maxTraceSeq,
+  sessionNeedsTitle,
+  type MessageRow,
+} from "./store";
+import {
+  buildSessionTools,
+  loadEnabledTools,
+  SESSION_RENAME_TOOL,
+  WEB_SEARCH_TOOL_NAME,
+  type EnabledTools,
+} from "./tools";
 
 /** pi 的资源发现(extensions/skills/settings/AGENTS.md)全部指向这个空目录。 */
 const ISOLATED_DIR = join(tmpdir(), "agent-xray-runtime-pi");
@@ -37,12 +49,6 @@ const SYSTEM_PROMPT_BASE =
   "你是 Agent X-Ray 站点上的演示 agent。访客与你对话的同时,页面右侧会实时展示你的内核事件轨迹。" +
   "请用访客使用的语言简洁作答。";
 
-/**
- * 系统提示按**本次会话实际注册到的工具**收尾。
- *
- * R3–R6 这里是写死的一句「你当前没有任何可用工具」;R7 起工具集由 `tool_config`
- * 决定,写死那句会在工具开着时直接和事实矛盾 —— 模型会据此拒绝去查教程库。
- */
 /**
  * 系统提示词。**必须按工具分组说**(codex 初审 P1)。
  *
@@ -59,14 +65,37 @@ const SYSTEM_PROMPT_BASE =
  * 「Available tools」与「Guidelines」两节**根本不会送达**(源码核实)。
  * 把一条安全提示放在一个不会被送达的字段里,比不放更糟:它看起来已经做了。
  * (工具的 `description` 不受影响 —— 那个走 API 请求的 tools 数组,不走系统提示词。)
+ *
+ * 【R-TITLE:命名工具单独一段】命名工具会写库,不能被裹进「它们只能读教程内容,不能写任何数据」
+ * 那句里 —— 那句话对只读工具组是承诺,对命名工具是谎话,模型会照着谎话拒绝调用它。
+ * 措辞照抄参考实现(pi 的 `auto-session-title` 扩展)的实测口径:给字数区间、明确禁标点、
+ * 点名「新会话 / 帮助」这类泛词 —— 少哪一条都会稳定地长出对应的坏标题;时机也与它一致:首轮即命名。
  */
 export function systemPromptFor(toolNames: string[]): string {
   if (toolNames.length === 0) return `${SYSTEM_PROMPT_BASE}你当前没有任何可用工具。`;
-  const notes = toolNames.filter((n) => n !== WEB_SEARCH_TOOL_NAME);
+  const hasRename = toolNames.includes(SESSION_RENAME_TOOL);
+  const notes = toolNames.filter((n) => n !== WEB_SEARCH_TOOL_NAME && n !== SESSION_RENAME_TOOL);
   const parts = [SYSTEM_PROMPT_BASE];
+  if (hasRename) {
+    // 【命名时机 = 第一轮,与参考实现一致;这是所有者裁定,别按 review 意见改成「等来意明确再命名」】
+    // codex 第 3 轮曾以 P1 提出:首句是「hi」时第一轮命名只会得到「打招呼」这种标题,且命名只有
+    // 一次、之后修不回来。所有者 2026-09-02 裁定**不采纳**:那是给功能加戏、属新增机制
+    // (CLAUDE.md 审查边界),标题退化成招呼词的代价可以接受。记录在 rounds/round-title 与 BACKLOG。
+    //
+    // 【措辞必须是「开始时还没有」+ 自限句,不能是「还没有标题」】(codex 初审 P2)
+    // 系统提示在 `createAgentSession` 时定格,而标题会在本会话第一轮就被写掉 ——
+    // 断言式的「本次会话还没有标题」从那一刻起就是一句过期的话,它会持续怂恿模型
+    // 每轮都再调一次(白占一次 provider 往返、一段 token 与一行轨迹,尽管 SQL 会拒绝改名)。
+    // 改成「开始时还没有」+ 明确的停止条件之后,这句话在整个会话里都成立。
+    parts.push(
+      `本次会话开始时还没有标题:**先调用一次 ${SESSION_RENAME_TOOL}**,用访客使用的语言把他这次要做的事` +
+        "概括成 4–18 字的短标题(不要标点、不要引号,也不要「新会话」「帮助」这类没有信息量的词)," +
+        "然后再正常回答。**命名过之后就不要再调用它**——一个会话只接受一次,重复调用只会拿回一句「已经设置过」。",
+    );
+  }
   if (notes.length > 0) {
     parts.push(
-      `你有一组**只读**工具可以查询本站的 Notes 教程库:${notes.join("、")}。` +
+      `${hasRename ? "你还有" : "你有"}一组**只读**工具可以查询本站的 Notes 教程库:${notes.join("、")}。` +
         "它们只能读教程内容,不能写任何数据、不能访问服务器或网络。" +
         "回答与本站教程相关的问题时先用它们查证,不要凭印象编造章节名。",
     );
@@ -633,12 +662,36 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
     flushQueued: false,
   };
 
+  // 【R-TITLE:工具集在这里再按会话裁一次】启用集合是全站的(`tool_config`),
+  // 但「这个会话还需不需要命名」是会话自己的事 —— 已命名的会话干脆不注册 `session_rename`,
+  // 免得模型在之后每一轮都试着调一次再被库里的 WHERE 挡回去。
+  //
+  // 判定失败**不阻断建会话**:退回「注册它」是安全的一侧 —— 真的已经命名过的话,
+  // `title-db.ts` 的 `WHERE title_source = 'derived'` 会挡住写入,代价只是一次空转的工具调用。
+  // 反过来把它当成「不需要命名」则会静默丢掉本轮的命名机会。
+  //
+  // 【命名成功后不会从**活着的**会话里撤掉这个工具,这是刻意的】(codex 初审 P2)
+  // 工具白名单在 `createAgentSession` 时定格,要撤只能重建会话 —— 而重建一次(冷启动串行链 +
+  // 历史注入,几百毫秒)比它要省的那一次工具往返贵得多,且要给 `acquireSession` 新增一条
+  // 会话级的重建触发,属机制类改动(CLAUDE.md 审查边界:非阻塞 findings 不新增机制)。
+  // 影响也有界:活着的会话上下文里就有模型自己刚才那次 `tool_call` 与结果,它没有理由再调;
+  // 真正会「不记得自己命名过」的是**被回收后重建**的会话 —— 而那条路正好走这里的 needsTitle。
+  // 系统提示那句话也已经改成在整个会话里都成立的措辞(见 systemPromptFor)。
+  let needsTitle = true;
+  try {
+    needsTitle = await sessionNeedsTitle(sessionId);
+  } catch (err) {
+    console.error(`session title check failed for ${sessionId}: ${safeErrorText(err)}`);
+  }
+  // names 与 definitions 必须成对用(白名单 ↔ 实现),所以由同一个调用一起产出
+  const sessionTools = buildSessionTools(cfg.tools, { sessionId, needsTitle });
+
   const settingsManager = pi.SettingsManager.inMemory({ compaction: { enabled: false } });
   const loader = new pi.DefaultResourceLoader({
     cwd: ISOLATED_DIR,
     agentDir: ISOLATED_DIR,
     settingsManager,
-    systemPromptOverride: () => systemPromptFor(cfg.tools.names),
+    systemPromptOverride: () => systemPromptFor(sessionTools.names),
     extensionFactories: [makeObserver(rec)],
   });
   await loader.reload();
@@ -657,9 +710,12 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
     //                     TOOL_REGISTRY 里的名字,所以 read/bash/edit/write 这些内置工具
     //                     不可能因为将来某处配置漂移而混进来。
     // 空数组(所有者把工具全关掉)与 noTools:"all" 等价,不需要额外分支。
+    //
+    // R-TITLE:这两项用的是**按会话裁过**的 `sessionTools`,不是 `cfg.tools` ——
+    // 会话绑定工具的实现要带着本会话的 id,而已命名的会话连名字都不该出现在白名单里。
     noTools: "all",
-    customTools: cfg.tools.definitions,
-    tools: cfg.tools.names,
+    customTools: sessionTools.definitions,
+    tools: sessionTools.names,
     resourceLoader: loader,
     sessionManager: pi.SessionManager.inMemory(ISOLATED_DIR),
     settingsManager,
