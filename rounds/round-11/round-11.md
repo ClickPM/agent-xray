@@ -256,3 +256,51 @@ udp 是我在命令行显式给的;**compose 这条路径直到真正部署才�
 3. **About 是空的**
 
 **验收 11 / 12(MCP token 留存与实连)与限额演练同样卡在这里** —— 都要 `XRAY_MCP_TOKEN_PROD` 就位、会话重启之后才能做。
+
+### 2026-09-02 内容迁移:130 → 生产(所有者裁定「三样都按 130 的直接上传生产」)
+
+**先说一样搬不了,而且是硬约束**:**LLM / 搜索 provider 的 key 拷不过来**。
+`llm_config` / `websearch_config` 里存的是密文,用 **130 那把 `CONFIG_ENCRYPTION_KEY`** 加密,
+而生产是新生成的另一把 —— 把密文行拷过去的结果是**解不开、agent 照样停摆**;
+MCP 读回来也只有掩码(`sk-…443a`,设计如此)。所以 provider 必须由所有者给明文 key 重新写一遍。
+(反过来说,「把 130 的 `CONFIG_ENCRYPTION_KEY` 拷到生产」是错误解法:那等于预发与生产共用一把密钥。)
+
+**Notes 与 About 走库级拷贝,不走 MCP 逐篇上传**。理由:103 张 WebP 走 `notes_asset_put` 要把
+base64 过一遍对话,上下文直接炸掉;而这五张表结构在两边完全一致(**核对过:39 列逐列相同** ——
+130 是迁移版本 7、生产是 9,但 008/009 只动 websearch 与 session title,不碰 notes/about)。
+
+| 步骤 | 结果 |
+|---|---|
+| 依赖顺序 | 外键链 `notes_categories → notes_series → {notes_chapters, notes_assets}`。**不能用一条 `pg_dump --data-only` 带多个 `-t`**:那样按字母序会把 `notes_assets` 排在 `notes_series` 前面,灌入时撞外键。改成**逐表 dump 再拼接**,顺序 categories → series → chapters → assets → about_content |
+| 序列 | `notes_chapters_id_seq` 显式一起 dump(`setval` 到 208)。漏了它的表现是灌完数据后新插入撞主键 |
+| dump | 19.85 MB(库内 11 MB,bytea 走 COPY 的十六进制编码会胀) |
+| 灌入 | `psql -v ON_ERROR_STOP=1 --single-transaction`,任何一条失败全部回滚 |
+| 校验 | 生产行数 **4 分类 / 13 系列 / 205 章节 / 103 配图 / 1 条 About**,与 130 逐项一致;dump 已从服务器删除 |
+
+**线上复验**:`/notes` 200 · 文章页 `/notes/typescript-deep-dive/chapter-18` 200(128 KB)·
+配图 `/notes/agent-basics/0d1812f5fa68e3f8.webp` 200 `image/webp` 88 KB · `/rss.xml` **30 条** · `/about` 200。
+
+**顺带发现并当场修掉一处会挂在公开生产站上的错**:About 的 intro 结尾是
+「这里是 130 预发环境,内容为 R9 部署验收的样本」—— 那句话跟着内容一起拷了过来。
+已用 `about_set` 只改 intro 一个字段删掉(线上复验已无该字样)。
+**About 其余字段仍是 R9 样本**(`repos` 只有一张卡、`langBar` 四项、`originUrl` 空),等所有者给真实内容,BACKLOG 有条目。
+
+**还发现一处冗余,记 BACKLOG 不当场改**:供图路径上 `X-Content-Type-Options` 出现**两次**
+(R6 给该端点单加过一条,R11 又在 Caddy 给全站加了一条;其余路径都是 1 次)。
+两个值完全相同、浏览器行为不变,但说明 Caddy 的 `header` 对这条是追加而非替换。
+修法都不划算(改端点要动 apps/ 并重建镜像;Caddyfile 里 delete-then-set 要赌内部操作顺序)。
+
+**验收 12 通过**:`server/discover` 回 `supportedVersions: ["2026-07-28"]`,
+`serverInfo` = `agent-xray-admin/1.0.0`(在 `result._meta["io.modelcontextprotocol/serverInfo"]` 下,
+R10 留证只写了值没写位置);`tools/list` **28 个**,与 `apps/api/mcp/tools.ts` 的 `registerTool` 计数一致;
+Claude Code 经 `.mcp.json` 的 `xray-admin-prod` 实连成功。
+
+> **两个操作坑,下次照抄别再踩**:
+> 1. **`_meta` 的三个键要带 `io.modelcontextprotocol/` 前缀**,还要有第三个 `clientInfo`。
+>    CLAUDE.md 里写的是「`params._meta` 里的 `protocolVersion` 与 `clientCapabilities`」——
+>    **那个措辞不够精确**,照它写会静默落到 2025-11-25 legacy 路径,`server/discover` 回 `-32601`
+>    (精确形状在 `rounds/round-10/checklist.md` §9)。
+> 2. **`docker compose exec -T` 仍然 attach stdin**。经 `ssh host bash -s <<'EOF'` 跑多行脚本时,
+>    脚本里任何一句 `docker compose exec -T` 都会把 heredoc **剩下的行当输入吃掉**,
+>    后续命令静默不执行(本轮 `migrate.sh` 第一次就是这么「跑完却没建表」的)。
+>    解法:给这类命令加 `< /dev/null`,或干脆一条命令一个 ssh。
