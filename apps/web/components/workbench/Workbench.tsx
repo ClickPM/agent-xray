@@ -20,8 +20,17 @@ import { mono } from "@/lib/styles";
 import { TimelineView } from "./TimelineView";
 import { ChainView } from "./ChainView";
 import { LifecycleMap } from "./LifecycleMap";
+import { ToolsPanel } from "./ToolsPanel";
 
-type Panel = "timeline" | "chain" | "lifecycle";
+// 右栏四个 tab(画板 1f/1g 起是四个,R-TOOLS)。前三个是同一条轨迹流的三种投影;
+// Tools 是静态目录,与会话无关。
+type Panel = "timeline" | "chain" | "lifecycle" | "tools";
+const PANEL_TABS = [
+  ["timeline", "Timeline"],
+  ["chain", "Chain View"],
+  ["lifecycle", "Lifecycle Map"],
+  ["tools", "Tools"],
+] as const satisfies readonly (readonly [Panel, string])[];
 
 /** 前端保留的轨迹事件条数上界,与服务端单次回放上限(MAX_REPLAY_EVENTS)同口径。 */
 const MAX_TRACE_EVENTS = 5000;
@@ -258,6 +267,9 @@ export function Workbench() {
 
   const active = sessionId !== null || items.length > 0;
   const title = sessions.find((s) => s.id === sessionId)?.title || "";
+  // 右栏实际显示的面板:空状态下前三个 tab 都落到 Lifecycle 待命图(画板 1e),
+  // Tools 不受此约束(它不依赖会话)
+  const shownPanel: Panel = active || panel === "tools" ? panel : "lifecycle";
 
   // 右栏三视图 = 同一条轨迹流的三种投影(docs/architecture.md)。
   // 必须 memo:events 最多 5000 条,而输入框每敲一个字都会触发重渲染——
@@ -457,9 +469,10 @@ export function Workbench() {
           {/* 右栏:运行时面板 */}
           <div className="runtime-panel" style={{ width: "42%", minWidth: 300, maxWidth: 500, flex: "none", display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", background: "var(--bg-panel)", borderBottom: "1px solid var(--border)" }}>
-              {([["timeline", "Timeline"], ["chain", "Chain View"], ["lifecycle", "Lifecycle Map"]] as const).map(([key, label]) => {
-                // 空状态右栏展示 Lifecycle 待命图,tab 高亮随之(画板 1e)
-                const highlighted = active ? panel === key : key === "lifecycle";
+              {PANEL_TABS.map(([key, label]) => {
+                // 空状态右栏展示 Lifecycle 待命图,tab 高亮随之(画板 1e);
+                // Tools 例外:它不依赖会话,空会话下切过去也有内容(R-TOOLS 验收 #4)
+                const highlighted = key === shownPanel;
                 return (
                   <div
                     key={key}
@@ -476,16 +489,16 @@ export function Workbench() {
                 );
               })}
             </div>
-            {active ? (
-              panel === "timeline" ? (
-                <TimelineView turns={timelineTurns} />
-              ) : panel === "chain" ? (
-                <ChainView chain={chain} />
-              ) : (
-                <LifecycleMap nodes={lifeNodes} />
-              )
-            ) : (
+            {shownPanel === "tools" ? (
+              <ToolsPanel />
+            ) : !active ? (
               <LifecycleMap nodes={lifeNodes} idle />
+            ) : shownPanel === "timeline" ? (
+              <TimelineView turns={timelineTurns} />
+            ) : shownPanel === "chain" ? (
+              <ChainView chain={chain} />
+            ) : (
+              <LifecycleMap nodes={lifeNodes} />
             )}
           </div>
         </div>

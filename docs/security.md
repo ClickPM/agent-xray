@@ -81,6 +81,13 @@ R-TITLE 补记(2026-09-01,所有者裁定;`apps/api/agent/tools.ts` + 迁移 `00
 - **入参经服务端 sanitize 才落库**:取首行、去首尾引号、去尾部标点、去控制字符、截 40 字符(与既有 `deriveTitle` 同一上界)。标题会出现在会话列表与删除确认框里,它的长度与换行不能由模型决定
 - **不新增任何 LLM 出网路径**:标题由**本轮对话自己**产出(模型调一次工具),不像参考实现(pi 的 `auto-session-title` 扩展)那样另起子进程/子会话。于是它的 token 与费用天然落在 R7 那套 `daily_quota` 计数里,不存在第二条绕过限额的出网路径
 
+R-TOOLS 补记(2026-09-02,所有者裁定;`apps/api/agent/catalog.ts` + `tools.ts` 的 META 常量):
+
+- **工具目录是一个公开的只读端点**(`GET /agent/tools`,Tools 面板的数据源)。它公开的是**能力说明**——名称 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 分组——这些本来就会以工具定义的形式送进模型上下文、又印在设计稿 1f/1g 上,不是新的信息面
+- **不得公开的是配置面**(公开即泄服务端配置):`execute` 本体、`ActiveWebSearchConfig` 的任何字段(baseUrl / key / model / provider / 超时)、`dailySearchLimit` 与当日用量、`tool_config` 的 `enabled` / `dangerous`。落点有两层:①**白名单序列化**——端点只按名取字段,不 spread;②**META 定义在闭包外面**——`makeWebSearchTool(cfg)` 的 `cfg` 与 `sessionRename(ctx)` 的 `ctx` 在 META 的作用域里不存在,「description 里插一句每日 N 次」这类写法在结构上做不到。`catalog.test.ts` 对响应文本做 grep 兜底
+- **目录静态、不读库**:`web_search` 未配置或被关掉时照样列出,且条目里没有任何「可不可用」字段——这与「不显示启停状态」是同一枚硬币的两面(所有者待裁定项见 ROUNDS.md R-TOOLS)
+- 端点本身不改变四层沙箱的任何一层:工具的注册集合仍由 `tool_config` 决定,目录只是把「已实现的全部」说给访客听
+
 ### 第 2 层 · 数据面只读
 
 - 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_categories` / `notes_series` / `notes_chapters` 三张表 `SELECT`,对 `llm_config` / `websearch_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `daily_quota` / `visits` 无任何权限
