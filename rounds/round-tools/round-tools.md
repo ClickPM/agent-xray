@@ -2,7 +2,7 @@
 
 <!-- 命名轮,不属于 R0–R11 线性序列。拆解见 ROUNDS.md「R-TOOLS」。 -->
 
-> 状态:进行中 —— 代码与验收已落地(2026-09-02,分支 `claude/round-tools-implementation-cd50cb`),codex 审查进行中
+> 状态:已完成 —— 代码、7 项验收与 codex 两轮审查均收口(2026-09-02,分支 `claude/round-tools-implementation-cd50cb`,提交 `98fd54e` + `062d4a1`);**尚未合并 `main`**,合并与「与 R11 的先后」待所有者裁定
 >
 > 与 R11(生产部署上线)的先后**待所有者裁定**:本轮无迁移、无新依赖、不动部署形态,放在上线前后都成立。
 
@@ -116,6 +116,14 @@
   画板原句按字面读确实不准,改文案不改机制。
 - 测试从「N 不截、N+1 截」收紧为「N 字符原样;N+1 字符 = **前 N 字符原样 + 标注**,且总长 > N」,把这条语义钉死。
 - `dev.ps1 gen` 重生成生成物(只有这个字段与注释变化,slug 噪音照旧还原两行)。
+- 整改提交:`062d4a1`;整改后 `dev.ps1 test` 14 文件 291 用例全过、`dev.ps1 check` 通过、api/web tsc 0 错误、浏览器脚注实测。
+
+**第 2 轮(零 findings)**:全量复审(分支对 `main`)。原文:「No actionable correctness, security, or compatibility
+defects were identified in the changes. The new catalog endpoint, generated client integration, and Tools panel are
+consistent with the repository's design and security constraints.」
+
+- 结论:**整改后 PASS**(缺陷门禁)。两轮共 1 条 findings(0×P1 · 1×P2),采纳整改;末轮零 findings。
+  合并 `main` 与「与 R11 的先后」按任务卡头部所述待所有者裁定。
 
 ## 失败处理
 
