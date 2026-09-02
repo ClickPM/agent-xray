@@ -5,6 +5,10 @@
 //   1. **纯函数**。工具实现只做一件事:经 `queryAsAgentRo` 读 notes 三张表。
 //      不碰文件系统、不 spawn 进程、不读 process.env、不做动态 import、不发任何网络请求。
 //      连接串 / 凭据在这里根本不存在,因而也无从泄漏。
+//      **唯一的例外是 R-TITLE 的 `session_rename`**(docs/security.md §1 第 1/2 层补记):
+//      它经 `setSessionTitleAsAgent` 写库 —— 只写 `sessions` 的 title / title_source 两列、
+//      只写**闭包绑定的那一行会话**(会话 id 不是入参,模型表达不出「改别人的标题」),
+//      写面由 Postgres 的列级授权强制(迁移 009)。上面另外五项对它照常成立。
 //   2. **注册集合由 `tool_config` 表决定**,但表里只能「开关已实现的工具」,
 //      不能凭名字长出工具:未知名字在 `loadEnabledTools` 被丢弃并记日志。
 //      bash / write / 任意代码执行类工具在本注册表里**不存在**,这是 CLAUDE.md 规则 9
@@ -23,6 +27,7 @@ import type { Transaction } from "encore.dev/storage/sqldb";
 import { safeErrorText } from "../shared/redact";
 import { db } from "./db";
 import { queryAsAgentRo } from "./ro-db";
+import { setSessionTitleAsAgent } from "./title-db";
 
 /** 单个工具结果的字符上限。超出截断并显式标注,不静默丢尾巴。 */
 const MAX_RESULT_CHARS = 8_000;
@@ -77,6 +82,8 @@ function splitOverflow<T>(rows: T[], limit: number): { rows: T[]; more: boolean 
 
 /** 工具失败时给模型看的固定文案。**不含任何上游细节**。 */
 const TOOL_FAILURE_TEXT = "查询失败,请稍后再试或换个问法。";
+/** 命名工具的失败文案。刻意带一句「继续回答」——否则模型会卡在重试标题上。 */
+const TITLE_FAILURE_TEXT = "标题没能保存,不必重试,请继续回答访客的问题。";
 
 /**
  * 工具执行的统一兜底:**换掉错误内容,但保留「这是一次失败」这个事实**。
@@ -93,12 +100,16 @@ const TOOL_FAILURE_TEXT = "查询失败,请稍后再试或换个问法。";
  *     用 `error.message` 造 `createErrorToolResult(...)` 并置 `isError: true`(源码核实),
  *     既拿到了正确的错误状态,给模型的又还是那句固定文案。
  */
-async function guarded(tool: string, run: () => Promise<ToolText>): Promise<ToolText> {
+async function guarded(
+  tool: string,
+  run: () => Promise<ToolText>,
+  failureText = TOOL_FAILURE_TEXT,
+): Promise<ToolText> {
   try {
     return await run();
   } catch (err) {
     console.error(`tool ${tool} failed: ${safeErrorText(err)}`);
-    throw new Error(TOOL_FAILURE_TEXT);
+    throw new Error(failureText);
   }
 }
 
@@ -328,7 +339,9 @@ export function snippetAround(content: string, pos: number, width = SNIPPET_CHAR
 }
 
 /**
- * 已实现工具的注册表。**这就是全部**:`tool_config` 里出现任何不在本表的名字,
+ * 已实现的**无状态**工具注册表。同一份定义被所有会话共用,实现里没有任何会话上下文。
+ *
+ * `tool_config` 里出现任何既不在本表、也不在 `SESSION_TOOL_REGISTRY` 里的名字,
  * 都只会被丢弃并记日志。新增工具 = 改这个文件 + 发一次版,不是改一行配置。
  */
 export const TOOL_REGISTRY: Readonly<Record<string, ToolDefinition>> = Object.freeze({
@@ -337,14 +350,173 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolDefinition>> = Object.fr
   [notesSearch.name]: notesSearch,
 });
 
+// ───────────────────── 会话绑定工具(R-TITLE) ─────────────────────
+
+export const SESSION_RENAME_TOOL = "session_rename";
+
+/** 标题上限。与 `store.deriveTitle` 同一口径:超出截断并留省略号。 */
+const MAX_TITLE_CHARS = 40;
+
+/** 标题为空/只有标点时给模型的固定文案。是「怎么改」的指引,不含任何内部细节。 */
+const TITLE_EMPTY_TEXT = "标题为空或只有标点,请给出一个 4–18 字、不带标点的短标题。";
+
+/**
+ * 模型给的标题 → 可以进会话列表的标题。
+ *
+ * 规则照抄参考实现(pi 的 `auto-session-title` 扩展),因为它们是同一批实测出来的模型习惯:
+ * 爱把标题整个引起来、爱加「标题:」前缀、爱以句号收尾、偶尔多写一行解释。
+ * 这里额外多做两件事:**控制字符压成空格**(标题会进会话列表与删除确认框,不能带排版字符)、
+ * **长度上界与 deriveTitle 对齐**——标题的长度不能由模型说了算。
+ */
+export function sanitizeTitle(raw: string): string {
+  let s = (raw.split(/\r?\n/, 1)[0] ?? "")
+    // 控制字符(含制表符)压成空格。非 ASCII 标点一律写成 \uXXXX 转义:直接写字面量的话,
+    // 编辑器与管道的 NFKC 归一会把全角 ! ? ; , : 悄悄换成半角,字符类看起来还在、其实少了一半。
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // 【为什么是循环而不是四条 replace 顺着写一遍】(faux 探针实测)引号与尾部标点会**互相挡住**:
+  // 「排查 SSE 断流」。—— 先去引号时尾巴是句号(去不掉引号),先去句号时尾巴是引号(去不掉句号),
+  // 无论哪种顺序,单趟都会剩下一个字符。循环到不动点为止;每一趟要么至少去掉一个字符、
+  // 要么原样返回并跳出,必然收敛。
+  for (;;) {
+    const next = s
+      // 首尾的引号与书名号(模型很爱把标题整个引起来)
+      .replace(/^["'`\u201c\u201d\u2018\u2019\u300a\u300c\u300e]+/, "")
+      .replace(/["'`\u201c\u201d\u2018\u2019\u300b\u300d\u300f]+$/, "")
+      // 「标题:」这类前缀
+      .replace(/^\u6807\u9898[:\uff1a]\s*/, "")
+      // 尾部标点(半角 + 全角 + 中日文)
+      .replace(/[.!?;,\u3002\u3001\uff01\uff1f\uff1b\uff0c\uff0e]+$/, "")
+      .trim();
+    if (next === s) break;
+    s = next;
+  }
+
+  // 【只去尾部的那一小撮标点是不够的】(codex 复审 P2)上面的字符类只覆盖常见句末标点,
+  // 模型给一串 `:` / `——` / `…` / `()` 时它们一个都不在类里,于是「纯标点」会原样活下来、
+  // 被当成合法标题写进库并把 title_source 翻成 agent —— 而命名只有一次,那个没法用的标题
+  // 就永久钉在会话列表上了。判据因此不是「去完标点还剩字符吗」,而是**剩下的字符里有没有
+  // 一个是字母或数字**(\p{L}/\p{N} 覆盖中日韩、拉丁、西里尔……)。
+  // 纯 emoji 一并落在这里:它在会话列表里同样不可用,退回去让模型重给一个。
+  if (!/[\p{L}\p{N}]/u.test(s)) return "";
+
+  return s.length > MAX_TITLE_CHARS ? `${s.slice(0, MAX_TITLE_CHARS)}…` : s;
+}
+
+/** 会话绑定工具在构建时拿到的上下文。**这里的字段永远不该出现在工具入参里。** */
+export interface SessionToolContext {
+  /** ≡ DB `sessions.id`。工具改的就是这一行,模型无从指定别的会话 */
+  sessionId: string;
+  /** 本会话是否还需要命名;false 时 `session_rename` 根本不注册(见 buildSessionTools) */
+  needsTitle: boolean;
+}
+
+export type SessionToolFactory = (ctx: SessionToolContext) => ToolDefinition;
+
+/**
+ * `session_rename`:给**本次**会话起标题(R-TITLE)。
+ *
+ * 【为什么会话 id 不做入参】这是整个例外能被限住的关键。做成入参的话,接口上就存在
+ * 「改另一个访客的会话标题」这句话,拦不拦得住全看服务端校验写没写对;
+ * 绑成闭包之后,那句话在这个工具的词汇表里根本不存在(docs/security.md §1 第 1 层补记)。
+ *
+ * 【为什么写不进去不算失败】重复调用(会话已命名)与会话已被删掉,都返回一条**正常**结果:
+ * 它们不是错误,把它们抛出去只会在轨迹面板上画出一个红色的 `isError`,
+ * 而访客什么也没做错。真正的失败(库不可用)才走 `guarded` 的错误路径。
+ */
+const sessionRename: SessionToolFactory = (ctx) => ({
+  name: SESSION_RENAME_TOOL,
+  label: "会话命名",
+  // description / promptSnippet 与 runtime.ts 的 systemPromptFor 口径一致(命名时机 = 第一轮,
+  // 所有者裁定),三处都进模型上下文,改其一要一起改。
+  description:
+    "给当前这次会话起一个简短标题,显示在左侧会话列表里。用访客使用的语言," +
+    "4–18 字概括访客这次要做的事;不要标点、不要引号,也不要「新会话」「帮助」这类没有信息量的词。" +
+    "整个会话只需在第一轮调用一次。",
+  promptSnippet: `${SESSION_RENAME_TOOL} —— 给本次会话起一个简短标题(整个会话一次)`,
+  parameters: {
+    type: "object",
+    properties: {
+      title: {
+        type: "string",
+        minLength: 1,
+        maxLength: 60,
+        description: "标题本身,一行,不带引号与标点",
+      },
+    },
+    required: ["title"],
+    additionalProperties: false,
+  },
+  async execute(_toolCallId, params) {
+    const { title } = (params ?? {}) as { title?: unknown };
+    const clean = typeof title === "string" ? sanitizeTitle(title) : "";
+    // 入参不可用是**模型可以改正**的失败:抛出去(pi 据此置 isError:true),
+    // 文案本身就是改正方法。
+    if (!clean) throw new Error(TITLE_EMPTY_TEXT);
+    return guarded(
+      SESSION_RENAME_TOOL,
+      async () => {
+        const changed = await setSessionTitleAsAgent(ctx.sessionId, clean);
+        return changed
+          ? textResult(`已把本会话的标题设为「${clean}」。`, { title: clean, changed: true })
+          : textResult("本会话的标题此前已经设置过,未做更改,不必再次调用。", {
+              title: clean,
+              changed: false,
+            });
+      },
+      TITLE_FAILURE_TEXT,
+    );
+  },
+});
+
+/**
+ * 需要在**建会话时**绑定会话上下文的工具。与 `TOOL_REGISTRY` 分成两张表不是洁癖:
+ * 「这个工具带着一个会话身份」是一条安全相关的性质,它应当在类型上就看得见,
+ * 而不是靠读实现才发现某个工具偷偷捕获了 sessionId。
+ */
+export const SESSION_TOOL_REGISTRY: Readonly<Record<string, SessionToolFactory>> = Object.freeze({
+  [SESSION_RENAME_TOOL]: sessionRename,
+});
+
 // ───────────────────── 启停:tool_config → 注册集合 ─────────────────────
 
 export interface EnabledTools {
-  /** 传给 createAgentSession 的 `tools` 白名单(同时也是 customTools 的名字集合) */
+  /** 本次启用的**全部**工具名(无状态的 + 会话绑定的);指纹由它算出 */
   names: string[];
+  /** 其中**无状态**工具的实现,可直接交给 createAgentSession */
   definitions: ToolDefinition[];
+  /** 其中需要绑定会话上下文的工具名;实现由 `buildSessionTools` 在建会话时构造 */
+  sessionScoped: string[];
   /** 集合变了就要重建会话(会话的工具集在创建时定格),判据是这个值 */
   fingerprint: string;
+}
+
+/**
+ * 把「启用集合」落成**这一个会话**实际注册的工具。
+ *
+ * 返回的 `names` 与 `definitions` 必须成对使用:`createAgentSession` 的 `tools` 是白名单、
+ * `customTools` 是实现,名字对不上的那一半会静默失效(白名单里多一个名字 = 一个不存在的
+ * 工具,实现里多一个 = 永远不会被激活)。
+ *
+ * 【为什么会话绑定工具可以被这里筛掉】「一个会话只命名一次」的第一道闸:
+ * 已经命名过的会话(`needsTitle === false`)干脆不注册 `session_rename` ——
+ * 模型看不见它,也就不会在后续每一轮都试着调一次、再被库里的 WHERE 条件挡回去。
+ * 第二道闸在 SQL 里(`WHERE title_source = 'derived'`),两道都在是刻意的。
+ */
+export function buildSessionTools(
+  enabled: EnabledTools,
+  ctx: SessionToolContext,
+): { names: string[]; definitions: ToolDefinition[] } {
+  const names = enabled.definitions.map((d) => d.name);
+  const definitions = [...enabled.definitions];
+  for (const name of enabled.sessionScoped) {
+    if (name === SESSION_RENAME_TOOL && !ctx.needsTitle) continue;
+    names.push(name);
+    definitions.push(SESSION_TOOL_REGISTRY[name](ctx));
+  }
+  return { names, definitions };
 }
 
 /** 上一次记过日志的集合;同一份配置不重复刷屏(热路径每轮都会调一次)。 */
@@ -354,7 +526,8 @@ let lastLoggedFingerprint: string | undefined;
  * 读 `tool_config` 决定本次会话注册哪些工具。
  *
  * 两道过滤,顺序不能反:
- *   1. **名字必须在 TOOL_REGISTRY 里**。表是所有者可写的,而「凭一个名字就注册一个工具」
+ *   1. **名字必须在两张注册表之一里**(无状态的 `TOOL_REGISTRY` 或会话绑定的
+ *      `SESSION_TOOL_REGISTRY`)。表是所有者可写的,而「凭一个名字就注册一个工具」
  *      这件事根本不存在 —— 落到这里的未知名字只会被丢掉。
  *   2. **dangerous 行需要服务器 env 双闸**。表里置 true 只是第一闸;
  *      没有 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 就不注册(docs/security.md §1 第 1 层)。
@@ -368,13 +541,17 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
   );
   const unlocked = process.env[DANGEROUS_UNLOCK_ENV] === "1";
   const names: string[] = [];
+  const stateless: string[] = [];
+  const sessionScoped: string[] = [];
   const dropped: string[] = [];
   for (const row of rows) {
     // 【必须是 hasOwn 而不是 `in`】(codex 初审 P3)`in` 会走到 Object.prototype 上:
     // 一个叫 `constructor` 的行(`tool_config_set` 的 snake_case 校验放行它)会被判为
     // 「已实现」,然后把 `Object` 本身当工具定义塞进 customTools —— 那东西没有 execute。
     // 注册表是数据不是原型链。
-    if (!Object.hasOwn(TOOL_REGISTRY, row.name)) {
+    const isStateless = Object.hasOwn(TOOL_REGISTRY, row.name);
+    const isSessionScoped = Object.hasOwn(SESSION_TOOL_REGISTRY, row.name);
+    if (!isStateless && !isSessionScoped) {
       dropped.push(`${row.name}(未实现)`);
       continue;
     }
@@ -383,6 +560,7 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
       continue;
     }
     names.push(row.name);
+    (isStateless ? stateless : sessionScoped).push(row.name);
   }
   const fingerprint = names.join(",");
   // 热路径每轮都会调一次,所以只在集合变化时记一行(含本次被丢弃的名字)
@@ -392,5 +570,10 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
       `agent tools enabled: [${fingerprint}]${dropped.length ? ` dropped: ${dropped.join(", ")}` : ""}`,
     );
   }
-  return { names, definitions: names.map((n) => TOOL_REGISTRY[n]), fingerprint };
+  return {
+    names,
+    definitions: stateless.map((n) => TOOL_REGISTRY[n]),
+    sessionScoped,
+    fingerprint,
+  };
 }

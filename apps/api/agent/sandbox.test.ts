@@ -8,11 +8,20 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "./db";
 import { queryAsAgentRo } from "./ro-db";
 import { checkQuota, recordUsage } from "./quota";
-import { loadEnabledTools, snippetAround, capText, TOOL_REGISTRY } from "./tools";
+import {
+  loadEnabledTools,
+  snippetAround,
+  capText,
+  SESSION_RENAME_TOOL,
+  SESSION_TOOL_REGISTRY,
+  TOOL_REGISTRY,
+} from "./tools";
 import { appendMessage, createSession } from "./store";
 
 /** 迁移 006 种下的三行启停配置;本文件会清空 tool_config,跑完复原。 */
 const SEED_TOOLS = ["notes_list_series", "notes_get_chapter", "notes_search"];
+/** 迁移 009 种下的会话绑定工具。**复原时不能漏**:漏了等于把默认开启的命名工具关掉。 */
+const SEED_SESSION_TOOLS = [SESSION_RENAME_TOOL];
 
 async function seedNotes() {
   await db.exec`DELETE FROM notes_chapters`;
@@ -37,7 +46,7 @@ describe("第 1 层 · 工具白名单", () => {
   });
 
   afterAll(async () => {
-    // 复原迁移 006 的种子,免得影响随后跑的文件与本地开发库
+    // 复原迁移 006 / 009 的种子,免得影响随后跑的文件与本地开发库
     await db.exec`DELETE FROM tool_config`;
     for (const name of SEED_TOOLS) {
       await db.rawExec(
@@ -46,13 +55,22 @@ describe("第 1 层 · 工具白名单", () => {
         name,
       );
     }
+    for (const name of SEED_SESSION_TOOLS) {
+      await db.rawExec(
+        `INSERT INTO tool_config (name, enabled, dangerous, note) VALUES ($1, TRUE, FALSE, 'R-TITLE 会话绑定工具')
+         ON CONFLICT (name) DO NOTHING`,
+        name,
+      );
+    }
   });
 
-  it("注册表里只有三个只读工具,执行类工具根本不存在", () => {
+  it("两张注册表里只有三个只读工具 + 一个会话绑定工具,执行类工具根本不存在", () => {
     expect(Object.keys(TOOL_REGISTRY).sort()).toEqual([...SEED_TOOLS].sort());
-    // CLAUDE.md 规则 9 的物理落点:这些名字不是"被关掉",是没有实现
+    expect(Object.keys(SESSION_TOOL_REGISTRY)).toEqual(SEED_SESSION_TOOLS);
+    // CLAUDE.md 规则 9 的物理落点:这些名字不是"被关掉",是没有实现 —— 两张表都不能有
     for (const forbidden of ["bash", "write", "edit", "read", "powershell", "exec"]) {
       expect(TOOL_REGISTRY[forbidden]).toBeUndefined();
+      expect(SESSION_TOOL_REGISTRY[forbidden]).toBeUndefined();
     }
   });
 

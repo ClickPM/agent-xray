@@ -31,6 +31,14 @@ R7 落地补记(2026-09-01,`apps/api/agent/tools.ts` + `runtime.ts`):
 - **工具集变更 = 会话重建**:工具白名单在 `createAgentSession` 时定格,事后开关对内存里的会话无效。所以它并进 R6 那个 `configFingerprint`,走同一条「配置指纹变了,会话下一轮被重建」的统一规则
 - **工具结果有界**(8000 字符,超出截断并标注)且**异常不外泄**:数据库错误只进服务端日志,给模型的是一句固定文案 —— 工具结果会进模型上下文 → 进轨迹事件 → 经公开的 `/trace/stream` 出去(§2)。**但失败仍要是失败**:固定文案以 `throw` 交给 pi 的错误路径,`tool_result` 的 `isError` 才是 true;`return` 一条普通结果会让轨迹面板把一次超时的查询画成一次成功的查询(codex 复审 P2)
 
+R-TITLE 补记(2026-09-01,所有者裁定;`apps/api/agent/tools.ts` + 迁移 `009`):
+
+- **「每个工具必须是纯函数」在本轮有了唯一一个例外**:`session_rename` 会写库。写的是 `sessions` 表的 `title`(与标记列 `title_source`)**一列半**,且只写**它自己所在的那一行会话**。其余几项对它照常成立 —— 不接触文件系统、不 spawn 进程、不读 `process.env`、不做动态 import、不发任何网络请求
+- **会话 id 不是入参**:工具定义在 `createAgentSession` 时按当前会话 id 以闭包绑死(`buildSessionTools`),模型能给的入参只有一个 `title` 字符串。这是这个例外能被限住的**关键**——「改另一个访客的会话标题」这件事在接口上根本表达不出来,即便 prompt injection 完全操纵了工具调用,能改的也只有访客自己眼前这一条会话的标题
+- **一个会话只命名一次,两道闸**:①已命名(`title_source='agent'`)的会话在冷启动时**根本不注册**这个工具;②SQL 带 `WHERE title_source = 'derived'`,第一道漏了也写不进去
+- **入参经服务端 sanitize 才落库**:取首行、去首尾引号、去尾部标点、去控制字符、截 40 字符(与既有 `deriveTitle` 同一上界)。标题会出现在会话列表与删除确认框里,它的长度与换行不能由模型决定
+- **不新增任何 LLM 出网路径**:标题由**本轮对话自己**产出(模型调一次工具),不像参考实现(pi 的 `auto-session-title` 扩展)那样另起子进程/子会话。于是它的 token 与费用天然落在 R7 那套 `daily_quota` 计数里,不存在第二条绕过限额的出网路径
+
 ### 第 2 层 · 数据面只读
 
 - 教程库工具走独立 Postgres 角色 `agent_ro`:仅对 `notes_categories` / `notes_series` / `notes_chapters` 三张表 `SELECT`,对 `llm_config` / `tool_config` / `about_content` / `notes_assets` / `mcp_audit` / `daily_quota` / `visits` 无任何权限
@@ -44,6 +52,13 @@ R7 落地补记(2026-09-01,所有者裁定;`apps/api/agent/ro-db.ts` + 迁移 `0
 - **必须是 `SET LOCAL` 而不是 `SET`**:Encore 的连接是池化的,`SET ROLE` 会留在连接上,归还池子后下一个请求(包括 MCP 管理面的写请求)会继承降权状态。`SET LOCAL` 随事务结束复位
 - **同一段事务还叠了 `SET TRANSACTION READ ONLY` 与 `statement_timeout`**:前者挡「工具实现自己写错 SQL」,与角色权限是两道独立的闸;后者是第 4 层「资源滥用」的一部分
 - **后建的表不自动授权**:刻意不设 `ALTER DEFAULT PRIVILEGES`。将来新增内容表要给 agent 看,必须在那次迁移里显式 `GRANT` —— 忘了写的后果是工具读不到(报错、看得见),而不是悄悄多出一张可读的表
+
+R-TITLE 补记(2026-09-01,所有者裁定;`apps/api/agent/title-db.ts` + 迁移 `009`):
+
+- 本层的标题从「**只读**」收窄为「**只读 + 一列定向写**」。写面的全部内容就是:`sessions` 表的 `title` 与 `title_source` 两列,`WHERE id = <闭包绑定的本会话 id>`。除此之外 agent 侧仍然一个字节都写不了
+- **写不走 `agent_ro`**(它跑在 `READ ONLY` 事务里,那是它的定义),另起一个同样 **NOLOGIN** 的角色 `agent_title`,授权是**列级**的:`GRANT SELECT (id, title, title_source)` + `GRANT UPDATE (title, title_source) ON sessions`。于是「只能改标题」由 Postgres 强制,不靠工具实现自觉 —— 以该角色改 `sessions.last_active_at`、写 `messages`、删会话、读 `llm_config`,全部 `permission denied`(`apps/api/agent/title.test.ts` 逐条断言,与 R7「以 agent_ro 写库必须失败」是同一形态的验收)
+- 事务里仍是 `SET LOCAL ROLE`(池化连接会把 `SET ROLE` 泄漏给下一个请求,理由同上一条补记),但**不叠 `SET TRANSACTION READ ONLY`** —— 这是沙箱里唯一一段刻意可写的事务;`statement_timeout` 照旧
+- 成员资格的授予口径与迁移 006 相同(只授给「已经能 SELECT `sessions`」的登录角色):能读 `sessions` 的角色本来就能整行改写它,再给它一个只能改两列的身份,**可证明地**不扩大任何权限
 
 ### 第 3 层 · 容器隔离
 
