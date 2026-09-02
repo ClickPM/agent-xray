@@ -1,7 +1,52 @@
-# Agent X-Ray — Caddy 反代(备案通过并解析域名后,把 :80 换成你的域名即自动 TLS)
-# 备案期自测:改成 :8080 并在安全组放行对应端口。
-:80 {
+# Agent X-Ray — Caddy 反代。
+#
+# 【站点地址由环境变量给】`{$SITE_ADDRESS::80}` = 取 SITE_ADDRESS,没设就用 `:80`。
+# 130 预发不设它,行为与本行改动前**一字不差**;生产在 ~/deploy/.env 里填域名
+# (如 `kzgai.cloud`),Caddy 据此自动签发 TLS 并把 80 跳到 443。
+# 一份 Caddyfile 供两个环境,不维护两份 —— R11 所有者裁定 2026-09-02。
+#
+# 多个域名用逗号分隔(`kzgai.cloud, www.kzgai.cloud`):环境变量在 Caddyfile 解析**之前**
+# 展开,所以它就是站点地址那一行的字面量。⚠️ 列进来的每个名字都要能解析到本机,
+# 否则那个名字的 ACME 签发会反复失败刷日志。先只上主域,确认通了再加 www。
+
+# 全局选项。必须在任何站点块**之前**。
+{
+	# 【生产只走 HTTPS,80 不给任何响应】所有者要求(2026-09-02)。
+	# 没有这一行时,站点地址填域名会让 Caddy 自动在 80 上起一个 308 跳转服务;
+	# 有了它,80 上不再有业务响应。
+	#
+	# **对 130 是空操作**:那边站点地址是 `:80` 的纯 HTTP 站,本来就不产生跳转路由。
+	#
+	# ⚠️ **代价有两条,别当它免费**:
+	#   ① 访客在地址栏直接敲 `kzgai.cloud`,浏览器若先试 HTTP 就会拿不到东西
+	#     (Chrome/Edge/Safari 近年默认 HTTPS-first,能救回大部分但不是全部)。
+	#   ② **ACME 的 HTTP-01 通道随之关掉**,证书首签与续期只能走 443 的 TLS-ALPN-01。
+	#     所以 **443 必须常年可达** —— 它从「站点入口」变成了「续期的唯一命脉」。
+	#     真出问题时的应急路径:临时注释掉本行 + `caddy reload`,让 HTTP-01 顶上。
+	auto_https disable_redirects
+}
+
+{$SITE_ADDRESS::80} {
 	encode zstd gzip
+
+	# ── 安全响应头(R11,docs/security.md §5.1)────────────────────────
+	# 放在站点块顶层 = 所有 handle 分支的响应都带上,不逐服务下发(漏一处就是漏一处)。
+	# 这里**没有 CSP 主体**:Next.js 会内联 script,收紧 script-src 要配 nonce,属机制类改动;
+	# 只用 CSP 的 frame-ancestors 一条(与脚本执行无关,不需要 nonce),和 X-Frame-Options 并存兼容旧浏览器。
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Content-Security-Policy "frame-ancestors 'none'"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
+	}
+
+	# HSTS **只在 HTTPS 响应上发**。规范上浏览器本就会忽略明文连接收到的 HSTS,
+	# 但 130 预发跑明文 :80 且与生产共用这份文件 —— 压根不发比「浏览器应该会忽略」更省心
+	# (R10 记这条 BACKLOG 时担心的正是「提前发 HSTS 把内网 IP 锁进 HTTPS」)。
+	# max-age 从 300 起步:证书链万一有问题,锁定期只有 5 分钟;冒烟确认后再往上调。preload 不加。
+	@secure protocol https
+	header @secure Strict-Transport-Security "max-age=300"
 
 	# API(含两条 SSE:/api/agent/*、/api/trace/stream)
 	#
@@ -44,6 +89,13 @@
 
 	# MCP 管理面可选 IP 白名单(docs/security.md §4;启用时取消注释并填入自己的出口 IP)。
 	# /api/mcp 已有静态 bearer token 认证,这一层是纵深防御,不是唯一防线。
+	#
+	# 【R11 所有者裁定 2026-09-02:生产也不启用,只靠 token】家宽出口 IP 会漂,
+	# 漂一次就要 ssh 上来改这里 + reload。代价认了:公网上那把 bearer token 是唯一防线,
+	# 兜底是 HTTPS(备案通过后 Caddy 自动 TLS,不再是 130 那种内网明文)+ mcp_audit 审计
+	# + token 走 CSPRNG、服务端只存 sha256、轮换路径已在 130 实测过。
+	# 想改回来:填 IP、取消注释、`docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile`,
+	# 然后**必须复验一次 MCP 实连** —— 白名单先于 token 生效,漏验的表现是 token 明明对却 403。
 	# @mcpBlocked {
 	# 	path /api/mcp*
 	# 	not remote_ip 1.2.3.4

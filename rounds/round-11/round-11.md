@@ -44,10 +44,10 @@
 | 5 | Docker + Compose 可用,拉镜像走加速 | `docker run hello-world` 成功;daemon.json 配 registry-mirrors | ✅ 2026-08-28 |
 | 6 | deploy 用户可密钥登录并操作 docker | `ssh deploy@106.54.238.52 docker ps` 成功 | ✅ 2026-08-28 |
 | 7 | ICP 备案通过,域名 A 记录解析到服务器 | 备案号下发;`dig <域名>` 指向 106.54.238.52 | ✅ 2026-09-02 备案通过,`苏ICP备2025204887号-2`;解析早于 2026-08-28 生效(`kzgai.cloud`/`www` 境内外 DNS 均指向服务器)。**部署时复核一次 `域名:80` 不再被拦截**(备案前实测是切断) |
-| 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ⬜ 待部署。**Caddyfile 要从 `:80` 改成域名**——130 与生产共用一份文件,改法见下「2026-09-02 裁定」第 5 条 |
+| 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ◐ **访问层已在 2026-09-02 预检中打通并留证**(见下「生产访问层预检」):真域名签发成功(`tls-alpn-01`)、本机 curl 未加 `-k` 通过证书校验、六个安全头齐。⬜ 剩「与应用镜像一起再跑一次」——正式部署用的是 compose 的 `deploy_caddy_data` volume,会重新签一次 |
 | 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ⬜ 待 R9/R10 |
 | 10 | 备案号挂 footer | web footer 显示备案号 | ⬜ 待部署。备案号已到手,填生产 `.env` 的 `ICP_BEIAN=苏ICP备2025204887号-2` 即可(**运行期注入**——`SiteFooter` 用 `await connection()` 把渲染推到请求期,不会被烧进构建产物;130 保持留空)。**公安联网备案另算**,见「所有者 TODO」第 6 条 |
-| 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ⬜ 待部署 |
+| 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ◐ **生成与哈希写入已完成**(2026-09-02,所有者本机生成 token、只交哈希);⬜ 剩两项待部署后做:①`XRAY_MCP_TOKEN_PROD` 环境变量与密码管理器留存的确认(所有者);②轮换演练(要 api 起来才验得了 401/200) |
 | 12 | MCP 管理面在生产实连(协议 **2026-07-28**) | `server/discover` 回 `supportedVersions: ["2026-07-28"]` + `serverInfo`,`tools/list` 出 **28** 个工具(R10 留证里的 24 是 R-WEBSEARCH 之前的数,以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准)——请求体形状照 [`rounds/round-10/checklist.md`](../round-10/checklist.md) §9(逐请求四件套缺一样就是 4xx,`_meta` 三键必须在 `params` 里);再经 `.mcp.json` 新增的 `xray-admin-prod` 用 Claude Code 实连一次。**必须早于「写生产 LLM provider」通过**(R6 起无引导密钥,不通则 `/agent/ask` 永远 503);**交接项②的 IP 白名单启用后要复验一次**(白名单先于 token 生效,漏验的表现是 token 明明对却 403) | ⬜ 待部署 |
 
 ## 所有者 TODO(Claude 无法代办)
@@ -88,9 +88,14 @@
    **别忘了 BACKLOG 里那条**:`audit.ts` 的 `remoteOf` 取 XFF 第一段可被写入方伪造,当前靠 Caddy 覆盖 XFF 挡住 ——
    白名单不启用意味着这层保护在生产也只剩 Caddy 那一道,给 Caddy 配 `trusted_proxies` 或前面再加一层代理时会失效。
 
-5. **Caddyfile 的域名化**(实现细节,尚未落地):130 用 `:80`、生产用 `kzgai.cloud`,两边共用一份部署资产。
-   建议用 Caddy 的环境变量占位 `{$SITE_ADDRESS::80}` —— 130 不填保持 `:80`,生产在 `.env` 里填域名,
-   比维护两份 Caddyfile 干净。**改完要在 130 上先验一次**(不填变量时行为不变),再用于生产。
+5. **Caddyfile 的域名化** ✅ **已落地**(提交 `c9e24b3`):130 用 `:80`、生产用 `kzgai.cloud`,两边共用一份部署资产。
+   用 Caddy 的环境变量占位 `{$SITE_ADDRESS::80}` —— 130 不填保持 `:80`,生产在 `.env` 里填域名。
+   「不填变量时行为不变」已在**本机 caddy 容器**回归实测(仍监听 `:80`、照常服务、5 个头齐、无 HSTS);
+   130 上的实跑并进那次预发升级。
+
+**同日追加的第六条要求**(所有者 2026-09-02,在五条之后提出):**生产只走 HTTPS,80 端口开着但不能有响应**。
+   落点是全局 `auto_https disable_redirects` —— 不加它的话,站点地址填域名会让 Caddy 自动在 80 上起 308 跳转,
+   那就是「有响应」。实现、代价与实测见下「生产访问层预检」。
 
 ## 禁止
 
@@ -125,3 +130,74 @@
 - **deploy 用户**:`adduser --disabled-password` + docker 组,authorized_keys 复用 ubuntu 同一把公钥;`ssh deploy@… docker ps` 验证通过
 - **外网连通实测**(2026-08-28,所有者放行控制台防火墙后):服务器临时 `python3 -m http.server`(timeout 45s 自动退出),本机 curl `http://106.54.238.52:{80,443,8080}` 全部 HTTP 200、~0.07s——两层防火墙齐,备案前 `IP:8080` 自测路径可用;80/443 当前 IP 直连未见拦截,域名接入后以备案状态为准
 - **踩坑**:PowerShell 5.1 向 ssh 传含双引号的多行脚本会剥引号,写坏远端配置文件(`printf "a\nb"` 变多参数);改用 Git Bash heredoc(`ssh host bash -s <<'EOF'`)后正常——后续远端脚本一律走 heredoc
+
+### 2026-09-02 生产访问层预检(不发布应用,只打通域名 / TLS / 访问口径)
+
+所有者当日追加要求:**生产只走 HTTPS,80 端口开着但不能有响应**。据此改了部署资产(提交 `c9e24b3`),
+并在生产服务器上用**真域名**跑了一次一次性 Caddy(不含应用镜像,上游缺失回 502)把访问层验到底。
+
+**先说做法为什么要改**:站点地址填域名后,Caddy 默认会在 80 上自动起一个 308 跳转服务 —— 那是「有响应」。
+关掉它的开关是全局 `auto_https disable_redirects`。**对 130 是空操作**(那边是 `:80` 纯 HTTP 站,本来就不产生跳转路由,已回归实测)。
+
+**四条实测结论**:
+
+1. **证书签发成功,走的是 `tls-alpn-01`**(日志原文:`served key authentication certificate … "challenge":"tls-alpn-01"`
+   → `authorization finalized … "authz_status":"valid"` → `certificate obtained successfully`)。
+   这正是关掉 80 之后的必然路径,也顺带证明了**境内服务器到 Let's Encrypt 的 ACME 通路是通的**。
+   **由此产生一条运维事实:443 从「站点入口」变成了「证书续期的唯一命脉」** —— 443 不可达不再只是「站点打不开」,
+   而是「证书也续不了」。应急路径:临时注释掉 `auto_https disable_redirects` + reload,让 HTTP-01 顶上。
+2. **HTTPS 一切正常**:本机 curl **未加 `-k`** 直接通过证书校验;六个安全响应头齐全,含 `Strict-Transport-Security: max-age=300`。
+3. **80 端口现在有两道保证,别把它们混为一谈**:
+   - **云侧**:外网 → `106.54.238.52:80` 的 SYN 被静默丢弃(2.2s 超时),而 ufw 明明是 `80/tcp ALLOW` ——
+     丢包发生在腾讯云那一层,不是我们配的。**这一条不受我们控制,不能当作保证**。
+   - **Caddy 侧**:服务器本机 `curl http://127.0.0.1:80` 回 **Connection reset,无任何 HTTP 响应**。
+     这是 `disable_redirects` 的直接结果(监听还在——真域名下 Caddy 会为 ACME 绑 80,但没有任何路由),
+     **这一条才是配置层的保证**:哪天控制台放开了 80,站点也不会突然多出一个明文入口。
+   - ⚠️ **一个测试陷阱**:用 `SITE_ADDRESS=localhost` 在本机测时 `netstat` 只有 `:443` ——
+     那是因为 localhost 走内部 CA、根本没跑 ACME,所以没绑 80。**别用本机 localhost 的结果去推真域名的行为**,
+     这两者在「是否监听 80」上结论相反(真域名下是监听的)。
+4. **域名一暴露就被扫**:证书签发会把域名写进 CT log,预检那几分钟里日志已经出现对
+   `/.env`、`/.env.local`、`/.env.prod`、`/.env.dev` 的探测(来源 `104.244.74.39`)。全部 502(上游没起)。
+   记这条是为了两件事:①上线前别让裸 Caddy 长期挂在公网上;②`.env` 只在服务器 `~/deploy/` 且 600,
+   本来就不在任何 web 根下 —— 这类探测打不中,但它证明扫描是即时的、不是「小站没人管」。
+
+**服务器侧已就位**(均为不依赖镜像的部分):
+
+- `~/deploy/` 建好,四个部署资产已传(`docker-compose.yml` / `Caddyfile` / `migrate.sh` / `.env.example`),`migrate.sh` 已 `chmod +x`
+- 基础镜像已预拉:`caddy:2-alpine`(88.7MB)、`postgres:16-alpine`(420MB)—— 上线时不必现拉
+- 预检签下的证书留在 volume `preflight_caddy_data`(`/data/caddy/certificates/…/kzgai.cloud.crt`)。
+  **compose 用的是另一个 volume(`deploy_caddy_data`),所以正式部署会重新签一次** ——
+  这是刻意的:手工造一个 compose 没造过的 volume 会撞上 Compose v5 的 label 校验。
+  重签的代价只有几秒,且 Let's Encrypt 的重复证书限额是每周 5 张,用掉 1 张
+- 预检容器已删,服务器当前**无任何容器运行**
+
+**当日追加处理的三条**:
+
+- ✅ **HTTP/3 打通**(所有者裁定:放行 udp/443、保留 HTTP/3)。发现的问题是 Caddy 响应带 `Alt-Svc: h3=":443"`
+  而防火墙只放行 `443/tcp` —— 广告了一个连不上的协议,表现是浏览器试一次 QUIC 失败再回落 TCP。
+  两层都放行后实测:`curl --http3-only https://kzgai.cloud/` 回 **`HTTP/3 502`**(502 = 上游没起,协议本身通),
+  六个安全头齐全。ufw 侧 `443/udp ALLOW IN`(v4+v6),腾讯云控制台侧由所有者添加 UDP 443 规则。
+  **验证工具要注意**:本机 curl 8.16.0 是 Schannel 构建,**不支持 HTTP/3**,验不了这件事;
+  用 `docker run --rm ymuski/curl-http3 curl --http3-only …` 才测得出来。
+- ⬜ **8080 自测端口留到上线冒烟之后再收**(所有者裁定)。理由是万一部署期需要一条绕开 Caddy 的旁路自测通道。
+  收的时候 ufw 与腾讯云控制台两处都要关。
+- ℹ️ **80 被丢包的原因已缩小范围,但仍未定论**:所有者的控制台截图显示 **TCP 80 规则是「允许」**,
+  ufw 也是 `80/tcp ALLOW` —— **两层防火墙都放行,而外网 SYN 仍被丢**,所以拦截在更上游
+  (最可能是备案接入信息尚未同步到云厂商的 80 拦截解除流程,备案当天通过)。
+  **对本轮的影响是零**:所有者要的就是 80 无响应。但要记住这条随时可能变——哪天上游解除拦截,
+  80 就会变成可达,**那时唯一的保证就是 Caddy 侧的 `disable_redirects`**,而它已经配好并实测过了。
+
+**生产 `.env` 已备好(2026-09-02),只差两项**:
+
+- 已填:`ICP_BEIAN=苏ICP备2025204887号-2` · `SITE_ADDRESS=kzgai.cloud` · `SITE_ORIGIN=https://kzgai.cloud` ·
+  `POSTGRES_PASSWORD` / `CONFIG_ENCRYPTION_KEY` / `METRICS_IP_SALT`(三者均 43 字符 base64)
+- **三个密钥在服务器上就地 `openssl rand -base64 32` 生成,原文一次都没经过本机或对话** ——
+  这是 R10 那条「130 上留了一份明文 `.llm-key`」的反面教材的正面做法
+- 权限 `-rw------- deploy:deploy` ✅
+- ✅ **`MCP_AUTH_TOKEN_HASH` 已填**(2026-09-02,`47518f5e…a36fed59`,64 位小写 hex):
+  token 原文由所有者在本机按 `deploy/.env.example` 的 CSPRNG 口径生成,**只有哈希交给我写进服务器**,原文一次都没进对话或仓库。
+  写入前脚本卡了一道格式(`^[0-9a-f]{64}$`)—— 格式错的表现是 api 起来后**一律 401 且极难定位**,值得在写入时就拦下
+- ⬜ **差 `IMAGE_TAG`**:等镜像构建后填 git 短 SHA
+- ⚠️ **`CONFIG_ENCRYPTION_KEY` 所有者必须自行备份一份**(`ssh` 上去 `cat ~/deploy/.env` 取)。
+  它是 `llm_config` / `websearch_config` 里凭据密文的唯一解开方式;丢了不是「重新生成」而是
+  「所有 provider 的 key 都要经 MCP 重写一遍」。轮换 MCP token 时**绝不能顺手把它一起换掉**。

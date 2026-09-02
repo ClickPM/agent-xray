@@ -196,6 +196,34 @@ R6 落地补记(2026-08-31):
 - 备案期间云厂商封 80/443 → 用 IP + 非标端口自测,备案通过后再绑域名
 - **境内直连 Anthropic/OpenAI API 不通或不稳** → LLM 出口配置海外中转端点(自备官方 key),中转地址作为 secrets 管理
 
+### 5.1 HTTP 安全响应头(R11,所有者裁定 2026-09-02)
+
+R10 逐项过检查单时发现**站点一个安全响应头都没有**(全站唯一带 `nosniff` 的是 R6 给供图端点单加的那一条)。
+当时裁定不做,理由之一是「HSTS 要等有 TLS」;R11 备案通过、Caddy 自动 TLS 就位后,所有者裁定**上线时一并加保守的一组**。
+
+在 `deploy/Caddyfile` 的站点块统一设置,**不逐服务下发**——这是边缘一致性问题,放在反代是唯一不会漏的地方:
+
+| 头 | 值 | 挡的是什么 |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | 浏览器按内容猜 MIME。与 R6 供图端点那条是同一件事,这里做成全站默认 |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | 跨站跳转时把完整 URL(含路径)带给第三方。本站 Notes 正文里有站外链接 |
+| `X-Frame-Options` | `DENY` | 点击劫持。本站没有任何需要被嵌入的场景 |
+| `Content-Security-Policy` | `frame-ancestors 'none'` | 同上的现代等价物,两条并存是为兼容旧浏览器 |
+| `Permissions-Policy` | 关掉 geolocation / microphone / camera / payment / usb | 本站不用任何一项;显式关掉可防将来某个依赖偷偷申请 |
+| `Strict-Transport-Security` | `max-age=300`(上线确认证书链无误后再调大) | 明文降级。**只在 HTTPS 上发**,见下 |
+
+三条边界要写清楚,否则下次有人会以为这里「少做了」:
+
+1. **不含 CSP 主体**(`default-src` / `script-src` 那一套)。Next.js 会内联 script,收紧 CSP 必须配 nonce 机制,
+   属机制类改动,不在 R11 范围。这里只用 CSP 的 `frame-ancestors` 一条指令 —— 它与脚本执行无关,不需要 nonce。
+2. **HSTS 用 `protocol https` matcher 限定,只在 HTTPS 响应上发**。规范上浏览器本就会忽略明文连接收到的 HSTS,
+   但 130 预发跑的是明文 `:80`、与生产共用同一份 Caddyfile,靠「浏览器应该会忽略」不如让它压根不发 ——
+   R10 记这条 BACKLOG 时担心的正是「提前发 HSTS 把内网 IP 锁进 HTTPS」。
+   `max-age` 从 300 起步:证书链或域名配置万一有问题,锁定期只有 5 分钟;上线冒烟确认无误后再往上调。**`preload` 不加**
+   (进了 preload 列表要退出得等浏览器发版,与个人站的可逆性不匹配)。
+3. **`/api/mcp` 不因此获得额外保护**。这一组头是给浏览器看的,而管理面没有浏览器客户端;
+   它的防线仍是 §4 那三条(bearer token / 只存哈希 / 带 Origin 就 403)。
+
 ## 6. 隐私与合规
 
 - 访问统计自托管:IP 加盐哈希后落库,不存原始 IP;无第三方统计脚本
