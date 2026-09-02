@@ -125,3 +125,52 @@
 - **deploy 用户**:`adduser --disabled-password` + docker 组,authorized_keys 复用 ubuntu 同一把公钥;`ssh deploy@… docker ps` 验证通过
 - **外网连通实测**(2026-08-28,所有者放行控制台防火墙后):服务器临时 `python3 -m http.server`(timeout 45s 自动退出),本机 curl `http://106.54.238.52:{80,443,8080}` 全部 HTTP 200、~0.07s——两层防火墙齐,备案前 `IP:8080` 自测路径可用;80/443 当前 IP 直连未见拦截,域名接入后以备案状态为准
 - **踩坑**:PowerShell 5.1 向 ssh 传含双引号的多行脚本会剥引号,写坏远端配置文件(`printf "a\nb"` 变多参数);改用 Git Bash heredoc(`ssh host bash -s <<'EOF'`)后正常——后续远端脚本一律走 heredoc
+
+### 2026-09-02 生产访问层预检(不发布应用,只打通域名 / TLS / 访问口径)
+
+所有者当日追加要求:**生产只走 HTTPS,80 端口开着但不能有响应**。据此改了部署资产(提交 `c9e24b3`),
+并在生产服务器上用**真域名**跑了一次一次性 Caddy(不含应用镜像,上游缺失回 502)把访问层验到底。
+
+**先说做法为什么要改**:站点地址填域名后,Caddy 默认会在 80 上自动起一个 308 跳转服务 —— 那是「有响应」。
+关掉它的开关是全局 `auto_https disable_redirects`。**对 130 是空操作**(那边是 `:80` 纯 HTTP 站,本来就不产生跳转路由,已回归实测)。
+
+**四条实测结论**:
+
+1. **证书签发成功,走的是 `tls-alpn-01`**(日志原文:`served key authentication certificate … "challenge":"tls-alpn-01"`
+   → `authorization finalized … "authz_status":"valid"` → `certificate obtained successfully`)。
+   这正是关掉 80 之后的必然路径,也顺带证明了**境内服务器到 Let's Encrypt 的 ACME 通路是通的**。
+   **由此产生一条运维事实:443 从「站点入口」变成了「证书续期的唯一命脉」** —— 443 不可达不再只是「站点打不开」,
+   而是「证书也续不了」。应急路径:临时注释掉 `auto_https disable_redirects` + reload,让 HTTP-01 顶上。
+2. **HTTPS 一切正常**:本机 curl **未加 `-k`** 直接通过证书校验;六个安全响应头齐全,含 `Strict-Transport-Security: max-age=300`。
+3. **80 端口现在有两道保证,别把它们混为一谈**:
+   - **云侧**:外网 → `106.54.238.52:80` 的 SYN 被静默丢弃(2.2s 超时),而 ufw 明明是 `80/tcp ALLOW` ——
+     丢包发生在腾讯云那一层,不是我们配的。**这一条不受我们控制,不能当作保证**。
+   - **Caddy 侧**:服务器本机 `curl http://127.0.0.1:80` 回 **Connection reset,无任何 HTTP 响应**。
+     这是 `disable_redirects` 的直接结果(监听还在——真域名下 Caddy 会为 ACME 绑 80,但没有任何路由),
+     **这一条才是配置层的保证**:哪天控制台放开了 80,站点也不会突然多出一个明文入口。
+   - ⚠️ **一个测试陷阱**:用 `SITE_ADDRESS=localhost` 在本机测时 `netstat` 只有 `:443` ——
+     那是因为 localhost 走内部 CA、根本没跑 ACME,所以没绑 80。**别用本机 localhost 的结果去推真域名的行为**,
+     这两者在「是否监听 80」上结论相反(真域名下是监听的)。
+4. **域名一暴露就被扫**:证书签发会把域名写进 CT log,预检那几分钟里日志已经出现对
+   `/.env`、`/.env.local`、`/.env.prod`、`/.env.dev` 的探测(来源 `104.244.74.39`)。全部 502(上游没起)。
+   记这条是为了两件事:①上线前别让裸 Caddy 长期挂在公网上;②`.env` 只在服务器 `~/deploy/` 且 600,
+   本来就不在任何 web 根下 —— 这类探测打不中,但它证明扫描是即时的、不是「小站没人管」。
+
+**服务器侧已就位**(均为不依赖镜像的部分):
+
+- `~/deploy/` 建好,四个部署资产已传(`docker-compose.yml` / `Caddyfile` / `migrate.sh` / `.env.example`),`migrate.sh` 已 `chmod +x`
+- 基础镜像已预拉:`caddy:2-alpine`(88.7MB)、`postgres:16-alpine`(420MB)—— 上线时不必现拉
+- 预检签下的证书留在 volume `preflight_caddy_data`(`/data/caddy/certificates/…/kzgai.cloud.crt`)。
+  **compose 用的是另一个 volume(`deploy_caddy_data`),所以正式部署会重新签一次** ——
+  这是刻意的:手工造一个 compose 没造过的 volume 会撞上 Compose v5 的 label 校验。
+  重签的代价只有几秒,且 Let's Encrypt 的重复证书限额是每周 5 张,用掉 1 张
+- 预检容器已删,服务器当前**无任何容器运行**
+
+**未决(需所有者)**:
+
+- **HTTP/3 广告与防火墙不一致**:Caddy 响应带 `Alt-Svc: h3=":443"`,而 ufw 是 `Default: deny (incoming)` 且只有
+  `443/tcp` —— **udp/443 是封的**。表现是浏览器试一次 QUIC 失败再回落 TCP(首访多一个来回,弱网下更明显)。
+  两条出路:放行 udp/443(要动 ufw + 腾讯云控制台),或在 Caddy 全局关掉 h3 广告(`servers { protocols h1 h2 }`,一行)。
+- **8080 自测端口可以收了**:备案已过、访问口径改为仅 HTTPS,`IP:8080` 这条备案期自测路径没有用途了。收的话 ufw 与控制台两处都要关。
+- **腾讯云控制台 80 的现状值得确认一次**:现在外网到 80 是被丢包的。这与所有者要的效果一致,
+  但**原因不明**(备案接入同步?控制台规则被改?),记录在案免得将来当成「我们配的」。
