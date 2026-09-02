@@ -46,7 +46,7 @@ docs/         架构 / 安全审计 / 部署文档
 
 ## 项目状态
 
-**轮次实现阶段**。设计已终稿(15 画板 + 可交互原型,见 [design/](design/));前端已按设计稿全部实现(当前跑演示数据);后端按轮次推进,进度与 roadmap 见 [ROUNDS.md](ROUNDS.md),开发约定见 [CLAUDE.md](CLAUDE.md)。
+**轮次实现阶段**。设计已终稿(12 画板 + 可交互原型,见 [design/](design/));前端已按设计稿实现(Tools 面板 1f–1g 于 2026-09-02 新增,待 R-TOOLS 实现);后端按轮次推进,进度与 roadmap 见 [ROUNDS.md](ROUNDS.md),开发约定见 [CLAUDE.md](CLAUDE.md)。
 
 ## License
 

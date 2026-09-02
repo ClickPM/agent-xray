@@ -72,7 +72,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
         </div>
         <div style="width:500px;flex:none;display:flex;flex-direction:column">
           <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
-            <sc-for list="{{panelTabs}}" as="pt" hint-placeholder-count="3">
+            <sc-for list="{{panelTabs}}" as="pt" hint-placeholder-count="4">
               <div style="font-size:12px;font-weight:{{pt.fw}};padding:8px 14px;background:{{pt.bg}};color:{{pt.color}};border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb" onClick="{{pt.go}}">{{pt.label}}</div>
             </sc-for>
           </div>
@@ -116,6 +116,82 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
               </sc-for>
             </div>
             <div style="display:flex;gap:16px;border-top:1px solid #e0e0e0;padding-top:8px;font-size:11px;color:#6b7280"><span><span style="color:#16a34a">✓</span> fired</span><span><span style="color:#2563eb">●</span> active</span><span><span style="color:#9ca3af">○</span> pending</span></div>
+          </div>
+          </sc-if>
+          <sc-if value="{{isTools}}" hint-placeholder-val="{{false}}">
+          <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+            <div style="flex:1;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{toolGroups}}" as="g" hint-placeholder-count="3">
+                <div>
+                  <div style="display:flex;align-items:center;gap:7px;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:7px">
+                    <span style="width:6px;height:6px;border-radius:50%;flex:none;background:{{g.color}}"></span>
+                    <span style="font-size:11px;font-weight:600;color:#6b7280;letter-spacing:0.05em">{{g.label}}</span>
+                    <span style="font-size:11px;color:#9ca3af;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{g.note}}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:5px">
+                    <sc-for list="{{g.tools}}" as="t" hint-placeholder-count="2">
+                      <div style="border:1px solid #e0e0e0;border-radius:6px;background:#ffffff;padding:7px 9px;cursor:pointer" style-hover="background:#eeeeee" onClick="{{t.toggle}}">
+                        <div style="display:flex;align-items:center;gap:8px">
+                          <span style="font:600 12px 'JetBrains Mono',monospace;color:#1a1a1a">{{t.name}}</span>
+                          <span style="font-size:12px;color:#6b7280">{{t.cn}}</span>
+                          <span style="flex:1"></span>
+                          <span style="font-size:10px;border-radius:4px;padding:1px 5px;background:#f5f5f5;color:{{t.color}}">{{t.badge}}</span>
+                          <span style="font-size:9px;color:#9ca3af">{{t.chev}}</span>
+                        </div>
+                        <sc-if value="{{t.closed}}" hint-placeholder-val="{{true}}">
+                          <div style="font-size:11px;color:#9ca3af;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{t.desc}}</div>
+                        </sc-if>
+                        <sc-if value="{{t.open}}" hint-placeholder-val="{{false}}">
+                          <div style="margin-top:8px;display:flex;flex-direction:column;gap:10px">
+                            <div style="font-size:12px;line-height:1.7;color:#6b7280;text-wrap:pretty">{{t.desc}}</div>
+                            <div>
+                              <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">INPUT</div>
+                              <div style="display:flex;flex-direction:column;gap:7px">
+                                <sc-for list="{{t.params}}" as="f" hint-placeholder-count="1">
+                                  <div>
+                                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                      <span style="font:600 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{f.name}}</span>
+                                      <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">{{f.type}}</span>
+                                      <span style="font-size:10px;font-weight:600;border-radius:4px;padding:1px 5px;background:{{f.reqBg}};color:{{f.reqColor}}">{{f.req}}</span>
+                                      <span style="font:400 10px 'JetBrains Mono',monospace;border-radius:4px;padding:1px 5px;background:#f5f5f5;color:#6b7280">{{f.rule}}</span>
+                                    </div>
+                                    <div style="font-size:11px;color:#9ca3af;line-height:1.65;margin-top:3px">{{f.desc}}</div>
+                                  </div>
+                                </sc-for>
+                              </div>
+                            </div>
+                            <div>
+                              <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">OUTPUT</div>
+                              <div style="font-size:11px;color:#6b7280;line-height:1.7">{{t.out}}</div>
+                              <div style="font-size:11px;color:#9ca3af;line-height:1.7;margin-top:3px">{{t.outNote}}</div>
+                            </div>
+                            <sc-if value="{{t.hasPhases}}" hint-placeholder-val="{{false}}">
+                              <div>
+                                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">PROGRESS</div>
+                                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                                  <sc-for list="{{t.phases}}" as="ph" hint-placeholder-count="4">
+                                    <div style="display:flex;align-items:center;gap:5px">
+                                      <span style="font-size:11px;color:#6b7280;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:4px;padding:1px 6px">{{ph.label}}</span>
+                                      <span style="font-size:10px;color:#9ca3af">{{ph.arrow}}</span>
+                                    </div>
+                                  </sc-for>
+                                </div>
+                                <div style="font-size:11px;color:#9ca3af;line-height:1.65;margin-top:6px">执行期间持续上报阶段 — 即 Timeline 上那串 <span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">tool_execution_update</span> 事件</div>
+                              </div>
+                            </sc-if>
+                          </div>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="flex:none;border-top:1px solid #e0e0e0;padding:9px 14px;display:flex;flex-direction:column;gap:4px">
+              <div style="font-size:11px;color:#9ca3af;line-height:1.6">入参一律 <span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">additionalProperties: false</span> — 不接受未声明字段</div>
+              <div style="font-size:11px;color:#9ca3af;line-height:1.6">工具结果统一 <span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">8000</span> 字符上限 — 超出显式标注截断,不静默丢尾</div>
+              <div style="font-size:11px;color:#9ca3af;line-height:1.6">工具集合中不存在 <span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">bash</span> / <span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">write</span> / 任意代码执行类工具</div>
+            </div>
           </div>
           </sc-if>
           <sc-if value="{{isTimeline}}" hint-placeholder-val="{{true}}">
@@ -323,7 +399,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
   &quot;streamingPulse&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Runtime panel&quot;}
 }">
 class Component extends DCLogic {
-  state = { screen: 'notes', rssOpen: false, copied: '', panel: 'timeline' };
+  state = { screen: 'notes', rssOpen: false, copied: '', panel: 'timeline', openTool: '' };
   renderVals() {
     const go = screen => () => this.setState({ screen, rssOpen: false });
     const s = this.state.screen;
@@ -458,10 +534,73 @@ class Component extends DCLogic {
       LN('agent_end', 'pending', ''),
       LN('session_shutdown', 'pending', '', { line: 'none' }),
     ];
+    const openTool = this.state.openTool;
+    const P = (name, type, required, rule, desc) => ({
+      name, type, rule, desc,
+      req: required ? '必填' : '可选',
+      reqBg: required ? '#eeeeee' : '#f5f5f5',
+      reqColor: required ? '#1a1a1a' : '#9ca3af',
+    });
+    const T = (name, cn, badge, color, desc, params, out, outNote, phaseLabels) => {
+      const isOpen = openTool === name;
+      return {
+        name, cn, badge, color, desc, params, out, outNote: outNote || '',
+        hasPhases: !!phaseLabels,
+        phases: (phaseLabels || []).map((label, i, a) => ({ label, arrow: i === a.length - 1 ? '' : '→' })),
+        open: isOpen, closed: !isOpen, chev: isOpen ? '▾' : '▸',
+        toggle: () => this.setState(st => ({ openTool: st.openTool === name ? '' : name })),
+      };
+    };
+    const toolGroups = [
+      {
+        label: '纯函数组', color: '#6b7280', note: '只读教程库三张表 · 不联网 · 不碰文件系统',
+        tools: [
+          T('notes_list_series', '教程库索引', '纯函数', '#6b7280',
+            '列出本站 Notes 教程库的系列;给出 series 参数时改为列出该系列的章节表(slug 可用于 notes_get_chapter)。',
+            [P('category', 'string', false, '≤64', '只看某个分类的 slug,省略则全部'),
+             P('series', 'string', false, '≤128', '给出系列 slug 时改为返回该系列的章节表')],
+            'JSON 文本。列系列时每条含 categorySlug / categoryName / slug / name / description / chapterCount;列章节时每条含 slug / label / title / wordCount',
+            '单次最多 50 条,超出带 more: true'),
+          T('notes_get_chapter', '读教程章节', '纯函数', '#6b7280',
+            '读取某个系列下某一章的正文(标准 markdown,超长会截断)。系列与章节的 slug 由 notes_list_series 或 notes_search 给出。',
+            [P('series', 'string', true, '1–128', '系列 slug'),
+             P('chapter', 'string', true, '1–128', '章节 slug')],
+            '一段 markdown —— 首部是标题 / 系列 / 章节 / 摘要 / 原文链接,其后是正文', ''),
+          T('notes_search', '检索教程库', '纯函数', '#6b7280',
+            '在本站教程库的标题、摘要与正文里做大小写不敏感的子串检索,返回命中的章节与片段。',
+            [P('query', 'string', true, '1–120', '关键词(子串匹配,不支持通配符)'),
+             P('limit', 'integer', false, '1–20 · 默认 5', '返回条数')],
+            'JSON 文本,hits 数组每条含 series / seriesName / chapter / title / snippet',
+            'snippet 取命中处前后共约 160 字'),
+        ],
+      },
+      {
+        label: '外呼组', color: '#2563eb', note: '持服务端凭据发请求 · 访客只控 query',
+        tools: [
+          T('web_search', '联网搜索', '外呼', '#2563eb',
+            '联网搜索并返回一段带来源的简明答案(由搜索网关在服务端执行检索与综述)。适合问「最新 / 现在 / 今年」这类超出已有知识的问题;本站教程库的内容请用 notes_search。只接受一个自然语言查询,不能指定网址、不能抓取指定页面。',
+            [P('query', 'string', true, '2–300', '自然语言查询;不要放网址')],
+            '一段正文 + 末尾「来源:」列表(序号 + 标题 + URL)',
+            '来源最多 10 条',
+            ['发起', '已受理', '检索中', '综述中']),
+        ],
+      },
+      {
+        label: '会话绑定组', color: '#f9c22e', note: '只写当前这次会话的标题 · 会话 id 不是入参',
+        tools: [
+          T('session_rename', '会话命名', '会话绑定', '#f9c22e',
+            '给当前这次会话起一个简短标题,显示在左侧会话列表里。用访客使用的语言,4–18 字概括访客这次要做的事;不要标点、不要引号。整个会话只需在第一轮调用一次。',
+            [P('title', 'string', true, '1–60', '标题本身,一行,不带引号与标点')],
+            '一句确认文本',
+            '已命名过的会话再次调用返回一条正常结果,不算失败'),
+        ],
+      },
+    ];
     return {
       siteName: this.props.siteName ?? 'Agent X-Ray',
-      panelTabs: [panelTab('Timeline', 'timeline'), panelTab('Chain View', 'chain'), panelTab('Lifecycle Map', 'lifecycle')],
-      isTimeline: p === 'timeline', isChain: p === 'chain', isLifecycle: p === 'lifecycle',
+      toolGroups,
+      panelTabs: [panelTab('Timeline', 'timeline'), panelTab('Chain View', 'chain'), panelTab('Lifecycle Map', 'lifecycle'), panelTab('Tools', 'tools')],
+      isTimeline: p === 'timeline', isChain: p === 'chain', isLifecycle: p === 'lifecycle', isTools: p === 'tools',
       lifeNodes,
       navTabs: [tab('Runtime', 'runtime', ['runtime']), tab('Notes', 'notes', ['notes', 'series', 'article']), tab('About', 'about', ['about'])],
       isRuntime: s === 'runtime', isNotes: s === 'notes', isSeries: s === 'series', isArticle: s === 'article', isAbout: s === 'about',

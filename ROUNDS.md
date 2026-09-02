@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01 两次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1e + 2a–2e(共 10 块)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01、2026-09-02 三次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1g + 2a–2e(共 12 块)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 >
 > **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
 > 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
@@ -19,6 +19,16 @@
 > 命名过程必须**在 Timeline 里看得见**(`tool_call · session_rename`)。
 > 工具会写库,与 `docs/security.md` §1 第 1/2 层的「纯函数 / 数据面只读」相抵,
 > 已按规则 9 先改文档(两处 R-TITLE 补记)再改代码。
+>
+> **2026-09-02 第三次修订(R-TOOLS)**:所有者裁定新增 **Tools 工具面板**——agent 现在真的会调工具
+> (`notes_*` 三个 + `web_search` + `session_rename`),访客在 Timeline 里看得到 `tool_call · web_search`,
+> **却无处得知这个 agent 有哪些工具、吃什么参数、吐什么结果**。与前两次修订不同,本次**不是**规则 8 的例外:
+> 设计稿先扩到 12 块(新增 `1f` Tools 列表态 / `1g` 展开态,原型同步加第 4 个面板 tab 与逐工具展开),
+> **然后**才有这一轮——「先改设计稿、再进轮次」是扩边界的唯一正确顺序。同日删除已废弃的 `3a–3e`。
+> 形态裁定:落点是 Runtime 右栏第 4 个 tab(与 Timeline / Chain View / Lifecycle Map 并列),
+> 理由是访客从「看到一次调用」到「想知道这是什么工具」的路径必须最短;内容**只读且静态**,
+> 显示工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组,
+> **不显示**启停状态、日限额与剩余次数、provider 与 model 名(公开即泄服务端配置面)。
 
 ## 进度表
 
@@ -39,6 +49,7 @@
 | **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | ✅ 已完成([任务卡](rounds/round-visitor/round-visitor.md) · [130 部署留证](rounds/round-visitor/round-visitor.md#130-预发部署留证2026-09-01)),12 项验收全过;codex 三轮共 6 条 findings(3×P1 · 3×P2),4 条采纳整改、1 条所有者裁定不修(130 内网)、1 条写明理由不采纳记 BACKLOG,第 3 轮零 findings,缺陷门禁 PASS。同日 130 预发升级到 `7cc17fe`(迁移 6→7),8 项冒烟全过,**本机验不了的「新建会话首帧带 Set-Cookie」在 130 上验掉,不再交接给 R11** | 2026-09-01 |
 | **R-WEBSEARCH** | agent 联网搜索工具(Responses API 网关 · 域白名单 · MCP 配 provider · DeepSeek 零分支兼容) | ✅ 已完成([任务卡](rounds/round-websearch/round-websearch.md)),本机验收 #1–#10、#14 全过;codex 四轮共 6 条 findings(3×P1 · 3×P2)**全部采纳整改**,第 4 轮零 findings,缺陷门禁 PASS;**所有者裁定本轮不构建镜像、不发 130**(#2/#11/#12/#13 四条 130 实跑验收并入下一次预发升级) | 2026-09-02 |
 | **R-TITLE** | 会话命名工具(`session_rename`:agent 自己给会话起名,轨迹可见,默认开启) | 🔄 已合并 `main`,待 130 预发验收 #1/#7([任务卡](rounds/round-title/round-title.md),8 项验收 6 过、2 项交接 130;codex 五轮共 4 条 findings(2×P1 · 2×P2):2 条 P2 采纳整改,1 条 P1 **所有者裁定不采纳并回滚**(记 BACKLOG),1 条 P1 随回滚作废,末轮零 findings,缺陷门禁 PASS) | — |
+| **R-TOOLS** | Tools 工具面板(右栏第 4 tab:工具名/描述/入参 schema/输出形态,只读) | ⬜ 未开始([任务卡](rounds/round-tools/round-tools.md);设计稿 1f–1g 与原型已就位,与 R11 的先后待所有者裁定) | — |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ⬜ | — |
 
 ## 里程碑
@@ -338,6 +349,38 @@
   ④经 MCP `tool_config_set` 关掉后新会话不再有这个工具,标题回落首行截断;⑤`dev.ps1 test` 全绿
 - **止损**:回退成本是一条迁移与一个工具;真出问题时 `tool_config_set session_rename enabled=false`
   即可当场停用,不需要发版
+
+### R-TOOLS — Tools 工具面板(命名轮;所有者裁定 2026-09-02)
+
+> 又一个不属于 R0–R11 线性序列的命名轮。**与 R11 的先后待所有者裁定**:它只加一个只读端点与一个前端 tab,
+> 无迁移、无新依赖、不动部署形态,放在上线前后都成立。
+
+**问题**:R7 落地只读工具组、R-WEBSEARCH 加了联网搜索、R-TITLE 加了会话命名,现在 agent 手上有 5 个工具。
+访客在 Timeline 里看得到 `tool_call · web_search` 这一行,**却无处得知这个 agent 一共有哪些工具、
+每个工具吃什么参数、吐什么结果**——「Agent 运行时 DevTools」这个定位缺了「能力清单」这一块。
+
+**形态裁定**:Runtime 右栏**第 4 个 tab `Tools`**,与 Timeline / Chain View / Lifecycle Map 并列。
+它与前三个的性质不同:前三个回答「本次运行发生了什么」,Tools 回答「这个 agent 具备什么能力」,
+**与有没有正在运行的会话无关**,空会话时也有内容。设计稿 `1f`(列表态)/ `1g`(展开 `web_search`)
+与原型已于 2026-09-02 就位,实现逐画板对照。
+
+- 只读端点(`apps/api/agent/`):吐工具元信息 —— 名称 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态说明 / 分组。
+  **端点不得吐**:`execute` 函数、`ActiveWebSearchConfig` 的任何字段(baseUrl / key / model / provider)、
+  `dailySearchLimit` 与当日用量、`tool_config` 的 enabled 状态(所有者裁定:公开即泄服务端配置面)。
+- 数据来源要认一件事:`TOOL_REGISTRY` 只有纯函数组三个;`web_search` 由 `makeWebSearchTool(cfg)` 现构造、
+  没配置就不存在,`session_rename` 是按会话闭包绑定的工厂。所以端点**不能**简单遍历注册表,
+  元信息要有一份不依赖配置、不依赖会话的静态来源,且**与工具定义同文件维护**(改 schema 不改展示 = 骗访客)。
+- 前端(`apps/web/components/workbench/`):新增 Tools 面板组件 + `Workbench.tsx` 的 tab 数组加第 4 项。
+  这是规则 7 允许的结构性改动 —— 依据是设计稿已扩到 12 块(见上方 2026-09-02 修订),不是「顺手加的」。
+- **一条待裁定**:目录是**静态**的(5 个工具全列)。若 `web_search` 未配置或被 `tool_config` 关掉,
+  面板仍会列出它 —— 这与「不显示启停状态」的裁定是同一枚硬币的两面。所有者若认为「列了但用不了」
+  比「泄配置面」更糟,再单独裁定改口径,不在本轮循环里自行决定。
+
+- 验收:①右栏出现第 4 个 tab,样式/间距/选中态与前三个一致,空会话下也有内容;②5 个工具齐、分三组,
+  每条的 name / label / description / 入参约束与 `apps/api/agent/tools.ts` **逐字一致**(用测试钉死,不靠眼看);
+  ③端点响应里 grep 不到 key / baseUrl / model / provider / 限额数字 / enabled;④展开态按画板 `1g` 对照;
+  ⑤`dev.ps1 test` 全绿、`dev.ps1 gen` 后前端类型对得上
+- **止损**:回退成本是一个端点文件 + 一个前端组件 + tab 数组里的一行,无迁移、无数据变更
 
 ### R11 — 生产部署上线
 

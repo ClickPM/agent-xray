@@ -11,7 +11,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 **Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。三个 Tab:Runtime 工作台 / Notes 研习库 / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。
 
-- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) 画板 1a–1e + 2a–2e(共 10 块)+ 可交互原型(规则 8;3a–3e 已废弃)。管理面范围以 ROUNDS.md R6 裁定清单为准。
+- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) 画板 1a–1g + 2a–2e(共 12 块)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,3a–3e 已废弃并同日从画布删除)。管理面范围以 ROUNDS.md R6 裁定清单为准。
 - 架构与既定决策:[`docs/architecture.md`](docs/architecture.md)(pi SDK in-process、Encore 类型化 RPC、SSE ×2、Postgres、单机 compose)。
 - 安全强约束:[`docs/security.md`](docs/security.md)——威胁模型、四层沙箱、脱敏、凭据管理;**是约束不是建议**(规则 9)。
 
@@ -76,7 +76,9 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 5. **`secret()` 只能在 service 目录内声明**(Encore 限制);共享库里不出现 `secret()`,需要密钥的共享代码收「已取好的值」作参数。
 6. **`apps/api` 是 Encore app root,不做 npm workspaces 提升**(规避 encore#1723:app root 下无关 node_modules/.ts 干扰 parser)。web 与 api 不手工共享源码文件;类型经 `encore gen client` 产物(`apps/web/lib/api-client.ts`)流向前端,该文件是生成物,不许手改。
 7. **非必要不得修改前端页面样式,不做视觉 review**。画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。(2026-08-31 修订:3a–3e 废弃,对应 `/admin` 六页按所有者裁定于 R6 整目录删除——属本条允许的结构性改动;同轮的 `next.config.ts` 配图 rewrite 亦然,理由=图片改从 Postgres 供,对外 URL 不变。)
-8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31 修订)。站点访客功能范围 = `design/` 画板 1a–1e + 2a–2e + 可交互原型;**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
+8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02 两次修订)。站点访客功能范围 = `design/` 画板 1a–1g + 2a–2e + 可交互原型;**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
+    - **2026-09-02 修订(R-TOOLS)**:所有者裁定新增 **Tools 工具面板**,设计稿随之扩到 12 块(新增 `1f` 列表态 / `1g` 展开态,同日删除废弃的 `3a–3e`)。**扩边界的正确顺序是「先改设计稿、再进轮次」**——本条不是被绕过,是先被改了。面板是访客可见的**只读**能力说明(工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组),**不显示**启停开关、日限额与剩余次数、provider 与 model 名(那些是服务端配置,公开即泄配置面)。
+    - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用,新画板从 `1f` 顺延。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**;SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
     - **工具分两组**(R-WEBSEARCH,2026-09-01 修订;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search`)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts`,env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入。文件系统 / 子进程 / 动态 import 对两组一样禁止。完整口径见 `docs/security.md` §1「工具分两组」。
 10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。**镜像一律本机构建后传输,服务器不构建、不留仓库与工具链**;tag 必须是 git SHA,禁止 `latest`。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。
