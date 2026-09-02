@@ -312,8 +312,10 @@ R-VISITOR 落地补记(2026-09-01,`apps/api/agent/visitor.ts` + `shared/visitor-
   会话列表 / 单查 / 续接 / 删除 / 轨迹流全部带 `WHERE visitor_id = $当前访客`。
   R-IMAGEGEN(2026-09-02)起多一条:**生成的图片**(`GET /agent/images/:file`)按
   `generated_images ⋈ sessions` 判归属——地址是 UUID 不可枚举,但「不可枚举」不是授权。
-  `<img>` 是同源 GET,`SameSite=Lax` 的 cookie 会带上;响应 `Cache-Control: private`,
-  不许中间缓存把一个访客的图交给另一个访客
+  `<img>` 是同源 GET,`SameSite=Lax` 的 cookie 会带上;响应 `Cache-Control: private, no-cache` + 强 ETag:
+  `private` 不许中间缓存把一个访客的图交给另一个访客,`no-cache` 让浏览器**每次都回服务端复验归属**
+  (codex 复审 P2:`private` 不按 cookie 分区,给了 `max-age` 的话同一浏览器换了访客身份仍能直接复用缓存)——
+  归属仍在是一次 304,不在是 404
   - **不匹配一律回 `not_found`,不回 403**:403 等于确认「这个 id 是存在的」,
     把会话 id 变成一个可探测的存在性预言机。没有 cookie 的调用方看到的是「一个空站点」
   - `visitor_id` 允许为 NULL(本轮之前建的存量会话),而 `= $1` 永不匹配 NULL ——

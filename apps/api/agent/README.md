@@ -12,8 +12,8 @@ pi SDK in-process 会话管理、对话流、只读工具组与限额。
   描述 / 入参 JSON Schema / 输出形态 / 分组。**静态、不读库**,与会话无关;白名单序列化,
   不含 `execute`、websearch / imagegen 配置、限额、`enabled`(docs/security.md §1 R-TOOLS 补记)。
 - `GET /agent/images/<uuid>.<ext>`(`images.ts`,`api.raw`,R-IMAGEGEN)—— `generate_image` 生成的图片。
-  **按访客归属供图**(`generated_images ⋈ sessions` 的 `visitor_id`,不匹配一律 404),`Cache-Control: private`
-  + 强 ETag + nosniff。对外地址带 `/api` 前缀(工具写进 markdown 的就是它),Encore 路由不带 —— 与反代前缀是一个契约。
+  **按访客归属供图**(`generated_images ⋈ sessions` 的 `visitor_id`,不匹配一律 404),`Cache-Control: private, no-cache`
+  (每次回服务端复验归属,命中即 304)+ 强 ETag + nosniff。对外地址带 `/api` 前缀(工具写进 markdown 的就是它),Encore 路由不带 —— 与反代前缀是一个契约。
 
 ## 工具元信息 META(R-TOOLS;`tools.ts`)
 

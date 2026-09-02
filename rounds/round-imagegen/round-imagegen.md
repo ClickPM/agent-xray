@@ -129,6 +129,19 @@
 
 整改后:`npx tsc --noEmit` 干净;`dev.ps1 test` **15 文件 / 373 用例全过**(+1);`dev.ps1 check` 通过(本机库 `encore db reset` 后迁移 010 以新 CHECK 重新施加)。
 
+### 第 2 轮(2026-09-02,基线 `2b57656`,仍为全量 branch 范围;1 条 findings,0×P1 · 1×P2)
+
+| # | 级别 | findings | 核验 | 处理 |
+|---|---|---|---|---|
+| 3 | P2 | 图片响应 `Cache-Control: private, max-age=86400`:`private` 只挡共享缓存、**不按 cookie 分区**,同一浏览器里访客 cookie 过期 / 被清 / 换新身份之后,只要还知道地址就能直接复用缓存,归属查询根本不跑 —— 端点声明的「只有生成者看得到」在那一天里是漏的 | **属实**。我把 `private` 读成了「按用户隔离」,它的语义只是「不进共享缓存」。场景是同一台设备上的下一位使用者(共用电脑),不是跨设备,但「不可枚举不是授权」这条同样适用于「缓存不是授权」 | **采纳**,取审查者给的两条修法里更强的那条:`private, no-cache`(每次回服务端复验),而不是 `Vary: Cookie`(依赖浏览器对 Vary 的实现细节)。归属仍在 = 一次 304(强 ETag 早就有),不在 = 404。代价:每张图每次页面加载多一次轻量往返,一个会话里的图就那几张。`docs/security.md` §6 与 `agent/README.md` 同步改口径 |
+
+审查者原文对其余部分的结论:「其余主要实现未发现明确的阻塞性问题。」
+
+整改后实跑(本机 `dev.ps1` + curl,新建会话拿 cookie、种子图入库):带 cookie **200** 且 `Cache-Control: private, no-cache`
++ 强 ETag + nosniff;带 cookie 与 `If-None-Match` → **304**;**不带 cookie 的条件请求 → 404(不是 304)**,即缓存复验也过归属;
+畸形百分号路径 `%zz.png` 被 Encore 网关先拦成 **400**,到不了 handler(第 1 轮自查加的那层 try/catch 是纵深兜底)。
+`dev.ps1 test` 15 文件 / 373 用例全过,tsc 干净。
+
 ## 失败处理
 
 同一验收项针对性整改后连续 2 次验证仍不过 → 写 `rounds/round-imagegen/BLOCKED.md`,停下呼人。禁止放宽验收标准自我通过。

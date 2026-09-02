@@ -25,11 +25,16 @@ export function publicImageUrl(id: string, contentType: ImageContentType): strin
 const FILE_RE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.([a-z0-9]{3,4})$/i;
 
 /**
- * `private` 是这条端点与 notes 配图的第二个差别:它的响应依赖 cookie,
- * 中间缓存(将来的 CDN / 云 LB)不许把一个访客的图交给另一个访客。
- * 浏览器自己缓存一天 + 强 ETag 复验,与 notes 配图同一节奏。
+ * `private, no-cache` 是这条端点与 notes 配图的第二个差别:它的响应依赖 cookie。
+ *
+ *   - `private`:中间缓存(将来的 CDN / 云 LB)不许把一个访客的图交给另一个访客;
+ *   - `no-cache`:**浏览器每次都要回服务端复验**(codex 复审第 2 轮 P2)。上一版给了
+ *     `max-age=86400` —— 而 `private` 只挡共享缓存、**不按 cookie 分区**:同一个浏览器里访客
+ *     cookie 过期 / 被清 / 换成新身份之后,只要还知道地址,浏览器会直接复用缓存,归属查询根本不跑,
+ *     端点声明的「只有生成者看得到」在这一天里是漏的。改成每次复验后,归属仍在就是一次 304
+ *     (强 ETag),不在就是 404 —— 代价是每张图每次页面加载多一次轻量往返,一个会话里的图就那几张。
  */
-const CACHE_CONTROL = "private, max-age=86400";
+const CACHE_CONTROL = "private, no-cache";
 
 function notFound(resp: ServerResponse, setCookie?: string): void {
   const headers: Record<string, string> = { "Content-Type": "application/json; charset=utf-8" };
