@@ -103,6 +103,16 @@ code {
   margin-top: 0 !important;
 }
 
+/* KaTeX 行间公式(components/Markdown 的 remark-math + rehype-katex)。
+   KaTeX 自带样式给 .katex-display 下的公式挂了 white-space: nowrap,长公式会把
+   整页顶出横向滚动条 —— 与正文宽表同一个处理:在自己的盒子里横向滚动。
+   竖向 2px 是给滚动条出现时留的余量,不让公式的上下缘被裁掉。 */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+}
+
 /* 流式行脉动(Timeline 进行中的事件行 / Lifecycle 活跃节点) */
 @keyframes omPulseBg {
   0%,

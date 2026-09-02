@@ -10,10 +10,21 @@
 // 裸 HTML 不放行:react-markdown 默认丢弃 html 节点(没挂 rehype-raw),
 // vault 正文里残留的标签会被忽略而不是执行 —— 这是 XSS 的兜底,不要为了渲染
 // 某个 <details> 而挂 rehype-raw。
+//
+// 数学公式:`$…$` / `$$…$$` 走 remark-math + rehype-katex(KaTeX 在服务端把公式
+// 编译成 span/MathML,前端不跑求值器)。没有它时 `$\mathcal{D}_{\text{train}}$`
+// 会原样漏出来,更糟的是里面的 `_` 被当强调吃掉,公式缺字符还看不出来。
+// KaTeX 的 `trust` 保持默认 false —— `\href`/`\url`/`\includegraphics`/`\html*`
+// 全部禁用,正文里的 LaTeX 因此拿不到 javascript: 之类的出口,与上面那条同一个口径。
 import type { CSSProperties, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { mono } from "@/lib/styles";
+// KaTeX 自带样式表:字体文件由构建产物同源提供(不连 CDN,与 app/layout.tsx
+// 自托管 JetBrains Mono 同一个理由 —— 境内首访不能挂在外域字体请求上)。
+import "katex/dist/katex.min.css";
 
 /** 画板 2c 的行内代码样式 */
 const inlineCode: CSSProperties = {
@@ -71,6 +82,80 @@ function textOf(node: ReactNode): string {
   return el.props ? textOf(el.props.children) : "";
 }
 
+/** mdast 里我们真正会读的那几个字段,不为此引 @types/mdast */
+type MdNode = {
+  type: string;
+  value?: string;
+  children?: MdNode[];
+  position?: { start?: { offset?: number }; end?: { offset?: number } };
+};
+
+/**
+ * `$…$` 只有在满足 Pandoc 的美元规则时才算行内公式:开定界符后不跟空白、
+ * 闭定界符前不是空白、闭定界符后不跟数字。
+ *
+ * 为什么需要这一层:remark-math 的行内配对是「照反引号那套」写的
+ * (micromark-extension-math 的 math-text),不看定界符两侧,于是正文里的**货币金额**
+ * 会被当成公式吃掉 —— `从 $6.00 降到 $1.15,降本 81%` 里 `$6.00 降到 $` 整段进公式,
+ * 后半句掉出来;`**$0.30/MTok 的缓存价**被读取,而不是原本的 **$3.00/MTok**` 更是
+ * 连两处加粗一起被吞。拿本地 vault 全量 226 篇跑过:169 个公式节点里正好这 3 处是
+ * 金额,其余 162 个行内公式(`$\mathcal{D}_{\text{train}}$` 这类)一个不落全过。
+ */
+function dollarLooksLikeMath(raw: string, after: string): boolean {
+  if (raw.startsWith("$$")) return true; // 作者显式写了双美元,意图明确
+  const inner = raw.slice(1, -1);
+  if (inner.trim() === "") return false;
+  if (/^\s|\s$/.test(inner)) return false;
+  return !/^[0-9]/.test(after);
+}
+
+/** 树里所有不合规则的行内公式,返回它们**开定界符**在源码里的偏移 */
+function offendingDollars(tree: MdNode, src: string): number[] {
+  const out: number[] = [];
+  const walk = (node: MdNode) => {
+    for (const kid of node.children ?? []) {
+      if (kid.type !== "inlineMath") {
+        walk(kid);
+        continue;
+      }
+      const from = kid.position?.start?.offset;
+      const to = kid.position?.end?.offset;
+      if (from === undefined || to === undefined) continue; // 没位置信息就不判,按公式走
+      if (!dollarLooksLikeMath(src.slice(from, to), src.slice(to, to + 1))) out.push(from);
+    }
+  };
+  walk(tree);
+  return out;
+}
+
+/**
+ * 把违规的开定界符转义成 `\$` 后**重新解析整篇**,而不是把那一段就地换成纯文本。
+ * 差别在于被误判那段里的行内 markdown:就地换文本会把 `**` 之类原样显示出来
+ * (上面第二例就是),重解析则让加粗、行内代码照常生效,只有 `$` 落回字面量。
+ *
+ * 重解析用的是 `this.parse` —— 插件的 this 就是当前 processor,拿到的是同一套
+ * micromark 扩展(gfm + math),不需要另外装一份 remark-parse。
+ * 只转义开定界符不动闭定界符:闭的那个可能正是后面真公式的开头
+ * (`$1 和 $\alpha$` → `\$1 和 $\alpha$`),所以每轮只改一处再重来,最多 4 轮。
+ * 正文里没有违规美元时一次都不会重解析,常见情况零开销。
+ */
+function remarkDollarGuard(this: { parse: (doc: string) => MdNode }) {
+  const processor = this;
+  return (tree: MdNode, file: { value?: unknown }) => {
+    let src = String(file);
+    let current = tree;
+    for (let round = 0; round < 4; round++) {
+      const bad = offendingDollars(current, src);
+      if (bad.length === 0) break;
+      // 从后往前插,前面的偏移量才不会被自己挪动
+      for (let i = bad.length - 1; i >= 0; i--) src = `${src.slice(0, bad[i])}\\${src.slice(bad[i])}`;
+      current = processor.parse(src);
+      file.value = src; // 让下游拿到的 position 与源码仍然对得上
+    }
+    return current;
+  };
+}
+
 /**
  * 抽取二级标题做「本章目录」。必须跳过代码围栏 —— 教程正文里 bash / markdown 片段
  * 带 `## ` 的情况不少,不跳过会把代码行混进目录。
@@ -109,7 +194,10 @@ export function Markdown({ children, headingIds = true }: { children: string; he
 
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkMath, remarkDollarGuard]}
+      // 公式写错时 rehype-katex 自己兜住 ParseError(不会把整页渲染带崩),
+      // 退化成「原文标红」;这里只把那个红换成现成的 --err-text(规则 7:不新增视觉语言)
+      rehypePlugins={[[rehypeKatex, { errorColor: "var(--err-text)" }]]}
       components={{
         h1: ({ children }) => (
           <h2 style={{ fontSize: 18, fontWeight: 650, marginTop: 30, marginBottom: 0 }}>{children}</h2>
