@@ -2,7 +2,7 @@
 
 <!-- 命名轮,先例见 rounds/round-websearch / rounds/round-title;拆解以 ROUNDS.md 的「R-IMAGEGEN」段为准。 -->
 
-> 状态:代码与审查已收口(2026-09-02 开工并当日收口,分支 `claude/agent-xray-image-generation-3c1bb5`,提交 `f0cf072` → `2b57656` → `0612bf2` + 收口提交);**待所有者合并 `main`、发预发 / 生产并配 provider 跑验收 #17 的外呼半边**
+> 状态:已完成,已合并 `main`(2026-09-02 开工、当日收口并合并;分支 `claude/agent-xray-image-generation-3c1bb5`,提交 `f0cf072` → `2b57656` → `0612bf2` → `98d4da6`)。**所有者裁定:与后续更新一起发生产**;届时配 provider 后跑验收 #17 的外呼半边
 >
 > 参考实现是 pi 的 `image-generation` 扩展(`~/.pi/agent/extensions/image-generation.ts`:
 > 两个工具各打一条生图链路,图片落盘到 workspace,凭据读 `models.json`)。

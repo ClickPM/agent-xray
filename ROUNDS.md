@@ -61,7 +61,7 @@
 | **R-TOOLS** | Tools 工具面板(右栏第 4 tab:工具名/描述/入参 schema/输出形态,只读) | ✅ 已完成并合并 `main`([任务卡](rounds/round-tools/round-tools.md);7 项验收全过,codex 两轮:1×P2 采纳整改 + 末轮零 findings,缺陷门禁 PASS)。**所有者 2026-09-02 裁定:先于 R11** —— 反正要走一次「构建 → 130 预发验 → 生产发」,带上它就只走一次,生产首发即最终形态;本轮无迁移、无新依赖,130 实跑随 R11 那次预发升级一并验 | 2026-09-02 |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ✅ 已完成([任务卡](rounds/round-11/round-11.md))。站点 **https://www.kzgai.cloud/** 于 2026-09-02 上线(SHA `5bd6ace`):备案号挂 footer、仅 HTTPS(80 无响应)、HTTP/3、六个安全头、裸域 301 到 www;内容从 130 库级拷入 + Encore 系列 22 篇经 MCP 发布;LLM/搜索 provider 不设限额;全链路(对话 / SSE ×2 / web_search / session_rename)生产实跑通过。验收 12 项中 11 项 ✅。**所有者裁定收工时不做四项**:上线检查单在生产重跑 / codex 审查 / token 轮换演练 / 首日观察 —— 代价见任务卡「收工」段 | 2026-09-02 |
 
-| **R-IMAGEGEN** | agent 生图工具(`generate_image`:单工具 · provider 的 `api_style` 分两种协议 · 图片存库按访客归属供图 · 对话框 markdown 预览 · MCP 四个 `imagegen_*`) | 🔄 代码与审查已收口,待合并 `main` 与预发/生产配 provider([任务卡](rounds/round-imagegen/round-imagegen.md));17 项验收 16 过、#17 外呼半边交接所有者(本机无凭据;前端半边已用种子数据实跑:对话框渲染出图、无 cookie 404);codex 三轮共 3 条 findings(0×P1 · 3×P2)**全部采纳整改**,第 3 轮零 findings,缺陷门禁 PASS;`dev.ps1 test` 15 文件 373 用例 | — |
+| **R-IMAGEGEN** | agent 生图工具(`generate_image`:单工具 · provider 的 `api_style` 分两种协议 · 图片存库按访客归属供图 · 对话框 markdown 预览 · MCP 四个 `imagegen_*`) | ✅ 已完成并合并 `main`([任务卡](rounds/round-imagegen/round-imagegen.md));17 项验收 16 过、#17 外呼半边交接生产配好 provider 后跑(本机无凭据;前端半边已用种子数据实跑:对话框渲染出图、无 cookie 404);codex 三轮共 3 条 findings(0×P1 · 3×P2)**全部采纳整改**,第 3 轮零 findings,缺陷门禁 PASS;`dev.ps1 test` 15 文件 373 用例。**所有者裁定与后续更新一起发生产**,届时生产 `.env` 补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api | 2026-09-02 |
 
 ## 里程碑
 
