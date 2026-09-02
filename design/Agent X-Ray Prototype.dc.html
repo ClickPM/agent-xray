@@ -14,6 +14,7 @@
 body{margin:0;background:#ffffff}
 a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
 @keyframes omPulseBg{0%,100%{background-color:rgba(37,99,235,0.05)}50%{background-color:rgba(37,99,235,0.16)}}
+@keyframes omWaveSweep{from{background-position:200% 0}to{background-position:-100% 0}}
 </style>
 </helmet>
 <div style="height:100vh;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;background:#ffffff">
@@ -201,7 +202,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
               <div>
                 <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px;background:{{r.rowBg}};animation:{{r.anim}}">
                   <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span><sc-if value="{{r.hasBadge}}" hint-placeholder-val="{{false}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#ef4444;color:#ffffff;border-radius:4px;padding:1px 5px">blocked</span></sc-if></div>
-                  <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+                  <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}};animation:{{r.barAnim}}"></div></div>
                   <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
                 </div>
                 <sc-if value="{{r.hasNote}}" hint-placeholder-val="{{false}}"><div style="font:400 11px 'JetBrains Mono',monospace;color:#ef4444;padding:1px 4px 3px 22px">└ permission-gate returned {block: true}</div></sc-if>
@@ -212,7 +213,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
               <div>
                 <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px;background:{{r.rowBg}};animation:{{r.anim}}">
                   <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span><sc-if value="{{r.hasBadge}}" hint-placeholder-val="{{false}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#ef4444;color:#ffffff;border-radius:4px;padding:1px 5px">blocked</span></sc-if></div>
-                  <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+                  <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}};animation:{{r.barAnim}}"></div></div>
                   <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
                 </div>
                 <sc-if value="{{r.hasNote}}" hint-placeholder-val="{{false}}"><div style="font:400 11px 'JetBrains Mono',monospace;color:#ef4444;padding:1px 4px 3px 22px">└ permission-gate returned {block: true}</div></sc-if>
@@ -412,8 +413,15 @@ class Component extends DCLogic {
       border: screens.includes(s) ? '#e0e0e0' : 'transparent',
     });
     const pulse = (this.props.streamingPulse ?? true) ? 'omPulseBg 1.8s ease-in-out infinite' : 'none';
+    // Timeline 进行中行改用「从左向右」的波浪扫光(行背景与时长条同一条波、同相位);
+    // Lifecycle 活跃节点仍用 omPulseBg —— 小方块里扫光看不出方向。
+    // 终点取 -100%:背景图整幅推到容器右侧外,两端只剩底色,无限循环重置那一帧不跳。
+    const wave = (this.props.streamingPulse ?? true) ? 'omWaveSweep 1.8s linear infinite' : 'none';
+    const waveRowBg = 'rgba(37,99,235,0.05) linear-gradient(90deg,rgba(37,99,235,0) 0%,rgba(37,99,235,0.16) 50%,rgba(37,99,235,0) 100%) 200% 0 / 200% 100% no-repeat';
+    // 条的高光用白色不用品牌蓝:底色是事件模式色(灰/蓝/红/黄),白色对四种都是提亮。
+    const waveBar = '#9ca3af linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.6) 50%,rgba(255,255,255,0) 100%) 200% 0 / 200% 100% no-repeat';
     const W = ms => Math.min(198, Math.max(4, Math.round(Math.sqrt(ms) * 11)));
-    const row = (name, ms, dur, c, x = {}) => ({ name, dur, c, w: W(ms), rowBg: 'transparent', anim: 'none', hasBadge: false, hasNote: false, ...x });
+    const row = (name, ms, dur, c, x = {}) => ({ name, dur, c, w: W(ms), rowBg: 'transparent', anim: 'none', barAnim: 'none', hasBadge: false, hasNote: false, ...x });
     const t1rows = [
       row('context', 12, '12ms', '#2563eb'),
       row('before_provider_request', 4, '4ms', '#2563eb'),
@@ -429,7 +437,7 @@ class Component extends DCLogic {
       row('tool_call · bash', 18, '18ms', '#ef4444', { hasBadge: true, hasNote: true }),
       row('tool_result', 6, '6ms', '#2563eb'),
       row('message_start', 1, '1ms', '#9ca3af'),
-      row('message_update', 2, '…', '#9ca3af', { rowBg: 'rgba(37,99,235,0.06)', anim: pulse }),
+      row('message_update', 2, '…', waveBar, { rowBg: waveRowBg, anim: wave, barAnim: wave }),
     ];
     const sessions = [
       { title: '演示:危险命令拦截', time: '2m ago', bg: '#e8e8e8' },

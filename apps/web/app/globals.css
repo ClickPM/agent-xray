@@ -113,7 +113,8 @@ code {
   padding: 2px 0;
 }
 
-/* 流式行脉动(Timeline 进行中的事件行 / Lifecycle 活跃节点) */
+/* 流式脉动(Lifecycle 活跃节点)。Timeline 的进行中行改用下面的波浪扫光——
+   扫光要有横向长度才看得出方向,Lifecycle 那种小方块留着脉动更合适。 */
 @keyframes omPulseBg {
   0%,
   100% {
@@ -121,6 +122,30 @@ code {
   }
   50% {
     background-color: rgba(37, 99, 235, 0.16);
+  }
+}
+
+/* Timeline 进行中行的波浪扫光:一条光带自左向右扫过,行背景与时长条同一条波。
+   只动 background-position(合成器属性),不触发重排重绘——这一行在整轮回复
+   期间一直在动,不能是每帧重绘的实现。
+
+   为什么终点是 -100% 而不是 0%:background-size 200% 时,position 百分比换算成
+   背景图偏移 x = -p% × 容器宽 W。200% → x=-2W(图整个在容器左边),
+   -100% → x=+W(图整个在容器右边)。两端都只剩底色,所以 infinite 循环重置的
+   那一帧看不出跳变;终点取 0% 的话重置前光带正停在右半边,会闪一下。 */
+@keyframes omWaveSweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* 发送按钮在回复生成期间的转圈 */
+@keyframes omSpin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

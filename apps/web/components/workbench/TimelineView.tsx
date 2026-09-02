@@ -1,9 +1,40 @@
 "use client";
 
-import { useEffect, useRef, useState, Fragment } from "react";
+import { useEffect, useRef, useState, Fragment, type CSSProperties } from "react";
 import { barWidth } from "@/lib/trace-view";
 import type { TraceRow, TraceRowDetail, TraceTurn } from "@/lib/types";
 import { mono } from "@/lib/styles";
+
+/**
+ * 进行中行的「从左向右」波浪扫光。keyframes 在 app/globals.css(omWaveSweep)。
+ *
+ * `row.streaming` 由 `toTimelineTurns(events, streaming)` 给出,而那个 streaming
+ * 是 Workbench 的整轮状态:从点发送到 askStream 结束(finally)之间恒为 true。
+ * 动画本身是 infinite,所以**这一轮没结束之前波浪一直在走**,不会自己停。
+ *
+ * 两处用同一条 keyframe、同一个周期,行背景与时长条同相位(demo 方案 E)。
+ * 时长条的高光取白色而不是品牌蓝:条的底色是事件模式色(notify 灰 / chain 蓝 /
+ * veto 红 / takeover 黄),白色高光对四种底色都是「提亮」,蓝色高光会把红黄两种
+ * 染脏、在蓝底上又几乎看不见。
+ */
+const WAVE_PERIOD = "1.8s";
+
+const waveRow: CSSProperties = {
+  backgroundColor: "rgba(37,99,235,0.05)",
+  backgroundImage:
+    "linear-gradient(90deg, rgba(37,99,235,0) 0%, rgba(37,99,235,0.16) 50%, rgba(37,99,235,0) 100%)",
+  backgroundSize: "200% 100%",
+  backgroundRepeat: "no-repeat",
+  animation: `omWaveSweep ${WAVE_PERIOD} linear infinite`,
+};
+
+const waveBar: CSSProperties = {
+  backgroundImage:
+    "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 100%)",
+  backgroundSize: "200% 100%",
+  backgroundRepeat: "no-repeat",
+  animation: `omWaveSweep ${WAVE_PERIOD} linear infinite`,
+};
 
 function DetailCard({ detail }: { detail: TraceRowDetail }) {
   return (
@@ -45,8 +76,14 @@ function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; on
         style={{
           display: "grid", gridTemplateColumns: "200px 1fr 52px", alignItems: "center",
           gap: 10, padding: "3px 4px", borderRadius: 4,
-          background: expanded ? "rgba(37,99,235,0.06)" : row.streaming ? "rgba(37,99,235,0.06)" : "transparent",
-          animation: row.streaming ? "omPulseBg 1.8s ease-in-out infinite" : "none",
+          // 底色用 backgroundColor 而不是 background 简写:波浪那几条是 background-*
+          // 长写,简写与长写混着用,streaming 翻回 false 时 React 会报
+          // 「Removing a style property … when a conflicting property is set」。
+          // 尾行每来一个新事件就翻一次,那条警告会一直刷。
+          backgroundColor: expanded ? "rgba(37,99,235,0.06)" : "transparent",
+          // 进行中的行盖掉上面那句静态底色(同名长写,后者赢)。展开态与进行中
+          // 同时成立时以波浪为准:「还在跑」比「已选中」更需要被看见。
+          ...(row.streaming ? waveRow : null),
           cursor: selectable ? "pointer" : "default",
         }}
       >
@@ -62,7 +99,13 @@ function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; on
           )}
         </div>
         <div style={{ minWidth: 0, overflow: "hidden" }}>
-          <div style={{ height: 10, borderRadius: 2, maxWidth: "100%", width: barWidth(row.ms), background: row.color }} />
+          <div
+            style={{
+              height: 10, borderRadius: 2, maxWidth: "100%", width: barWidth(row.ms),
+              backgroundColor: row.color, // 同上:不能写 background 简写
+              ...(row.streaming ? waveBar : null),
+            }}
+          />
         </div>
         <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{row.dur}</div>
       </div>

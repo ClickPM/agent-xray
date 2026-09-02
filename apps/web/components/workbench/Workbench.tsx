@@ -220,14 +220,22 @@ function EmptyState({ onSuggest }: { onSuggest: (text: string) => void }) {
   );
 }
 
+/**
+ * 输入区(画板 1a)。`busy` = 这一轮回复还在生成中:发送按钮换成转圈并禁用。
+ *
+ * 输入框**不禁用** —— 生成期间照样可以把下一句先打好;真正的拦截在 `send()`
+ * 里(streaming 时直接 return),回车与点击走的是同一个出口。
+ */
 function InputBar({
   value,
   onChange,
   onSend,
+  busy,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
+  busy: boolean;
 }) {
   return (
     <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "center" }}>
@@ -241,11 +249,29 @@ function InputBar({
           fontSize: 14, color: "var(--text)", background: "var(--bg)", outline: "none", font: "inherit",
         }}
       />
-      <GhostButton height={32} style={{ width: 32, padding: 0 }} onClick={onSend}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13" />
-          <polygon points="22 2 15 22 11 13 2 9 22 2" />
-        </svg>
+      <GhostButton
+        height={32}
+        style={{ width: 32, padding: 0 }}
+        onClick={onSend}
+        disabled={busy}
+        title={busy ? "回复生成中…" : "发送"}
+      >
+        {busy ? (
+          // 3/4 圆弧转圈。transformOrigin 显式给 50%:SVG 里它的默认值不是盒中心,
+          // 不写会绕着左上角甩。keyframes omSpin 在 app/globals.css。
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2.4" strokeLinecap="round"
+            style={{ animation: "omSpin 0.8s linear infinite", transformOrigin: "50% 50%" }}
+          >
+            <path d="M12 3a9 9 0 1 0 9 9" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+        )}
       </GhostButton>
     </div>
   );
@@ -464,7 +490,7 @@ export function Workbench() {
           {/* 中栏:对话 */}
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
             {active ? <ChatPane items={items} /> : <EmptyState onSuggest={setDraft} />}
-            <InputBar value={draft} onChange={setDraft} onSend={send} />
+            <InputBar value={draft} onChange={setDraft} onSend={send} busy={streaming} />
           </div>
           {/* 右栏:运行时面板 */}
           <div className="runtime-panel" style={{ width: "42%", minWidth: 300, maxWidth: 500, flex: "none", display: "flex", flexDirection: "column" }}>
