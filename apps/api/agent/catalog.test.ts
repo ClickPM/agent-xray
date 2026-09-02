@@ -211,11 +211,17 @@ describe("五个工具齐、分三组、每条有输出形态(验收 #6)", () =>
     }
   });
 
-  it("脚注的字符上限来自 capText 真正用的那个常量", async () => {
-    const { resultCharLimit } = await listTools();
-    expect(resultCharLimit).toBe(MAX_RESULT_CHARS);
-    expect(capText("x".repeat(resultCharLimit))).not.toContain("已截断");
-    expect(capText("x".repeat(resultCharLimit + 1))).toContain("已截断");
+  it("脚注的正文上限来自 capText 真正用的那个常量,语义是「正文预算 + 标注另加」", async () => {
+    const { resultBodyCharLimit: n } = await listTools();
+    expect(n).toBe(MAX_RESULT_CHARS);
+    // 恰好 N 字符:原样,不截
+    expect(capText("x".repeat(n))).toBe("x".repeat(n));
+    // N+1 字符:前 N 字符原样保留,其后是显式截断标注 —— 整段结果因此**长于** N,
+    // 这正是端点把它叫「正文上限」而不是「结果上限」的原因(codex 初审 P2)
+    const capped = capText("x".repeat(n + 1));
+    expect(capped.slice(0, n)).toBe("x".repeat(n));
+    expect(capped.slice(n)).toMatch(/^\n…\(已截断/);
+    expect(capped.length).toBeGreaterThan(n);
   });
 
   it("端点响应就是目录本身(没有第二份手工目录)", async () => {

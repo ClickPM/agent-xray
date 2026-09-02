@@ -200,8 +200,9 @@ export function ToolsPanel() {
           <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
             入参一律 <Code>additionalProperties: false</Code> — 不接受未声明字段
           </div>
+          {/* 「正文」二字是契约的一部分:超限时正文截到 N,截断标注另加,整段结果会略长于 N(见 catalog.ts) */}
           <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
-            工具结果统一 <Code>{catalog.resultCharLimit}</Code> 字符上限 — 超出显式标注截断,不静默丢尾
+            工具结果正文统一 <Code>{catalog.resultBodyCharLimit}</Code> 字符上限 — 超出显式标注截断,不静默丢尾
           </div>
           <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
             工具集合中不存在 <Code>bash</Code> / <Code>write</Code> / 任意代码执行类工具

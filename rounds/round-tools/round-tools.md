@@ -96,9 +96,26 @@
 
 <!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:<codex /codex:review | codex /codex:adversarial-review | /code-review(写明降级原因)>
-- findings 处理:<逐条:采纳整改 / 不采纳及理由;或链接同目录记录文件>
-- 结论:<PASS | 整改后 PASS>
+- 审查方式:codex `/codex:review --background --scope branch`(分支对 `main` 的全量 diff)
+- 轮次范围:第 1、2 轮全量(CLAUDE.md 审查范围:只有前两轮用固定全量范围)
+- 一个操作坑:companion 用 `process.cwd()` 找仓库,Claude Code 的后台 Bash 任务不继承会话 cwd,第一次报
+  「This command must run inside a Git repository」;命令前加 `cd <worktree>` 即可
+
+**第 1 轮(1 条 findings:0×P1 · 1×P2)**
+
+| # | 级别 | findings | 处置 |
+|---|---|---|---|
+| 1 | P2 | `resultCharLimit` 的契约不准确:`capText` 超限时**保留全部 8000 字符正文再追加截断标注**,实际返回文本长于端点与脚注宣称的「8000 字符上限」。建议二选一:在 `capText` 里给标注预留空间,或把这个值描述为正文预算而不是硬上限 | **采纳,按第二条(改描述)整改** |
+
+整改内容与理由:
+
+- **改的是契约描述,不是 `capText`**。给标注预留空间等于改工具结果的实际内容长度(模型少看到几十个字符),
+  属工具执行逻辑,任务卡「禁止」段明写不碰;而且它是为一条 P2 新增行为,按 CLAUDE.md 审查边界不该做。
+- 字段改名 `resultCharLimit` → **`resultBodyCharLimit`**,注释写清「正文预算,标注另加,整段结果可略长于 N」;
+  脚注文案加「正文」二字(「工具结果**正文**统一 8000 字符上限 — 超出显式标注截断,不静默丢尾」)——
+  画板原句按字面读确实不准,改文案不改机制。
+- 测试从「N 不截、N+1 截」收紧为「N 字符原样;N+1 字符 = **前 N 字符原样 + 标注**,且总长 > N」,把这条语义钉死。
+- `dev.ps1 gen` 重生成生成物(只有这个字段与注释变化,slug 噪音照旧还原两行)。
 
 ## 失败处理
 
@@ -109,7 +126,7 @@
 ### 数字
 
 - `dev.ps1 test`:**14 文件 291 用例全过**(新增 `catalog.test.ts` 12 个;既有 `sandbox.test.ts` / `title.test.ts` 未改一行)。`dev.ps1 check` 通过;`tsc --noEmit` 在 `apps/api`、`apps/web` 各 0 错误
-- 端点实测(本机 `GET /agent/tools`):5 条、三组、响应体里除 schema 边界数字外没有任何数字;`resultCharLimit: 8000`
+- 端点实测(本机 `GET /agent/tools`):5 条、三组、响应体里除 schema 边界数字外没有任何数字;`resultBodyCharLimit: 8000`(codex 第 1 轮后改名,见「代码审查」)
 - 改动面:后端 2 个新文件(端点 + 测试)+ `tools.ts`(META 抽取)+ `websearch.ts`(1 行:`MAX_CITATIONS` 加 `export`);前端 1 个新组件 + `Workbench.tsx` 3 处 + `agent-api.ts` 1 段 + 生成物;文档 3 处
 - `git diff -w` 核对:五个 `execute` 体、`guarded`、`loadEnabledTools`、`buildSessionTools` **零改动**(`session_rename` 的 execute 因外层多包了一层 `Object.assign` 而整体缩进 +2,`-w` 下为空)
 
@@ -131,7 +148,7 @@
 ### 与计划的偏离
 
 - **`makeWebSearchTool` 与 `websearch.ts` 的 `MAX_CITATIONS` 加了 `export`**。前者是让测试能「按真实构造路径」拿一份带假配置的定义与目录逐字段比对,并证明配置值进不了目录;后者是让 `outputNote` 的「来源最多 N 条」引用真实常量。两处实现体一行未动
-- **端点响应多一个字段 `resultCharLimit`**(画板脚注「工具结果统一 8000 字符上限」)。它是代码常量不是配置值(不在库里、不在 env 里,设计稿上本来就印着);前端写死一个 8000 就是「第二个要改的地方」,与本轮要消灭的东西同类。测试把它钉在 `capText` 的真实行为上(N 不截、N+1 截)
+- **端点响应多一个字段 `resultBodyCharLimit`**(画板脚注「工具结果统一 8000 字符上限」)。它是代码常量不是配置值(不在库里、不在 env 里,设计稿上本来就印着);前端写死一个 8000 就是「第二个要改的地方」,与本轮要消灭的东西同类。测试把它钉在 `capText` 的真实行为上(N 字符原样;N+1 字符 = 前 N 字符 + 截断标注)。**脚注文案比画板多了「正文」二字**(「工具结果正文统一 8000 字符上限」):codex 第 1 轮指出 `capText` 是「正文截到 N 再追加标注」,整段结果会略长于 N,画板原句按字面读是不准确的;改文案不改机制(见「代码审查」)
 - **`SessionToolFactory` 从函数类型改成「可调用 + `meta`」接口**(`Object.assign(fn, { meta })`):面板要读会话绑定工具的 META,而工厂需要 `ctx` 才能调用 —— 不想为了读一份描述先造一个绑着假会话 id 的工具。`buildSessionTools` 的调用形式 `SESSION_TOOL_REGISTRY[name](ctx)` 不变
 - **`.claude/launch.json` 加了 `api` 项**:浏览器验证工具要起后端(`powershell -File dev.ps1`),此前只有 `web`。非产品代码
 - **分组的中文名 / 组注 / 徽标文案在前端**(`ToolsPanel.tsx` 的 `GROUPS`,按 `group` 键入):任务卡明确允许「按后端给的 group 渲染,三组的色值是固定的」;组名与组注同样是三组的固定属性(设计稿文案),不随工具变。放后端只会让端点多一段与工具无关的静态文案
