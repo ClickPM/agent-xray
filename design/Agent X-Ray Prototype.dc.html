@@ -288,6 +288,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
 
   <sc-if value="{{isArticle}}" hint-placeholder-val="{{false}}">
   <div style="flex:1;min-height:0;overflow:auto;position:relative">
+    <!-- 阅读进度线:width 是「读到三分之一」的定格示意,不是固定长度 —— 静态画板画不出跟随滚动。实现见 components/ReadingProgress.tsx(样式照此,长度接真实滚动)。 -->
     <div style="position:sticky;top:0;left:0;width:31%;height:2px;background:#2563eb;z-index:2"></div>
     <div style="max-width:1000px;margin:0 auto;padding:26px 32px 64px;display:grid;grid-template-columns:minmax(0,720px) 1fr;gap:56px;align-items:start">
       <div style="min-width:0">

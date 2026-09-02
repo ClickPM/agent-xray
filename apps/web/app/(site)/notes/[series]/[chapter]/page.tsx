@@ -6,6 +6,7 @@ import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
 import { isoDate, readingMinutes } from "@/lib/time";
 import { Markdown, extractToc } from "@/components/Markdown";
+import { ReadingProgress } from "@/components/ReadingProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,8 @@ export default async function ArticlePage({
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative" }}>
-      {/* 阅读进度线(设计稿为静态演示;滚动联动属细化项,未做) */}
-      <div style={{ position: "sticky", top: 0, left: 0, width: "31%", height: 2, background: "var(--accent)", zIndex: 2 }} />
+      {/* 阅读进度线。画板 2c 里是写死的 31%(静态画板只能定格一帧),这里接真实滚动 */}
+      <ReadingProgress />
       <div
         style={{
           maxWidth: 1000, margin: "0 auto", padding: "26px 32px 64px",
