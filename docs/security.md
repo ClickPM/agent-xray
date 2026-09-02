@@ -90,7 +90,7 @@ R-TOOLS 补记(2026-09-02,所有者裁定;`apps/api/agent/catalog.ts` + `tools.t
 
 R-IMAGEGEN 补记(2026-09-02,所有者裁定;`apps/api/agent/imagegen.ts` + `image-db.ts` + `images.ts` + 迁移 `010`):
 
-- **外呼组的第二个成员 `generate_image`**,六条附加约束逐条落点:①访客只控 `prompt` 一个字段(`images` 形态落进请求体的 `prompt`,`chat` 形态落进 `messages[0].content`),尺寸是 provider 配置(`image_size`)不是入参;②目标域白名单独立一份(`shared/imagegen-hosts.ts`,内置 `api.openai.com` / `aigateway.variflight.com`,env `XRAY_IMAGEGEN_EXTRA_HOSTS` 只能追加),**判据实现与搜索共用**(`shared/outbound-hosts.ts`),`redirect:"manual"` 照旧;③双计时器,但**空闲计时器只在响应头到达后才起**——生图上游在出图前一个字节都不发,等头那段只受总时长约束;④`daily_quota.images` 计次,上限在 `imagegen_config.daily_image_limit`;⑤响应体 16 MiB、解码后 8 MiB 两道字节上界,失败一律固定文案,错误对象在构造处就抹掉本次 key;⑥**返回的是字节不是文本**,不可信输入的判据换成「是不是图片」:base64 必须合法、**魔数必须是 png / jpeg / webp / gif 之一**,上游声明的 mime 不作数;不是图片就不存、也不给模型
+- **外呼组的第二个成员 `generate_image`**,六条附加约束逐条落点:①访客只控 `prompt` 一个字段(`images` 形态落进请求体的 `prompt`,`chat` 形态落进 `messages[0].content`),尺寸是 provider 配置(`image_size`)不是入参;②目标域白名单独立一份(`shared/imagegen-hosts.ts`,内置只有 `api.openai.com`,env `XRAY_IMAGEGEN_EXTRA_HOSTS` 只能追加),**判据实现与搜索共用**(`shared/outbound-hosts.ts`),`redirect:"manual"` 照旧;③双计时器,但**空闲计时器只在响应头到达后才起**——生图上游在出图前一个字节都不发,等头那段只受总时长约束;④`daily_quota.images` 计次,上限在 `imagegen_config.daily_image_limit`;⑤响应体 16 MiB、解码后 8 MiB 两道字节上界,失败一律固定文案,错误对象在构造处就抹掉本次 key;⑥**返回的是字节不是文本**,不可信输入的判据换成「是不是图片」:base64 必须合法、**魔数必须是 png / jpeg / webp / gif 之一**,上游声明的 mime 不作数;不是图片就不存、也不给模型
 - **协议形态是 provider 的配置字段**(`api_style`:`images` = `POST {base}/v1/images/generations` → `data[0].b64_json`;`chat` = `POST {base}/v1/chat/completions` → `message.images[0].image_url.url` 的 data URL),不是两个工具。**只收内联图片数据**:上游只回 `url` 时报失败,本进程不去抓那个链接——「让服务器去取一个上游给的地址」与「让 agent 去抓这个地址」是同一类事
 - **它同时是会话绑定的**(与 `session_rename` 同构):图片要归到访客的会话名下,会话 id 在建会话时闭包绑定、不是入参,模型表达不出「往别人的会话里塞图」。写库走第 2 层的 `agent_image` 角色(见下)
 - **模型拿到的是一行 markdown**(`![…](/api/agent/images/<uuid>.<ext>)`),不是图片内容:pi 支持把 `ImageContent` 回给模型,但那是 token 与费用,轨迹事件里也放不下。系统提示要求把这一行**原样**写进回复——对话框里的预览就是助手回复里的 markdown 图片,渲染器(`Markdown.tsx` 的 `img`)本来就有,前端零改动
@@ -151,7 +151,7 @@ R-WEBSEARCH 落地补记(2026-09-01,`apps/api/agent/websearch.ts` + `websearch-c
   `response.output_text.delta` / `response.completed` / `response.failed` / `response.incomplete`。
   **DeepSeek 与自建 AI 网关(CPA)是同一套协议**,差异只有 baseUrl / model / 工具类型名
   (DeepSeek 另有带日期的 `web_search_2025_08_26`)—— 所以是一份实现、三个配置字段,不是两条代码路径
-- **目标域白名单硬编码在 `websearch.ts`**(`api.deepseek.com` / `aigateway.variflight.com`),
+- **目标域白名单硬编码在 `shared/websearch-hosts.ts`**(内置只有 `api.deepseek.com`;R-IMAGEGEN 时所有者裁定个人项目不进公司网关域名,原有的第二项已删),
   可经服务器 env `XRAY_WEBSEARCH_EXTRA_HOSTS` **追加**(逗号分隔)但不能**替换**内置项:
   env 只做加法,一个被改坏的环境变量拿不掉既有约束。校验发生在两处 —— MCP 写入时(拒得早)
   与每次调用前(库里可能躺着白名单收紧之前写下的行)。host 比对是**精确相等**,不做后缀匹配:

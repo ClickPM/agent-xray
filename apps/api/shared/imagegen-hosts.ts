@@ -4,9 +4,9 @@
 // 一个域被列进搜索白名单,不等于它自动可以当生图端点 —— 所有者要显式选。
 // 所以这里不 import 搜索那份清单,也不存在「合并两份」的入口。
 //
-// 内置项:OpenAI 官方端点,以及本站自己的 AI 网关(它同时在搜索白名单里,两处各列一次是刻意的)。
-// 所有者的 CLIProxyAPI 网关(域名随 IP 变)走 env 追加,与搜索那边的做法一致
-// (R11 已把它加进 `XRAY_WEBSEARCH_EXTRA_HOSTS`,本轮同款再加一次 `XRAY_IMAGEGEN_EXTRA_HOSTS`)。
+// 内置项:只有 OpenAI 官方端点。所有者的 CLIProxyAPI 网关(域名随 IP 变)走 env 追加,
+// 与搜索那边的做法一致(R11 已把它加进 `XRAY_WEBSEARCH_EXTRA_HOSTS`,本轮同款再加一次
+// `XRAY_IMAGEGEN_EXTRA_HOSTS`)。**任何自建 / 公司网关都不进代码**(所有者裁定 2026-09-02:个人项目)。
 //
 // 消费方:`agent/imagegen.ts`(每次外呼前)与 `mcp/tools.ts`(写入时);两处校验缺一不可。
 import { makeHostAllowlist } from "./outbound-hosts";
@@ -14,7 +14,7 @@ import { makeHostAllowlist } from "./outbound-hosts";
 export type { BaseUrlCheck } from "./outbound-hosts";
 
 /** 内置项。改它要发版。 */
-const BUILTIN_ALLOWED_HOSTS = ["api.openai.com", "aigateway.variflight.com"] as const;
+const BUILTIN_ALLOWED_HOSTS = ["api.openai.com"] as const;
 
 /** 可选**追加**项(逗号分隔)。 */
 const EXTRA_HOSTS_ENV = "XRAY_IMAGEGEN_EXTRA_HOSTS";

@@ -9,8 +9,11 @@ import { makeHostAllowlist } from "./outbound-hosts";
 
 export type { BaseUrlCheck } from "./outbound-hosts";
 
-/** 内置项。改它要发版。 */
-const BUILTIN_ALLOWED_HOSTS = ["api.deepseek.com", "aigateway.variflight.com"] as const;
+/**
+ * 内置项。改它要发版。只有官方端点;所有者自建 / 代理的网关一律走 env 追加
+ * (所有者裁定 2026-09-02:这是个人项目,公司网关域名不进代码)。
+ */
+const BUILTIN_ALLOWED_HOSTS = ["api.deepseek.com"] as const;
 
 /** 可选**追加**项(逗号分隔)。 */
 const EXTRA_HOSTS_ENV = "XRAY_WEBSEARCH_EXTRA_HOSTS";

@@ -95,7 +95,7 @@ export function parseAllowedBaseUrl(baseUrl: string): URL {
 /**
  * 兼容 baseUrl 的两种常见写法:以 `/v1` 结尾,或只写服务根路径。
  * (`https://api.deepseek.com` → `/v1/responses`;
- *  `https://aigateway.variflight.com/api` → `/api/v1/responses`)
+ *  `https://gw.example/api` → `/api/v1/responses`)
  */
 export function responsesUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, "");

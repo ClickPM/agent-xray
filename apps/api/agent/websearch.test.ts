@@ -102,7 +102,7 @@ const messageOut = (text: string, annotations?: unknown[]) => [
 describe("目标域白名单(docs/security.md §1 外呼组约束 2)", () => {
   it("放行内置白名单里的 https 地址", () => {
     expect(parseAllowedBaseUrl("https://api.deepseek.com").hostname).toBe("api.deepseek.com");
-    expect(parseAllowedBaseUrl("https://aigateway.variflight.com/api").pathname).toBe("/api");
+    expect(parseAllowedBaseUrl("https://api.deepseek.com/v1").pathname).toBe("/v1");
   });
 
   it.each([
@@ -136,9 +136,9 @@ describe("responsesUrl 兼容两种 baseUrl 写法", () => {
   it.each([
     ["https://api.deepseek.com", "https://api.deepseek.com/v1/responses"],
     ["https://api.deepseek.com/", "https://api.deepseek.com/v1/responses"],
-    ["https://aigateway.variflight.com/api", "https://aigateway.variflight.com/api/v1/responses"],
-    ["https://aigateway.variflight.com/v1", "https://aigateway.variflight.com/v1/responses"],
-    ["https://aigateway.variflight.com/v1/", "https://aigateway.variflight.com/v1/responses"],
+    ["https://gw.example/api", "https://gw.example/api/v1/responses"],
+    ["https://gw.example/v1", "https://gw.example/v1/responses"],
+    ["https://gw.example/v1/", "https://gw.example/v1/responses"],
   ])("%s → %s", (base, want) => {
     expect(responsesUrl(base)).toBe(want);
   });

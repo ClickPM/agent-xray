@@ -144,7 +144,7 @@
    tool_config_set { "name": "web_search", "enabled": true }
    ```
 
-   - baseUrl 的 host 白名单**在代码里**(`apps/api/shared/websearch-hosts.ts`),内置 `api.deepseek.com` 与 `aigateway.variflight.com`;要加别的域,`.env` 的 `XRAY_WEBSEARCH_EXTRA_HOSTS` 可**追加**(不能替换),或改代码发版
+   - baseUrl 的 host 白名单**在代码里**(`apps/api/shared/websearch-hosts.ts`),内置只有 `api.deepseek.com`;自建 / 代理网关一律用 `.env` 的 `XRAY_WEBSEARCH_EXTRA_HOSTS` **追加**(不能替换),不进代码(所有者裁定 2026-09-02:个人项目)
    - 自建 AI 网关与 DeepSeek 是同一套 Responses API,换 `baseUrl` / `modelId` 即可;DeepSeek 若要用带日期的工具变体,另传 `"toolType": "web_search_2025_08_26"`
    - 改动**下一轮生效**(会话按配置指纹重建);删掉默认 provider 后工具自动下线,`tool_config` 的开关不用动
 
@@ -163,7 +163,7 @@
    tool_config_set { "name": "generate_image", "enabled": true }
    ```
 
-   - 生图白名单在 `apps/api/shared/imagegen-hosts.ts`(内置 `api.openai.com` / `aigateway.variflight.com`);要加别的域,`.env` 的 `XRAY_IMAGEGEN_EXTRA_HOSTS` 可**追加**(不能替换)——网关域名要在这里**再写一次**,搜索那条的追加项不作数
+   - 生图白名单在 `apps/api/shared/imagegen-hosts.ts`(内置只有 `api.openai.com`);要加别的域,`.env` 的 `XRAY_IMAGEGEN_EXTRA_HOSTS` 可**追加**(不能替换)——网关域名要在这里**再写一次**,搜索那条的追加项不作数
    - 生成的图存 Postgres(`generated_images`,随会话级联删除),由 `GET /api/agent/images/<uuid>.<ext>` 按访客归属供图;对话框里的预览是助手回复里的 markdown 图片,前端不用改
    - 上游必须回**内联**图片数据(`b64_json` / data URL);只回 `url` 的 provider(如 dall-e-3 默认)用不了 —— 本站不抓链接
 
@@ -246,5 +246,5 @@
 - **生产 80 不给响应**(`auto_https disable_redirects`),ACME 只走 TLS-ALPN-01,443 是证书续期的唯一命脉(`docs/security.md` §5);130 是明文 `:80`,这条对它是空操作。
 - **udp/443 三处齐**才有 HTTP/3:compose `443:443/udp` + ufw + 云控制台。
 - **`XRAY_WEBSEARCH_EXTRA_HOSTS`**:两个环境都要放 LLM/搜索网关的域名。130 早就设了,生产首次部署漏了它 `websearch_provider_upsert` 会直接拒。
-- **`XRAY_IMAGEGEN_EXTRA_HOSTS`**(R-IMAGEGEN):生图白名单是**另一份清单**(内置 `api.openai.com` / `aigateway.variflight.com`),网关域名要在这里再写一次,否则 `imagegen_provider_upsert` 直接拒。env 变了要**重建 api**(`up -d api`),`restart` 不生效。
+- **`XRAY_IMAGEGEN_EXTRA_HOSTS`**(R-IMAGEGEN):生图白名单是**另一份清单**(内置只有 `api.openai.com`),网关域名要在这里再写一次,否则 `imagegen_provider_upsert` 直接拒。env 变了要**重建 api**(`up -d api`),`restart` 不生效。
 - `.env` 各环境独立,永不入 Git;LLM key 不进镜像,经 `infra-config.json` 的 `{"$env": …}` 在运行时注入。

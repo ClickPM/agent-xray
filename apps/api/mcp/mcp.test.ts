@@ -664,7 +664,7 @@ describe("websearch provider(mcp/store + shared/websearch-hosts)", () => {
 
   it("目标域白名单:写入侧与调用侧用的是同一份判据", () => {
     expect(checkBaseUrl("https://api.deepseek.com").ok).toBe(true);
-    expect(checkBaseUrl("https://aigateway.variflight.com/api").ok).toBe(true);
+    expect(checkBaseUrl("https://api.deepseek.com/v1").ok).toBe(true);
     for (const bad of [
       "https://evil.tld",
       "https://api.deepseek.com.evil.tld",
@@ -750,7 +750,7 @@ describe("websearch 管理 tool 的入参 schema", () => {
 
   it("白名单内的合法 baseUrl 放行", () => {
     const schema = schemaOf("websearch_provider_upsert");
-    for (const url of ["https://api.deepseek.com", "https://aigateway.variflight.com/api"]) {
+    for (const url of ["https://api.deepseek.com", "https://api.deepseek.com/v1"]) {
       expect(schema.safeParse({ provider: "p", baseUrl: url, makeDefault: false }).success, url).toBe(true);
     }
   });
@@ -876,7 +876,8 @@ describe("imagegen provider(mcp/store + shared/imagegen-hosts)", () => {
 
   it("目标域白名单:生图那份与搜索那份是两份清单,判据相同", () => {
     expect(checkImageBaseUrl("https://api.openai.com/v1").ok).toBe(true);
-    expect(checkImageBaseUrl("https://aigateway.variflight.com/api").ok).toBe(true);
+    // 内置只有官方端点;自建 / 公司网关一律走 env 追加,不进代码(所有者裁定 2026-09-02)
+    expect(allowedImageHosts()).toEqual(["api.openai.com"]);
     // 搜索白名单里的 DeepSeek 在生图这边不放行 —— 一个域被列进搜索白名单不等于自动能当生图端点
     expect(checkBaseUrl("https://api.deepseek.com").ok).toBe(true);
     expect(checkImageBaseUrl("https://api.deepseek.com").ok).toBe(false);

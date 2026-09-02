@@ -433,7 +433,7 @@
   `<img>` 是同源 GET,cookie 自动带上,前端不需要做任何事
 - **写库走第三个 NOLOGIN 角色 `agent_image`**(与 R-TITLE 同构):只有 `generated_images` 的 INSERT,
   没有 SELECT / UPDATE / DELETE;会话 id 闭包绑定不是入参。文档先行(规则 9):`docs/security.md` §1 第 1/2/4 层各一段补记 + §3 + §6
-- **域白名单独立一份**(`shared/imagegen-hosts.ts`,内置 `api.openai.com` / `aigateway.variflight.com`,env
+- **域白名单独立一份**(`shared/imagegen-hosts.ts`,内置只有 `api.openai.com`;同轮所有者裁定个人项目不进公司网关域名,搜索白名单的内置也收成只剩 `api.deepseek.com`;env
   `XRAY_IMAGEGEN_EXTRA_HOSTS` 只能追加),判据实现与搜索共用(`shared/outbound-hosts.ts` 工厂);同轮把魔数判定、
   带上界的响应体读取、本次 key 的精确脱敏三样也抽到 `shared/`,搜索与生图各自调用同一份
 - **双计时器的一处不同**:生图是非流式的,上游出图前一个字节都不发,**空闲计时器只在响应头到达后才起**

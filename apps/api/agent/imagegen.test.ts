@@ -127,7 +127,7 @@ const chatResponse = (dataUrl: string) =>
 describe("生图的目标域白名单(docs/security.md §1 外呼组约束 2)", () => {
   it("放行内置白名单里的 https 地址", () => {
     expect(parseAllowedImageBaseUrl("https://api.openai.com/v1").hostname).toBe("api.openai.com");
-    expect(parseAllowedImageBaseUrl("https://aigateway.variflight.com/api").pathname).toBe("/api");
+    expect(parseAllowedImageBaseUrl("https://api.openai.com").pathname).toBe("/");
   });
 
   it.each([

@@ -38,7 +38,7 @@
 | 图片存哪 | **Postgres `generated_images`**,不落盘 | 容器根文件系统只读(第 3 层)、工具禁止碰文件系统(第 1 层)、镜像内不烧内容(R6 裁定)—— 与 notes 配图同一个理由。行随 `sessions` 级联删除:访客删会话 / 3 天保留期到期,图一起没了 |
 | 谁能看图 | **只有生成它的那个访客**(`sessions.visitor_id` 归属过滤,不匹配一律 404) | R-VISITOR 把会话内容按访客隔离,生成图是会话内容的一部分;地址是 UUID 不可枚举,但「不可枚举」不是授权。`<img>` 是同源 GET,`SameSite=Lax` 的 cookie 会带上,前端不需要做任何事 |
 | 写库走哪条通道 | **NOLOGIN 角色 `agent_image`,只有 `generated_images` 的 INSERT** | 与 R-TITLE 同构:agent 侧第二次拿到写库能力,授权面由 Postgres 限死,不靠工具实现自觉。会话 id 闭包绑定(不是入参),模型表达不出「往别人的会话里塞图」 |
-| 域白名单 | 独立一份 `shared/imagegen-hosts.ts`(内置 `api.openai.com` / `aigateway.variflight.com`,env `XRAY_IMAGEGEN_EXTRA_HOSTS` 只能追加),**判据实现与搜索共用**(`shared/outbound-hosts.ts` 工厂) | 两个白名单不合一:搜索网关不该因为被列进搜索白名单就自动可以当生图端点,所有者要显式选;判据(https / 精确 host / 无凭据 / 无 query)只能有一份实现 |
+| 域白名单 | 独立一份 `shared/imagegen-hosts.ts`(内置只有 `api.openai.com`,env `XRAY_IMAGEGEN_EXTRA_HOSTS` 只能追加),**判据实现与搜索共用**(`shared/outbound-hosts.ts` 工厂)。**合并后所有者追加裁定(2026-09-02)**:这是个人项目,公司网关域名从两份内置清单里都删掉,搜索侧内置只剩 `api.deepseek.com`;任何自建 / 公司网关一律走 env 追加,不进代码 | 两个白名单不合一:搜索网关不该因为被列进搜索白名单就自动可以当生图端点,所有者要显式选;判据(https / 精确 host / 无凭据 / 无 query)只能有一份实现 |
 | 超时默认值 | **总 180s / 空闲 30s**(库级 CHECK 上界 300s / 120s) | 生图上游在出图前**一个字节都不发**(非流式),所以空闲计时器**只在响应头到达后才起**;等头那段只受总时长约束,期间每 10s 上报一次「生成中」让 Timeline 不空转 |
 | `tool_config` 初始状态 | **默认关** | 与 `web_search` 同一理由:没配 provider 本来就不会注册,默认关把它变成显式的一件事 |
 | 前端是否改动 | **零改动**(规则 7) | 预览走 `Markdown.tsx` 既有的 `img`;三视图泛型渲染 `tool_execution_*`;Tools 面板按后端目录渲染。唯一变化是 `dev.ps1 gen` 重生成的 `api-client.ts`(新 raw 端点的包装,生成物) |
