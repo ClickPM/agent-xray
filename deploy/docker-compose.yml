@@ -38,6 +38,14 @@ services:
       # ⚠️ 它和 SITE_ORIGIN 是两件事:这个决定 Caddy **听**什么,那个是 RSS 里写出去的**对外地址**。
       #    两者必须指向同一个站,否则订阅链接指向一个没在听的端点。
       - SITE_ADDRESS=${SITE_ADDRESS:-:80}
+      # 规范主机名重定向(R11):把 SITE_REDIRECT_FROM 列的主机名 301 到 SITE_ORIGIN。
+      # 两者都不设 = 这条规则是死的(130 预发就是这样)。Caddy 拿 SITE_ORIGIN 只为当跳转目标,
+      # 与 web/api 拿它写 RSS 绝对链接是同一个值 —— 共用一个变量,配不歪。
+      # ⚠️ 默认值必须是哨兵而不是空串:Caddy 的 `{$VAR:default}` 只在变量**不存在**时
+      #    取默认值,变量存在但为空时取空 —— 那会让 matcher 变成 `host `(缺参数),
+      #    Caddyfile 解析失败、caddy 起不来。给一个永不匹配的主机名最安全。
+      - SITE_REDIRECT_FROM=${SITE_REDIRECT_FROM:-__unset__}
+      - SITE_ORIGIN=${SITE_ORIGIN:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

@@ -304,3 +304,35 @@ Claude Code 经 `.mcp.json` 的 `xray-admin-prod` 实连成功。
 >    脚本里任何一句 `docker compose exec -T` 都会把 heredoc **剩下的行当输入吃掉**,
 >    后续命令静默不执行(本轮 `migrate.sh` 第一次就是这么「跑完却没建表」的)。
 >    解法:给这类命令加 `< /dev/null`,或干脆一条命令一个 ssh。
+
+### 2026-09-02 站点地址改为 `https://www.kzgai.cloud/`(所有者要求)
+
+做法不是「把 kzgai.cloud 换成 www.kzgai.cloud」,而是**定一个规范地址、其余的跳过去**:
+两个主机名都进 `SITE_ADDRESS`(裸域不列就没有证书,连不上更谈不上跳转),裸域 **301** 到 www。
+这样旧链接不断、地址栏统一、RSS 里的绝对链接也只有一个形态。
+
+| 变量 | 值 |
+|---|---|
+| `SITE_ADDRESS` | `www.kzgai.cloud, kzgai.cloud` |
+| `SITE_ORIGIN` | `https://www.kzgai.cloud` |
+| `SITE_REDIRECT_FROM`(新增) | `kzgai.cloud` |
+
+**跳转目标直接复用 `SITE_ORIGIN`,没有另开变量** —— 于是「跳到哪」与「RSS 写出去的绝对链接是哪」
+永远是同一个值,配不歪。代价是 caddy 容器也要拿到 `SITE_ORIGIN`(compose 里补了一行)。
+
+**踩到并挡住一个会让 caddy 起不来的坑**:compose 里这个新变量的默认值**必须是哨兵而不是空串**。
+Caddy 的 `{$VAR:default}` 只在变量**不存在**时取默认值,变量存在但为空时取空 ——
+matcher 于是变成 `host `(缺参数),Caddyfile 直接解析失败。
+**这不是推测,是实测出来的**:`-e SITE_REDIRECT_FROM=` 起容器报
+`module name 'host': module value cannot be null`。若照最自然的 `${SITE_REDIRECT_FROM:-}` 写法,
+**130 下次重启就会起不来**(它不会设这个变量,而 compose 会把它设成空串)。
+现在 compose 默认值是 `__unset__`,Caddyfile 侧再兜一层同名哨兵。
+
+四种取值组合本机 `caddy validate` 逐个验过(130 口径 / 变量全不设 / 生产口径 / 空串必须报错),
+另用本机容器验了真实跳转行为:`old.localhost/notes/x?a=1` → **301** → `canon.localhost/notes/x?a=1`
+(路径与 query 原样带过),规范主机名自身不被跳转。
+
+**线上复验**:`https://www.kzgai.cloud/` **200** · `https://kzgai.cloud/notes` **301 → https://www.kzgai.cloud/notes** ·
+跟随跳转后最终 URL 落在 www · RSS 绝对链接已全部是 `https://www.kzgai.cloud/…` ·
+六个安全头齐 · 备案号仍在 footer · 80 仍无响应 · **HTTP/3 200**。
+www 的证书由 Caddy 在重建后自动签发(`tls-alpn-01`)。

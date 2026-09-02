@@ -48,6 +48,20 @@
 	@secure protocol https
 	header @secure Strict-Transport-Security "max-age=300"
 
+	# ── 规范主机名重定向(R11)────────────────────────────────────────
+	# 站点对外只有一个地址(`SITE_ORIGIN`),其余能解析过来的主机名 301 到它。
+	# 生产:`SITE_REDIRECT_FROM=kzgai.cloud` → 裸域跳 https://www.kzgai.cloud,
+	# 旧链接不断、地址栏统一;www 与裸域都要列进 SITE_ADDRESS,否则裸域没有证书、
+	# 连不上更谈不上跳转。
+	#
+	# 【为什么跳转目标直接用 SITE_ORIGIN,不另开一个变量】那样「跳到哪」与
+	# 「RSS 里写出去的绝对链接是哪」永远是同一个值,不可能配歪。
+	#
+	# **两个变量都不设时(130 预发)这两行是死的**:matcher 匹配一个不存在的主机名,
+	# 永不命中 —— 与这段不存在时行为一致(已回归实测)。
+	@non_canonical host {$SITE_REDIRECT_FROM:__unset__}
+	redir @non_canonical {$SITE_ORIGIN:}{uri} permanent
+
 	# API(含两条 SSE:/api/agent/*、/api/trace/stream)
 	#
 	# 端口契约:Encore 自托管镜像默认监听 8080,compose 里用 PORT=4000 显式对齐这里。
