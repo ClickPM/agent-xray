@@ -55,6 +55,8 @@
    >
    > 它刻意**不传 `.env`** —— `.env` 按环境独立、含密钥,永不出本机。
 
+   传输量比想象的小:`docker save` 对两个镜像**共享的 bun 基座层去重**,api 600 MB + web 355 MB 打成的 tar 只有 **155 MB**(R11 实测,传到境内云 99 秒)——别按镜像大小之和去估带宽,也不必为此改走压缩或 registry。
+
    生产按网络情况用同法或私有 registry(registry 流程在 `./migrate.sh` 前先 `docker pull` 对应 api 镜像,迁移要从镜像里取 SQL)。**任何环境都不用 `latest` tag**:compose 里 `${IMAGE_TAG:?}` 挡空值,`migrate.sh` 进一步硬校验 tag 必须是 git SHA。部署资产(`docker-compose.yml` / `Caddyfile` / `migrate.sh` / `.env.example`)首次与变更时随包一起 scp。
 
 3. **服务器部署 —— 先迁移,后起服务**:
@@ -63,7 +65,8 @@
    cd deploy && cp .env.example .env && chmod 600 .env   # 首次
    # 填 IMAGE_TAG=<git-sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY
    #   / METRICS_IP_SALT / SITE_ORIGIN=<含 scheme 的对外地址>  ← 生成方式见 .env.example 里的注释
-   # 生产另填 ICP_BEIAN=<备案号>(备案通过后;预发留空,留空则页面底部不渲染那条底栏)
+   # 生产另填:ICP_BEIAN=<备案号>(预发留空则底栏不渲染)/ SITE_ADDRESS=<域名>(预发留空 = :80)
+   #   / SITE_REDIRECT_FROM=<裸域>(预发留空)/ XRAY_WEBSEARCH_EXTRA_HOSTS=<网关域名>(不补则搜索 provider 写不进去)
 
    docker compose up -d --wait postgres   # 1) 只起库,--wait 会阻塞到 healthy
    ./migrate.sh                           # 2) schema 就位(详见下一节)
@@ -78,6 +81,11 @@
    ./migrate.sh --status   # 只读:看当前版本与待执行清单
    ./migrate.sh            # 应用待执行迁移
    ```
+
+   > ⚠️ **经 ssh 远程跑时,一条命令一个 ssh,或给它 `< /dev/null`**。`migrate.sh` 内部用 `docker compose exec -T`,
+   > 而 **`-T` 只是不分配 TTY,stdin 照样 attach** —— 把它放进 `ssh host bash -s <<'EOF'` 的多行脚本里,
+   > 它会把 heredoc **剩下的行当成自己的输入吃掉**,后面的命令静默不执行。R11 生产首发就是这么
+   > 「`--status` 通了、实际迁移一行没跑、表数 0」的,日志里看不出任何异常。
 
    **为什么需要这一步**(实测 2026-08-29):Encore 的自托管镜像**不含迁移执行逻辑**。本地 `encore run` 时是 encore CLI 把 SQL 灌进库的(日志里的 "Running database migrations"),而生产镜像里没有 CLI,Encore 运行时本身也没有迁移代码。镜像虽打包了 `agent/migrations/*.up.sql`,但容器启动不会应用。**空库直起的表现极具迷惑性**:
 
@@ -159,8 +167,14 @@
    | 13 | 网络分段 | 从 `web` / `caddy` 容器**连不上也解析不到** `postgres`;`api` 可以 |
    | 14 | 打点与统计 | `POST /t` → 204;`visits` 里只有哈希、无原始 IP;MCP 的 `traffic_*` 结果与打点逐项对得上 |
    | 15 | migrate.sh 守卫 | `IMAGE_TAG=latest` 被拒;未知参数(如 `--stats`)被拒 |
+   | 17 | **HTTP/3**(R11) | `docker run --rm ymuski/curl-http3 curl --http3-only -sS -o /dev/null -w '%{http_version} %{http_code}' https://<域名>/` 回 `3 200`。**本机 curl 是 Schannel 构建、不支持 h3,验不了这条**。三处缺一不可:compose 的 `443:443/udp`(简写 `"443:443"` **只映射 tcp**)、ufw `443/udp`、云控制台 UDP 443。漏了的表现不是报错,是 Caddy 照样广告 `Alt-Svc: h3` 而访客首访白等一次超时 |
+   | 18 | **80 无响应 + 规范跳转**(仅生产,R11) | `http://<域名>/` 连不上或空回复,**不得**出现 30x;非规范主机名(`SITE_REDIRECT_FROM`)→ **301** 到 `SITE_ORIGIN`,路径与 query 原样带过;规范主机名自身不被跳转 |
    | 16 | **联网搜索**(R-WEBSEARCH,配了才查) | ① 只配 provider 不开 `tool_config` → 工具不出现;两步都做 → 下一轮出现 ② 问一个知识截止后的问题,答案带来源链接 ③ 右栏 Timeline 出现 `tool_execution_update · web_search ×N`,Lifecycle 的 `tool_call`/`tool_execution`/`tool_result` 三节点点亮 ④ `websearch_provider_upsert` 传一个白名单外的 baseUrl **被拒** ⑤ `websearch_providers_list` 只回掩码 ⑥ `/trace/stream` 原始字节里搜不到搜索 key |
 
+   > **预检必须走 compose 起容器,别用 `docker run` 手工凑。** R11 上线前用 `docker run -p 443:443/udp …` 做过一次
+   > 访问层预检,HTTP/3 是通的;正式 `docker compose up` 之后却不通 —— compose 里根本没写 udp 映射,
+   > udp 是预检时手敲在命令行上的。「预检用的启动方式和生产不是同一条」这类差异只能靠跑真实部署路径消除。
+   >
    > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,metrics,about,system`)白名单决定。新增服务时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
    >
    > 因此冒烟不能只看 `/health`,要**逐个确认当前已落地的正式 service 端点都可达**(表里第 1 条)。本项目不引入自动服务发现,这条靠清单与冒烟兜住。
@@ -181,6 +195,26 @@
 
 7. **回滚**:镜像即回滚单元。把 `.env` 的 `IMAGE_TAG` 换回上一个 SHA,`docker compose up -d`。涉及不可逆迁移时先恢复备份(R10 衔接)。
 
+8. **环境间内容迁移(预发 → 生产,R11 实做过一次)**:Notes 与 About 走**库级拷贝**,不走 MCP 逐篇重发——103 张配图的 base64 过一遍对话会把上下文炸掉,而库拷贝 20 MB、几秒钟、逐字节一致。
+
+   ```bash
+   # 源端:逐表 dump,顺序 = 外键依赖(categories → series → chapters → assets → about),序列单独带上
+   for t in notes_categories notes_series notes_chapters notes_assets about_content notes_chapters_id_seq; do
+     docker compose exec -T postgres pg_dump -U app -d agent --data-only --no-owner --no-privileges -t "public.$t" < /dev/null
+   done > notes-content.sql
+   # 目标端:单事务灌入,任何一条失败整体回滚
+   docker compose exec -T postgres psql -U app -d agent -v ON_ERROR_STOP=1 --single-transaction -q < notes-content.sql
+   ```
+
+   四条硬约束,每条都有实测依据:
+
+   - **别用一条 `pg_dump` 带多个 `-t`**:`--data-only` 按**字母序**出表,`notes_assets` 会排在 `notes_series` 前面,灌入时撞外键。逐表 dump 再拼接才能控制顺序
+   - **`notes_chapters_id_seq` 要显式 dump**(`-t` 不会自动带上被表拥有的序列),漏了的表现是拷完之后**新插入撞主键**
+   - **先核两边表结构**(`information_schema.columns` 逐列 diff):两个环境的迁移版本可能不同(R11 时 130 是 7、生产是 9),恰好 008/009 不碰这五张表才能直接灌
+   - **`llm_config` / `websearch_config` 不可拷,连试都别试**:key 是用**各环境自己的** `CONFIG_ENCRYPTION_KEY` 加密的密文,拷到另一个环境解不开、agent 照样 503;MCP 读回也只有掩码。provider 必须由所有者给明文经 `llm_provider_upsert` / `websearch_provider_upsert` 重写。反过来「把源环境的 `CONFIG_ENCRYPTION_KEY` 也拷过去」是错误解法——那等于两个环境共用一把密钥
+
+   拷完检查一遍 About:文案里可能带着源环境的话(R11 从 130 拷来的 intro 结尾是「这里是 130 预发环境」,上了公开生产站才发现)。
+
 ## 环境差异要点
 
 - 容器安全约束(非 root / read_only / cap_drop ALL / pids_limit / mem_limit / no-new-privileges / tmpfs noexec)在 `deploy/docker-compose.yml` 已定稿,预发与生产一致,不得为省事放宽(`docs/security.md` §1 第 3 层)。
@@ -188,4 +222,8 @@
 - 端口契约:api 容器 `PORT=4000`,与 `deploy/Caddyfile` 的 `reverse_proxy api:4000` 成对;镜像默认是 8080,两处必须同改。
 - 生产额外做服务器基线初始化(`docs/security.md` §5)与 ICP 备案/TLS(`docs/deploy-cn-lightweight.md`)。
 - 预发(130)不备案,内网 IP + 端口直访即可;Caddy TLS 只在生产开。
+- **站点地址与规范主机名**:生产 `SITE_ADDRESS=www.kzgai.cloud, kzgai.cloud` + `SITE_REDIRECT_FROM=kzgai.cloud`(裸域 301 到 `SITE_ORIGIN`);130 两者都不设(`:80`,跳转规则是死的)。compose 里 `SITE_REDIRECT_FROM` 的默认值是哨兵 `__unset__` 而非空串——Caddy 的 `{$VAR:default}` 对**存在但为空**的变量取空,matcher 变成 `host `(缺参数)、Caddyfile 解析失败(实测 `module value cannot be null`)。
+- **生产 80 不给响应**(`auto_https disable_redirects`),ACME 只走 TLS-ALPN-01,443 是证书续期的唯一命脉(`docs/security.md` §5);130 是明文 `:80`,这条对它是空操作。
+- **udp/443 三处齐**才有 HTTP/3:compose `443:443/udp` + ufw + 云控制台。
+- **`XRAY_WEBSEARCH_EXTRA_HOSTS`**:两个环境都要放 LLM/搜索网关的域名。130 早就设了,生产首次部署漏了它 `websearch_provider_upsert` 会直接拒。
 - `.env` 各环境独立,永不入 Git;LLM key 不进镜像,经 `infra-config.json` 的 `{"$env": …}` 在运行时注入。

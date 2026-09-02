@@ -2,7 +2,9 @@
 
 <!-- 保存为 rounds/round-NN/round-NN.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:进行中(2026-08-28 提前开工:仅「服务器初始化 + 备案启动」两项;compose 部署与上线冒烟等 R9/R10 收口后继续)
+> 状态:**已完成**(2026-09-02 收工,所有者裁定)。站点 https://www.kzgai.cloud/ 已上线并可用;收工时明确跳过的四项与代价见文末「收工」段。
+>
+> 历史:2026-08-28 提前开工(仅「服务器初始化 + 备案启动」两项);2026-09-02 备案通过后一日内完成访问层预检、部署、内容迁移、provider 配置与全链路验收
 >
 > **2026-09-02:ICP 备案通过**,备案号 `苏ICP备2025204887号-2`(所有者提供)。同日所有者一次性裁定五条(见下「2026-09-02 备案通过后的裁定」),
 > 其中「先做 R-TOOLS 再上线」把本轮的开工时点推到 R-TOOLS 合并之后。
@@ -43,9 +45,9 @@
 | 4 | 自动安全更新开启 | `20auto-upgrades`:Update-Package-Lists=1 + Unattended-Upgrade=1 | ✅ 2026-08-28 |
 | 5 | Docker + Compose 可用,拉镜像走加速 | `docker run hello-world` 成功;daemon.json 配 registry-mirrors | ✅ 2026-08-28 |
 | 6 | deploy 用户可密钥登录并操作 docker | `ssh deploy@106.54.238.52 docker ps` 成功 | ✅ 2026-08-28 |
-| 7 | ICP 备案通过,域名 A 记录解析到服务器 | 备案号下发;`dig <域名>` 指向 106.54.238.52 | ✅ 2026-09-02 备案通过,`苏ICP备2025204887号-2`;解析早于 2026-08-28 生效(`kzgai.cloud`/`www` 境内外 DNS 均指向服务器)。**部署时复核一次 `域名:80` 不再被拦截**(备案前实测是切断) |
+| 7 | ICP 备案通过,域名 A 记录解析到服务器 | 备案号下发;`dig <域名>` 指向 106.54.238.52 | ✅ 2026-09-02 备案通过,`苏ICP备2025204887号-2`;解析早于 2026-08-28 生效(`kzgai.cloud`/`www` 境内外 DNS 均指向服务器)。80 的状态最终是**刻意无响应**(所有者要求),不再需要「复核不被拦截」 |
 | 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ✅ **2026-09-02 完成**:预检验过一次(`tls-alpn-01`),正式部署在 compose 的 `deploy_caddy_data` volume 里重新签发,首次 curl 失败(签发中)、第二次 **200**。HTTP/3 也通(修掉 compose 缺 udp 映射的缺陷后) |
-| 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ◐ **13 项已过**(见下「生产部署与上线冒烟」):三 Tab / 七服务端点 / 废弃路由 404 / 安全头 / MCP 三种失败一致 / Tools 目录 / 访客 cookie 带 Secure / 内存 / 日志无真实错误。✅ **2026-09-02 补齐**:`/agent/ask` 真实对话、两条 SSE、web_search 端到端全通(见下「LLM / 搜索 provider 写入与全链路验收」)。**限额演练不适用** —— 所有者裁定不设限额,超限路径在生产无从演练,以 R9 在 130 的留证为准 |
+| 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ✅ **13 项已过**(见下「生产部署与上线冒烟」):三 Tab / 七服务端点 / 废弃路由 404 / 安全头 / MCP 三种失败一致 / Tools 目录 / 访客 cookie 带 Secure / 内存 / 日志无真实错误。✅ **2026-09-02 补齐**:`/agent/ask` 真实对话、两条 SSE、web_search 端到端全通(见下「LLM / 搜索 provider 写入与全链路验收」)。**限额演练不适用** —— 所有者裁定不设限额,超限路径在生产无从演练,以 R9 在 130 的留证为准 |
 | 10 | 备案号挂 footer | web footer 显示备案号 | ✅ **2026-09-02 线上实测**:`苏ICP备2025204887号-2` 在页面底部,链到 `beian.miit.gov.cn`。运行期注入生效(`SiteFooter` 的 `await connection()` 把渲染推到请求期,没被烧进构建产物)。**公安联网备案另算**,见「所有者 TODO」第 6 条 |
 | 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ◐ **生成与哈希写入已完成**(2026-09-02,所有者本机生成 token、只交哈希);⬜ 剩两项待部署后做:①`XRAY_MCP_TOKEN_PROD` 环境变量与密码管理器留存的确认(所有者);②轮换演练(要 api 起来才验得了 401/200) |
 | 12 | MCP 管理面在生产实连(协议 **2026-07-28**) | `server/discover` 回 `supportedVersions: ["2026-07-28"]` + `serverInfo`,`tools/list` 出 **28** 个工具(R10 留证里的 24 是 R-WEBSEARCH 之前的数,以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准)——请求体形状照 [`rounds/round-10/checklist.md`](../round-10/checklist.md) §9(逐请求四件套缺一样就是 4xx,`_meta` 三键必须在 `params` 里);再经 `.mcp.json` 新增的 `xray-admin-prod` 用 Claude Code 实连一次。**必须早于「写生产 LLM provider」通过**(R6 起无引导密钥,不通则 `/agent/ask` 永远 503);**交接项②的 IP 白名单启用后要复验一次**(白名单先于 token 生效,漏验的表现是 token 明明对却 403) | ✅ **2026-09-02 通过**:`supportedVersions: ["2026-07-28"]` · `serverInfo` = `agent-xray-admin/1.0.0` · `tools/list` **28 个**(与 `registerTool` 计数一致)· Claude Code 经 `xray-admin-prod` 实连成功。白名单按裁定不启用,无需复验 |
@@ -58,7 +60,7 @@
 4. **生产 MCP token 原文存进密码管理器**(验收 11):服务端只存 sha256,原文丢了不能找回、只能轮换。轮换时 `CONFIG_ENCRYPTION_KEY` **绝不能跟着换**——换了 `llm_config` 里的 LLM key 密文全部解不开,agent 立刻停摆,得把每个 provider 的 key 经 `llm_provider_upsert` 重写一遍
 5. ~~**提供 Caddy IP 白名单要放行的真实出口 IP**(R10 交接项②)~~ ✅ 2026-09-02 裁定**暂不启用**,不再需要 IP
 6. **公安联网备案(待所有者确认口径)**:ICP 备案通过后,按规定还需在网站开通后 30 日内办理公安网安备案,并在页面底部同时挂公安备案号(链到 `beian.mps.gov.cn`)。**当前 `SiteFooter` 只支持一个 ICP 号**,要挂第二个号得改组件(与 ICP 号同属规则 8「docs 的部署约束不是新功能」口径)。请确认腾讯云侧提示的具体要求与时限后再定改不改
-7. **真实内容**:生产是空库 —— 130 上那 13 系列 / 205 章节 / 103 张配图在 130 的库里,生产要经 MCP 重发一遍(幂等,130 上实测 22s);About 还是 R9 写的样本文案,需要所有者给真实内容(BACKLOG 有条目)
+7. ~~**真实内容**:生产是空库~~ ✅ Notes 已从 130 库级拷入(4/13/205/103),Encore 系列 22 篇经 MCP 发布;⬜ **About 仍是 R9 样本**(intro 里那句「130 预发环境」已删,`repos` / `langBar` / `originUrl` 等所有者给真实内容,BACKLOG 有条目)
 
 ## 2026-09-02 备案通过后的裁定(所有者一次性定了五条)
 
@@ -108,11 +110,9 @@
 
 ## 代码审查
 
-<!-- 完成后回填。本轮当前无仓库代码改动(仅远端服务器配置 + 本任务卡),compose 部署段完成后走 codex 审查。 -->
-
-- 审查方式:待 compose 部署段完成后定
-- findings 处理:—
-- 结论:—
+- 审查方式:**所有者裁定本轮不走 codex 审查**(2026-09-02 收工时,与 R9 同一先例)
+- 本轮仓库改动清单(供将来补审或下一轮顺带扫到):`deploy/Caddyfile`(域名化 / 安全头 / HSTS / `disable_redirects` / 规范跳转)、`deploy/docker-compose.yml`(`SITE_ADDRESS` / `SITE_REDIRECT_FROM` / `SITE_ORIGIN` 传给 caddy、`443:443/udp`)、`deploy/.env.example`、`docs/security.md` §5 与 §5.1、`docs/deploy-*.md`、`.mcp.json`、`CLAUDE.md`。**`apps/` 一行未动**,镜像内容即 R-TOOLS 合并后的 `main`(已过 codex 两轮)
+- 结论:未审查(所有者裁定)
 
 ## 失败处理
 
@@ -379,3 +379,24 @@ R9 在 130 上有超限行为的留证(`rounds/round-09/smoke.md` §5),需要时
    轮换后经 `llm_provider_upsert` + `websearch_provider_upsert` 各重写一次即可
    (**`CONFIG_ENCRYPTION_KEY` 不要动**)。落盘那条约束是守住了 —— 服务器上没有任何明文 key 文件
    (R10 交接项③要求的正是这个,130 上那份 `~/deploy/.llm-key` 就是反面教材)。
+
+## 收工(2026-09-02,所有者裁定)
+
+所有者裁定 R11 到此完成,**明确不做**以下四项。逐条把「不做的代价」写清楚,不是为了追责,是为了下次有人碰到相关症状时知道这里没验过:
+
+| 不做的项 | 代价 / 残留风险 |
+|---|---|
+| **上线检查单在生产重跑**(M4 止损原话「在生产重跑才算数」) | 检查单 13 项里**6 项从未在生产核过**:`.env` 600 + 明文 key 不落镜像(新镜像 `5bd6ace`,R10 核的是 `5c98b3e`)· 容器安全约束(`docker inspect` 逐项)· 最终镜像无 node · postgres 仅 back 网段可达 · SSE 脱敏结构化扫描 · SSE 优雅关闭。这些都是 compose / Dockerfile 层的**静态属性**,130 上全绿且部署资产未在这几处改动,**大概率成立但没证据** |
+| **codex 审查** | 本轮部署资产改动(Caddyfile / compose)没有第二双眼睛看过。已知的一处冗余(供图路径 nosniff 重复)记了 BACKLOG;是否还有别的,不知道 |
+| **token 轮换演练**(验收 11 ②) | 轮换路径只在 130 验过(2026-09-01),生产没走过一遍。真要轮换时照 CLAUDE.md 那段做,**`CONFIG_ENCRYPTION_KEY` 绝不能跟着换** |
+| **首日观察**(限额 / 内存 / 日志) | 上线当天只看了一个快照(api 30 MB / web 82 MB,日志无真实错误)。没设限额,所以「限额」这项本来也没东西可观察;内存与日志的趋势要靠所有者之后自己看 `docker stats` / `docker compose logs` |
+
+**收工时的生产状态快照**:
+
+- SHA `5bd6ace`,四容器 running,迁移版本 9
+- 内容:4 分类 / 14 系列 / 226 章节 / 103 配图(130 拷入 205 + Encore 新发 21 正式篇)
+- provider:`cliproxy-dmit` 一个,LLM 与搜索共用,**全部不设限额**;五个工具全开
+- 访问:`https://www.kzgai.cloud/` 规范地址,裸域 301,80 无响应,HTTP/3 通,HSTS `max-age=300`(**上线稳定后可调大**,当前值是给证书链留的 5 分钟反悔期)
+- 服务器上没有任何明文 key 文件;`.env` 600;`.env.bak-*` 已 shred
+
+**本轮踩过的坑已全部落进文档**(2026-09-02 收工前逐条核):`docs/deploy-environments.md`(compose exec -T 吃 stdin / docker save 去重 / 预检必须走 compose / HTTP/3 三处齐 / 环境间内容迁移 / 生产口径)、`docs/deploy-cn-lightweight.md`(80 刻意无响应 / udp 443 / 公安备案 / `.env` 清单)、`docs/security.md` §5(udp 443 / 443 是续期命脉)、`CLAUDE.md`(`_meta` 键要带命名空间前缀与 `clientInfo` / `xray-admin-prod` 指 www)。本机特有的(ssh 中文路径用 8.3 短路径 / CR 计数用 `tr` 不用 `grep` / python 写文件 `newline=""` / commit message 走 `-F-` heredoc)进了 memory,不进仓库。

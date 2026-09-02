@@ -58,8 +58,8 @@ mem_limit  = API_RSS_p95 × 1.3(突发余量)
 2. 服务器购买 ≥3 个月(备案要求)
 3. 在云厂商备案控制台提交:个人备案,网站名称避免「Agent/AI 服务」等敏感表述,建议以「个人技术学习分享」类目申报
 4. 审核周期约 1–3 周;**备案通过前,云厂商会拦截 80/443 的 HTTP 服务** → 开发期用 `IP:8080` 等非标端口自测
-5. 备案通过后:域名解析 A 记录 → 服务器 IP,放开 Caddy 80/443,自动签发 TLS
-6. 网站底部挂备案号(web footer 预留位)
+5. 备案通过后:域名解析 A 记录 → 服务器 IP,`.env` 填 `SITE_ADDRESS=<域名>`,Caddy 在 443 自动签发 TLS。**生产 80 刻意不给响应**(所有者要求),证书走 TLS-ALPN-01(见 `docs/security.md` §5)——别按「放开 80/443」的老口径去核 80
+6. 网站底部挂备案号(`.env` 的 `ICP_BEIAN`,运行期注入;web footer 预留位)。**ICP 之外还有公安联网备案**:网站开通后 30 日内办,底部要同时挂公安备案号并链到 `beian.mps.gov.cn`;当前 `SiteFooter` 只支持一个 ICP 号,要挂第二个得改组件(R11 上线时待所有者确认口径,未做)
 
 ## 2. 服务器初始化(一次性)
 
@@ -69,7 +69,8 @@ adduser deploy && usermod -aG docker deploy
 # sshd_config: PasswordAuthentication no; PermitRootLogin no
 
 # 2) 防火墙(云控制台安全组同步配置)
-ufw allow 80/tcp && ufw allow 443/tcp && ufw allow <SSH端口>/tcp && ufw enable
+ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 443/udp && ufw allow <SSH端口>/tcp && ufw enable
+# 443/udp 是 HTTP/3(QUIC);云控制台安全组也要加一条 UDP 443,少一层都不通
 
 # 3) fail2ban + 自动安全更新
 apt install -y fail2ban unattended-upgrades
@@ -97,7 +98,11 @@ ssh <host> "docker load -i ~/deploy/xray-<sha>.tar && chmod +x ~/deploy/migrate.
 ```bash
 # —— 服务器 ——
 cd ~/deploy && cp .env.example .env && chmod 600 .env    # 首次
-# 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY / SITE_ORIGIN
+# 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY / METRICS_IP_SALT
+#   / SITE_ADDRESS=<域名> / SITE_REDIRECT_FROM=<裸域> / SITE_ORIGIN=https://www.<域名> / ICP_BEIAN=<备案号>
+#   / XRAY_WEBSEARCH_EXTRA_HOSTS=<LLM/搜索网关域名>   ← 生产首次部署最容易漏:内置白名单只有两个域,
+#     不补这项 websearch_provider_upsert 直接拒(R11 实测;130 早就设了所以从没暴露)
+# 密钥类三项在服务器上就地 `openssl rand -base64 32` 生成,原文不经本机、不进对话
 # (R6 起没有 LLM 引导密钥:起完服务后经 MCP 的 llm_provider_upsert 写入 provider)
 
 docker compose up -d --wait postgres   # 1) 只起库,等到 healthy
