@@ -113,15 +113,18 @@ cd apps\web; npm run dev   # 前端 next dev :3000
 
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。
-- **站点管理面在 `.mcp.json` 里注册了两个,别混用**——每个环境一把独立 token,一把只开一扇门:
+- **站点管理面在 `.mcp.json` 里注册了三个,别混用**——每个环境一把独立 token,一把只开一扇门:
 
   | server | 指向 | token 环境变量 | 期望哈希存在哪 |
   |---|---|---|---|
   | `xray-admin` | `127.0.0.1:4000/mcp`(本机) | `XRAY_MCP_TOKEN` | `apps/api/.secrets.local.cue` 的 `McpAuthTokenHash` |
   | `xray-admin-130` | `192.168.100.130/api/mcp`(预发) | `XRAY_MCP_TOKEN_130` | 130 上 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH` |
+  | `xray-admin-prod` | `https://kzgai.cloud/api/mcp`(生产) | `XRAY_MCP_TOKEN_PROD` | 生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH` |
 
-  用本机那个前先 `dev.ps1` 起后端。仓库里**只有哈希、没有 token 原文**,两者的生成方式见 `deploy/.env.example`。首次使用需在 `claude` 里批准这两个项目级 MCP server。
+  用本机那个前先 `dev.ps1` 起后端。仓库里**只有哈希、没有 token 原文**,生成方式见 `deploy/.env.example`。首次使用需在 `claude` 里批准这三个项目级 MCP server。
+  **`xray-admin-prod` 在 R11 生产部署完成前连不上**(端点还不存在),会话启动时会看到一次 `ConnectionRefused` —— 这是预期,不是配置错。
 - **token 丢了不用慌,轮换即可**(2026-09-01 对 130 实测):服务端只存 sha256,原文不可恢复但可换。流程 = 本机按 `deploy/.env.example` 的 CSPRNG 口径生成新 token → 新哈希写进目标环境的 `MCP_AUTH_TOKEN_HASH` → **`docker compose up -d api` 重建容器**(env 变了 `restart` 不生效)。**`CONFIG_ENCRYPTION_KEY` 绝不能跟着换**,否则 `llm_config` 里的 key 密文全解不开、agent 直接停摆。
+- **注册了但对端不在时,只在会话启动时报一次错**,中途起服务不会自动重连(见下条)。
 - **`.mcp.json` 的改动要重启会话才生效**,而且 MCP client 连不上时只在会话启动时报一次 `ConnectionRefused`——中途起后端不会自动重连。急着用可以直接对 `/mcp` 发 JSON-RPC,但要带齐 2026-07-28 的逐请求契约(`Accept` 同时含 `application/json` 与 `text/event-stream`、`Mcp-Method` 头、`params._meta` 里的 `protocolVersion` 与 `clientCapabilities`;`tools/call` 再加 `Mcp-Name`,细节见 `apps/api/mcp/README.md`「三条容易改错的地方」第 3 条)。**不带 `params._meta` 时 handler 会静默落到 2025-11-25 的 legacy 无状态路径**:`tools/list` / `tools/call` 照常可用、响应变成 SSE 帧,而 `server/discover` 回 `-32601 Method not found`——这不是端点坏了,是请求走错了协议时代(2026-09-02 对 130 实测;R10 留证里带齐契约的 `server/discover` 是通的)。
 - `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;自建的 `sync-notes` 已随 R5 管道废除(R6 删除)。
 - **worktree 用完必须 `dev.ps1 wt-clean` 删,别手删也别只跑 `git worktree remove`**(2026-08-31 实测)。在 `.claude\worktrees\<名字>` 里跑过 encore 之后,该目录会被两处占住:那个会话的 `encore mcp run`(`.claude\mcp-encore.ps1` 把 cwd 设进 `<worktree>\apps\api`,而 `encore.app` 的 `id` 为空、本地 app 只能靠 cwd 定位,换 `--app` 也绕不开),以及**注册过该 app 后同样握着句柄的 encore daemon**——单杀 MCP 无效,必须连 daemon 一起停。表现是 `git worktree remove` 报 `Permission denied`、目录删到一半只剩空壳,登记与磁盘长期不一致(本仓库曾同时积下 r3/r4/r5 三份)。`wt-clean` 把「安全闸 → 杀占用进程 → 长路径强删 → (仍在才)停 encore → prune → 拉回 daemon」固化成一条命令。**「仍删不掉」有两种原因,别一律当会话占用**(2026-09-02 实测):① **路径超过 MAX_PATH(260)**——残留全在 `apps\api\node_modules\@earendil-works\pi-coding-agent\node_modules\@aws-sdk\...\*.d.ts`(261–269 字符),没有任何进程持句柄,PowerShell 5.1 的 `Remove-Item` 就是过不去;脚本曾因此误判成占用、白白重启了同机共用的 daemon,现已改成先 `cmd /c rd /s /q "\\?\<路径>"`(实测能删;其退出码不可信,目录被占时照样回 0,成败看事后 `Test-Path`),只有它也失败才停 daemon;② **另一个 Claude Code 会话以该 worktree 为 cwd**——目录已空但 busy,用 CCD 的 `list_sessions` 按 `cwd` 找到那个会话,关掉后重跑;`archive_session` 得所有者明确同意,脚本不替你关。
