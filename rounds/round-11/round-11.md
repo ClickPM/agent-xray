@@ -45,7 +45,7 @@
 | 6 | deploy 用户可密钥登录并操作 docker | `ssh deploy@106.54.238.52 docker ps` 成功 | ✅ 2026-08-28 |
 | 7 | ICP 备案通过,域名 A 记录解析到服务器 | 备案号下发;`dig <域名>` 指向 106.54.238.52 | ✅ 2026-09-02 备案通过,`苏ICP备2025204887号-2`;解析早于 2026-08-28 生效(`kzgai.cloud`/`www` 境内外 DNS 均指向服务器)。**部署时复核一次 `域名:80` 不再被拦截**(备案前实测是切断) |
 | 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ✅ **2026-09-02 完成**:预检验过一次(`tls-alpn-01`),正式部署在 compose 的 `deploy_caddy_data` volume 里重新签发,首次 curl 失败(签发中)、第二次 **200**。HTTP/3 也通(修掉 compose 缺 udp 映射的缺陷后) |
-| 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ◐ **13 项已过**(见下「生产部署与上线冒烟」):三 Tab / 七服务端点 / 废弃路由 404 / 安全头 / MCP 三种失败一致 / Tools 目录 / 访客 cookie 带 Secure / 内存 / 日志无真实错误。⬜ **SSE ×2 与限额演练卡在「没有 LLM provider」**——`/agent/ask` 现在回 503,要先经 MCP 写 provider |
+| 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ◐ **13 项已过**(见下「生产部署与上线冒烟」):三 Tab / 七服务端点 / 废弃路由 404 / 安全头 / MCP 三种失败一致 / Tools 目录 / 访客 cookie 带 Secure / 内存 / 日志无真实错误。✅ **2026-09-02 补齐**:`/agent/ask` 真实对话、两条 SSE、web_search 端到端全通(见下「LLM / 搜索 provider 写入与全链路验收」)。**限额演练不适用** —— 所有者裁定不设限额,超限路径在生产无从演练,以 R9 在 130 的留证为准 |
 | 10 | 备案号挂 footer | web footer 显示备案号 | ✅ **2026-09-02 线上实测**:`苏ICP备2025204887号-2` 在页面底部,链到 `beian.miit.gov.cn`。运行期注入生效(`SiteFooter` 的 `await connection()` 把渲染推到请求期,没被烧进构建产物)。**公安联网备案另算**,见「所有者 TODO」第 6 条 |
 | 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ◐ **生成与哈希写入已完成**(2026-09-02,所有者本机生成 token、只交哈希);⬜ 剩两项待部署后做:①`XRAY_MCP_TOKEN_PROD` 环境变量与密码管理器留存的确认(所有者);②轮换演练(要 api 起来才验得了 401/200) |
 | 12 | MCP 管理面在生产实连(协议 **2026-07-28**) | `server/discover` 回 `supportedVersions: ["2026-07-28"]` + `serverInfo`,`tools/list` 出 **28** 个工具(R10 留证里的 24 是 R-WEBSEARCH 之前的数,以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准)——请求体形状照 [`rounds/round-10/checklist.md`](../round-10/checklist.md) §9(逐请求四件套缺一样就是 4xx,`_meta` 三键必须在 `params` 里);再经 `.mcp.json` 新增的 `xray-admin-prod` 用 Claude Code 实连一次。**必须早于「写生产 LLM provider」通过**(R6 起无引导密钥,不通则 `/agent/ask` 永远 503);**交接项②的 IP 白名单启用后要复验一次**(白名单先于 token 生效,漏验的表现是 token 明明对却 403) | ✅ **2026-09-02 通过**:`supportedVersions: ["2026-07-28"]` · `serverInfo` = `agent-xray-admin/1.0.0` · `tools/list` **28 个**(与 `registerTool` 计数一致)· Claude Code 经 `xray-admin-prod` 实连成功。白名单按裁定不启用,无需复验 |
@@ -336,3 +336,46 @@ matcher 于是变成 `host `(缺参数),Caddyfile 直接解析失败。
 跟随跳转后最终 URL 落在 www · RSS 绝对链接已全部是 `https://www.kzgai.cloud/…` ·
 六个安全头齐 · 备案号仍在 footer · 80 仍无响应 · **HTTP/3 200**。
 www 的证书由 Caddy 在重建后自动签发(`tls-alpn-01`)。
+
+### 2026-09-02 LLM / 搜索 provider 写入与全链路验收(站点真正可用)
+
+所有者要求**不设限额,token 与搜索都不设**。四项写入 + 一处白名单调整:
+
+| 项 | 值 |
+|---|---|
+| LLM provider | `cliproxy-dmit` · `https://api.64-186-228-154.sslip.io/v1` · `gpt-5.6-terra` · 默认 |
+| LLM 限额 | `maxTurnsPerSession=0` / `dailyTokenLimit=0` / `dailyCostLimitCents=0`(**全 0 = 不限**) |
+| 自定义模型目录 | 从 130 的 `llm_config.models` 原样取来(该列不加密,只有 key 是密文)。**漏了它模型解析不出来** —— `gpt-5.6-terra` 不是 pi 内置模型 id,`hasCustomModels: true` 就是这个意思 |
+| websearch provider | 同网关同模型 · `dailySearchLimit=0`(**不限**)· idle 45s / total 180s · 默认 |
+| `tool_config` | `web_search` 由 `false` 置 **`true`** —— 种子行默认是关的,配好 provider 也不会自动注册 |
+| 白名单 | 生产 `.env` 补 `XRAY_WEBSEARCH_EXTRA_HOSTS=api.64-186-228-154.sslip.io` 并**重建 api**(env 变了 restart 不生效) |
+
+**白名单这条是必须先做的前置**:生产的 `allowedHosts` 起初只有内置两个
+(`aigateway.variflight.com` / `api.deepseek.com`),网关域名不在其中 —— 不补这一项,
+`websearch_provider_upsert` 会直接拒掉。130 上之所以能用,是因为它的 `.env` 早就设了这个变量。
+
+**全链路验收(至此 R11 的验收 9 补齐)**:
+
+| 检查 | 结果 |
+|---|---|
+| `/agent/ask` 真实对话 | ✅ SSE `session` → `delta` 流式输出正常 |
+| 消息落库 | ✅ 该会话 2 条(user + assistant) |
+| **R-TITLE 验收 #1**(欠了一直没验) | ✅ **`title_source=agent`**,标题「介绍你的身份」是模型自己调 `session_rename` 起的 —— 首行是「用一句话说明你是什么」,证明不是首行截断 |
+| 第二条 SSE `/trace/stream` | ✅ 回放出 `session_start` / `resources_discover` / `input` / `before_agent_start`,`seq` / `eventType` / `mode`(notify·chain·takeover)齐全 |
+| **web_search 端到端** | ✅ 新会话里模型自行发起搜索并给出带来源的回答;轨迹中 **4 次 `tool_call` / 4 次 `tool_result`**,`web_search` 出现 17 次 |
+| 五个工具启停 | ✅ 全部 `enabled=true` |
+
+**「限额演练」这一项的性质变了,要写明**:所有者裁定不设限额(三项全 0 + 搜索 0),
+**超限路径在生产就没有东西可演练** —— 它不是「没做」,是「被配置取消了」。
+R9 在 130 上有超限行为的留证(`rounds/round-09/smoke.md` §5),需要时以那份为准。
+将来若改回有限额,这条要重新跑。
+
+**遗留两点**:
+
+1. **生产库里留了 4 条冒烟会话**。它们按访客归属只对当时那个 curl cookie 可见,
+   且 3 天保留期会清掉(R-VISITOR),不手工删。
+2. **key 的明文进过本次会话上下文**。所有者本意是「key 在文本文件里、不要传进上下文」,
+   但读取动作已经发生、内容已在对话里。**已如实告知并建议在网关侧轮换一次**;
+   轮换后经 `llm_provider_upsert` + `websearch_provider_upsert` 各重写一次即可
+   (**`CONFIG_ENCRYPTION_KEY` 不要动**)。落盘那条约束是守住了 —— 服务器上没有任何明文 key 文件
+   (R10 交接项③要求的正是这个,130 上那份 `~/deploy/.llm-key` 就是反面教材)。
