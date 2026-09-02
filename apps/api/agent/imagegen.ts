@@ -315,8 +315,16 @@ export async function runImageGen(
       );
     }
     if (!res.ok) {
-      // 错误体同样要封顶;上游会把请求头回显进错误体,所以在构造错误的地方就抹掉本次 key
-      const body = await readCapped(res).catch(() => "");
+      // 错误体同样要封顶;上游会把请求头回显进错误体,所以在构造错误的地方就抹掉本次 key。
+      // 【读错误体时的超时 / 超限必须原样往外抛】(codex 初审 P2)上一版是 `.catch(() => "")`:
+      // 上游给了个 5xx 的头然后挂住不发 body,计时器掐断 → 这里吞成空串 → 报成 `http_error`,
+      // 模型拿到的是「生图失败」而不是「生图超时」的后路指引,日志里的 kind 也是错的;
+      // 一个 4xx 却回几百 MB 的错误体同样会被报成普通 HTTP 错误而不是 `oversize`。
+      // 只把「读体本身的普通失败」(连接被上游关掉之类)当成空 body。
+      const body = await readCapped(res).catch((err) => {
+        if (err instanceof ImageGenError || (err as { name?: string })?.name === "AbortError") throw err;
+        return "";
+      });
       throw new ImageGenError(
         "http_error",
         `上游 HTTP ${res.status}: ${redactSecret(body, cfg.apiKey).slice(0, 300)}`,

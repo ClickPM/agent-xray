@@ -114,8 +114,20 @@
 <!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
 - 审查方式:`/codex:review --background --scope branch`(前两轮全量;第 3 轮起 `--base <上一轮已审提交>`)
-- findings 处理:待回填
-- 结论:待回填
+- 审查边界按 CLAUDE.md 带给审查者:只判定缺陷与严重级别,不展开设计方案;非阻塞 findings 只允许最小改动
+- findings 处理:见下表(逐条:核验 → 采纳整改 / 不采纳写明理由)
+- 结论:待第 2 轮复审后回填
+
+### 第 1 轮(2026-09-02,基线 `f0cf072`,全量 branch 范围;2 条 findings,0×P1 · 2×P2)
+
+| # | 级别 | findings | 核验 | 处理 |
+|---|---|---|---|---|
+| 1 | P2 | 迁移 010 的 8 MiB 上界只 CHECK 了元数据列 `byte_size`,不查 BYTEA 本身:一次写错的 INSERT 填 `byte_size = 1` 就能塞进任意大的 `bytes`,而 `agent_image` 正是刻意放给 agent 侧的写面 | **属实**。「就算代码漏了也进不了库」这句在原 CHECK 下不成立 —— 代码那道(`decodeImagePayload` 与 `insertGeneratedImageAsAgent` 传 `bytes.length`)是对的,库那道是摆设 | **采纳**:CHECK 改成 `byte_size > 0 AND byte_size <= 8388608 AND octet_length(bytes) = byte_size`(命名约束 `generated_images_byte_size_check`)。迁移尚未离开本机(不在 main、130、生产),就地改 010 而不是再补一条 011;本机 run / test 两个库 `encore db reset` 后重跑。回归用例:`byte_size = 1` 配真 PNG 进不来、真实字节超上界配如实元数据也进不来、一致且在界内进得来;读 `pg_constraint` 的用例加断言 CHECK 文本含 `octet_length(bytes) = byte_size` |
+| 2 | P2 | `runImageGen` 读非 2xx 错误体时 `readCapped(res).catch(() => "")` 把超时 / 超限吞成空串,再报成 `http_error`:模型拿到「生图失败」而不是「生图超时」的后路指引,日志 kind 也错;4xx 却回超过 16 MiB 的错误体报不出 `oversize` | **属实**。计时器 abort → `reader.read()` 以 AbortError 拒绝 → 被 catch 吞掉 → `abortReason` 永远用不上。**`websearch.ts` 的同款写法有同一个洞**(`readTextCapped(res, resetIdle).catch(() => "")`),跨轮次问题记 BACKLOG,不当场改 | **采纳**:只把「读体本身的普通失败」当空串 —— `ImageGenError`(oversize)与 `AbortError`(计时器 / 外部取消)原样往外抛,外层 catch 照旧把 AbortError 映射成 `abortReason`。回归用例三条:5xx 头 + 挂住的 body → `idle_timeout`;4xx + 17 MiB 错误体 → `oversize`;读错误体期间外部 signal 取消 → `AbortError` |
+
+**codex 推理清单里提到、但未报成 findings 的两处,自查后一并处理**:①`images.ts` 对路径段裸调 `decodeURIComponent`,畸形百分号编码会抛 `URIError` 冒成 500 —— 包 try/catch 回 404(三行,不是新机制);`notes/assets.ts` / `rss.ts` 的同款写法跨轮次,记 BACKLOG。②白名单判 host 不判端口(`https://api.openai.com:8443` 会放行)—— 与搜索白名单的既有口径一致,端口仍是白名单内的那台主机,不改。
+
+整改后:`npx tsc --noEmit` 干净;`dev.ps1 test` **15 文件 / 373 用例全过**(+1);`dev.ps1 check` 通过(本机库 `encore db reset` 后迁移 010 以新 CHECK 重新施加)。
 
 ## 失败处理
 
@@ -126,7 +138,7 @@
 ### 本机门禁(2026-09-02)
 
 - `dev.ps1 check`:通过(迁移 010 施加成功,app 起得来)
-- `dev.ps1 test`:**15 文件 / 372 用例全过**(新增 `imagegen.test.ts` 41 项 + `sandbox` 5 项 + `catalog` 1 项 + `mcp` 11 项;基线 14 文件 / 314 项)
+- `dev.ps1 test`:**15 文件 / 372 用例全过**(新增 `imagegen.test.ts` 41 项 + `sandbox` 5 项 + `catalog` 1 项 + `mcp` 11 项;基线 14 文件 / 314 项);codex 第 1 轮整改后 **373**(+1 条回归用例)
 - `npx tsc --noEmit`:api 与 web 都干净(门禁不跑 tsc,见 BACKLOG)
 - `expose: true` / `sensitive: true` 行数:**17 = 17**(security.md §6 的不变量,新端点两行都在)
 - `git diff --stat apps/web/`:只有 `lib/api-client.ts`(`dev.ps1 gen` 重生成:新 raw 端点 `image` 的包装 + 一段跟着源码走的注释;

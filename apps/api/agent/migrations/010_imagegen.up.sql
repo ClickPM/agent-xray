@@ -98,9 +98,16 @@ CREATE TABLE generated_images (
     content_type TEXT NOT NULL
                  CHECK (content_type IN ('image/png', 'image/jpeg', 'image/webp', 'image/gif')),
     bytes        BYTEA NOT NULL,
-    -- 上界 8 MiB,**必须与 imagegen.ts 的 MAX_IMAGE_BYTES 同值**(测试从 information_schema 读
+    -- 上界 8 MiB,**必须与 imagegen.ts 的 MAX_IMAGE_BYTES 同值**(测试从 pg_constraint 读
     -- 这条 CHECK 比对)。代码那道是「不把大东西读进内存」,这道是「就算代码漏了也进不了库」。
-    byte_size    INT  NOT NULL CHECK (byte_size > 0 AND byte_size <= 8388608),
+    --
+    -- **上界必须查 BYTEA 本身,不能只查元数据列**(codex 初审 P2):只写 `byte_size <= N` 的话,
+    -- 一次写错的 INSERT 可以填 byte_size = 1 却塞进任意大的 bytes,这道闸就形同虚设 ——
+    -- 而 agent_image 正是刻意放给 agent 侧的写面。所以同时钉死 `octet_length(bytes) = byte_size`:
+    -- 元数据要么与真实字节一致,要么整行进不来。
+    byte_size    INT  NOT NULL,
+    CONSTRAINT generated_images_byte_size_check
+        CHECK (byte_size > 0 AND byte_size <= 8388608 AND octet_length(bytes) = byte_size),
     -- 内容的 sha256(hex);供图端点用它做 ETag
     etag         TEXT NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()

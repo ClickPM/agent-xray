@@ -220,6 +220,14 @@
       与 R-TOOLS 的裁定「provider 与 model 名是服务端配置面,公开即泄」不一致。R-IMAGEGEN 的 `generate_image` 已按
       R-TOOLS 口径实现(details 只有 imageId / contentType / bytes,进度文案不带 host / model);websearch 那两处
       是跨轮次问题,不当场改。修法是两行:details 去掉那两个字段、进度文案去掉 hostname 与 model (2026-09-02)
+- [ ] R-IMAGEGEN **`websearch.ts` 读非 2xx 错误体时 `.catch(() => "")` 会吞掉超时 / 超限的 kind**:上游给了个 5xx 的头然后
+      挂住不发 body,空闲计时器掐断后被报成 `http_error`(模型拿到「搜索失败」而不是「搜索超时」的后路指引,日志 kind 也错);
+      4xx 却回超过 4 MiB 的错误体同样报不出 `oversize`。codex 在 R-IMAGEGEN 初审对 `imagegen.ts` 的同款写法报了 P2,
+      生图侧已改成「`WebSearchError` / `AbortError` 原样往外抛,只把读体本身的普通失败当空串」;搜索侧是跨轮次问题,
+      不当场改,修法一行(`imagegen.ts` 的 `readCapped(res).catch(...)` 照抄) (2026-09-02)
+- [ ] R-IMAGEGEN **`notes/assets.ts` 与 `notes/rss.ts` 对路径段裸调 `decodeURIComponent`**,畸形百分号编码(`/notes/x/%zz.webp`)
+      会抛 `URIError` 冒成 500 而不是 404。`agent/images.ts` 新端点已包了 try/catch 回 404;那两处是跨轮次问题,不当场改,
+      修法同款三行 (2026-09-02)
 
 ## 功能提案(需所有者裁定)
 

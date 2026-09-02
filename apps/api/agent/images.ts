@@ -51,7 +51,15 @@ export const image = api.raw(
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean);
     // /agent/images/<uuid>.<ext>
-    const file = decodeURIComponent(parts[2] ?? "");
+    // 畸形的百分号编码(`%zz`)会让 decodeURIComponent 抛 URIError;对本端点它就是「不是一个合法文件名」,
+    // 回 404 而不是让异常冒成 500(自查发现,notes/assets.ts 同款写法留给 BACKLOG)
+    let file: string;
+    try {
+      file = decodeURIComponent(parts[2] ?? "");
+    } catch {
+      notFound(resp);
+      return;
+    }
     const m = FILE_RE.exec(file);
     const wantType = m ? imageTypeOfExtension(m[2]) : null;
     if (!m || !wantType) {

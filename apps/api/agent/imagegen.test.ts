@@ -301,6 +301,8 @@ describe("解码与魔数(不是图片就不存)", () => {
     const m = /<=\s*(\d+)/.exec(sizeCheck!);
     expect(m, sizeCheck).not.toBeNull();
     expect(Number(m![1])).toBe(MAX_IMAGE_BYTES);
+    // 上界必须查 BYTEA 本身(codex 初审 P2):CHECK 里得有 octet_length(bytes) 与 byte_size 的相等约束
+    expect(sizeCheck).toMatch(/octet_length\(bytes\)\s*=\s*byte_size/);
   });
 });
 
@@ -329,6 +331,30 @@ describe("超时与体积上界", () => {
         fetchImpl: fakeFetch(['{"data":[{"b64_json":"'], { neverEnd: true }),
       }),
     ).rejects.toMatchObject({ kind: "idle_timeout" });
+  });
+
+  it("**非 2xx 的错误体读到一半超时 / 超限,kind 不能被吞成 http_error**(codex 初审 P2)", async () => {
+    // 5xx 的头到了,body 挂住:是空闲超时,不是「上游 HTTP 500」
+    await expect(
+      runImageGen("p", cfg({ idleTimeoutMs: 200, totalTimeoutMs: 5_000 }), {
+        fetchImpl: fakeFetch(['{"error":"partial'], { status: 500, neverEnd: true }),
+      }),
+    ).rejects.toMatchObject({ kind: "idle_timeout" });
+    // 4xx 却回一个超过上界的错误体:是 oversize,不是普通 HTTP 错误
+    const chunk = "x".repeat(1024 * 1024);
+    await expect(
+      runImageGen("p", cfg({ idleTimeoutMs: 10_000, totalTimeoutMs: 30_000 }), {
+        fetchImpl: fakeFetch(Array.from({ length: 17 }, () => chunk), { status: 400 }),
+      }),
+    ).rejects.toMatchObject({ kind: "oversize" });
+    // 外部 signal 在读错误体期间取消:仍是 AbortError 原样往外抛(会话被回收的路径)
+    const ac = new AbortController();
+    const p = runImageGen("p", cfg(), {
+      signal: ac.signal,
+      fetchImpl: fakeFetch(['{"error":"partial'], { status: 500, neverEnd: true }),
+    });
+    setTimeout(() => ac.abort(), 50);
+    await expect(p).rejects.toMatchObject({ name: "AbortError" });
   });
 
   it("响应体分块慢慢来,不该被空闲超时误杀(每块都重置)", async () => {
@@ -554,25 +580,25 @@ describe("agent_image 角色 · 写面由 Postgres 限死", () => {
     ).rejects.toThrow();
   });
 
-  it("库级 CHECK:content_type 只收四种、byte_size 有上界", async () => {
-    await expect(
+  it("库级 CHECK:content_type 只收四种;byte_size 必须等于 BYTEA 的真实长度且不超上界", async () => {
+    const insert = (contentType: string, bytes: Buffer, byteSize: number) =>
       db.rawExec(
         `INSERT INTO generated_images (id, session_id, content_type, bytes, byte_size, etag)
-         VALUES (gen_random_uuid(), $1::uuid, 'image/svg+xml', $2, $3, 'e')`,
+         VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, 'e')`,
         sessionId,
-        PNG,
-        PNG.length,
-      ),
-    ).rejects.toThrow();
-    await expect(
-      db.rawExec(
-        `INSERT INTO generated_images (id, session_id, content_type, bytes, byte_size, etag)
-         VALUES (gen_random_uuid(), $1::uuid, 'image/png', $2, $3, 'e')`,
-        sessionId,
-        PNG,
-        MAX_IMAGE_BYTES + 1,
-      ),
-    ).rejects.toThrow();
+        contentType,
+        bytes,
+        byteSize,
+      );
+    await expect(insert("image/svg+xml", PNG, PNG.length)).rejects.toThrow();
+    // 【元数据撒谎进不了库】(codex 初审 P2)只查 byte_size <= N 的话,填 byte_size = 1 就能塞进任意大的 bytes
+    await expect(insert("image/png", PNG, 1)).rejects.toThrow();
+    await expect(insert("image/png", PNG, MAX_IMAGE_BYTES + 1)).rejects.toThrow();
+    // 真实字节超过上界:元数据如实写也进不来 —— 上界查的是 octet_length(bytes) 对得上的那个数
+    const big = Buffer.alloc(MAX_IMAGE_BYTES + 1, 1);
+    await expect(insert("image/png", big, big.length)).rejects.toThrow();
+    // 一致且在界内:进得来
+    await expect(insert("image/png", PNG, PNG.length)).resolves.toBeUndefined();
   });
 });
 
