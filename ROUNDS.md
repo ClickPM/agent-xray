@@ -367,9 +367,17 @@
 - 只读端点(`apps/api/agent/`):吐工具元信息 —— 名称 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态说明 / 分组。
   **端点不得吐**:`execute` 函数、`ActiveWebSearchConfig` 的任何字段(baseUrl / key / model / provider)、
   `dailySearchLimit` 与当日用量、`tool_config` 的 enabled 状态(所有者裁定:公开即泄服务端配置面)。
-- 数据来源要认一件事:`TOOL_REGISTRY` 只有纯函数组三个;`web_search` 由 `makeWebSearchTool(cfg)` 现构造、
-  没配置就不存在,`session_rename` 是按会话闭包绑定的工厂。所以端点**不能**简单遍历注册表,
-  元信息要有一份不依赖配置、不依赖会话的静态来源,且**与工具定义同文件维护**(改 schema 不改展示 = 骗访客)。
+- **派生式,不手工维护目录**(所有者裁定 2026-09-02,针对「每次发版还得顺便处理一下面板」)。
+  数据来源要认一件事:`TOOL_REGISTRY` 只有纯函数组三个;`web_search` 由 `makeWebSearchTool(cfg)` 现构造、
+  没配置就不存在,`session_rename` 是按会话闭包绑定的工厂 —— 但这三条路径里 `name` / `label` /
+  `description` / `parameters` **都是常量**,只有 `execute` 闭包才用到 `cfg` / `ctx`。于是:
+  每个工具一份 **META 常量**(定义由它构造 `{...META, execute}`),端点收集 META 并按白名单序列化。
+  **面板永远不是第二个要改的地方**。
+- 画板上有两样 pi 的 `ToolDefinition` 没有的东西,它们才是会反复要人手补的地方,各给一条出路:
+  **工具分组按注册路径派生**(在哪个注册表里就是哪一组,手写只会写错);
+  **输出形态是 META 的必填字段**,漏写是**编译不过**而不是「面板少一行」—— 拦在写工具那一刻,不是发版前。
+- META 定义在闭包**外面**,`cfg` / `ctx` 在那个作用域里不存在,所以「description 里插进限额数字」
+  这类泄配置面的写法**在结构上做不到**,不靠自觉也不靠 grep。
 - 前端(`apps/web/components/workbench/`):新增 Tools 面板组件 + `Workbench.tsx` 的 tab 数组加第 4 项。
   这是规则 7 允许的结构性改动 —— 依据是设计稿已扩到 12 块(见上方 2026-09-02 修订),不是「顺手加的」。
 - **一条待裁定**:目录是**静态**的(5 个工具全列)。若 `web_search` 未配置或被 `tool_config` 关掉,
