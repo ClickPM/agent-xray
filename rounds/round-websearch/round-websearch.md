@@ -83,8 +83,9 @@
 ## 代码审查
 
 - 审查方式:`/codex:review --background`(changes against `main`;前两轮用全量范围)
-- 结论:三轮共 6 条 findings(3×P1 + 3×P2)**全部采纳整改**;第 4 轮复审待发
-  (按 CLAUDE.md,第 3 轮起范围收到「上一轮整改 diff」)
+- 结论:**整改后 PASS**。四轮共 6 条 findings(3×P1 + 3×P2)**全部核验属实、全部采纳整改**,
+  没有一条以「概率低」「会被替换」为由放行;**第 4 轮零 findings**,缺陷门禁关闭
+  (第 3/4 轮按 CLAUDE.md 收到「上一轮整改 diff」:`--base 0c36322` / `--base 4355cdf`)
 
 ### 第 1 轮(2026-09-01,基线 `4f338e1`)
 
@@ -126,7 +127,16 @@
 **回归用例覆盖三条离开路径**(中途抛 / 读完后抛 / 正常成功),判据是「传给 fetch 的
 `signal` 最终是否 `aborted`」—— 真实 fetch 正是靠它断连接的。`dev.ps1 test` **262 项全过**。
 
-**这一轮的教训比 findings 本身重要**:上一轮我为了修 P1 顺手删了一行 `ctrl.abort()`,
+### 第 4 轮(2026-09-02,`--base 4355cdf`)
+
+**零 findings。** 审查者原文:「The change correctly aborts the internal fetch controller in the
+function's finally block, covering success, upstream failure, timeout, cancellation, and oversize
+paths without altering the public result behavior. TypeScript compilation succeeds, and no
+additional blocking issues were identified.」
+
+(第一次跑到一半被会话中断、无完成记录,重跑一次得到上述结论;两次都是 `--base 4355cdf`。)
+
+**第 3 轮的教训比 findings 本身重要**:上一轮我为了修 P1 顺手删了一行 `ctrl.abort()`,
 并给它编了一个听起来合理、实际错误的理由(「随作用域结束」)。**整改动作本身也会引入缺陷**,
 这正是缺陷门禁要求「有采纳整改就必须再发一轮复审」的原因;把第 3 轮范围收到整改 diff
 恰好让这类回归无处可藏。
