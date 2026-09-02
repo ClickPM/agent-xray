@@ -73,8 +73,23 @@ $hostedServices = "agent,trace,notes,mcp,metrics,about,system"
 # 本函数按 1→2 的顺序逐级升级,能不停 daemon 就不停(daemon 同机与 ticketBookingB2B 共用,
 # 规则 1);真停了会立刻拉回来。
 #
-# 【本函数不碰的一类】以该 worktree 为根目录的 Claude Code 会话进程(claude.exe)本身也占着根目录。
-# 那是你的会话,脚本不替你杀——删不掉时会提示你关掉对应会话窗口再重跑。
+# 【还有一种根本不是占用:路径超过 MAX_PATH(260)】2026-09-02 实测三个 worktree 清理后各剩 3–12 个文件,
+# 全在 apps\api\node_modules\@earendil-works\pi-coding-agent\node_modules\@aws-sdk\...\*.d.ts,
+# 路径 261–269 字符,没有任何进程持句柄——PowerShell 5.1 的 Remove-Item 就是过不了 MAX_PATH。
+# 旧版把这当成「句柄占用」,白白重启了同机共用的 daemon。所以删除一律先走 Remove-DirLongPath
+# (cmd 的 rd /s /q 配 \\?\ 前缀,实测能删),Remove-Item 只是兜底;只有长路径删除也失败才升级到停 daemon。
+#
+# 【本函数不碰的一类】以该 worktree 为根目录的 Claude Code 会话进程(claude.exe 及其子 shell、skill server
+# 的 node)也占着根目录。那是你的会话,脚本不替你杀——删不掉时会提示你先排除路径长度,再用 CCD 的
+# list_sessions 按 cwd 找到那个会话,关掉后重跑。
+
+# 长路径删除:先 rd /s /q + \\?\ 前缀,还在再回落 Remove-Item。
+# rd 的退出码不可信(目录被进程当 cwd 占着时照样回 0,2026-09-02 实测),成败一律看事后 Test-Path。
+function Remove-DirLongPath([string]$dir) {
+    if (Test-Path $dir) { & cmd /c rd /s /q ('\\?\' + $dir) 2>$null | Out-Null }
+    if (Test-Path $dir) { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue }
+}
+
 function Remove-DevWorktree([string]$name, [bool]$force) {
     $path = "$repoRoot\.claude\worktrees\$name"
     if (-not (Test-Path $path)) { Write-Warning "$($name):目录不存在,跳过"; return }
@@ -108,21 +123,24 @@ function Remove-DevWorktree([string]$name, [bool]$force) {
             Stop-Process -Id $h.ProcessId -Force -ErrorAction SilentlyContinue
         }
         Start-Sleep -Milliseconds 300
-        Remove-Item -Recurse -Force $path -ErrorAction SilentlyContinue
+        Remove-DirLongPath $path
     }
 
-    # 第 2 级:还在 = daemon 握着句柄。停掉全部 encore 进程(daemon + 各会话的 mcp run)再删,完事拉回。
+    # 第 2 级:长路径删除也过不去 = 真有句柄(daemon 握着)。停掉全部 encore 进程(daemon + 各会话的
+    # mcp run)再删,完事拉回。纯路径长度问题在上一步就已删干净,不会走到这里。
     if (Test-Path $path) {
-        Write-Host "    仍被占用 -> 停 encore daemon 与全部 encore mcp run(同机共用,会一并重启)"
+        Write-Host "    长路径删除后仍在 -> 停 encore daemon 与全部 encore mcp run(同机共用,会一并重启)"
         Get-Process encore -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Milliseconds 300
-        Remove-Item -Recurse -Force $path -ErrorAction SilentlyContinue
+        Remove-DirLongPath $path
         & $encore daemon | Out-Null
     }
 
     & git -C $repoRoot worktree prune
     if (Test-Path $path) {
-        Write-Warning "$($name):仍删不掉。剩下的占用者多半是以该 worktree 为根目录的 Claude Code 会话(claude.exe);关掉那个会话窗口后重跑本命令。"
+        Write-Warning "$($name):仍删不掉。先排除路径长度,再怀疑会话占用:"
+        Write-Host "    1) 长路径:残留若在 node_modules 深层、路径超过 260 字符,本命令已用 \\?\ 前缀的 rd /s /q 试过;还留着就到 Git Bash 里 rm -rf 该目录(先 find <目录> -type f 看残留在哪)。"
+        Write-Host "    2) 会话占用:残留路径不长、目录已空却 busy,才是以该 worktree 为根目录的 Claude Code 会话(claude.exe 及其子进程)占着——用 CCD 的 list_sessions 按 cwd 找到那个会话,关掉后重跑本命令。"
     } else {
         Write-Host "    已删除"
     }
