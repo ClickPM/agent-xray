@@ -25,6 +25,12 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # Caddyfile 站点地址(R11)。留空 = `:80`,与本项加入前的行为一字不差(130 预发就留空);
+      # 生产填域名(如 kzgai.cloud)→ Caddy 自动签发 TLS 并把 80 跳到 443。
+      # ⚠️ 它和 SITE_ORIGIN 是两件事:这个决定 Caddy **听**什么,那个是 RSS 里写出去的**对外地址**。
+      #    两者必须指向同一个站,否则订阅链接指向一个没在听的端点。
+      - SITE_ADDRESS=${SITE_ADDRESS:-:80}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
