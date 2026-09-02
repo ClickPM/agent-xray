@@ -44,9 +44,9 @@
 | 5 | Docker + Compose 可用,拉镜像走加速 | `docker run hello-world` 成功;daemon.json 配 registry-mirrors | ✅ 2026-08-28 |
 | 6 | deploy 用户可密钥登录并操作 docker | `ssh deploy@106.54.238.52 docker ps` 成功 | ✅ 2026-08-28 |
 | 7 | ICP 备案通过,域名 A 记录解析到服务器 | 备案号下发;`dig <域名>` 指向 106.54.238.52 | ✅ 2026-09-02 备案通过,`苏ICP备2025204887号-2`;解析早于 2026-08-28 生效(`kzgai.cloud`/`www` 境内外 DNS 均指向服务器)。**部署时复核一次 `域名:80` 不再被拦截**(备案前实测是切断) |
-| 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ◐ **访问层已在 2026-09-02 预检中打通并留证**(见下「生产访问层预检」):真域名签发成功(`tls-alpn-01`)、本机 curl 未加 `-k` 通过证书校验、六个安全头齐。⬜ 剩「与应用镜像一起再跑一次」——正式部署用的是 compose 的 `deploy_caddy_data` volume,会重新签一次 |
-| 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ⬜ 待 R9/R10 |
-| 10 | 备案号挂 footer | web footer 显示备案号 | ⬜ 待部署。备案号已到手,填生产 `.env` 的 `ICP_BEIAN=苏ICP备2025204887号-2` 即可(**运行期注入**——`SiteFooter` 用 `await connection()` 把渲染推到请求期,不会被烧进构建产物;130 保持留空)。**公安联网备案另算**,见「所有者 TODO」第 6 条 |
+| 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ✅ **2026-09-02 完成**:预检验过一次(`tls-alpn-01`),正式部署在 compose 的 `deploy_caddy_data` volume 里重新签发,首次 curl 失败(签发中)、第二次 **200**。HTTP/3 也通(修掉 compose 缺 udp 映射的缺陷后) |
+| 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ◐ **13 项已过**(见下「生产部署与上线冒烟」):三 Tab / 七服务端点 / 废弃路由 404 / 安全头 / MCP 三种失败一致 / Tools 目录 / 访客 cookie 带 Secure / 内存 / 日志无真实错误。⬜ **SSE ×2 与限额演练卡在「没有 LLM provider」**——`/agent/ask` 现在回 503,要先经 MCP 写 provider |
+| 10 | 备案号挂 footer | web footer 显示备案号 | ✅ **2026-09-02 线上实测**:`苏ICP备2025204887号-2` 在页面底部,链到 `beian.miit.gov.cn`。运行期注入生效(`SiteFooter` 的 `await connection()` 把渲染推到请求期,没被烧进构建产物)。**公安联网备案另算**,见「所有者 TODO」第 6 条 |
 | 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ◐ **生成与哈希写入已完成**(2026-09-02,所有者本机生成 token、只交哈希);⬜ 剩两项待部署后做:①`XRAY_MCP_TOKEN_PROD` 环境变量与密码管理器留存的确认(所有者);②轮换演练(要 api 起来才验得了 401/200) |
 | 12 | MCP 管理面在生产实连(协议 **2026-07-28**) | `server/discover` 回 `supportedVersions: ["2026-07-28"]` + `serverInfo`,`tools/list` 出 **28** 个工具(R10 留证里的 24 是 R-WEBSEARCH 之前的数,以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准)——请求体形状照 [`rounds/round-10/checklist.md`](../round-10/checklist.md) §9(逐请求四件套缺一样就是 4xx,`_meta` 三键必须在 `params` 里);再经 `.mcp.json` 新增的 `xray-admin-prod` 用 Claude Code 实连一次。**必须早于「写生产 LLM provider」通过**(R6 起无引导密钥,不通则 `/agent/ask` 永远 503);**交接项②的 IP 白名单启用后要复验一次**(白名单先于 token 生效,漏验的表现是 token 明明对却 403) | ⬜ 待部署 |
 
@@ -201,3 +201,58 @@
 - ⚠️ **`CONFIG_ENCRYPTION_KEY` 所有者必须自行备份一份**(`ssh` 上去 `cat ~/deploy/.env` 取)。
   它是 `llm_config` / `websearch_config` 里凭据密文的唯一解开方式;丢了不是「重新生成」而是
   「所有 provider 的 key 都要经 MCP 重写一遍」。轮换 MCP token 时**绝不能顺手把它一起换掉**。
+
+### 2026-09-02 生产部署与上线冒烟(SHA `5bd6ace`)
+
+**所有者裁定跳过 130 预发,直接从 `main` 打包发生产**。前提事实先纠正过一次:130 停在 `7cc17fe`(迁移 7),
+R-WEBSEARCH / R-TITLE / R-TOOLS 三轮**都没上过 130**。但跳过的结论成立,理由比「130 已经跑过」更硬:
+
+- **生产是空库**,`migrate.sh` 从 0 跑到 9 是全新建 schema,不存在「存量数据被迁移改坏」——
+  而那正是预发升级的主要价值(130 那次是 6→7,带 12 条存量会话)
+- 欠着的那几条验收本来就要在生产重跑(M4:检查单在生产重跑才算数)
+- 首发出问题的回滚代价 ≈ 0:没有数据可丢
+
+**执行记录**:
+
+| 步骤 | 结果 |
+|---|---|
+| `dev.ps1 build` | `local/xray-api:5bd6ace` 600MB + `local/xray-web:5bd6ace` 355MB。bun 基座已在本地,没踩「encore 绕过 mirror 直连 Docker Hub 卡几十分钟」那个坑 |
+| `dev.ps1 ship agent-xray-prod-deploy` | **99 秒**(12:58:01 → 12:59:40)。tar 只有 **155.2 MB** —— `docker save` 对两个镜像共享的 bun 基座层做了去重,不是 600+355 的和。远端 load 成功、tar 已自动清理 |
+| 迁移 | 0 → **9**,九个迁移逐个在独立事务内应用。事前核过:9 个迁移**都不含 `CONCURRENTLY`**(含了 `migrate.sh` 会拒绝执行) |
+| `docker compose up -d` | 四个容器全 running,postgres healthy |
+
+**冒烟结果**:
+
+| # | 检查 | 结果 |
+|---|---|---|
+| 1 | 首页 | `https://kzgai.cloud/` **200** |
+| 2 | 三个 Tab | `/` `/notes` `/about` 全 200 |
+| 3 | **备案号挂 footer** | ✅ `苏ICP备2025204887号-2`,链到 `beian.miit.gov.cn`(**验收 10 通过**) |
+| 4 | 安全响应头 | 六个全在(nosniff / Referrer-Policy / X-Frame-Options / CSP frame-ancestors / Permissions-Policy / HSTS `max-age=300`) |
+| 5 | 七个服务各取一端点 | 全部非 404:`/api/agent/sessions` 200 · `/api/agent/tools` 200 · `/api/trace/stream` 400(缺参,非 404)· `/api/notes/series` 200 · `/api/about` 200 · `/rss.xml` 200 · `/api/mcp` 401 |
+| 6 | 废弃路由 | `/api/spike/ask` · `/admin` · `/admin/login` **全 404** |
+| 7 | HTTP 80 | 无响应(外网连不上) |
+| 8 | HTTP/3 | ✅ 修掉一个缺陷后 `HTTP/3 200`,见下 |
+| 9 | MCP 三种失败 | 无 header / 错 token / 畸形 token **响应体完全一致**:`{"jsonrpc":"2.0","id":null,"error":{"code":-32001,"message":"unauthorized"}}` |
+| 10 | Tools 目录 | 5 个工具齐、分三组(`pure` ×3 / `outbound` ×1 / `session` ×1);配置面字段 grep **0 命中** |
+| 11 | 访客 cookie | 建会话响应带 `Set-Cookie: xr_visitor=…; HttpOnly; SameSite=Lax; **Secure**`。`Secure` 只在服务端确认请求经 HTTPS 到达时才加 —— 顺带证明 Caddy 的 proto 转发是对的。**R-VISITOR 欠着的那条在生产验掉了** |
+| 12 | 容器内存 | caddy 11.4M/128M · web 81.9M/384M · api 29.8M/1G · postgres 60.1M/768M,全部远低于上限 |
+| 13 | api 日志 error | 6 条,**全部是本次冒烟自己打的**(1 条 `trace/stream` 无参 400 + 5 条 MCP 未授权),无真实错误 |
+
+**冒烟抓到一个真缺陷(已修,提交 `97fcdec`)**:`docker-compose.yml` 的 caddy 只映射了 `443/tcp`,
+而 Caddy 照样在响应里广告 `Alt-Svc: h3=":443"` —— 浏览器于是去试 QUIC,宿主上 udp/443 却没人听,
+**每个访客首访白等一次超时再回落 TCP**。根因是 compose 的 `"443:443"` 简写**默认只映射 tcp**。
+
+**这个缺陷为什么预检没抓到,值得记一笔**:预检那次是手工 `docker run -p 443:443/udp` 起的容器,
+udp 是我在命令行显式给的;**compose 这条路径直到真正部署才第一次走到**。
+「预检用的启动方式和生产用的不是同一条」——这类差异只能靠跑真实部署路径来消除。
+修复后实测 `HTTP/3 200`,TCP 路径不受影响。
+
+**站点当前是「空壳可用」状态,还差三样(都要 MCP token,见「所有者 TODO」)**:
+
+1. **没有 LLM provider** → `/agent/ask` 会回 503(R6 起没有引导密钥,唯一来源是 `llm_config` 表)。
+   Runtime Tab 能打开、能建会话,但发不出消息
+2. **Notes 是空的** —— 130 上那 13 系列 / 205 章节 / 103 张配图在 130 的库里,生产要经 MCP 重发
+3. **About 是空的**
+
+**验收 11 / 12(MCP token 留存与实连)与限额演练同样卡在这里** —— 都要 `XRAY_MCP_TOKEN_PROD` 就位、会话重启之后才能做。
