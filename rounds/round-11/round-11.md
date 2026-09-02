@@ -44,7 +44,7 @@
 | 5 | Docker + Compose 可用,拉镜像走加速 | `docker run hello-world` 成功;daemon.json 配 registry-mirrors | ✅ 2026-08-28 |
 | 6 | deploy 用户可密钥登录并操作 docker | `ssh deploy@106.54.238.52 docker ps` 成功 | ✅ 2026-08-28 |
 | 7 | ICP 备案通过,域名 A 记录解析到服务器 | 备案号下发;`dig <域名>` 指向 106.54.238.52 | ✅ 2026-09-02 备案通过,`苏ICP备2025204887号-2`;解析早于 2026-08-28 生效(`kzgai.cloud`/`www` 境内外 DNS 均指向服务器)。**部署时复核一次 `域名:80` 不再被拦截**(备案前实测是切断) |
-| 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ⬜ 待部署。**Caddyfile 要从 `:80` 改成域名**——130 与生产共用一份文件,改法见下「2026-09-02 裁定」第 5 条 |
+| 8 | Caddy 自动 TLS,HTTPS 可访问 | 备案后放开 80/443,证书自动签发 | ◐ **访问层已在 2026-09-02 预检中打通并留证**(见下「生产访问层预检」):真域名签发成功(`tls-alpn-01`)、本机 curl 未加 `-k` 通过证书校验、六个安全头齐。⬜ 剩「与应用镜像一起再跑一次」——正式部署用的是 compose 的 `deploy_caddy_data` volume,会重新签一次 |
 | 9 | 生产 compose 全链路冒烟 | 三 Tab + SSE ×2 + 限额,按 R9 预发同口径(**R6 起无 `/admin`**,管理面走 MCP,见 11/12) | ⬜ 待 R9/R10 |
 | 10 | 备案号挂 footer | web footer 显示备案号 | ⬜ 待部署。备案号已到手,填生产 `.env` 的 `ICP_BEIAN=苏ICP备2025204887号-2` 即可(**运行期注入**——`SiteFooter` 用 `await connection()` 把渲染推到请求期,不会被烧进构建产物;130 保持留空)。**公安联网备案另算**,见「所有者 TODO」第 6 条 |
 | 11 | 生产 MCP token 已生成并留存,轮换路径验过 | **部署前**:按 `deploy/.env.example` 的 CSPRNG 口径生成一对,哈希进生产 `~/deploy/.env` 的 `MCP_AUTH_TOKEN_HASH`、原文进密码管理器 + 本机用户级 `XRAY_MCP_TOKEN_PROD`,**不复用 130 那把**(一把 token 只开一扇门)。轮换演练一次:改哈希 → `docker compose up -d api` **重建容器**(env 变了 `restart` 不生效)→ 旧 token 401 / 新 token 通,全程**不动** `CONFIG_ENCRYPTION_KEY` | ⬜ 待部署 |
@@ -88,9 +88,14 @@
    **别忘了 BACKLOG 里那条**:`audit.ts` 的 `remoteOf` 取 XFF 第一段可被写入方伪造,当前靠 Caddy 覆盖 XFF 挡住 ——
    白名单不启用意味着这层保护在生产也只剩 Caddy 那一道,给 Caddy 配 `trusted_proxies` 或前面再加一层代理时会失效。
 
-5. **Caddyfile 的域名化**(实现细节,尚未落地):130 用 `:80`、生产用 `kzgai.cloud`,两边共用一份部署资产。
-   建议用 Caddy 的环境变量占位 `{$SITE_ADDRESS::80}` —— 130 不填保持 `:80`,生产在 `.env` 里填域名,
-   比维护两份 Caddyfile 干净。**改完要在 130 上先验一次**(不填变量时行为不变),再用于生产。
+5. **Caddyfile 的域名化** ✅ **已落地**(提交 `c9e24b3`):130 用 `:80`、生产用 `kzgai.cloud`,两边共用一份部署资产。
+   用 Caddy 的环境变量占位 `{$SITE_ADDRESS::80}` —— 130 不填保持 `:80`,生产在 `.env` 里填域名。
+   「不填变量时行为不变」已在**本机 caddy 容器**回归实测(仍监听 `:80`、照常服务、5 个头齐、无 HSTS);
+   130 上的实跑并进那次预发升级。
+
+**同日追加的第六条要求**(所有者 2026-09-02,在五条之后提出):**生产只走 HTTPS,80 端口开着但不能有响应**。
+   落点是全局 `auto_https disable_redirects` —— 不加它的话,站点地址填域名会让 Caddy 自动在 80 上起 308 跳转,
+   那就是「有响应」。实现、代价与实测见下「生产访问层预检」。
 
 ## 禁止
 
