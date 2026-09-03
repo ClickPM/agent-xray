@@ -28,6 +28,8 @@
 export const SITE_TABS = [
   { key: "runtime", label: "Runtime 工作台", path: "/" },
   { key: "notes", label: "Notes 研习库", path: "/notes" },
+  // R-SKILLS(2026-09-03):第四个 tab,插在 notes 与 about 之间(画板 2f 的四格导航条顺序)
+  { key: "skills", label: "Skills 技能库", path: "/skills" },
   { key: "about", label: "About", path: "/about" },
 ] as const;
 

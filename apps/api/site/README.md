@@ -9,6 +9,7 @@
 - **只回呈现与否**。字样、href、路由匹配规则都在前端的 `apps/web/lib/tabs.ts`
   (设计稿画板 1a 的导航条),不由 API 下发 —— CLAUDE.md 规则 7:接后端只换数据源。
 - tab 的闭集在 `apps/api/shared/site-tabs.ts`,读写两面共用。库里出现登记表之外的 key 一律丢弃。
+  R-SKILLS(2026-09-03)起是四格:`runtime / notes / skills / about`;新增一个 tab 仍按那份文件头的「三处登记」走。
 
 ## 「隐藏」到底藏掉什么(所有者裁定 2026-09-03)
 
@@ -16,7 +17,7 @@
 
 | 藏掉的 | 没藏的 |
 |---|---|
-| 导航条上那一格不渲染 | `/agent/*`、`/trace/*`、`/notes/*`、`/rss.xml` 等后端端点**照常服务** |
+| 导航条上那一格不渲染 | `/agent/*`、`/trace/*`、`/notes/*`、`/skills/*`、`/rss.xml` 等后端端点**照常服务** |
 | web 侧该 tab 的页面不可达(404;`runtime` 因为落在站点根路径上,改为 307 到第一个可见 tab) | `GET /site/tabs` 自己(它必须可读,否则前端无从知道该藏谁) |
 
 想让 agent 真的停下来,现成的通路是 `tool_config_set` 关工具、删掉默认 LLM provider,

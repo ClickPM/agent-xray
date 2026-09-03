@@ -25,6 +25,14 @@ const nextConfig: NextConfig = {
         source: "/notes/:series/:file(.+\\.(?:webp|png|jpe?g|gif))",
         destination: "http://127.0.0.1:4000/assets/notes/:series/:file",
       },
+      // Skills 的 zip 下载(R-SKILLS):对外 /skills/<name>.zip,api 侧 /assets/skills/<name>.zip
+      // (Encore 路由里 /skills/:file 会与详情页的 /skills/:name 撞车)。同样按扩展名匹配:
+      // 详情页地址 /skills/<name> 不带扩展名,动态路由 /skills/[name] 不受影响。
+      // 生产侧由 deploy/Caddyfile 做同样的扩展名分流。
+      {
+        source: "/skills/:file([a-z0-9-]+\\.zip)",
+        destination: "http://127.0.0.1:4000/assets/skills/:file",
+      },
     ];
   },
 };

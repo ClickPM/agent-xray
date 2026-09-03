@@ -916,12 +916,13 @@ describe("imagegen 管理 tool 的入参 schema", () => {
     return z.object(t!.config.inputSchema!);
   };
 
-  it("四个 imagegen tool 都注册了;总数 34", () => {
+  it("四个 imagegen tool 都注册了;总数 42", () => {
     for (const name of ["imagegen_providers_list", "imagegen_provider_upsert", "imagegen_set_default", "imagegen_provider_delete"]) {
       expect(registered.map((r) => r.name)).toContain(name);
     }
-    // 总数是一道「别不小心多注册一个管理面工具」的闸,加工具时**要**改这个数字(R-TABS:32 → 34)
-    expect(registered).toHaveLength(34);
+    // 总数是一道「别不小心多注册一个管理面工具」的闸,加工具时**要**改这个数字
+    // (R-TABS:32 → 34;R-SKILLS:34 → 42,分类三个 + skill 五个)
+    expect(registered).toHaveLength(42);
   });
 
   it("baseUrl 被拒时给出能行动的理由;搜索白名单里的域在这里也被拒", () => {
@@ -987,11 +988,11 @@ describe("顶部导航 tab 呈现开关(mcp/store,R-TABS)", () => {
 
   it("隐藏一个 tab:读回是 false,回执里的 visibleTabs 少了它", async () => {
     const r = await store.setSiteTab({ key: "runtime", visible: false });
-    expect(r.visibleKeys).toEqual(["notes", "about"]);
+    expect(r.visibleKeys).toEqual(["notes", "skills", "about"]);
     const tabs = await store.listSiteTabs();
     expect(tabs.find((t) => t.key === "runtime")?.visible).toBe(false);
-    // 只动被点名的那一个
-    expect(tabs.filter((t) => t.visible).map((t) => t.key)).toEqual(["notes", "about"]);
+    // 只动被点名的那一个(R-SKILLS 起登记表是四格)
+    expect(tabs.filter((t) => t.visible).map((t) => t.key)).toEqual(["notes", "skills", "about"]);
   });
 
   it("从没配置过的 tab 也能直接设(缺行时是 created,不是报错)", async () => {
@@ -1010,6 +1011,7 @@ describe("顶部导航 tab 呈现开关(mcp/store,R-TABS)", () => {
   it("**拒绝关掉最后一个可见的 tab**,且那一行不会被改动", async () => {
     await store.setSiteTab({ key: "runtime", visible: false });
     await store.setSiteTab({ key: "notes", visible: false });
+    await store.setSiteTab({ key: "skills", visible: false });
     await expect(store.setSiteTab({ key: "about", visible: false })).rejects.toThrow(store.ConflictError);
     // 事务回滚:about 仍然可见,站点上还有入口
     expect((await store.listSiteTabs()).filter((t) => t.visible).map((t) => t.key)).toEqual(["about"]);
@@ -1019,6 +1021,7 @@ describe("顶部导航 tab 呈现开关(mcp/store,R-TABS)", () => {
     await db.rawExec(`INSERT INTO site_tab_config (key, visible) VALUES ('admin', TRUE)`);
     await store.setSiteTab({ key: "runtime", visible: false });
     await store.setSiteTab({ key: "notes", visible: false });
+    await store.setSiteTab({ key: "skills", visible: false });
     // 若把 'admin' 也数进去,这一句会「成功」,站点上却一个 tab 都不剩
     await expect(store.setSiteTab({ key: "about", visible: false })).rejects.toThrow(store.ConflictError);
   });

@@ -9,7 +9,7 @@
 // key 与后端 `apps/api/shared/site-tabs.ts` 的登记表一字不差。新增 tab 时两边
 // 都要加(后端还要一条迁移种子),漏了后端的表现是「关不掉」,漏了这里是「压根不显示」。
 
-export type TabKey = "runtime" | "notes" | "about";
+export type TabKey = "runtime" | "notes" | "skills" | "about";
 
 export interface TabDef {
   key: TabKey;
@@ -23,5 +23,7 @@ export interface TabDef {
 export const TABS: readonly TabDef[] = [
   { key: "runtime", label: "Runtime", href: "/", match: (p) => p === "/" },
   { key: "notes", label: "Notes", href: "/notes", match: (p) => p.startsWith("/notes") },
+  // R-SKILLS(2026-09-03):第四格,画板 2f 的导航条顺序 Runtime · Notes · Skills · About
+  { key: "skills", label: "Skills", href: "/skills", match: (p) => p.startsWith("/skills") },
   { key: "about", label: "About", href: "/about", match: (p) => p.startsWith("/about") },
 ];
