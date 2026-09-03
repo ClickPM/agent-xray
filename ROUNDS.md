@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01、2026-09-02 三次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1g + 2a–2e(共 12 块)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01、2026-09-02 三次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1g + 2a–2h(共 15 块;2f–2h 于 2026-09-03 新增,见第六次修订)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 >
 > **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
 > 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
@@ -52,6 +52,14 @@
 > 有需要时先在 130 发版验证,不是发生产的强制前置,130 与生产的 SHA 允许不一致(当前 130 停在 `7cc17fe` / 迁移 7);
 > ③**生产 JS 运行时 = bun、MCP 管理面协议 = 2026-07-28 是强制要求**(CLAUDE.md 规则 12):后续迭代若可能使二者之一不再满足,
 > 必须提前向所有者做风险告知,不得自行降级。
+>
+> **2026-09-03 第六次修订(R-SKILLS)**:所有者裁定新增**第四个顶部 tab「Skills」技能库**——分享自己写的与精选的第三方 skill
+> (Claude Code / Codex 通用的 `SKILL.md` 目录包)。与 R-TOOLS 同一顺序,**不是**规则 8 的例外:设计稿先扩到 **15 块**
+> (新增 `2f` 首页 / `2g` 详情页 SKILL.md 预览态 / `2h` 详情页 Python 文件预览态;既有 12 块画板的导航条同步改四格;原型加 Skills 两屏),
+> 并入 `design/` **之后**才有这一轮。形态由所有者在设计前逐项裁定:**列表 + 详情页**;访客拿走的方式 = **复制安装命令 + GitHub 外链 + 站内 zip**;
+> **按用途分类**(与 Notes 首页同构);收录 **自研 + 精选第三方**(卡片带出处与徽标);详情页必须**看得到目录树、能逐文件预览**(markdown 渲染、代码带行号)。
+> 整个 tab **只读**:无搜索 / 筛选、无点赞评论、不显示安装量、无 RSS。内容经 MCP 整包发布(与 notes 同一读写分工),
+> 文件一律当文本渲染、`.py` 永不执行,agent 侧本轮**不可读**(是否给 agent 加只读工具记 BACKLOG 待裁定)。
 
 ## 进度表
 
@@ -77,6 +85,7 @@
 | **R-IMAGEGEN** | agent 生图工具(`generate_image`:单工具 · provider 的 `api_style` 分两种协议 · 图片存库按访客归属供图 · 对话框 markdown 预览 · MCP 四个 `imagegen_*`) | ✅ 已完成并合并 `main`([任务卡](rounds/round-imagegen/round-imagegen.md));17 项验收 16 过、#17 外呼半边交接生产配好 provider 后跑(本机无凭据;前端半边已用种子数据实跑:对话框渲染出图、无 cookie 404);codex 三轮共 3 条 findings(0×P1 · 3×P2)**全部采纳整改**,第 3 轮零 findings,缺陷门禁 PASS;`dev.ps1 test` 15 文件 373 用例。**所有者裁定与后续更新一起发生产** —— 已于 2026-09-02 随 SHA `b291eb1` 上生产(迁移 v9→v10;生产 `.env` 已补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api)。**`generate_image` 已于 2026-09-02 在生产配好 provider 并打开**(`imagegen_provider_upsert` 经 MCP 写入、key 只贴进调用不落盘,`tool_config_set` 开;`.env` 补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api),验收 #17 外呼半边生产实跑通过(约 72s 出图、PNG 落 `generated_images`、对话框正常渲染);此后 6 个工具全开,发布细节见 `docs/releases.md` | 2026-09-02 |
 
 | **R-TABS** | 顶部导航 tab 的呈现开关(MCP 逐个开关三个 tab 露不露;隐藏 = 导航条不渲染 + 页面不可达,后端端点照常) | ✅ 已完成([任务卡](rounds/round-tabs/round-tabs.md));11 项验收全过,`dev.ps1 test` 16 文件 388 用例;真实 MCP 协议路径本机实跑通过(34 工具、enum 下发、拒未知 key、拒关最后一个可见 tab)。codex 首轮**零 findings**,缺陷门禁 PASS。**所有者裁定边界只到呈现层**,不碰任何后端端点。待发预发/生产(迁移 v10→v11) | 2026-09-03 |
+| **R-SKILLS** | Skills 技能库 tab(第四个顶部 tab:按用途分类的 skill 卡片 → 详情页目录树 + 逐文件预览(markdown / 代码带行号)+ 复制安装命令 / GitHub 外链 / 站内 zip;内容经 MCP 整包发布) | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills.md));设计稿 `2f–2h` 已于 2026-09-03 并入 `design/`(15 块,三方合并、本地动画/进度线优化保留);ROUNDS / CLAUDE.md / security / architecture 已按规则 9「先改文档」写入约束;四条裁定已落(2026-09-03:zip = `fflate`、第三方 LICENSE 与仓库链接**非必填**、仓库名按 skill 逐个必填、高亮按画板做三 token),文档已合并 `main`,待另开 session 开工 | — |
 
 ## 里程碑
 
@@ -460,6 +469,27 @@
   等头不受空闲超时约束 · 两道字节上界 · 不是图片就不存 · 凭据不外泄 · 限额原子 · 未配不注册 · 指纹变化 ·
   `agent_image` 写面限死 · 按归属供图 · 目录对齐 · MCP 四 tool · 前端零改动 · **本机实跑对话框里看得到图**(需所有者凭据)
 - **止损**:回退成本是一条迁移(纯追加)+ 一个工具;真出问题时 `tool_config_set generate_image enabled=false` 当场停用,不需要发版
+
+### R-SKILLS — Skills 技能库 tab(命名轮;所有者裁定 2026-09-03;文档就绪、未开工)
+
+> 投产后的第二个功能轮(第一个是 R-IMAGEGEN)。所有者裁定「先写全文档、不写代码」,任务卡见 [`rounds/round-skills/round-skills.md`](rounds/round-skills/round-skills.md)。
+> 与 R-TOOLS 同一顺序:设计稿**先**扩到 15 块(`2f–2h`,2026-09-03 并入 `design/`),**再**进轮次,不是规则 8 的例外。
+
+**问题**:所有者日常 agent 开发里攒了一批反复用的 skill(自己写的 + 精选的第三方),站点没有地方分享它们;
+读者想用,得先知道它长什么样(目录里有什么、SKILL.md 怎么写、脚本做什么),再一条命令装进自己的 Claude Code / Codex。
+
+**形态裁定**(所有者在设计前逐项答复,直接决定画板):
+- **列表 + 详情页**:`/skills` 按用途四分类的卡片(与 Notes 首页同构:分类表 + 色点 + 网格;卡片 = 等宽 skill 名 + 「自研 / 精选」徽标 + 一句话 + 出处与文件数);`/skills/<name>` 详情。
+- **详情页 = 头部 + 「左目录树 / 右文件预览」**:头部有面包屑、等宽大标题、`GitHub ↗` 与 `下载 zip` 两枚 ghost 按钮、`INSTALL` 面板(一行 `npx skills add <owner>/<repo> --skill <name>` + copy);
+  左栏 240px 粘性目录树(选中行 `#e8e8e8` + 字重 600;当前文件是 markdown 时下面多一块「本页目录」),右栏预览卡(头部条 = 路径 · 类型 · 大小 · 行数 · copy;markdown → frontmatter 键值块 + 既有 2c 排版;代码 → 行号列 + 三 token 高亮)。默认打开 `SKILL.md`,`?file=` 深链。
+- **访客拿走的三条路**:复制安装命令、GitHub 外链、站内 zip(服务端从库内文件现打,对外 URL `/skills/<name>.zip`,API 侧 `/assets/skills/…`,Caddy / next dev 按 `.zip` 扩展名分流——与 notes 配图同一手法)。
+- **内容经 MCP 整包发布**:八个 `skills_*` 工具(分类三个 + skill 五个),`skills_upsert` 收 `files[{path, content}]` 整包替换;只收文本、限 64 文件 / 单文件 256 KB / 整包 512 KB、路径规则、`SKILL.md` 必填且 frontmatter `name` 与 skill 名一致。
+- **三处登记**(R-TABS 定下的):`shared/site-tabs.ts` + 迁移种子 + `web/lib/tabs.ts`;`GlobalNav` 零改动、既有三 tab 页面零改动(规则 7)。
+- **安全口径**(已按规则 9 写进 `docs/security.md` §1 第 2 层 / §4 补记):文件当文本渲染、不执行、不收二进制、不做 markdown 改写;新表不授权任何 agent 角色;zip 响应 `nosniff` + `attachment`;`repoUrl` http(s) 两道校验。
+
+- 验收(14 项,细则在任务卡):①`check` + `test` 全绿;②三处登记一致、enum 下发四值;③写面十二种非法输入逐条拒;④幂等;⑤级联删除与分类保护;⑥读面顺序 / 404;⑦zip 两条路径都通且解压回读一致;⑧⑨画板 2f / 2g / 2h 逐项对照(含 `?file=` 与两处 copy);⑩呈现开关藏 / 露;⑪安全(脚本注入只是文本、`javascript:` 拒、`agent_ro` 读新表被拒);⑫镜像白名单含 `skills`;⑬真实 MCP 协议路径发布仓库自带的 `encore-api` 全链路;⑭gen client
+- **所有者裁定四条(2026-09-03)**:zip 库 = `fflate`;第三方 skill 的 `LICENSE` 与仓库链接 `repoUrl` **均非必填**(写面不拦,`repoUrl` 空时 GitHub 按钮与出处链接不渲染,与 About `originUrl` 同一口径;许可合规由所有者收录时自行把关);仓库名不设全局默认,`repo` 是每个 skill 发布时的必填字段(画板里 `ClickPM/agent-skills` 只是示例数据);代码高亮按画板做三 token
+- **止损**:回退 = 删两个目录 + 登记表两行 + 两条路由 + 一条 `DROP` 迁移;临时下架只需 `site_tab_set{skills,false}`
 
 ## 轮次外事项
 

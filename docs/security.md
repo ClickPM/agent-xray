@@ -123,6 +123,12 @@ R-IMAGEGEN 补记(2026-09-02,所有者裁定;`apps/api/agent/image-db.ts` + 迁�
 - 外键 `generated_images.session_id → sessions(id)` 的检查由 Postgres 以**被引用表所有者**的身份执行,`agent_image` 不需要、也没有 `sessions` 的 SELECT(测试钉住:以该角色 `SELECT sessions` 是 `permission denied`,INSERT 却能通过外键检查)
 - 上面那句「即使 prompt injection 完全操纵了工具调用,能做的也只有…」从本轮起多一件:往**自己这个会话**里追加一张图(受每日次数限额)。它做不到往别的会话追加(会话 id 不是入参)、做不到读回或删除任何图
 
+R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」——本轮尚未写代码,以下是约束不是现状):
+
+- Skills 技能库的三张表 `skills_categories` / `skills` / `skill_files`(迁移 `012`)**不授权任何 agent 角色**:`agent_ro` / `agent_title` / `agent_image` 对它们一律无权限。迁移 006 刻意没设 `ALTER DEFAULT PRIVILEGES`,所以那份迁移里**不写 GRANT 就是全部答案**;`sandbox.test.ts` 加断言钉住「以 `agent_ro` 读 skills 三表 → `permission denied`」
+- 于是「即使 prompt injection 完全操纵了工具调用,能做的也只有…」这句**本轮不变长**:skills 内容对 agent 不可见。要给 agent 一个 `skills_*` 只读工具属新功能,先记 BACKLOG 等裁定;届时按本层既定口径——在那次迁移里显式 `GRANT SELECT`、走 `agent_ro` 的 `READ ONLY` 事务
+- 读面(`apps/api/skills/`)用全权连接但**只读**(不建表、不写库),写面在 mcp;两个面互不触碰(§4)
+
 ### 第 3 层 · 容器隔离
 
 - Encore+pi 进程跑在容器内:非 root 用户、`read_only: true` 根文件系统(仅 tmpfs 可写)、不挂 docker.sock、不挂宿主目录
@@ -210,6 +216,14 @@ R6 落地补记(2026-08-31):
 - **带 `Origin` 头的请求一律 403**。规范要求校验 Origin 防 DNS rebinding;管理面没有浏览器客户端(所有者用的是 Claude Code 这类进程内客户端,它们不发 Origin),所以「有 Origin 就拒」比维护一份随环境漂移的域名白名单更严也更省。将来真要接浏览器客户端,改成白名单并同步本条
 - **`subscriptions/listen` 显式关闭**(`maxSubscriptions: 0`)。它是 SDK 自带的,而 Claude Code 一连上来就会调(实测抓包)。开着等于在管理端点上留长连 SSE,而 Encore 网关**不把客户端断开传导进来**(见 `apps/api/trace/README.md`),那些流没有东西能收尾。管理面本无订阅需求
 - **附件是可执行文档的入口**:上传只接受 webp/png/jpeg/gif,**SVG 永不接受**(同源下的存储型 XSS);扩展名、`contentType`、文件头魔数三者必须一致;供图响应带 `X-Content-Type-Options: nosniff`
+
+R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」——约束先于代码):
+
+- **skill 是一包文件,而文件是访客可见、可下载的内容面**,口径与「附件是可执行文档的入口」同一条线:`skills_upsert` **只收文本**(UTF-8、无 NUL;`kind` 由扩展名派生且是闭集 `markdown / python / shell / typescript / javascript / json / yaml / toml / text`),**不收二进制**,SVG 之类当然也进不来(它不是文本 kind);上限 64 个文件、单文件 256 KB、整包 512 KB;`path` 相对、无 `..`、不以 `/` 开头、段字符集 `[A-Za-z0-9._-]`、深度 ≤ 4——路径会进目录树与 zip 条目名,不收就是防路径穿越
+- **文件永远只是文本**:前端把内容当字符串交给 React(转义)与既有 `components/Markdown`(与 Notes 同一份,不开 raw HTML);`.py` / `.sh` / `.ts` 在服务端与前端**都不执行、不 import、不进 in-process 进程**——这与规则 9 的「bash / write / 任意代码执行类工具永久禁止」是同一条红线,只是入口换成了内容面
+- **zip 由服务端从库内 `skill_files` 打包**(写入时打好存 `skills.zip`,读面只吐字节),不落盘、不读文件系统;响应 `Content-Type: application/zip` + `Content-Disposition: attachment; filename="<name>.zip"` + `X-Content-Type-Options: nosniff`;条目名就是校验过的 `path`,不会有绝对路径或 `..`
+- `repo_url` 会进 `<a href>`:写面只收 http(s)(与 About `originUrl` 的 `isHttpUrl` 同一口径),前端再过一次 `safeExternal`(库是可以绕过 tool 直接改的)。安装命令由 `repo` + `name` 派生,两者都受正则约束,不接受任意字符串进 `npx skills add …` 那一行
+- 第三方 skill 的全文预览与 zip 是**再分发**:所有者 2026-09-03 裁定 `LICENSE` 文件与 `repo_url` **均非必填**——写面不拦,许可合规由所有者在收录时自行把关(只收允许再分发的包);`repo_url` 有值时仍走上一条的两道校验,为空时前端不渲染外链
 
 ## 5. 服务器基线(境内轻量服务器)
 
