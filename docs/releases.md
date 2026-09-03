@@ -32,14 +32,14 @@ healthy、`/health` 200,没有任何一处会报错。
 
 ### 首批 skill 内容(2026-09-03,`789007e` 发版当日)
 
-18 个,分三类出处;**发布前逐个看 LICENSE**:
+19 个,分三类出处;**发布前逐个看 LICENSE**:
 
 | 出处 | skill | 判据 |
 |---|---|---|
 | `encoredev/skills`(curated) | encore-api / auth / database / frontend / secret / service / testing / code-review | `.claude/skills-lock.json` 记的 source |
 | `anthropics/skills`(curated) | skill-creator | 该 skill 目录内是 **Apache 2.0** |
 | `kepano/obsidian-skills`(curated) | obsidian-bases | 与上游**逐字节一致**,不重复托管 |
-| `ClickPM/skills-hub`(own) | defuddle · obsidian-markdown · obsidian-cli(三个改自 `kepano/obsidian-skills`,MIT)· diagram · wiki-init / compile / lint / query | 所有者裁定:没有公开出处的自研 skill 新建 `skills-hub` 公开仓库承接,再挂它 |
+| `ClickPM/skills-hub`(own) | defuddle · obsidian-markdown · obsidian-cli(三个改自 `kepano/obsidian-skills`,MIT)· diagram · ppt-master(文档面精简包)· wiki-init / compile / lint / query | 所有者裁定:没有公开出处的自研 skill 新建 `skills-hub` 公开仓库承接,再挂它 |
 
 **「来自官方仓库」要逐文件比对,别信记忆**(2026-09-03 实测):所有者说 `defuddle` / `obsidian-markdown` /
 `obsidian-bases` 三个都来自 Obsidian 官方的 [`kepano/obsidian-skills`](https://github.com/kepano/obsidian-skills)(MIT)。
@@ -58,7 +58,16 @@ healthy、`/health` 200,没有任何一处会报错。
   *Distribute, sublicense, or transfer these materials to any third party* 与 *retain copies outside the Services*。
   站点托管副本 + 提供 zip 下载正是这两条禁止的行为,**不发**。(这三个在 `anthropics/skills` 公开仓库里也有,
   但「仓库公开」不等于「许可允许再分发」,判据是 skill 目录内的 LICENSE,不是仓库可见性。)
-- `ppt-master` —— 158 个可收文件 / 1.9 MB,超平台 64 文件与 512 KB 上限,整包发不进去。
+- `ppt-master` —— 整包发不进去(158 个可收文件 / 1.9 MB,超 64 文件与 512 KB 上限;更根本的是
+  `templates/icons` 的 11,820 个 **SVG 在闭集之外,提上限也进不来**)。所有者裁定发**文档面精简包**
+  (`SKILL.md` + `references` + `workflows` + `.env.example` + `requirements.txt`,23 文件 / 296 KB),
+  完整版指向 GitHub。**推公开仓库前拦下一件事**:`templates/layouts/` 里 22 个版式有 12 个是具名机构
+  (`variflight` 含公司 logo 位图与「复刻自公司内部 PPT」的 design_spec、`招商银行`、`中国电建`×2、
+  `中汽研`×3、`china_telecom_template`、`重庆大学`、`mckinsey`、`anthropic`、`google_style`)——
+  所有者裁定 **`templates/` 整个不推**。
+  **这条差点漏掉的原因值得记**:此前那遍「个人信息扫描」用的是 `grep -E "variFlight|VariFlight"`,
+  **大小写敏感**,而目录名是全小写 `variflight`,中文机构名更是从没进过 pattern。
+  扫公开前的资产要 `grep -i` 并把**目录名**也纳入(`find`),只扫文件内容会漏。
 - `okf-visualizer` —— 86% 体积是第三方 `vendor/force-graph.min.js`,而它的许可文件叫
   `force-graph.LICENSE`(不是 `LICENSE`)会被扩展名闭集剔掉;所有者裁定不发。
 
