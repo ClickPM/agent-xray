@@ -87,10 +87,9 @@ healthy、`/health` 200,没有任何一处会报错。
 本机实测结论、工作文档示例)。**照「上游原版」发会把本机改动当上游内容发出去,照「自研」发又抹掉上游署名** ——
 两种错法都靠这次 diff 才拦住。改动版按所有者裁定发,包内带上游 `LICENSE` 与 `## Attribution` 段(MIT 要求)。
 
-**公开前要洗的不止路径**:这批里洗掉了绝对路径(`D:/…/.claude/skills/diagram/scripts`)、vault 名
-(`VariFlightWork`)、私有 vault 统计(2710 files / 1669 orphans 这类)、公司文档标题当示例
-(`[[#5.1 客户端标识与路由维度]]`)、「本机实测」措辞。仓库那边还把首个提交的 author 邮箱从个人 gmail
-改成 GitHub noreply 后 force-push(公开仓库的 commit 元信息也是个人信息)。
+**公开前要洗的不止路径**:这批里洗掉了绝对路径(`D:/…/.claude/skills/diagram/scripts`)、vault 名、
+私有 vault 统计(2710 files / 1669 orphans 这类)、拿内部文档章节标题当示例的行、「本机实测」措辞。
+仓库那边还把首个提交的 author 邮箱从个人 gmail 改成 GitHub noreply 后 force-push(公开仓库的 commit 元信息也是个人信息)。
 
 **没发的四个,理由要记住**:
 
@@ -101,12 +100,11 @@ healthy、`/health` 200,没有任何一处会报错。
 - `ppt-master` —— 整包发不进去(158 个可收文件 / 1.9 MB,超 64 文件与 512 KB 上限;更根本的是
   `templates/icons` 的 11,820 个 **SVG 在闭集之外,提上限也进不来**)。所有者裁定发**文档面精简包**
   (`SKILL.md` + `references` + `workflows` + `.env.example` + `requirements.txt`,23 文件 / 296 KB),
-  完整版指向 GitHub。**推公开仓库前拦下一件事**:`templates/layouts/` 里 22 个版式有 12 个是具名机构
-  (`variflight` 含公司 logo 位图与「复刻自公司内部 PPT」的 design_spec、`招商银行`、`中国电建`×2、
-  `中汽研`×3、`china_telecom_template`、`重庆大学`、`mckinsey`、`anthropic`、`google_style`)——
+  完整版指向 GitHub。**推公开仓库前拦下一件事**:`templates/layouts/` 里 22 个版式有 12 个带具名机构的品牌资产
+  (雇主的 logo 位图 + 写明「复刻自内部材料」的 design_spec、几家国内企业与高校、几家外企风格版式)——
   所有者裁定 **`templates/` 整个不推**。
-  **这条差点漏掉的原因值得记**:此前那遍「个人信息扫描」用的是 `grep -E "variFlight|VariFlight"`,
-  **大小写敏感**,而目录名是全小写 `variflight`,中文机构名更是从没进过 pattern。
+  **这条差点漏掉的原因值得记**:此前那遍「个人信息扫描」的 pattern 是**大小写敏感**的雇主名两种写法,
+  而目录名用的是全小写的同一个词,中文机构名更是从没进过 pattern。
   扫公开前的资产要 `grep -i` 并把**目录名**也纳入(`find`),只扫文件内容会漏。
 - `okf-visualizer` —— 86% 体积是第三方 `vendor/force-graph.min.js`,而它的许可文件叫
   `force-graph.LICENSE`(不是 `LICENSE`)会被扩展名闭集剔掉;所有者裁定不发。
