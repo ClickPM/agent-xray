@@ -56,6 +56,51 @@ function hasDetail(data: unknown): boolean {
   return Object.keys(data as Record<string, unknown>).some((k) => k !== "type");
 }
 
+/**
+ * 事件数据里的派生字段 `handlers`(R-SKILLS-2):`tool_call` 由守卫扩展落笔、`before_agent_start` 由注入扩展落笔,
+ * 每条是 `{extension, returned?}` 的摘要(服务端 events.ts 白名单)。没有这个字段的事件 = 观测者记录的,
+ * 沿用「观测者只读」的文案。
+ */
+export interface EventHandler {
+  extension: string;
+  returned?: unknown;
+}
+
+export function handlersOf(data: unknown): EventHandler[] {
+  const raw = (data as { handlers?: unknown } | null)?.handlers;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((h): h is { extension: string; returned?: unknown } => typeof h === "object" && h !== null && typeof (h as { extension?: unknown }).extension === "string")
+    .map((h) => ({ extension: h.extension, ...("returned" in h && { returned: h.returned }) }));
+}
+
+/** 守卫拦截了这次调用:handlers 里有一条 `returned.block === true` */
+function blockedBy(handlers: EventHandler[]): string | undefined {
+  return handlers.find((h) => (h.returned as { block?: unknown } | undefined)?.block === true)?.extension;
+}
+
+/** `returned` 的展示文本:与 formatEventData 同一套 JSON 写法;undefined 如实显示为 undefined */
+function formatReturned(returned: unknown): string {
+  if (returned === undefined) return "undefined";
+  const text = JSON.stringify(returned);
+  return text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW)}…` : text;
+}
+
+/** 详情卡的 EXTENSION RETURNED / DIFF 两段:优先展示真的返回了东西的那个扩展 */
+function detailOf(handlers: EventHandler[]): { extension: string; returned: string; diff: string } {
+  const decisive = handlers.find((h) => h.returned !== undefined) ?? handlers[0];
+  if (!decisive) {
+    // 本站只挂了一个观测者扩展在这类事件上:它订阅但从不改写任何值
+    // (`noTools:'all'` + handler 一律返回 undefined)。如实呈现,不编造链式修改。
+    return { extension: "xray-observer", returned: "undefined", diff: "(无变更 — 观测者只读)" };
+  }
+  const r = decisive.returned as { block?: unknown; systemPromptDelta?: unknown } | undefined;
+  let diff = "(无变更 — 扩展未改写)";
+  if (r?.block === true) diff = "(已拦截 — 工具未执行)";
+  else if (typeof r?.systemPromptDelta === "number") diff = `systemPrompt: +${r.systemPromptDelta} chars`;
+  return { extension: decisive.extension, returned: formatReturned(decisive.returned), diff };
+}
+
 interface EventRun {
   events: TraceEvent[];
 }
@@ -90,6 +135,9 @@ function toRow(run: EventRun, nextStart: number | undefined, streaming: boolean)
   // 行时长 = 本行第一个事件 → 下一行第一个事件。对折叠行就是这段流式的跨度,
   // 对单事件行就是"到下一件事发生"的间隔,两者口径一致。
   const ms = Math.max(0, (nextStart ?? last.timestamp) - first.timestamp);
+  // R-SKILLS-2:tool_call / before_agent_start 带派生字段 handlers(谁裁决谁记录);其它事件没有,走观测者文案
+  const handlers = handlersOf(first.data);
+  const blocker = blockedBy(handlers);
   return {
     key: `s${first.seq}`,
     name: rowName(first, run.events.length),
@@ -97,14 +145,12 @@ function toRow(run: EventRun, nextStart: number | undefined, streaming: boolean)
     dur: streaming ? "…" : formatDuration(ms),
     color: EV[first.mode] ?? EV.notify,
     streaming,
+    // 画板 1a 第 1043 行:被拦截的 tool_call 行尾红色 blocked 徽标 + 「└ <扩展> returned {block: true}」注记
+    ...(blocker !== undefined && { hasBadge: true, hasNote: true, blockedBy: blocker }),
     expandable: hasDetail(first.data),
     detail: {
       input: formatEventData(first.data),
-      extension: "xray-observer",
-      // 本站只挂了一个观测者扩展,它订阅全部 34 种事件但从不改写任何值
-      // (`noTools:'all'` + handler 一律返回 undefined)。如实呈现,不编造链式修改。
-      returned: "undefined",
-      diff: "(无变更 — 观测者只读)",
+      ...detailOf(handlers),
     },
   };
 }
@@ -177,18 +223,48 @@ export function toChainView(events: TraceEvent[]): ChainViewModel {
     };
   }
 
+  // R-SKILLS-2:带 handlers 的 chain 事件(before_agent_start)按裁决者生成步骤;没有 handlers 的保留观测者文案
+  const handlers = handlersOf(latest.data);
+  const steps =
+    handlers.length > 0
+      ? handlers.map((h) => {
+          const r = h.returned as { systemPromptDelta?: unknown; skills?: unknown; block?: unknown } | undefined;
+          if (typeof r?.systemPromptDelta === "number") {
+            const skills = Array.isArray(r.skills) ? r.skills.map(String).join(", ") : "";
+            return {
+              name: h.extension,
+              // 画板 1b 的 annotator 卡:追加 = takeover 黄
+              badge: "追加",
+              badgeColor: EV.takeover,
+              lines: [
+                { text: `systemPrompt += ${r.systemPromptDelta} chars` },
+                ...(skills ? [{ text: `skills: [${skills}]`, muted: true }] : []),
+              ],
+            };
+          }
+          if (r?.block === true) {
+            return { name: h.extension, badge: "拦截", badgeColor: EV.veto, lines: [{ text: formatReturned(r) }] };
+          }
+          return {
+            name: h.extension,
+            badge: "未修改",
+            badgeColor: EV.notify,
+            lines: [{ text: "(原样沿链传递 — 本轮没有可注入的内容)", muted: true }],
+          };
+        })
+      : [
+          {
+            name: "xray-observer",
+            badge: "未修改",
+            badgeColor: EV.notify,
+            lines: [{ text: "(原样沿链传递 — 观测者只订阅,不改写)", muted: true }],
+          },
+        ];
   return {
     event: latest.eventType,
-    subtitle: "链式传递 · 1 个扩展参与",
+    subtitle: `链式传递 · ${steps.length} 个扩展参与`,
     raw: formatEventData(latest.data),
-    steps: [
-      {
-        name: "xray-observer",
-        badge: "未修改",
-        badgeColor: EV.notify,
-        lines: [{ text: "(原样沿链传递 — 观测者只订阅,不改写)", muted: true }],
-      },
-    ],
+    steps,
   };
 }
 

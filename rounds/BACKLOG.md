@@ -251,6 +251,12 @@
       七条:做;规则 9「一次性容器」→「独立容器可常驻 + 一次性进程」;第四组「沙箱执行组」先改画板 1f/1g;`network_mode: none` + unix socket(spike 不通停下重估);
       首批 skills 在 1.0 里经 MCP 上传、默认只展示不注入;**改可用 skill = 发版**(可用集合在代码里,库只开关 + hash 一致性);130 非必经、生产冒烟验收。
       文档已按规则 9 先改(`docs/security.md` / `CLAUDE.md` / `docs/architecture.md` / `ROUNDS.md`),代码零改动。派生出下面三条新记录 (2026-09-03)
+- [ ] R-SKILLS-2 **画板 1f/1g 的第四组「沙箱执行组」还没画**(2026-09-03 开工时核对:云端 Claude Design 项目与本地 `design/` 的 Tools 面板示例数据都只有三组)。
+      任务卡把它列为开工前置、由所有者在画布上改;代码轮没有等,前端 `ToolsPanel.tsx` 按任务卡建议值接上(组名「沙箱执行组」、色 `#8b5cf6`、
+      示例工具 `skill_run`)。所有者画完后按画板核对这三处;拉稿照 `design/README.md` 的合并口径(先 diff、找 base、三方合并) (2026-09-03)
+- [ ] R-SKILLS-2 **前端纯函数测试的运行方式**:`apps/web/lib/trace-view.test.ts` 用 `node:test` 写法、由 `bun test lib` 跑(`dev.ps1 test` 收尾多跑这一步),
+      零新增 npm 依赖。代价是 `next build` 的 tsc 也会扫到它(`import.meta`/`node:test` 类型来自 `@types/node`,目前过);将来若 web 侧测试变多,
+      再考虑 vitest 与 tsconfig 排除。属工具链取舍,不是功能 (2026-09-03)
 - [ ] R-SKILLS-2 **Skills 页(2f–2h)要不要显示「agent 可用」徽标**:哪些 skill 对站上 agent 开放,访客现在只能在 Runtime 的 `before_agent_start` 详情卡
       与 `skill_load` 调用里看到,Skills 页本身不区分。画板没有这个徽标,规则 8 下本轮不做;要做先在画布上给卡片 / 详情页头部加一枚(可沿用出处微徽标的形制) (2026-09-03)
 - [ ] R-SKILLS-2 **注入型(纯文本)skill 能否直接从库注入、不发版**:与 `notes_get_chapter` 同一信任级(所有者经 MCP 发布的文本),

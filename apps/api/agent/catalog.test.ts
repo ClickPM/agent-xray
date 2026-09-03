@@ -13,14 +13,46 @@ import {
   capText,
   GENERATE_IMAGE_TOOL,
   makeGenerateImageTool,
+  makeSkillLoadTool,
+  makeSkillRunTool,
   makeWebSearchTool,
   MAX_RESULT_CHARS,
   SESSION_TOOL_REGISTRY,
+  SKILL_LOAD_TOOL,
+  SKILL_RUN_TOOL,
   TOOL_REGISTRY,
   WEB_SEARCH_TOOL_NAME,
 } from "./tools";
 import type { ActiveImageGenConfig } from "./imagegen-config";
+import type { SandboxConfig } from "./sandbox-config";
+import type { RunnerTarget } from "./skill-runner";
+import type { AvailableSkills } from "./skills-catalog";
 import type { ActiveWebSearchConfig } from "./websearch-config";
+
+/** R-SKILLS-2:一份每个值都独一无二的假可用集合 / 沙箱配置 / 运行器地址,任何一个出现在响应里都能被 grep 抓到 */
+const FAKE_SKILLS: AvailableSkills = {
+  skills: [
+    {
+      name: "fake-skill-qwe",
+      description: "fake skill description zxc",
+      network: "none",
+      body: "FAKE SKILL BODY rty",
+      files: [{ path: "SKILL.md", sha256: "f".repeat(64) }],
+      scripts: [
+        {
+          file: "fake_script_uio.py",
+          sha256: "e".repeat(64),
+          description: "fake script description",
+          input: { type: "object", properties: { text: { type: "string", description: "t", maxLength: 10 } }, required: ["text"], additionalProperties: false },
+        },
+      ],
+    },
+  ],
+  fingerprint: "fp-fake-skills-8c2a",
+  dropped: [],
+};
+const FAKE_SANDBOX: SandboxConfig = { dailyRunLimit: 7_777, totalTimeoutMs: 66_666, fingerprint: "fp-fake-sandbox-1d4b" };
+const FAKE_RUNNER: RunnerTarget = { kind: "unix", socketPath: "/run/fake-runner-zzq/runner.sock", network: "none" };
 
 /**
  * 一份**每个值都独一无二**的假配置:任何一个值出现在响应里,都能被下面的 grep 抓到。
@@ -59,6 +91,7 @@ const SESSION_ID = "11111111-2222-4333-8444-555555555555";
 function definitionFor(entry: ToolCatalogEntry) {
   switch (entry.group) {
     case "pure":
+      if (entry.name === SKILL_LOAD_TOOL) return makeSkillLoadTool(FAKE_SKILLS);
       return TOOL_REGISTRY[entry.name];
     case "session":
       return SESSION_TOOL_REGISTRY[entry.name]({ sessionId: SESSION_ID, needsTitle: true });
@@ -67,6 +100,9 @@ function definitionFor(entry: ToolCatalogEntry) {
       if (entry.name === GENERATE_IMAGE_TOOL) {
         return makeGenerateImageTool(FAKE_IMG_CFG, { sessionId: SESSION_ID, needsTitle: false });
       }
+      return undefined;
+    case "sandbox":
+      if (entry.name === SKILL_RUN_TOOL) return makeSkillRunTool(FAKE_SKILLS, FAKE_SANDBOX, FAKE_RUNNER);
       return undefined;
   }
 }
@@ -99,12 +135,14 @@ describe("目录与实现双向对齐(验收 #2)", () => {
     expect(entry.parameters).not.toBe(def.parameters);
   });
 
-  it("②集合相等:目录 name 集合 == TOOL_REGISTRY ∪ SESSION_TOOL_REGISTRY ∪ {web_search, generate_image}", () => {
+  it("②集合相等:目录 name 集合 == TOOL_REGISTRY ∪ SESSION_TOOL_REGISTRY ∪ {web_search, generate_image, skill_load, skill_run}", () => {
     const expected = [
       ...Object.keys(TOOL_REGISTRY),
       ...Object.keys(SESSION_TOOL_REGISTRY),
       WEB_SEARCH_TOOL_NAME,
       GENERATE_IMAGE_TOOL,
+      SKILL_LOAD_TOOL,
+      SKILL_RUN_TOOL,
     ].sort();
     const actual = toolCatalog()
       .map((t) => t.name)
@@ -115,11 +153,12 @@ describe("目录与实现双向对齐(验收 #2)", () => {
 
   it("②分组按注册路径派生:在哪张表里就是哪一组,不多不少", () => {
     for (const entry of toolCatalog()) {
-      const inPure = Object.hasOwn(TOOL_REGISTRY, entry.name);
+      const inPure = Object.hasOwn(TOOL_REGISTRY, entry.name) || entry.name === SKILL_LOAD_TOOL;
       const inSession = Object.hasOwn(SESSION_TOOL_REGISTRY, entry.name);
       const isOutbound = entry.name === WEB_SEARCH_TOOL_NAME || entry.name === GENERATE_IMAGE_TOOL;
-      const expected: ToolGroup = inPure ? "pure" : inSession ? "session" : isOutbound ? "outbound" : "pure";
-      expect([inPure, inSession, isOutbound].filter(Boolean)).toHaveLength(1); // 一个名字只走一条路径
+      const isSandbox = entry.name === SKILL_RUN_TOOL;
+      const expected: ToolGroup = inPure ? "pure" : inSession ? "session" : isOutbound ? "outbound" : isSandbox ? "sandbox" : "pure";
+      expect([inPure, inSession, isOutbound, isSandbox].filter(Boolean)).toHaveLength(1); // 一个名字只走一条路径
       expect(entry.group).toBe(expected);
     }
   });
@@ -159,6 +198,18 @@ describe("响应不泄配置面(验收 #3)", () => {
       expect(text).not.toContain(String(value));
     }
     expect(text).not.toContain(SESSION_ID);
+    // R-SKILLS-2(任务卡验收 ⑤):可用集合 / 沙箱配置 / socket 路径都进不了目录;
+    // 入参里没有 code / path / argv / interpreter 任何形式的字段;超时 / 限额数字不出现
+    for (const value of ["fake-skill-qwe", "fake_script_uio", "FAKE SKILL BODY", FAKE_SKILLS.fingerprint, FAKE_RUNNER.socketPath, "/run/runner", "unix:"]) {
+      expect(text).not.toContain(value);
+    }
+    // 「256 KiB 截断」是代码常量、与 8000 一样印在面板上,不在这个清单里;这里挡的是配置值与库级上下界
+    for (const n of [FAKE_SANDBOX.dailyRunLimit, FAKE_SANDBOX.totalTimeoutMs, 30000, 5000, 120000]) {
+      expect(text).not.toMatch(new RegExp(`\\b${n}\\b`));
+    }
+    for (const key of ["code", "path", "argv", "interpreter", "env", "command", "socketPath", "dailyRunLimit", "totalTimeoutMs", "network"]) {
+      expect(text).not.toMatch(new RegExp(`"${key}"`));
+    }
     // 配置面的字段名本身也不该出现(哪怕值是空的)
     for (const key of [
       "apiKey",
@@ -222,13 +273,31 @@ describe("响应不泄配置面(验收 #3)", () => {
   });
 });
 
-describe("六个工具齐、分三组、每条有输出形态(验收 #6;R-IMAGEGEN 起六个)", () => {
-  it("三组都在,组的顺序是 纯函数 → 外呼 → 会话绑定", () => {
+describe("八个工具齐、分四组、每条有输出形态(验收 #6;R-IMAGEGEN 起六个,R-SKILLS-2 起八个)", () => {
+  it("四组都在,组的顺序是 纯函数 → 外呼 → 会话绑定 → 沙箱执行(第四组加在末尾)", () => {
     const groups = toolCatalog().map((t) => t.group);
     const firstIndex = (g: ToolGroup) => groups.indexOf(g);
-    expect(new Set(groups)).toEqual(new Set<ToolGroup>(["pure", "outbound", "session"]));
-    expect(firstIndex("pure")).toBeLessThan(firstIndex("outbound"));
-    expect(firstIndex("outbound")).toBeLessThan(firstIndex("session"));
+    const lastIndex = (g: ToolGroup) => groups.lastIndexOf(g);
+    expect(new Set(groups)).toEqual(new Set<ToolGroup>(["pure", "outbound", "session", "sandbox"]));
+    expect(lastIndex("pure")).toBeLessThan(firstIndex("outbound"));
+    expect(lastIndex("outbound")).toBeLessThan(firstIndex("session"));
+    expect(lastIndex("session")).toBeLessThan(firstIndex("sandbox"));
+    expect(groups.filter((g) => g === "sandbox")).toEqual(["sandbox"]);
+  });
+
+  it("R-SKILLS-2:skill_load 在纯函数组、skill_run 在沙箱执行组,且都与按真实路径构造的定义逐字段一致", () => {
+    const load = toolCatalog().find((t) => t.name === SKILL_LOAD_TOOL)!;
+    const run = toolCatalog().find((t) => t.name === SKILL_RUN_TOOL)!;
+    expect(load.group).toBe("pure");
+    expect(run.group).toBe("sandbox");
+    expect(modelVisible(load)).toEqual(modelVisible(makeSkillLoadTool(FAKE_SKILLS)));
+    expect(modelVisible(run)).toEqual(modelVisible(makeSkillRunTool(FAKE_SKILLS, FAKE_SANDBOX, FAKE_RUNNER)));
+    expect(Object.keys(load.parameters.properties)).toEqual(["name"]);
+    expect(Object.keys(run.parameters.properties)).toEqual(["skill", "script", "input"]);
+    for (const key of ["available", "configured", "enabled", "disabled", "status", "skills"]) {
+      expect(load).not.toHaveProperty(key);
+      expect(run).not.toHaveProperty(key);
+    }
   });
 
   it("每条都有非空的 output;入参一律 object + additionalProperties:false", () => {
@@ -253,6 +322,8 @@ describe("六个工具齐、分三组、每条有输出形态(验收 #6;R-IMAGEG
         expect(entry.phases).toEqual(["发起", "已受理", "检索中", "综述中"]);
       } else if (entry.name === GENERATE_IMAGE_TOOL) {
         expect(entry.phases).toEqual(["发起", "生成中", "已回复", "接收中", "校验解码", "写入图库"]);
+      } else if (entry.name === SKILL_RUN_TOOL) {
+        expect(entry.phases).toEqual(["校验", "已提交", "运行中", "已结束"]);
       } else {
         expect(entry).not.toHaveProperty("phases");
       }

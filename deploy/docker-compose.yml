@@ -140,7 +140,14 @@ services:
       #
       # 高危工具双闸之一,**默认不设**(设了也只是开了第一闸,还要 tool_config 那半):
       #   XRAY_UNLOCK_DANGEROUS_TOOLS=1
-      # 当前注册表里没有任何 dangerous 工具,所以这个变量目前没有用武之地。
+      # R-SKILLS-2 起它有了用武之地:`skill_run`(在独立的 skill-runner 容器里跑 skill 自带的 Python 脚本)
+      # 是注册表里第一个 dangerous=TRUE 的工具。打开顺序见 rounds/round-skills/round-skills-2.md「运维」段
+      # (发版 → 生产冒烟 4 条 → skill_load → 逐 skill agent_enabled → 这里设 1 并 `up -d api` 重建 → skill_run)。
+      # 关掉只需 `tool_config_set skill_run false`(不用动这里);要回到「注册表里没有 dangerous 实现」的状态
+      # 才把这一行去掉并重建 api。
+      - XRAY_UNLOCK_DANGEROUS_TOOLS=${XRAY_UNLOCK_DANGEROUS_TOOLS:-}
+      # 执行容器地址**不在这里配**:api 走命名卷 runner_sock 里的 unix socket(代码默认值 unix:/run/runner/runner.sock),
+      # `XRAY_SKILL_RUNNER_URL` 是本机开发专用的 TCP 覆盖项(代码级闭集,只认 http://127.0.0.1:<port>),生产不设。
       # 需要新增变量时,先在 infra-config.json 的 secrets 段增声明再在此处补。
       #
       # 联网搜索的目标域白名单**追加**项(R-WEBSEARCH),默认空。
@@ -154,12 +161,56 @@ services:
     expose:
       - "4000"
     networks: [front, back]
+    volumes:
+      # api ↔ skill-runner 的唯一通道:命名卷里的 unix socket(R-SKILLS-2;docs/security.md §1 R-SKILLS-2 补记)。
+      # 两个容器同 uid 10001,socket 0660。api 这边只读挂载没有意义(连接 socket 不需要写目录),
+      # 但也不需要写:目录里只会有 runner 创建的那一个 socket 文件。
+      - runner_sock:/run/runner
     depends_on:
       postgres:
         condition: service_healthy
+      # 只保证启动顺序(socket 目录先由 runner 建好),**不是**硬依赖:
+      # `docker compose stop skill-runner` 之后 api 照常服务,skill_run 以固定文案失败(止损路径)。
+      skill-runner:
+        condition: service_started
     # 必须 ≥ infra-config.json 的 graceful_shutdown.total(30s)+ 余量,
     # 否则 SSE 长连接会被 SIGKILL 硬断而不是走优雅关闭
     stop_grace_period: 40s
+
+  skill-runner:
+    # agent `skill_run` 的执行容器(R-SKILLS-2,所有者裁定 2 / 4):Python venv + 镜像里预置的 skill 脚本
+    # (runner/,本机 `dev.ps1 build` 出第三个镜像 xray-runner:<sha>)。**不是 JS 运行时**,规则 11 不涉及。
+    image: ${IMAGE_REGISTRY:-local}/xray-runner:${IMAGE_TAG:?IMAGE_TAG 必须显式指定(git SHA),禁止 latest}
+    restart: unless-stopped
+    # 【硬约束】没有任何网络 —— 连 DNS 都没有,因而也回打不了 api / postgres(共网方案的硬伤,research.md §2.4)。
+    # api 经上面那个命名卷里的 unix socket 单向找它,反向无通道。R-WEBFETCH 的 egress 实例是**另一个** service,
+    # 这一行对它不适用;本实例的 network_mode: none 一字不改。
+    network_mode: none
+    # 比 api 再收紧三处(docs/security.md §1 第 3 层「执行容器」):只读根 FS + noexec 的 tmpfs 工作目录 + cpus 限 1。
+    read_only: true
+    tmpfs:
+      # 每次运行一个 /run/work/<uuid>,结束即删;noexec 让脚本落盘的东西不可执行;64m 是容量上限(rlimit FSIZE 16M 是单文件)
+      - /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001
+    volumes:
+      - runner_sock:/run/runner
+    user: "10001:10001"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 384m
+    pids_limit: 64
+    cpus: 1.0
+    environment:
+      # 出网档次(缺省 none):清单里该 skill 的 network 与这里不等即拒(R-WEBFETCH C6 提前进本轮)。
+      # egress 实例(R-WEBFETCH)会把它设成 egress 并挂在专用网络上;本实例永远是 none。
+      - RUNNER_NETWORK=none
+    # 走同一个 socket 的 GET /health;冒烟清单第 1 条「skill-runner healthy」看的就是它
+    healthcheck:
+      test: ["CMD", "/opt/venv/bin/python", "-I", "/opt/runner.py", "--health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   postgres:
     image: postgres:16-alpine
@@ -199,3 +250,5 @@ volumes:
   caddy_data:
   caddy_config:
   pg_data:
+  # api ↔ skill-runner 的 unix socket 所在(R-SKILLS-2)。只有一个 socket 文件,不持久化任何数据
+  runner_sock:

@@ -29,6 +29,9 @@ import { magicMatches } from "../shared/image-magic";
 import { allowedHosts, checkBaseUrl } from "../shared/websearch-hosts";
 // tab 的闭集与读面(apps/api/site/)共用同一份登记表;两个面不互相 import,故落在 shared/
 import { SITE_TAB_KEYS } from "../shared/site-tabs";
+// agent 可用 skills 的代码清单与一致性判据(R-SKILLS-2):agent 侧注册环节用的是同一份,故落在 shared/
+import { compareSkillFiles } from "../shared/skill-manifest";
+import { AGENT_SKILLS } from "../shared/skills.generated";
 // skill 一包文件的形状上限(R-SKILLS);深层规则(路径 / kind / NUL / frontmatter)在 store 调 validateSkillPack
 import {
   MAX_SKILL_FILE_BYTES,
@@ -1186,6 +1189,108 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       write(ctx, "skills_delete", `删 skill ${args.name}`, async () => {
         await store.deleteSkill(args.name);
         return { name: args.name, status: "deleted" };
+      }),
+  );
+
+  // ───────────────────── agent 使用 skills(R-SKILLS-2)─────────────────────
+  //
+  // 四个工具:skills_agent_set / skills_agent_status / sandbox_config_get / sandbox_config_set。
+  // 可用集合在代码里(shared/skills.generated.ts),这里只能在集合之内开关;库内展示副本必须与代码副本
+  // 逐文件 sha256 一致才会被注入 —— skills_agent_status 就是给所有者看的那面镜子。
+  // 打开顺序(任务卡「运维」段):发版 → 生产冒烟 → tool_config_set skill_load → skills_agent_set 逐个
+  // → 服务器 .env 加 XRAY_UNLOCK_DANGEROUS_TOOLS=1 并重建 api → tool_config_set skill_run。
+
+  const codeSkillNames = AGENT_SKILLS.map((s) => s.name);
+
+  server.registerTool(
+    "skills_agent_set",
+    {
+      title: "打开 / 关闭一个 skill 对 agent 的可用性",
+      description:
+        `只能在代码清单之内开关(当前清单:${codeSkillNames.join(" / ")});库里得先有它的展示副本(skills_upsert),` +
+        "且展示副本必须与代码副本逐文件一致(skills_agent_status 报 ok)才会真的被注入。" +
+        "默认全关(所有者裁定:首批只展示、不注入)。注入型 skill 至少要 tool_config_set skill_load 打开;" +
+        "可运行型另需 skill_run 打开 + 服务器 env XRAY_UNLOCK_DANGEROUS_TOOLS=1。改动对**新会话**生效(指纹变化 → 会话下一轮重建)。",
+      inputSchema: { name: skillName, enabled: z.boolean() },
+    },
+    async (args) =>
+      write(ctx, "skills_agent_set", `skill ${args.name} agent_enabled=${args.enabled}`, async () => {
+        if (!codeSkillNames.includes(args.name)) {
+          throw new ConflictError(`skill ${args.name} 不在代码清单里(只能开关:${codeSkillNames.join(" / ")});改可用集合要发版`);
+        }
+        await store.setSkillAgentEnabled(args.name, args.enabled);
+        return { name: args.name, agentEnabled: args.enabled, status: "saved" };
+      }),
+  );
+
+  server.registerTool(
+    "skills_agent_status",
+    {
+      title: "agent 可用 skills 的状态",
+      description:
+        "代码清单里的每个 skill 在库里的状态:有没有上传展示副本(inLibrary)、开没开(agentEnabled)、" +
+        "展示副本与代码副本是否逐文件一致(consistency: ok / drift / missing,drift 时列出 missing / extra / changed 的路径)、" +
+        "以及综合之后会不会被注入(available = inLibrary ∧ agentEnabled ∧ ok)。另回两个工具闸的开关(tool_config)。" +
+        "drift 的修法:用 skills_upsert 重新上传与代码副本相同的文件(代码副本在仓库 runner/skills/<name>/)。",
+      inputSchema: {},
+    },
+    async () =>
+      read("skills_agent_status", async () => {
+        const rows = await store.skillAgentRows(codeSkillNames);
+        const gates = await store.listToolConfig();
+        const gate = (name: string) => gates.find((g) => g.name === name)?.enabled ?? false;
+        return {
+          gates: { skill_load: gate("skill_load"), skill_run: gate("skill_run") },
+          skills: AGENT_SKILLS.map((s) => {
+            const row = rows.find((r) => r.name === s.name);
+            const drift = row ? compareSkillFiles(s.files, row.files) : null;
+            const consistency = !row ? "missing" : drift!.status;
+            return {
+              name: s.name,
+              network: s.network,
+              scripts: s.scripts.map((x) => x.file),
+              inLibrary: !!row,
+              agentEnabled: row?.agentEnabled ?? false,
+              consistency,
+              ...(drift && drift.status === "drift" && { drift: { missing: drift.missing, extra: drift.extra, changed: drift.changed } }),
+              available: !!row && row.agentEnabled && consistency === "ok",
+            };
+          }),
+        };
+      }),
+  );
+
+  server.registerTool(
+    "sandbox_config_get",
+    {
+      title: "沙箱执行组的两个上限",
+      description: "dailyRunLimit(每日 skill_run 次数,0 = 不限)与 totalTimeoutMs(单次运行总时长,含排队;5000–120000)。",
+      inputSchema: {},
+    },
+    async () =>
+      read("sandbox_config_get", async () => {
+        const row = await store.getSandboxConfig();
+        if (!row) throw new NotFoundError("sandbox_config 单行不存在(迁移 013 没跑?)");
+        return { ...row, updatedAt: toIso(row.updatedAt) };
+      }),
+  );
+
+  server.registerTool(
+    "sandbox_config_set",
+    {
+      title: "改沙箱执行组的上限(部分更新)",
+      description:
+        "省略的字段保留原值。totalTimeoutMs 上下界由库的 CHECK 强制(5000–120000);执行容器侧另有 rlimit,这里改不到。" +
+        "改动对**新会话**生效(指纹变化 → 会话下一轮重建)。",
+      inputSchema: {
+        dailyRunLimit: z.number().int().min(0).max(1_000_000).optional().describe("0 = 不限"),
+        totalTimeoutMs: z.number().int().min(5000).max(120000).optional(),
+      },
+    },
+    async (args) =>
+      write(ctx, "sandbox_config_set", `sandbox_config ${JSON.stringify(args)}`, async () => {
+        const row = await store.setSandboxConfig(args);
+        return { ...row, updatedAt: toIso(row.updatedAt), status: "saved" };
       }),
   );
 }

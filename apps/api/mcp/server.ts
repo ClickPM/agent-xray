@@ -33,7 +33,11 @@ const INSTRUCTIONS =
   "三组 provider 的 key 任何读回都是掩码;" +
   "搜索与生图 provider 的 baseUrl 各有一份目标域白名单(在代码里),配好 provider 后还要 tool_config_set 打开对应工具。\n" +
   "site_tab_set 控制顶部四个 tab 各自露不露 —— 那只是**呈现**开关(导航条不渲染 + 该 tab 的页面在站点上不可达)," +
-  "被隐藏 tab 的后端端点仍在服务;要真的停掉 agent 用 tool_config_set。";
+  "被隐藏 tab 的后端端点仍在服务;要真的停掉 agent 用 tool_config_set。\n" +
+  "agent 使用 skills(R-SKILLS-2)的打开顺序:发版并过生产冒烟 → tool_config_set skill_load true → skills_agent_set <name> true 逐个打开" +
+  "(先 skills_agent_status 看 consistency 是 ok:库内展示副本必须与代码副本逐文件一致才会被注入)" +
+  "→ 服务器 .env 加 XRAY_UNLOCK_DANGEROUS_TOOLS=1 并重建 api → tool_config_set skill_run true。" +
+  "止损:tool_config_set skill_run false 当场停用运行;skills_agent_set <name> false 单个下线。";
 
 /** 反代在前,socket 地址永远是反代;审计线索取 XFF 首段(见 audit.ts 的同名逻辑)。 */
 function remoteOfRequest(request: Request | undefined): string | undefined {

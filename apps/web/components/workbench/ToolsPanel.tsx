@@ -22,17 +22,19 @@ import { mono } from "@/lib/styles";
  */
 
 /**
- * 三个分组的固定呈现。**按 `group` 键入**,`Record<ToolGroup, …>` 让「后端多出第四组」
+ * 四个分组的固定呈现。**按 `group` 键入**,`Record<ToolGroup, …>` 让「后端多出一组」
  * 变成前端编译错误,而不是页面上悄悄少一组。色值沿用既有语义色(design/README「工具分组」):
- * 纯函数组 = 文本次级色 · 外呼组 = chain 蓝 · 会话绑定组 = takeover 黄,没有新造 token。
+ * 纯函数组 = 文本次级色 · 外呼组 = chain 蓝 · 会话绑定组 = takeover 黄 · 沙箱执行组 = frontier 紫(`#8b5cf6`,
+ * R-SKILLS-2;任务卡建议沿用的既有语义色,待所有者在画板 1f/1g 上定稿后按画板核对),没有新造 token。
  */
 const GROUPS: Record<ToolGroup, { label: string; note: string; badge: string; color: string }> = {
   pure: { label: "纯函数组", note: "只读教程库三张表 · 不联网 · 不碰文件系统", badge: "纯函数", color: "#6b7280" },
   outbound: { label: "外呼组", note: "持服务端凭据发请求 · 访客只控 query", badge: "外呼", color: "#2563eb" },
   session: { label: "会话绑定组", note: "只写当前这次会话的标题 · 会话 id 不是入参", badge: "会话绑定", color: "#f9c22e" },
+  sandbox: { label: "沙箱执行组", note: "独立无网络容器里跑 skill 自带的脚本 · 只能跑清单里的", badge: "沙箱执行", color: "#8b5cf6" },
 };
-/** 画板上的分组顺序 */
-const GROUP_ORDER: readonly ToolGroup[] = ["pure", "outbound", "session"];
+/** 画板上的分组顺序(第四组加在末尾) */
+const GROUP_ORDER: readonly ToolGroup[] = ["pure", "outbound", "session", "sandbox"];
 
 /**
  * 目录在一次页面生命周期里只取一次:它是静态的,每次切到这个 tab 都重新请求没有意义。

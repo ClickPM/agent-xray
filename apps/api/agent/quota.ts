@@ -195,3 +195,23 @@ export async function reserveImage(dailyImageLimit: number): Promise<boolean> {
   );
   return row !== null;
 }
+
+/**
+ * 沙箱运行的每日次数闸(R-SKILLS-2;docs/security.md §1 R-SKILLS-2 补记第 4 条),与上面两个逐字同构:
+ * 一条带条件的原子 UPSERT,发起前扣、失败不退(超时 / 非零退出的运行照样占过执行容器的 CPU 与并发名额)。
+ * 计数在 `daily_quota.skill_runs`,上限在 `sandbox_config.daily_run_limit`(0 = 不限)。
+ * 会话内的次数(每 turn / 每会话)不在这里,由守卫扩展按会话计(agent/guard.ts)。
+ */
+export async function reserveSkillRun(dailyRunLimit: number): Promise<boolean> {
+  const limit = Math.max(0, Math.round(dailyRunLimit));
+  const row = await db.rawQueryRow<{ skillRuns: number }>(
+    `INSERT INTO daily_quota (day, skill_runs) VALUES (${TODAY}, 1)
+     ON CONFLICT (day) DO UPDATE
+       SET skill_runs = daily_quota.skill_runs + 1,
+           updated_at = now()
+       WHERE $1 = 0 OR daily_quota.skill_runs < $1
+     RETURNING skill_runs::double precision AS "skillRuns"`,
+    limit,
+  );
+  return row !== null;
+}

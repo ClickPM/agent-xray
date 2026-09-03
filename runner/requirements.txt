@@ -1,0 +1,8 @@
+# skill-runner venv 的第三方依赖(docs/security.md §7「执行容器的供应链」)。
+#
+# 首批 skill 只用标准库,本文件**刻意为空**。将来要加依赖时:
+#   1. 每一行都带 --hash=sha256:…(Dockerfile 用 --require-hashes 安装,没带 hash 的行装不进去);
+#   2. 新增依赖 = 发版(可运行 skill 的准入清单第 2 条,rounds/round-skills/research.md §2.2);
+#   3. 例:
+#      # pypdf==6.0.0 \
+#      #     --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000

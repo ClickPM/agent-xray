@@ -15,7 +15,7 @@
    访客只需诱导 agent 去搜一个自己控制的页面。**兜底不在检测,而在能力**——被注入的模型能调用的
    只有那几个只读工具(第 1 层)和另一次同样受限的搜索,做不成任何有副作用的事。
    搜索结果不做「指令过滤」:那是一场打不赢的字符串仗,而能力边界是可证明的
-6. **代码执行**(R-SKILLS-2 补,2026-09-03;所有者裁定,待实现)——访客(经模型)能驱动一个 Python 解释器跑**固定**的、
+6. **代码执行**(R-SKILLS-2 补,2026-09-03;所有者裁定,同日落地)——访客(经模型)能驱动一个 Python 解释器跑**固定**的、
    随发版物带进镜像的脚本(`skill_run`)。新的威胁面:资源耗尽(CPU / 内存 / 进程数 / 磁盘)、沙箱逃逸、借脚本触达内网或本进程。
    **兜底仍在能力**:脚本在独立容器里跑,那个容器**默认没有任何网络**(声明了出网档次的 skill 跑在另一个只出公网的实例里,见第 7 条)、根文件系统只读、每次运行是一次性的进程与工作目录、
    受 rlimit 与超时约束;脚本的**内容**只能来自代码(镜像层 + sha256 核对),模型给的只有一个受 schema 约束的 JSON 输入。
@@ -116,7 +116,9 @@ R-IMAGEGEN 补记(2026-09-02,所有者裁定;`apps/api/agent/imagegen.ts` + `ima
 - **它同时是会话绑定的**(与 `session_rename` 同构):图片要归到访客的会话名下,会话 id 在建会话时闭包绑定、不是入参,模型表达不出「往别人的会话里塞图」。写库走第 2 层的 `agent_image` 角色(见下)
 - **模型拿到的是一行 markdown**(`![…](/api/agent/images/<uuid>.<ext>)`),不是图片内容:pi 支持把 `ImageContent` 回给模型,但那是 token 与费用,轨迹事件里也放不下。系统提示要求把这一行**原样**写进回复——对话框里的预览就是助手回复里的 markdown 图片,渲染器(`Markdown.tsx` 的 `img`)本来就有,前端零改动
 
-R-SKILLS-2 补记(2026-09-03,所有者裁定;规则 9「先改文档」——**待实现,以下是约束不是现状**;研究与裁定见 `rounds/round-skills/research.md`):
+R-SKILLS-2 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日落地 —— 落点:`apps/api/agent/tools.ts` 的 `makeSkillLoadTool` / `makeSkillRunTool`、
+`skill-runner.ts`(协议)、`skills-catalog.ts`(四个条件)、`guard.ts` / `skill-injector.ts`(两个 pi 扩展)、`runner/`(执行容器)、迁移 `013`;
+研究与裁定见 `rounds/round-skills/research.md`):
 
 - **第四组「沙箱执行组」**(`skill_run`),与前三组并列。它既不是纯函数(要跨容器调一次执行)、也不是外呼(无凭据、目标不是公网而是本机
   一个 unix socket)、也不是会话绑定(不写库)。归组按「访客能驱动什么」判:前三组驱动的是查询 / 网络请求 / 一列写,这一组驱动的是**一个解释器**。
@@ -205,7 +207,7 @@ R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日落�
 - Skills 技能库的三张表 `skills_categories` / `skills` / `skill_files`(迁移 `012`)**不授权任何 agent 角色**:`agent_ro` / `agent_title` / `agent_image` 对它们一律无权限。迁移 006 刻意没设 `ALTER DEFAULT PRIVILEGES`,所以那份迁移里**不写 GRANT 就是全部答案**;`sandbox.test.ts` 的「配置面与配额面对 agent_ro 不可见」用例已把三张表列进 denied 清单
 - 于是「即使 prompt injection 完全操纵了工具调用,能做的也只有…」这句**本轮不变长**:skills 内容对 agent 不可见。要给 agent 一个 `skills_*` 只读工具属新功能,先记 BACKLOG 等裁定;届时按本层既定口径——在那次迁移里显式 `GRANT SELECT`、走 `agent_ro` 的 `READ ONLY` 事务
 - 读面(`apps/api/skills/`)用全权连接但**只读**(不建表、不写库),写面在 mcp;两个面互不触碰(§4)
-- **R-SKILLS-2(2026-09-03,待实现)不改变本条**:agent 使用 skills 的注入来源是**编译进 api 的代码清单**,不是库;库只提供 `skills.agent_enabled`
+- **R-SKILLS-2(2026-09-03,已落地)不改变本条**:agent 使用 skills 的注入来源是**编译进 api 的代码清单**,不是库;库只提供 `skills.agent_enabled`
   开关与「展示副本 == 代码副本」的一致性判据,这两样在**注册环节**用全权连接读(与 `loadEnabledTools` 读 `tool_config` 同一位置),不在任何工具体内。
   `agent_ro` / `agent_title` / `agent_image` 对 skills 三表与 `sandbox_config` 仍然无任何权限
 
@@ -213,7 +215,7 @@ R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日落�
 
 - Encore+pi 进程跑在容器内:非 root 用户、`read_only: true` 根文件系统(仅 tmpfs 可写)、不挂 docker.sock、不挂宿主目录
 - `mem_limit` 防单会话 OOM 拖垮全站;并发 session 上限 + 空闲会话回收 + 及时 `dispose()`
-- **执行容器 `skill-runner`**(R-SKILLS-2,2026-09-03 裁定,待实现)比 api 再收紧三处:`network_mode: none`(不在任何 docker 网络里;api 经命名卷里的
+- **执行容器 `skill-runner`**(R-SKILLS-2,2026-09-03 裁定并落地;`deploy/docker-compose.yml` + `runner/Dockerfile`)比 api 再收紧三处:`network_mode: none`(不在任何 docker 网络里;api 经命名卷里的
   unix socket 调它)、`tmpfs /run/work` 为 `noexec,nosuid,nodev` 且有容量上限、`cpus` 限 1。其余同 api:非 root(与 api 同 uid,socket 才能共用)、
   `read_only`、`cap_drop ALL`、`no-new-privileges`、`mem_limit 384m`、`pids_limit 64`;子进程另叠 rlimit。它的 Python 基座与依赖按 digest / hash 钉(§7)
 - **egress 实例 `skill-runner-egress`**(R-WEBFETCH,2026-09-03 裁定,待实现):同一镜像、同一套收紧项,只有网络不同 —— `networks: [egress]`,
@@ -227,7 +229,7 @@ R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日落�
 - 每日 token + 费用计数(`daily_quota`),超限拒绝新会话;单会话 turn 上限
 - 用户无法借工具把服务器变成**任意**代理。R-WEBFETCH(2026-09-03 裁定,待实现)的 egress 档 skill 是一个**受限**取页器
   (只 GET 公网 https 页面、固定头、无凭据、限额、UA 表明身份),边界见 §1 R-WEBFETCH 补记
-- **沙箱执行也计日限额**(R-SKILLS-2,待实现):`daily_quota.skill_runs`,上限 `sandbox_config.daily_run_limit`(0 = 不限),与 `searches` / `images`
+- **沙箱执行也计日限额**(R-SKILLS-2,已落地:`agent/quota.ts` 的 `reserveSkillRun`):`daily_quota.skill_runs`,上限 `sandbox_config.daily_run_limit`(0 = 不限),与 `searches` / `images`
   同样各计各的、不合列;超限时工具抛固定文案(计为一次失败的工具调用),不拒整轮对话
 
 R7 落地补记(2026-09-01,`apps/api/agent/quota.ts` + 迁移 `006`):
@@ -469,7 +471,7 @@ R-VISITOR 落地补记(2026-09-01,`apps/api/agent/visitor.ts` + `shared/visitor-
 
 - lockfile 固定版本;`npm audit` 进 CI;Dependabot 开启
 - pi 依赖体量大(~130MB),部署镜像分层缓存,升级前先在本地过一遍事件兼容性
-- **执行容器的供应链**(R-SKILLS-2,待实现):基座 `python:3.12-slim` 按 **digest** 钉;`runner/requirements.txt` 用 `pip install --require-hashes` 锁定;
-  执行容器自身零第三方依赖(`runner.py` 只用标准库);R-WEBFETCH 起 `requirements.txt` 不再为空(抽取库 `trafilatura`,exact + hash,
+- **执行容器的供应链**(R-SKILLS-2,已落地:`runner/Dockerfile`):基座 `python:3.12-slim` 按 **digest** 钉;`runner/requirements.txt` 用 `pip install --require-hashes` 锁定,
+  装完把 pip / setuptools 从 venv 里删掉(运行期没有网络也没有写权限,留着只是攻击面);执行容器自身零第三方依赖(`runner.py` 只用标准库);R-WEBFETCH 起 `requirements.txt` 不再为空(抽取库 `trafilatura`,exact + hash,
   可选依赖不装;只用它的 `extract`,不用它自带的下载器)。**可运行脚本是仓库里的代码**,与其它代码一样走轮次 + codex 审查,审阅口径是
   `rounds/round-skills/research.md` §2.2 的准入清单(stdin JSON → stdout;无 `subprocess` / `socket` / `eval`;不写 cwd 之外;确定性;有 schema)

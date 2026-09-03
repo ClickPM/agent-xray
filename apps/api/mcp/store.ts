@@ -1696,3 +1696,91 @@ export async function deleteSkill(name: string): Promise<void> {
   );
   if (!done) throw new NotFoundError(`skill ${name} 不存在`);
 }
+
+// ───────────────────── agent 使用 skills:开关 / 一致性 / 沙箱配置(R-SKILLS-2)─────────────────────
+//
+// 库里能决定的只有「在代码清单之内打开 / 关闭」(skills.agent_enabled)与两个上限(sandbox_config);
+// 可用集合本身在代码里(shared/skills.generated.ts)。这里不 import agent 目录,清单从 shared 取。
+
+export interface SkillAgentRow {
+  name: string;
+  agentEnabled: boolean;
+  /** 库内展示副本每个文件的 sha256(SQL 侧算,口径 = UTF-8 字节的 sha256,与生成器对磁盘文件的算法相同) */
+  files: { path: string; sha256: string }[];
+}
+
+/** 代码清单里那几个名字在库里的状态;库里没有的不出现在结果里 */
+export async function skillAgentRows(names: readonly string[]): Promise<SkillAgentRow[]> {
+  if (names.length === 0) return [];
+  const ph = names.map((_, i) => `$${i + 1}`).join(", ");
+  const rows = await db.rawQueryAll<{ name: string; agentEnabled: boolean }>(
+    `SELECT name, agent_enabled AS "agentEnabled" FROM skills WHERE name IN (${ph}) ORDER BY name`,
+    ...names,
+  );
+  const files = await db.rawQueryAll<{ skillName: string; path: string; sha256: string }>(
+    `SELECT skill_name AS "skillName", path, encode(sha256(convert_to(content, 'UTF8')), 'hex') AS sha256
+       FROM skill_files WHERE skill_name IN (${ph}) ORDER BY skill_name, path`,
+    ...names,
+  );
+  return rows.map((r) => ({
+    ...r,
+    files: files.filter((f) => f.skillName === r.name).map((f) => ({ path: f.path, sha256: f.sha256 })),
+  }));
+}
+
+/** 开 / 关一个 skill 对 agent 的可用性。库里没有这个 skill 时报 NotFound(先经 skills_upsert 上传展示副本)。 */
+export async function setSkillAgentEnabled(name: string, enabled: boolean): Promise<void> {
+  const row = await db.rawQueryRow<{ name: string }>(
+    `UPDATE skills SET agent_enabled = $2, updated_at = CASE WHEN agent_enabled <> $2 THEN now() ELSE updated_at END
+      WHERE name = $1 RETURNING name`,
+    name,
+    enabled,
+  );
+  if (!row) throw new NotFoundError(`skill ${name} 不在库里;先用 skills_upsert 上传它的展示副本`);
+}
+
+export interface SandboxConfigRow {
+  dailyRunLimit: number;
+  totalTimeoutMs: number;
+  /** epoch ms */
+  updatedAt: number;
+}
+
+export async function getSandboxConfig(): Promise<SandboxConfigRow | null> {
+  return db.rawQueryRow<SandboxConfigRow>(
+    `SELECT daily_run_limit::double precision  AS "dailyRunLimit",
+            total_timeout_ms::double precision AS "totalTimeoutMs",
+            ${ms("updated_at", "updatedAt")}
+       FROM sandbox_config WHERE id = 1`,
+  );
+}
+
+/**
+ * 部分更新(与 provider upsert 同一口径:省略的字段保留原值)。上下界由库的 CHECK 强制,
+ * 这里把 CHECK 违例翻成一句能行动的话,而不是 internal error。
+ */
+export async function setSandboxConfig(input: {
+  dailyRunLimit?: number;
+  totalTimeoutMs?: number;
+}): Promise<SandboxConfigRow> {
+  try {
+    await db.rawExec(
+      `INSERT INTO sandbox_config (id, daily_run_limit, total_timeout_ms, updated_at)
+       VALUES (1, COALESCE($1::int, 0), COALESCE($2::int, 30000), now())
+       ON CONFLICT (id) DO UPDATE
+          SET daily_run_limit  = COALESCE($1::int, sandbox_config.daily_run_limit),
+              total_timeout_ms = COALESCE($2::int, sandbox_config.total_timeout_ms),
+              updated_at = now()`,
+      input.dailyRunLimit ?? null,
+      input.totalTimeoutMs ?? null,
+    );
+  } catch (err) {
+    if (/sandbox_config_.*_check|violates check constraint/i.test(String(err))) {
+      throw new ConflictError("取值越界:dailyRunLimit ≥ 0;totalTimeoutMs 在 5000–120000 之间");
+    }
+    throw err;
+  }
+  const row = await getSandboxConfig();
+  if (!row) throw new NotFoundError("sandbox_config 单行不存在(迁移 013 没跑?)");
+  return row;
+}

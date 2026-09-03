@@ -111,7 +111,8 @@ function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; on
       </div>
       {row.hasNote && (
         <div style={{ ...mono(11), color: "var(--err-text)", padding: "1px 4px 3px 22px" }}>
-          └ permission-gate returned {"{"}block: true{"}"}
+          {/* 画板 1a 的注记格式不变;扩展名从事件的 handlers 取(R-SKILLS-2),不再写死 permission-gate */}
+          └ {row.blockedBy ?? "xray-guard"} returned {"{"}block: true{"}"}
         </div>
       )}
       {expanded && row.detail && <DetailCard detail={row.detail} />}

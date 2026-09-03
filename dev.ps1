@@ -20,6 +20,9 @@
 #       .\dev.ps1 ship <host> [sha]
 #                           把镜像与四件部署资产传到服务器(save -o / scp / load -i)
 #       .\dev.ps1 skills    把 .claude\skills 镜像到 .agents\skills(给 codex 审查者用)
+#       .\dev.ps1 skills-gen
+#                           读 runner\skills 生成两份同源清单(runner\manifest.json + apps\api\shared\skills.generated.ts;R-SKILLS-2)
+#       .\dev.ps1 runner    本机起 skill-runner 执行容器(docker build runner\ + docker run,TCP 开发模式 127.0.0.1:8000)
 #       .\dev.ps1 wt-clean [名字|all] [--force]
 #                           清理 .claude\worktrees 残留(不带参数 = 只列不动;坑的说明见函数注释)
 
@@ -149,7 +152,23 @@ function Remove-DevWorktree([string]$name, [bool]$force) {
 }
 
 switch ($Cmd) {
-    "test"  { Warn-BunDrift; & $encore test @args }
+    "test"  {
+        Warn-BunDrift
+        & $encore test @args
+        $apiExit = $LASTEXITCODE
+        # 前端的纯函数投影测试(R-SKILLS-2 起有 apps\web\lib\trace-view.test.ts):
+        # 用 bun test 跑 node:test 写法的用例,零新增 npm 依赖(规则 11 的运行时仍是 bun)。
+        # 不带参数时才跑:带了参数说明在筛 api 侧的某个文件。
+        if (-not $args) {
+            Write-Host "==> apps\web: bun test"
+            Push-Location "$repoRoot\apps\web"
+            & bun test lib
+            $webExit = $LASTEXITCODE
+            Pop-Location
+            if ($webExit -ne 0) { exit $webExit }
+        }
+        exit $apiExit
+    }
     "check" { & $encore check }
     "gen"   {
         # 排除 mcp:管理面是**服务端到服务端**的面,前端永不调用它
@@ -168,6 +187,12 @@ switch ($Cmd) {
         $registry = if ($env:IMAGE_REGISTRY) { $env:IMAGE_REGISTRY } else { "local" }
         $apiTag = "$registry/xray-api:$sha"
         $webTag = "$registry/xray-web:$sha"
+        $runnerTag = "$registry/xray-runner:$sha"
+
+        # 清单生成物必须与 runner\skills 一致再构建(R-SKILLS-2):api 镜像里的 skills.generated.ts 与
+        # runner 镜像里的 manifest.json 同源于一次生成;漂移的表现是 skill_run 一律 hash_mismatch。
+        & node "$repoRoot\tools\skills-manifest\generate.mjs" --check
+        if ($LASTEXITCODE -ne 0) { throw "skills 清单已漂移,先跑 .\dev.ps1 skills-gen 并提交" }
 
         Write-Host "==> api  $apiTag  (bun 基座 $bunBase, 服务 $hostedServices)"
         & $encore build docker `
@@ -181,13 +206,19 @@ switch ($Cmd) {
         & docker build -t $webTag "$repoRoot\apps\web"
         if ($LASTEXITCODE -ne 0) { throw "web 镜像构建失败" }
 
+        # 第三个镜像(R-SKILLS-2):skill-runner 执行容器。Python 基座按 digest 钉在 runner\Dockerfile 里,
+        # 不是 JS 运行时(规则 11 不涉及);与 $hostedServices 同类「漏补」热点 —— ship 与 compose 都要三个 tag。
+        Write-Host "==> runner  $runnerTag"
+        & docker build -t $runnerTag "$repoRoot\runner"
+        if ($LASTEXITCODE -ne 0) { throw "runner 镜像构建失败" }
+
         Write-Host ""
         Write-Host "构建完成。部署用:"
         Write-Host "  IMAGE_TAG=$sha (写进 deploy/.env)"
         # 传输必须走文件,不能在 PowerShell 里管道直传:PS 5.1 对原生命令的管道
         # 按文本重编码,docker save 输出的二进制 tar 会被破坏,远端 load 必失败。
         Write-Host "  传输(勿在 PowerShell 用 `"docker save | ssh docker load`" 管道直传,二进制会被重编码破坏):"
-        Write-Host "    docker save -o xray-$sha.tar $apiTag $webTag"
+        Write-Host "    docker save -o xray-$sha.tar $apiTag $webTag $runnerTag"
         Write-Host "    scp xray-$sha.tar <host>:~  然后  ssh <host> docker load -i xray-$sha.tar"
         Write-Host "  或直接: .\dev.ps1 ship <host>"
     }
@@ -206,14 +237,15 @@ switch ($Cmd) {
         $registry = if ($env:IMAGE_REGISTRY) { $env:IMAGE_REGISTRY } else { "local" }
         $apiTag = "$registry/xray-api:$sha"
         $webTag = "$registry/xray-web:$sha"
-        foreach ($t in @($apiTag, $webTag)) {
+        $runnerTag = "$registry/xray-runner:$sha"
+        foreach ($t in @($apiTag, $webTag, $runnerTag)) {
             & docker image inspect $t 2>$null | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "本机没有镜像 $t,先跑 .\dev.ps1 build" }
         }
 
         $tar = Join-Path $env:TEMP "xray-$sha.tar"
-        Write-Host "==> docker save → $tar"
-        & docker save -o $tar $apiTag $webTag
+        Write-Host "==> docker save → $tar(三镜像:api / web / runner)"
+        & docker save -o $tar $apiTag $webTag $runnerTag
         if ($LASTEXITCODE -ne 0) { throw "docker save 失败" }
         $mb = [math]::Round((Get-Item $tar).Length / 1MB, 1)
         Write-Host "    $mb MB"
@@ -266,6 +298,32 @@ switch ($Cmd) {
         $n = (Get-ChildItem -Recurse -File $dst).Count
         Write-Host "已同步 $n 个文件到 .agents\skills:$names"
         Write-Host "(codex 读 .agents\skills;Claude Code 仍读 .claude\skills)"
+    }
+    "skills-gen" {
+        # R-SKILLS-2:读 runner\skills → 生成 runner\manifest.json + apps\api\shared\skills.generated.ts。
+        # 两份都是生成物、都入库;apps\api\agent\skills-manifest.test.ts 把「生成物 == 现算」钉成测试。
+        # 生成器只用 node 标准库、刻意放在 Encore app root 之外(tools\,规则 6)。
+        & node "$repoRoot\tools\skills-manifest\generate.mjs" @args
+        exit $LASTEXITCODE
+    }
+    "runner" {
+        # R-SKILLS-2:本机起 skill-runner 执行容器,TCP 开发模式(生产是 unix socket + network_mode: none)。
+        # api 在 Windows 宿主上拿不到容器里的 unix socket,所以本机用 TCP;api 侧要设
+        #   $env:XRAY_SKILL_RUNNER_URL = "http://127.0.0.1:8000"   (代码级闭集,只认这一种形状)
+        # 再起 .\dev.ps1。容器的其它约束(只读根 FS / noexec tmpfs / 非 root / cap_drop / pids / 内存)与 compose 一致,
+        # 只有网络不同 —— 别把这条命令当成隔离形态的验收,那在生产冒烟(任务卡验收 ⑮)。
+        & node "$repoRoot\tools\skills-manifest\generate.mjs" --check
+        if ($LASTEXITCODE -ne 0) { throw "skills 清单已漂移,先跑 .\dev.ps1 skills-gen" }
+        Write-Host "==> docker build runner\ → xray-runner:dev"
+        & docker build -t xray-runner:dev "$repoRoot\runner"
+        if ($LASTEXITCODE -ne 0) { throw "runner 镜像构建失败" }
+        Write-Host "==> docker run(Ctrl+C 停;RUNNER_LISTEN=tcp://0.0.0.0:8000 → 127.0.0.1:8000)"
+        & docker run --rm --name xray-runner-dev -p 127.0.0.1:8000:8000 `
+            -e RUNNER_LISTEN=tcp://0.0.0.0:8000 -e RUNNER_NETWORK=none `
+            --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
+            --tmpfs /run/runner:rw,size=1m,uid=10001,gid=10001 `
+            --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 384m --cpus 1.0 `
+            xray-runner:dev
     }
     "wt-clean" {
         $wtRoot = "$repoRoot\.claude\worktrees"

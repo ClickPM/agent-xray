@@ -105,7 +105,7 @@
 
 | **R-TABS** | 顶部导航 tab 的呈现开关(MCP 逐个开关三个 tab 露不露;隐藏 = 导航条不渲染 + 页面不可达,后端端点照常) | ✅ 已完成([任务卡](rounds/round-tabs/round-tabs.md));11 项验收全过,`dev.ps1 test` 16 文件 388 用例;真实 MCP 协议路径本机实跑通过(34 工具、enum 下发、拒未知 key、拒关最后一个可见 tab)。codex 首轮**零 findings**,缺陷门禁 PASS。**所有者裁定边界只到呈现层**,不碰任何后端端点。待发预发/生产(迁移 v10→v11) | 2026-09-03 |
 | **R-SKILLS** | Skills 技能库 tab(第四个顶部 tab:按用途分类的 skill 卡片 → 详情页目录树 + 逐文件预览(markdown / 代码带行号)+ 复制安装命令 / GitHub 外链 / 站内 zip;内容经 MCP 整包发布) | ✅ **实现完成、codex 三轮审查收口(整改后 PASS),待合并 `main` 与发版**([任务卡](rounds/round-skills/round-skills.md),分支 `claude/round-skill-phase-one-abc0e6`,2026-09-03):迁移 `012` 三张表 + `apps/api/skills/` 只读面(首页 / 详情 / zip)+ `shared/skill-pack.ts` 判据与 fflate 打包 + mcp 八个 `skills_*`(工具 34 → 42)+ 前端 2f/2g/2h + 四格 tab 三处登记;`check` / `test` 全绿(18 文件 / 413 用例)、本机验收 ①–⑪ / ⑬ / ⑭ 通过(真实 MCP 路径发布 `encore-api` 等四个 skill,zip 解压逐文件一致);codex 三轮(全量 / 全量 / 整改 diff)共 4 P2 + 1 P3 全部整改,high 级为零;镜像验收 ⑫ 留在合并后的发版步骤。设计稿 `2f–2h` 已于同日并入 `design/`;四条裁定(zip = `fflate`、第三方 LICENSE 与仓库链接**非必填**、仓库名按 skill 逐个必填、高亮三 token)全部按裁定落地 | — |
-| **R-SKILLS-2** | agent 使用 skills(`round-skills` 2.0 迭代):`skill_load` 注入 + `skill_run` 在独立无网络容器里跑 skill 自带的 Python 脚本(第四组「沙箱执行组」,首个 `dangerous=TRUE` 工具)· 守卫 / 注入 / 运行三条轨迹进既有 34 事件 · 可用集合 = 代码清单 ∩ 库里开关 ∩ hash 一致 | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills-2.md) · [研究与七条裁定](rounds/round-skills/research.md));规则 9 措辞、第四组、威胁模型 6、容器与供应链约束已按「先改文档」写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md`。**三个开工前置**:R-SKILLS(1.0)落地合并、画板 1f/1g 加第四组(所有者画布)、spike「Encore bun 运行时 `fetch` 走 unix socket」(不通则 BLOCKED 回所有者,不自行退到共网) | — |
+| **R-SKILLS-2** | agent 使用 skills(`round-skills` 2.0 迭代):`skill_load` 注入 + `skill_run` 在独立无网络容器里跑 skill 自带的 Python 脚本(第四组「沙箱执行组」,首个 `dangerous=TRUE` 工具)· 守卫 / 注入 / 运行三条轨迹进既有 34 事件 · 可用集合 = 代码清单 ∩ 库里开关 ∩ hash 一致 | 🔧 **代码已落地、待审查合并**([任务卡](rounds/round-skills/round-skills-2.md) · [研究与七条裁定](rounds/round-skills/research.md)):`runner/` 执行容器 + `tools/skills-manifest` 生成器 + 迁移 013 + 两个工具 / 两个扩展 / MCP +4(46)+ 前端三处投影;`dev.ps1 test` 全绿(api 24 文件 500 用例 + web 9 用例),含 faux provider 驱动真实 pi loop 的轨迹形状测试。spike 通过(两个 `network_mode: none` 容器经 unix socket,bun `fetch({unix})` 通)。**前置第 2 项未闭合**:画板 1f/1g 的第四组所有者尚未在画布上画,前端按任务卡建议值先接、待核对。生产冒烟 4 条与发版在合并 `main` 之后 | — |
 | **R-WEBFETCH** | agent 读访客指定的公网网页(建在 R-SKILLS-2 之上):不是新工具,是沙箱执行组的 egress 档 skill `web-fetch`,跑在同一 runner 镜像的第二个实例 `skill-runner-egress`(只出公网)里 · SSRF 防线 = 脚本逐地址校验 + 钉 IP 连 / 容器不在内部网络 / 宿主 `DOCKER-USER` 过滤 · 不维护域名黑白名单 · 零新工具 / 画板 / 迁移 / MCP 工具 / 前端改动 | 📝 **文档就绪、未开工**([任务卡](rounds/round-webfetch/round-webfetch.md) · [预研留档](rounds/round-webfetch/study.md));所有者十条裁定已落(2026-09-03),规则 9「先改文档」已写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md` / `research.md` §2.2 / `round-skills-2.md`(C6 提前)。**前置**:R-SKILLS-2 合并 `main`;所有者经 MCP 上传 `web-fetch` 展示副本 | — |
 
 ## 里程碑
@@ -512,10 +512,10 @@
 - **所有者裁定四条(2026-09-03)**:zip 库 = `fflate`;第三方 skill 的 `LICENSE` 与仓库链接 `repoUrl` **均非必填**(写面不拦,`repoUrl` 空时 GitHub 按钮与出处链接不渲染,与 About `originUrl` 同一口径;许可合规由所有者收录时自行把关);仓库名不设全局默认,`repo` 是每个 skill 发布时的必填字段(画板里 `ClickPM/agent-skills` 只是示例数据);代码高亮按画板做三 token
 - **止损**:回退 = 删两个目录 + 登记表两行 + 两条路由 + 一条 `DROP` 迁移;临时下架只需 `site_tab_set{skills,false}`
 
-### R-SKILLS-2 — agent 使用 skills:注入 + 沙箱运行(`round-skills` 的 2.0 迭代;所有者裁定 2026-09-03;文档就绪、未开工)
+### R-SKILLS-2 — agent 使用 skills:注入 + 沙箱运行(`round-skills` 的 2.0 迭代;所有者裁定 2026-09-03;同日代码落地、待审查合并)
 
 > 建在 R-SKILLS(1.0)之上,不另起一套 skill 存储。任务卡 [`rounds/round-skills/round-skills-2.md`](rounds/round-skills/round-skills-2.md),
-> 研究与七条裁定 [`research.md`](rounds/round-skills/research.md)(pi 0.84.3 内核实测依据在附 A)。**代码一行未写**。
+> 研究与七条裁定 [`research.md`](rounds/round-skills/research.md)(pi 0.84.3 内核实测依据在附 A)。实测与偏离记在任务卡「本轮实测」。
 
 **问题**:1.0 让访客看得到、拿得走 skill,但站上的 agent 自己用不了它们 —— 而「agent 怎么用 skill、守卫怎么拦、脚本怎么跑」正是本站右栏最想展示的一段内核轨迹。
 所有者的原始要求六条:能运行 skills;能跑 skill 内的 Python 脚本;运行阶段有 pi 守卫插件;脚本必须在虚拟环境里;只能是内置 skill 与脚本、不许临时写脚本;三条轨迹在右栏可见。

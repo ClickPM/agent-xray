@@ -1,0 +1,49 @@
+{
+  "network": "none",
+  "scripts": {
+    "wordfreq.py": {
+      "description": "统计一段文本的词频,返回出现最多的若干个词(英文按单词、中文按单字)",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "要统计的文本",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "top": {
+            "type": "integer",
+            "description": "返回出现次数最多的前几个,默认 10",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": ["text"],
+        "additionalProperties": false
+      }
+    },
+    "json_pretty.py": {
+      "description": "把一段 JSON 文本格式化,并统计键数、嵌套深度与顶层类型",
+      "input": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "string",
+            "description": "一段 JSON 文本",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "indent": {
+            "type": "integer",
+            "description": "缩进空格数,默认 2;0 = 压成一行",
+            "minimum": 0,
+            "maximum": 8
+          }
+        },
+        "required": ["json"],
+        "additionalProperties": false
+      }
+    }
+  }
+}
