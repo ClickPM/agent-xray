@@ -2,7 +2,8 @@
 
 <!-- 保存为 rounds/round-skills/round-skills.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**进行中 —— 实现完成、本机验收 ①–⑪ / ⑬ / ⑭ 通过(2026-09-03);待 codex 审查、待镜像验收 ⑫ 与生产发版**
+> 状态:**审查通过、待合并 `main`(2026-09-03)** —— 实现完成、本机验收 ①–⑪ / ⑬ / ⑭ 通过、codex 三轮审查收口(整改后 PASS);
+> 合并后进入发版步骤:`dev.ps1 build`(tag = 合并后 SHA)→ 冒烟第 1 / 3 条覆盖验收 ⑫ → `docs/releases.md` 记一行 → 所有者经 MCP 上传首批 skills
 >
 > 开工前置动作已完成:任务卡与 ROUNDS.md 拆解已过目,「所有者裁定」四条已定(见下),文档已合并 `main`。
 > 开工分支 `claude/round-skill-phase-one-abc0e6`(worktree),实测与偏离见文末「本轮实测」。
@@ -173,8 +174,9 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
   1. [P2] `mcp/store.ts` 的 `getSkill`(管理端 `skills_get`)仍是两条查询各看各的快照 —— 与首轮 #2 同一类,首轮只改了访客读面。
      **采纳整改**:两条查询进同一个 `REPEATABLE READ, READ ONLY` 事务(复用 `inTransaction`)。
   2. [P3] `CodeView` 对空文件渲染一个编号 1 的空行,而头部按 `line_count` 写 `0 行`。**采纳整改**:空内容渲染 0 行。
-- **第 3 轮**:<按 CLAUDE.md「第 3 轮起只审整改 diff」,`--base 0f9c958`;待发起>
-- 结论:<待第 3 轮>
+- **第 3 轮**(只审整改 diff,`--base 0f9c958`,审 `01016a4`):**无 findings**(「快照事务正确、空文件行数已对齐」;它提到的 `encore check` 超时是 codex 自己沙箱里的 daemon,本机 check 通过)。
+- 结论:**整改后 PASS**(三轮合计 4 P2 + 1 P3,全部采纳整改;high 级为零;无不采纳项)。
+  顺带的教训:第 1 轮 #2 修了访客读面的快照问题,第 2 轮在管理端读面又来了同一类 —— 一条 finding 指向一类模式时,同一 diff 里的同类位置要一起改。
 
 ## 失败处理
 
