@@ -5,6 +5,11 @@
 > 状态:**未开始(文档就绪、四条裁定已落,2026-09-03;所有者要求另开 session 开工)**
 >
 > 开工前置动作已完成:任务卡与 ROUNDS.md 拆解已过目,「所有者裁定」四条已定(见下),文档已合并 `main`。
+>
+> **2.0 迭代已裁定并落卡**(2026-09-03):agent 使用 skills(注入 + 沙箱运行 Python 脚本)见 [`round-skills-2.md`](round-skills-2.md)
+> 与 [`research.md`](research.md)。**本卡(1.0)是它的前置,范围不变**:本轮 agent 仍不读 skills、新表仍不授权任何 agent 角色;
+> 2.0 只会 `ADD COLUMN skills.agent_enabled`,不改本卡的表结构与八个 MCP 工具契约。所有者要在本轮经 MCP 上传首批 skills(2.0 裁定 5),
+> 其中打算给 agent 用的那些,目录还要原样放进 `runner/skills/`(2.0 的一致性判据要求库内副本与代码副本逐文件 sha256 相等)。
 
 ## 目标
 
