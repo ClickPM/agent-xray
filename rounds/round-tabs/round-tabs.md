@@ -1,6 +1,6 @@
 # Round R-TABS — 顶部导航 tab 的呈现开关(MCP 可配)
 
-> 状态:进行中(实现与本机验收已完成,待 codex 审查 → 合并 `main` → 发预发/生产)
+> 状态:已完成(codex 审查零 findings;待发预发/生产)
 
 ## 目标
 
@@ -92,9 +92,15 @@ R6(MCP 管理面)、R8(About 只读服务的读/写分工样板)、R11(生产已
 
 ## 代码审查
 
-- 审查方式:codex `/codex:review`(本轮改动 17 个文件,带 `--background`)
-- findings 处理:<待回填>
-- 结论:<待回填>
+- 审查方式:codex `/codex:review --background`,范围 `branch diff against main`(本轮是 R-TABS 的第 1 轮审查,
+  按 CLAUDE.md「审查范围」用固定的全量范围)
+- findings 处理:**零 findings**。原文:"The changes consistently implement configurable tab visibility across the
+  MCP management layer, API read endpoint, database migration, and dynamic frontend routing. TypeScript checks pass,
+  and no actionable regressions were identified in the diff."
+  审查过程里 codex 自己跑了 `npx tsc --noEmit`(通过)与 `dev.ps1 test`(exit 0),并专门查过几处值得查的:
+  Next 客户端 Router Cache 会不会让导航条留在旧状态、`site_tab_config` 的迁移是否漏了角色授权、
+  `= ANY($1)` 的数组参数序列化、React `cache` 的作用域、以及 `sensitive: true` 对数据暴露面的影响 —— 均未成为 finding。
+- 结论:**PASS**(无整改,故不需要第二轮复审;缺陷门禁通过)
 
 ## 失败处理
 
@@ -115,5 +121,19 @@ R6(MCP 管理面)、R8(About 只读服务的读/写分工样板)、R11(生产已
   `readonly SiteTabMeta[]` 的话 `key` 退化成 `string`,enum 仍能在运行期拦住未知值,
   但 `tools/list` 不再向 MCP 客户端下发「可用的三个值」,管理端只能猜键名。
   已在 `shared/site-tabs.ts` 注释里写明,别在整理类型时把 `as const` 顺手删掉。
-- **没做的事**:本机没有走真实的 MCP 请求路径(`xray-admin` 需要 `XRAY_MCP_TOKEN` 原文,
-  仓库里只有哈希),写面是经 store 层单测覆盖的;真实 MCP 调用留到 130 预发验收。
+- **真实 MCP 协议路径已在本机验掉**(所有者指出 token 就在用户环境变量里,不必等预发):
+  用 `XRAY_MCP_TOKEN` 直接对 `127.0.0.1:4000/mcp` 发 2026-07-28 契约的 JSON-RPC(`_meta` 三个带命名空间的键、
+  `Mcp-Method` 头,`tools/call` 再加 `Mcp-Name` 头;形状照 `rounds/round-10/checklist.md` §9),实测:
+  | 步骤 | 结果 |
+  |---|---|
+  | `server/discover` | 200,`supportedVersions=2026-07-28` |
+  | `tools/list` | 200,**工具总数 34**,含 `site_tabs_list` / `site_tab_set`;`key` 的 enum 下发为 `runtime, notes, about` |
+  | `site_tab_set{runtime,false}` | `visibleTabs: [notes, about]`,`GET /site/tabs` 同步变为 `runtime:false` |
+  | `site_tab_set{key:'admin'}` | `isError`,SDK 层就拒:`expected one of "runtime"\|"notes"\|"about"` |
+  | 关掉 notes 后再关 about | `isError` + 那句可读的拒绝理由,事务回滚,about 仍可见 |
+  | 三个逐个恢复 | 全部 `updated`,收尾态三格全可见 |
+- **仍留给 130 / 生产的**:迁移 v10 → v11 在真实部署上跑一遍,以及经 `xray-admin-130` /
+  `xray-admin-prod` 各调一次(生产那把 token 也在用户环境变量里,但生产现在跑的是 `b291eb1`,
+  还没有这两个工具 —— 发上去之后才谈得上验)。
+- **踩到的第二处坑(规则 3)**:探测脚本第一版带中文注释、没存 BOM,PowerShell 5.1 按 ANSI(936) 解码,
+  整个脚本被解析成一堆语法错误。规则 3 说的就是这件事;临时脚本更省事的做法是**全 ASCII**。
