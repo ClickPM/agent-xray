@@ -2,6 +2,7 @@
 // 由 components/Markdown 映射到画板既有的排版(规则 7)。
 import Link from "next/link";
 import { api, notFoundOnBadRoute } from "@/lib/api";
+import { requireVisibleTab } from "@/lib/tabs-server";
 import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
 import { isoDate, readingMinutes } from "@/lib/time";
@@ -29,6 +30,9 @@ export default async function ArticlePage({
   params: Promise<{ series: string; chapter: string }>;
 }) {
   const { series, chapter } = await params;
+
+  // R-TABS:Notes tab 被隐藏时,它的地址在站点上不存在(404,不重定向 —— 见 lib/tabs-server.ts)
+  await requireVisibleTab("notes");
 
   // 路由参数是访客可控的:认不出与形状不合法都渲染 404,真故障原样抛出。
   const data = await api.notes.getChapter(series, chapter).catch(notFoundOnBadRoute);

@@ -9,6 +9,8 @@ import type { Transaction } from "encore.dev/storage/sqldb";
 import { encryptSecret, maskSecret } from "../shared/crypto";
 import { safeErrorText } from "../shared/redact";
 import { siteDay, siteDayAgo } from "../shared/site-time";
+// tab 的闭集与读面(apps/api/site/)共用同一份登记表;两个面不互相 import,故落在 shared/
+import { SITE_TAB_KEYS, SITE_TABS, isSiteTabKey } from "../shared/site-tabs";
 import { chapterHash, countWords, sha256Hex } from "./content";
 import { db } from "./db";
 
@@ -1319,4 +1321,104 @@ export async function setToolConfig(input: {
     input.note ?? null,
   );
   return { created: row?.action === "created" };
+}
+
+// ───────────────────── 顶部导航 tab 的呈现开关(R-TABS)─────────────────────
+
+export interface SiteTabRow {
+  key: string;
+  /** 管理端可读的名字,来自 shared/site-tabs.ts 的登记表(不是库里的列) */
+  label: string;
+  /** 该 tab 在站点上的落点,同样来自登记表 */
+  path: string;
+  visible: boolean;
+  /** epoch ms;从未配置过(库里没有这一行)时为 null */
+  updatedAt: number | null;
+}
+
+/**
+ * 登记表 × 库里的开关。兜底方向与读面(`apps/api/site/store.ts`)逐字相同:
+ * 登记表里有、库里没行 → 当作可见;库里有、登记表里没有 → 丢弃。
+ * 两处各自实现是刻意的(两个面不互相 import),所以有一条测试拿它们对比。
+ */
+export async function listSiteTabs(): Promise<SiteTabRow[]> {
+  const rows = await db.rawQueryAll<{ key: string; visible: boolean; updatedAt: number }>(
+    `SELECT key, visible, ${ms("updated_at", "updatedAt")} FROM site_tab_config`,
+  );
+  const byKey = new Map(rows.map((r) => [r.key, r]));
+  return SITE_TABS.map((t) => {
+    const row = byKey.get(t.key);
+    return {
+      key: t.key,
+      label: t.label,
+      path: t.path,
+      visible: row?.visible ?? true,
+      updatedAt: row ? row.updatedAt : null,
+    };
+  });
+}
+
+/**
+ * 事务级 advisory lock:「不许关掉最后一个可见 tab」是一条**跨行**约束,
+ * 而跨行约束在 READ COMMITTED 下靠单条语句是拦不住并发的 ——
+ * 两个并发的「关掉 notes」「关掉 about」各自看到对方提交前的快照,
+ * 双双认为「还剩别的可见 tab」,提交完站点上一个 tab 都不剩。
+ *
+ * 用 advisory lock 而不是 `SELECT … FOR UPDATE`:理由与 `lockProviders` 同 ——
+ * 行锁在**缺行**的情形下锁不住任何东西(某个 tab 从没被配置过时它本来就没有行),
+ * 而这里恰恰要在「行还不存在」时也保证互斥。
+ */
+const SITE_TABS_LOCK = 0x74616231; // 'tab1',本库内唯一即可
+async function lockSiteTabs(tx: Transaction): Promise<void> {
+  await tx.rawExec(`SELECT pg_advisory_xact_lock($1)`, SITE_TABS_LOCK);
+}
+
+/**
+ * 置一个 tab 的呈现开关。
+ *
+ * **拒绝关掉最后一个可见的 tab**:全关之后站点的导航条是空的、`/` 无处可去
+ * (前端隐藏 `runtime` 时是重定向到第一个可见 tab,没有可见 tab 就没有落点),
+ * 而把自己关成这样之后**唯一的恢复通路仍然是 MCP** —— 这不是死锁,但它是一个
+ * 除了所有者自己没人看得懂的故障态。在这里挡掉,比在前端补一层兜底便宜。
+ *
+ * key 的合法性由 tools 层的 `z.enum` 与这里各判一次:tool 那道给的是可读的错误消息
+ * 与客户端可见的取值列表,这道保证「绕过 tool 直接调 store 也进不了未知的 key」。
+ */
+export async function setSiteTab(input: {
+  key: string;
+  visible: boolean;
+}): Promise<{ created: boolean; visibleKeys: string[] }> {
+  if (!isSiteTabKey(input.key)) {
+    throw new NotFoundError(`未知的 tab:${input.key}(可用:${SITE_TAB_KEYS.join(" / ")})`);
+  }
+  return inTransaction(async (tx) => {
+    await lockSiteTabs(tx);
+    const row = await tx.rawQueryRow<{ action: string }>(
+      `INSERT INTO site_tab_config (key, visible, updated_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (key) DO UPDATE
+          SET visible = EXCLUDED.visible,
+              updated_at = now()
+       RETURNING CASE WHEN xmax = 0 THEN 'created' ELSE 'updated' END AS action`,
+      input.key,
+      input.visible,
+    );
+
+    // 结果集**只按登记表里的 key 统计**:库里遗留的未知行不该顶替一个真的可见 tab
+    // (读面会把它们丢弃,前端看不到它们)。缺行按可见计,与两处读面的兜底一致。
+    const after = await tx.rawQueryAll<{ key: string; visible: boolean }>(
+      `SELECT key, visible FROM site_tab_config WHERE key = ANY($1)`,
+      SITE_TAB_KEYS as string[],
+    );
+    const byKey = new Map(after.map((r) => [r.key, r.visible]));
+    const visibleKeys = SITE_TAB_KEYS.filter((k) => byKey.get(k) ?? true);
+
+    if (visibleKeys.length === 0) {
+      throw new ConflictError(
+        `${input.key} 是最后一个可见的 tab,关掉它之后站点上不会剩下任何入口 —— 拒绝。` +
+          `先把另一个 tab 打开,再关这个。`,
+      );
+    }
+    return { created: row?.action === "created", visibleKeys: [...visibleKeys] };
+  });
 }

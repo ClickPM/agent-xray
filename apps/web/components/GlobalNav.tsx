@@ -4,12 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { CSSProperties } from "react";
 import { XrayMark } from "@/components/XrayMark";
-
-const TABS = [
-  { label: "Runtime", href: "/", match: (p: string) => p === "/" },
-  { label: "Notes", href: "/notes", match: (p: string) => p.startsWith("/notes") },
-  { label: "About", href: "/about", match: (p: string) => p.startsWith("/about") },
-];
+import { TABS, type TabKey } from "@/lib/tabs";
 
 function ThemeToggle() {
   return (
@@ -36,8 +31,15 @@ function ThemeToggle() {
   );
 }
 
-export function GlobalNav() {
+/**
+ * R-TABS:`visible` 是本次渲染要露出来的 tab(由 `(site)/layout.tsx` 服务端取好传进来)。
+ *
+ * **这是本组件相对画板 1a 的全部改动**(CLAUDE.md 规则 7):tab 组少渲染几个 `<Link>`,
+ * 每一格的样式、间距、选中态与外层容器一个字节都没动。全部可见时与画板一字不差。
+ */
+export function GlobalNav({ visible }: { visible: readonly TabKey[] }) {
   const pathname = usePathname() ?? "/";
+  const tabs = TABS.filter((t) => visible.includes(t.key));
   return (
     <div
       style={{
@@ -62,7 +64,7 @@ export function GlobalNav() {
           borderRadius: 7, padding: 2, gap: 2,
         }}
       >
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const active = t.match(pathname);
           const style: CSSProperties = {
             fontSize: 12, padding: "4px 14px", borderRadius: 5,
@@ -73,7 +75,7 @@ export function GlobalNav() {
             textDecoration: "none",
           };
           return (
-            <Link key={t.label} href={t.href} style={style}>
+            <Link key={t.key} href={t.href} style={style}>
               {t.label}
             </Link>
           );

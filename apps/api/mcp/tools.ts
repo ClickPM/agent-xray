@@ -27,6 +27,8 @@ import { SITE_TZ_LABEL } from "../shared/site-time";
 import { allowedImageHosts, checkImageBaseUrl } from "../shared/imagegen-hosts";
 import { magicMatches } from "../shared/image-magic";
 import { allowedHosts, checkBaseUrl } from "../shared/websearch-hosts";
+// tab 的闭集与读面(apps/api/site/)共用同一份登记表;两个面不互相 import,故落在 shared/
+import { SITE_TAB_KEYS } from "../shared/site-tabs";
 
 /**
  * slug 口径必须与 `apps/api/notes/series.ts` 的 SLUG_RE 一字不差。
@@ -934,6 +936,61 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       write(ctx, "tool_config_set", `工具 ${args.name} enabled=${args.enabled}`, async () => {
         const r = await store.setToolConfig(args);
         return { name: args.name, enabled: args.enabled, status: r.created ? "created" : "updated" };
+      }),
+  );
+
+  // ───────────────────── 顶部导航 tab 的呈现(R-TABS)─────────────────────
+  //
+  // 【边界:只管呈现,不停后端】隐藏一个 tab = 导航条不渲染它 + web 侧它的页面不可达。
+  // `/agent/*`、`/trace/*`、`/notes/*`、`/rss.xml` 照常服务(所有者裁定 2026-09-03)。
+  // 两个 tool 的 description 都重申了这一条 —— 它是最容易被读成「关掉整个功能」的地方。
+
+  server.registerTool(
+    "site_tabs_list",
+    {
+      title: "列出顶部导航各 tab 的呈现状态",
+      description:
+        "站点顶部三格(Runtime / Notes / About)现在分别露不露。" +
+        "updatedAt 为 null = 这个 tab 从没被配置过(此时按可见处理)。" +
+        "**这只是呈现开关**:隐藏的 tab 只是导航条上没有、页面在站点上打不开," +
+        "后端 API(/agent/*、/trace/*、/notes/*、/rss.xml)一律照常服务。",
+      inputSchema: {},
+    },
+    async () =>
+      read("site_tabs_list", async () =>
+        (await store.listSiteTabs()).map((t) => ({ ...t, updatedAt: toIsoOrNull(t.updatedAt) })),
+      ),
+  );
+
+  server.registerTool(
+    "site_tab_set",
+    {
+      title: "显示 / 隐藏一个顶部导航 tab",
+      description:
+        "改完**下次渲染即生效**,不需要发版或重启(站点各页都是 force-dynamic 的 Server Component)。\n" +
+        "隐藏 `runtime` 时,站点根路径 `/` 会 302 到第一个仍可见的 tab —— 首页不会变成 404。\n" +
+        "**不许关掉最后一个可见的 tab**(会拒绝):全关之后站点上不剩任何入口。\n" +
+        "**这只是呈现开关,不是停机开关**:被隐藏的 tab 其后端端点仍在服务," +
+        "想让 agent 真的停下来,用 `tool_config_set` 关工具、或删掉默认 LLM provider。",
+      inputSchema: {
+        // 【必须是 enum,不能是自由字符串】取值是一个闭集(shared/site-tabs.ts),
+        // 而 enum 会随 tools/list 一起下发给客户端 —— 管理端因此不必猜键名。
+        // store 层另有一道同样的判断:绕过 tool 直接调 store 也进不了未知的 key。
+        key: z
+          .enum(SITE_TAB_KEYS)
+          .describe("runtime = 首页的 Runtime 工作台 / notes = 研习库 / about = About 页"),
+        visible: z.boolean().describe("false = 导航条上不出现,且该 tab 的页面在站点上不可达"),
+      },
+    },
+    async (args) =>
+      write(ctx, "site_tab_set", `tab ${args.key} visible=${args.visible}`, async () => {
+        const r = await store.setSiteTab(args);
+        return {
+          key: args.key,
+          visible: args.visible,
+          status: r.created ? "created" : "updated",
+          visibleTabs: r.visibleKeys,
+        };
       }),
   );
 }

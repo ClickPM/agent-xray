@@ -36,6 +36,7 @@ export default class Client {
     public readonly agent: agent.ServiceClient
     public readonly metrics: metrics.ServiceClient
     public readonly notes: notes.ServiceClient
+    public readonly site: site.ServiceClient
     public readonly system: system.ServiceClient
     public readonly trace: trace.ServiceClient
     private readonly options: ClientOptions
@@ -56,6 +57,7 @@ export default class Client {
         this.agent = new agent.ServiceClient(base)
         this.metrics = new metrics.ServiceClient(base)
         this.notes = new notes.ServiceClient(base)
+        this.site = new site.ServiceClient(base)
         this.system = new system.ServiceClient(base)
         this.trace = new trace.ServiceClient(base)
     }
@@ -581,6 +583,42 @@ export namespace notes {
 
         public async siteFeed(method: "GET", body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
             return this.baseClient.callAPI(method, `/rss.xml`, body, options)
+        }
+    }
+}
+
+export namespace site {
+    export interface ListTabsResponse {
+        /**
+         * 顺序即登记表顺序;库里没有配置过的 tab 一律回 visible=true
+         */
+        tabs: SiteTab[]
+    }
+
+    export interface SiteTab {
+        /**
+         * 与 apps/web/lib/tabs.ts 的 key 一字不差
+         */
+        key: string
+
+        /**
+         * false = 导航条不渲染它,且它的页面在 web 侧不可达
+         */
+        visible: boolean
+    }
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.listTabs = this.listTabs.bind(this)
+        }
+
+        public async listTabs(): Promise<ListTabsResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/site/tabs`)
+            return await resp.json() as ListTabsResponse
         }
     }
 }

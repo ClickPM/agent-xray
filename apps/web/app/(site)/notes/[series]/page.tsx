@@ -1,6 +1,7 @@
 // 系列目录(设计稿画板 2b)。数据来自 notes 服务;样式与拆分前一致(规则 7)。
 import Link from "next/link";
 import { api, notFoundOnBadRoute } from "@/lib/api";
+import { requireVisibleTab } from "@/lib/tabs-server";
 import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
 import { relTime, tenThousand } from "@/lib/time";
@@ -10,6 +11,9 @@ import { relTime, tenThousand } from "@/lib/time";
 export const dynamic = "force-dynamic";
 
 export default async function SeriesPage({ params }: { params: Promise<{ series: string }> }) {
+  // R-TABS:Notes tab 被隐藏时,它的地址在站点上不存在(404,不重定向 —— 见 lib/tabs-server.ts)
+  await requireVisibleTab("notes");
+
   const { series } = await params;
 
   // 路由参数是访客可控的:认不出与形状不合法都渲染 404,真故障原样抛出。

@@ -8,7 +8,8 @@
 //   - provider 部分更新 —— 错了改个 baseUrl 会把限额清零
 //   - About 部分更新 —— 错了改一句 intro 会静默清空七张仓库卡(R8)
 //   - 访问统计聚合 —— 错了统计数字与打点对不上,而没有任何东西会报错(R8)
-import { beforeEach, describe, expect, it } from "vitest";
+//   - tab 呈现开关 —— 错了会把站点关成没有任何入口,而恢复通路仍只有 MCP(R-TABS)
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as z from "zod";
 import { siteDay, siteDayAgo } from "../shared/site-time";
 import {
@@ -22,6 +23,7 @@ import {
 } from "../shared/crypto";
 import { allowedImageHosts, checkImageBaseUrl } from "../shared/imagegen-hosts";
 import { allowedHosts, checkBaseUrl } from "../shared/websearch-hosts";
+import { SITE_TAB_KEYS } from "../shared/site-tabs";
 import { parseBearer, sha256Hex, verifyAuth } from "./auth";
 import { chapterHash, countWords } from "./content";
 import { db } from "./db";
@@ -914,11 +916,12 @@ describe("imagegen 管理 tool 的入参 schema", () => {
     return z.object(t!.config.inputSchema!);
   };
 
-  it("四个 imagegen tool 都注册了;总数 32", () => {
+  it("四个 imagegen tool 都注册了;总数 34", () => {
     for (const name of ["imagegen_providers_list", "imagegen_provider_upsert", "imagegen_set_default", "imagegen_provider_delete"]) {
       expect(registered.map((r) => r.name)).toContain(name);
     }
-    expect(registered).toHaveLength(32);
+    // 总数是一道「别不小心多注册一个管理面工具」的闸,加工具时**要**改这个数字(R-TABS:32 → 34)
+    expect(registered).toHaveLength(34);
   });
 
   it("baseUrl 被拒时给出能行动的理由;搜索白名单里的域在这里也被拒", () => {
@@ -960,5 +963,102 @@ describe("imagegen 管理 tool 的入参 schema", () => {
     expect(parse({ idleTimeoutMs: 120_000 })).toBe(true);
     expect(parse({ idleTimeoutMs: 4_999 })).toBe(false);
     expect(parse({ dailyImageLimit: -1 })).toBe(false);
+  });
+});
+
+describe("顶部导航 tab 呈现开关(mcp/store,R-TABS)", () => {
+  /** 复原成迁移种子的样子;写面测试全表改,跑完必须还原,否则后面的文件读到的是残局。 */
+  async function reseed(): Promise<void> {
+    await db.exec`DELETE FROM site_tab_config`;
+    for (const key of SITE_TAB_KEYS) {
+      await db.rawExec(`INSERT INTO site_tab_config (key, visible) VALUES ($1, TRUE)`, key);
+    }
+  }
+
+  beforeEach(reseed);
+  afterEach(reseed);
+
+  it("列出时带上登记表里的 label / path,顺序取登记表", async () => {
+    const tabs = await store.listSiteTabs();
+    expect(tabs.map((t) => t.key)).toEqual([...SITE_TAB_KEYS]);
+    expect(tabs[0]).toMatchObject({ key: "runtime", path: "/", visible: true });
+    expect(tabs[0].label).not.toBe("");
+  });
+
+  it("隐藏一个 tab:读回是 false,回执里的 visibleTabs 少了它", async () => {
+    const r = await store.setSiteTab({ key: "runtime", visible: false });
+    expect(r.visibleKeys).toEqual(["notes", "about"]);
+    const tabs = await store.listSiteTabs();
+    expect(tabs.find((t) => t.key === "runtime")?.visible).toBe(false);
+    // 只动被点名的那一个
+    expect(tabs.filter((t) => t.visible).map((t) => t.key)).toEqual(["notes", "about"]);
+  });
+
+  it("从没配置过的 tab 也能直接设(缺行时是 created,不是报错)", async () => {
+    await db.rawExec(`DELETE FROM site_tab_config WHERE key = 'about'`);
+    const r = await store.setSiteTab({ key: "about", visible: false });
+    expect(r.created).toBe(true);
+    expect((await store.listSiteTabs()).find((t) => t.key === "about")?.visible).toBe(false);
+  });
+
+  it("未知 key 进不了库(绕过 tool 直接调 store 也一样)", async () => {
+    await expect(store.setSiteTab({ key: "admin", visible: true })).rejects.toThrow(store.NotFoundError);
+    const rows = await db.rawQueryAll<{ key: string }>(`SELECT key FROM site_tab_config`);
+    expect(rows.map((r) => r.key).sort()).toEqual([...SITE_TAB_KEYS].sort());
+  });
+
+  it("**拒绝关掉最后一个可见的 tab**,且那一行不会被改动", async () => {
+    await store.setSiteTab({ key: "runtime", visible: false });
+    await store.setSiteTab({ key: "notes", visible: false });
+    await expect(store.setSiteTab({ key: "about", visible: false })).rejects.toThrow(store.ConflictError);
+    // 事务回滚:about 仍然可见,站点上还有入口
+    expect((await store.listSiteTabs()).filter((t) => t.visible).map((t) => t.key)).toEqual(["about"]);
+  });
+
+  it("库里遗留的未知行不算「还有可见 tab」—— 它在读面本来就被丢弃", async () => {
+    await db.rawExec(`INSERT INTO site_tab_config (key, visible) VALUES ('admin', TRUE)`);
+    await store.setSiteTab({ key: "runtime", visible: false });
+    await store.setSiteTab({ key: "notes", visible: false });
+    // 若把 'admin' 也数进去,这一句会「成功」,站点上却一个 tab 都不剩
+    await expect(store.setSiteTab({ key: "about", visible: false })).rejects.toThrow(store.ConflictError);
+  });
+
+  it("重新打开是对称的", async () => {
+    await store.setSiteTab({ key: "runtime", visible: false });
+    const r = await store.setSiteTab({ key: "runtime", visible: true });
+    expect(r.created).toBe(false);
+    expect(r.visibleKeys).toEqual([...SITE_TAB_KEYS]);
+  });
+});
+
+describe("site_tab_set 的入参 schema(R-TABS)", () => {
+  interface Registered {
+    name: string;
+    config: { inputSchema?: Record<string, z.ZodType> };
+  }
+
+  const registered: Registered[] = [];
+  const fakeServer = {
+    registerTool(name: string, config: Registered["config"]) {
+      registered.push({ name, config });
+    },
+  };
+  registerTools(fakeServer as never, {});
+
+  it("两个 tool 都注册了", () => {
+    expect(registered.map((r) => r.name)).toContain("site_tabs_list");
+    expect(registered.map((r) => r.name)).toContain("site_tab_set");
+  });
+
+  it("key 是闭集 enum:登记表里的都收,别的都拒", () => {
+    const t = registered.find((r) => r.name === "site_tab_set");
+    const schema = z.object(t!.config.inputSchema!);
+    for (const key of SITE_TAB_KEYS) {
+      expect(schema.safeParse({ key, visible: false }).success, key).toBe(true);
+    }
+    // 未知值、以及原型链上的名字(sandbox.test.ts 为 tool_config 记过同一个坑)
+    for (const key of ["admin", "Runtime", "constructor", ""]) {
+      expect(schema.safeParse({ key, visible: false }).success, key).toBe(false);
+    }
   });
 });

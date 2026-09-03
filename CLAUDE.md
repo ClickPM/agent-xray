@@ -23,7 +23,8 @@ This file provides guidance to Claude Code when working in this repository.
 apps/web      Next.js 15 前端(App Router)。三 Tab 已按画板实现,轮次实现 = 逐块换成真实
               API(样式零改动,规则 7);/admin 六页已于 R6 整目录删除
 apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。agent/ trace/ notes/ mcp/ 已落地
-              (R3/R4/R5/R6);metrics/ 只有 README(职责与安全约束已写明,实现按 ROUNDS.md)
+              (R3/R4/R5/R6);site/ 是顶部 tab 呈现开关的只读面(R-TABS);
+              metrics/ 只有 README(职责与安全约束已写明,实现按 ROUNDS.md)
 design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token 速查)——实现时逐画板对照
 deploy/       docker compose + Caddyfile(预发/生产共用;框架版,R9 定稿)
 docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署
@@ -78,6 +79,15 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 7. **非必要不得修改前端页面样式,不做视觉 review**。画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。(2026-08-31 修订:3a–3e 废弃,对应 `/admin` 六页按所有者裁定于 R6 整目录删除——属本条允许的结构性改动;同轮的 `next.config.ts` 配图 rewrite 亦然,理由=图片改从 Postgres 供,对外 URL 不变。)
 8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02 两次修订)。站点访客功能范围 = `design/` 画板 1a–1g + 2a–2e + 可交互原型;**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
     - **2026-09-02 修订(R-TOOLS)**:所有者裁定新增 **Tools 工具面板**,设计稿随之扩到 12 块(新增 `1f` 列表态 / `1g` 展开态,同日删除废弃的 `3a–3e`)。**扩边界的正确顺序是「先改设计稿、再进轮次」**——本条不是被绕过,是先被改了。面板是访客可见的**只读**能力说明(工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组),**不显示**启停开关、日限额与剩余次数、provider 与 model 名(那些是服务端配置,公开即泄配置面)。
+    - **2026-09-03 修订(R-TABS)**:所有者裁定新增**顶部 tab 的呈现开关**(经 MCP 逐个开关三个 tab 露不露)。
+      这**是**本条的例外(与 R-VISITOR 的会话删除入口同类,不同于 R-TOOLS 的「先改设计稿」):画板 1a 的导航条
+      是三格固定的,没画过「某一格可以不出现」。理由是它不是产品功能,是一次**合规运维动作**的开关 ——
+      备案审核窗口期要求内容可撤下,靠发版则一来一回两次构建 + 传镜像 + 重建容器。
+      **边界只到呈现层**:隐藏 = 导航条不渲染 + 该 tab 的页面在 web 侧不可达(`runtime` 落在站点根路径上,
+      改为 302 到第一个可见 tab),`/agent/*`、`/trace/*`、`/notes/*`、`/rss.xml` 等后端端点**照常服务**;
+      要真的停掉 agent 用 `tool_config_set`。三个 tab 全部可见时前端与画板 1a 一字不差,不新增画板。
+      tab 的闭集在 `apps/api/shared/site-tabs.ts`,**新增一个 tab 要改三处**(该文件 + 一条迁移种子 +
+      `apps/web/lib/tabs.ts`),缺哪一处的表现各不相同,文件头列了。
     - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用,新画板从 `1f` 顺延。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**;SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
     - **工具分两组**(R-WEBSEARCH,2026-09-01 修订;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。完整口径见 `docs/security.md` §1「工具分两组」。

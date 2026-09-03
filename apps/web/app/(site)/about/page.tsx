@@ -13,6 +13,7 @@
 // `https://github.com/.png` 会是一张 404 的头像)。
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { requireVisibleTab } from "@/lib/tabs-server";
 import { mono } from "@/lib/styles";
 
 // 内容随 MCP 写入变化,且 docker build 时后端不可达 —— 不允许构建期预渲染。
@@ -49,6 +50,9 @@ function safeExternal(value: string): string | null {
 }
 
 export default async function AboutPage() {
+  // R-TABS:About tab 被隐藏时,它的地址在站点上不存在(404,不重定向 —— 见 lib/tabs-server.ts)
+  await requireVisibleTab("about");
+
   const about = await api.about.get();
   const gh = about.githubUser ? `https://github.com/${about.githubUser}` : null;
   const origin = safeExternal(about.originUrl);

@@ -18,6 +18,7 @@ Caddy :443(自动 TLS,单机反代)
                         ├── trace 服务:GET /trace/stream(api.raw SSE ← 事件队列,推送前脱敏)
                         ├── notes 服务:教程库查询(前端用)+ pi 只读工具组(agent_ro 角色)
                         ├── mcp 服务:无状态 MCP 管理面 /api/mcp(内容发布 / 附件 / About / LLM 多 provider / 工具启停;静态 token,统计查询在 R8)
+                        ├── site 服务:GET /site/tabs(顶部 tab 呈现开关的只读面,R-TABS)
                         ├── metrics 服务:POST /t 访问打点
                         └── Postgres(docker-compose 内)
 ```

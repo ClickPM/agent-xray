@@ -229,6 +229,13 @@
       会抛 `URIError` 冒成 500 而不是 404。`agent/images.ts` 新端点已包了 try/catch 回 404;那两处是跨轮次问题,不当场改,
       修法同款三行 (2026-09-02)
 
+- [ ] R-TABS **About 页里指向 `/notes` 的那条链接在 Notes 被隐藏时会指到 404**(`apps/web/app/(site)/about/page.tsx:185`,
+      「教程库全部内容开源并提供 RSS 订阅 → Notes」)。这是站点上唯一一条跨 tab 的硬编码链接;
+      Notes 内部那几条面包屑不受影响(Notes 被藏起来时那些页面本身就不可达)。不当场改的理由:
+      修法要在画板 2e 的定稿页面里加一个条件渲染(规则 7 的结构性改动),而所有者本轮的实际用法是隐藏
+      **Runtime**、Notes 保持可见 —— 为一个不会发生的配置去动定稿页面不划算。将来真要隐藏 Notes 时再改,
+      改法是 About 页多取一次 `visibleTabKeys()`,那一句按 notes 是否可见渲染 (2026-09-03)
+
 ## 功能提案(需所有者裁定)
 
 - [ ] R-IMAGEGEN **`generate_image` 是否给访客一个 `size` 入参**(横版 / 竖版 / 方图)。本轮裁定只控 `prompt`、尺寸是

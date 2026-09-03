@@ -1,5 +1,6 @@
 // Notes 首页数据源(R5):真实 API 取代 demo-data,交互部分见 components/notes/NotesIndex。
 import { api } from "@/lib/api";
+import { requireVisibleTab } from "@/lib/tabs-server";
 import { rssDisplay, rssHref } from "@/lib/site";
 import { relTime } from "@/lib/time";
 import { NotesIndex, type IndexCategory } from "@/components/notes/NotesIndex";
@@ -9,6 +10,9 @@ import type { RssCat } from "@/components/notes/RssModal";
 export const dynamic = "force-dynamic";
 
 export default async function NotesPage() {
+  // R-TABS:Notes tab 被隐藏时,它的地址在站点上不存在(404,不重定向 —— 见 lib/tabs-server.ts)
+  await requireVisibleTab("notes");
+
   const { categories, latest } = await api.notes.listSeries();
   const now = Date.now();
 

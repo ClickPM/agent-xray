@@ -30,6 +30,14 @@
 > 显示工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组,
 > **不显示**启停状态、日限额与剩余次数、provider 与 model 名(公开即泄服务端配置面)。
 >
+> **2026-09-03 第五次修订(R-TABS)**:所有者裁定新增**顶部 tab 的呈现开关**(经 MCP 逐个开关三个 tab 露不露)。
+> 这是规则 8 的例外,与 R-VISITOR 的会话删除入口同类:画板 1a 的导航条是三格固定的,没画过「某一格可以不出现」,
+> 管理面范围本来也以 R6 裁定清单为准。理由是**它不是产品功能,是一次合规运维动作的开关** ——
+> 公安网备案的内容审核窗口期要求内容可撤下,而「撤下 / 放回」若靠发版,一来一回是两次本机构建 + 传镜像 + 重建容器。
+> 边界由所有者明确收在**呈现层**:隐藏 = 导航条不渲染 + 该 tab 的页面在 web 侧不可达,
+> `/agent/*`、`/trace/*`、`/notes/*`、`/rss.xml` 等后端端点照常服务(要真停 agent 用 `tool_config_set`)。
+> 三个 tab 全部可见时前端与画板 1a 一字不差,**不扩设计稿、不加新画板**。
+>
 > **2026-09-02 第四次修订(R-IMAGEGEN)**:所有者裁定给 agent 配一个**生图工具** `generate_image`,
 > 并要求**访客在对话框里直接看到生成的图**。工具本身**不是**规则 8 的例外(`docs/security.md` §1 开篇与第 4 层
 > 从第一天起就写着「后续生图、联网搜索等插件」「外呼型工具(LLM / 生图 / 搜索)」,与 R-WEBSEARCH 同为补齐既定边界;
@@ -62,6 +70,8 @@
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ✅ 已完成([任务卡](rounds/round-11/round-11.md))。站点 **https://www.kzgai.cloud/** 于 2026-09-02 上线(SHA `5bd6ace`):备案号挂 footer、仅 HTTPS(80 无响应)、HTTP/3、六个安全头、裸域 301 到 www;内容从 130 库级拷入 + Encore 系列 22 篇经 MCP 发布;LLM/搜索 provider 不设限额;全链路(对话 / SSE ×2 / web_search / session_rename)生产实跑通过。验收 12 项中 11 项 ✅。**所有者裁定收工时不做四项**:上线检查单在生产重跑 / codex 审查 / token 轮换演练 / 首日观察 —— 代价见任务卡「收工」段 | 2026-09-02 |
 
 | **R-IMAGEGEN** | agent 生图工具(`generate_image`:单工具 · provider 的 `api_style` 分两种协议 · 图片存库按访客归属供图 · 对话框 markdown 预览 · MCP 四个 `imagegen_*`) | ✅ 已完成并合并 `main`([任务卡](rounds/round-imagegen/round-imagegen.md));17 项验收 16 过、#17 外呼半边交接生产配好 provider 后跑(本机无凭据;前端半边已用种子数据实跑:对话框渲染出图、无 cookie 404);codex 三轮共 3 条 findings(0×P1 · 3×P2)**全部采纳整改**,第 3 轮零 findings,缺陷门禁 PASS;`dev.ps1 test` 15 文件 373 用例。**所有者裁定与后续更新一起发生产** —— 已于 2026-09-02 随 SHA `b291eb1` 上生产(迁移 v9→v10;生产 `.env` 已补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api)。**`generate_image` 在生产仍是 `enabled:false`**(迁移 010 的种子即默认关):要用它,所有者需先经 MCP `imagegen_provider_upsert` 配好 provider(key 只贴进调用、不落盘),再 `tool_config_set` 打开;验收 #17 的外呼半边到那时才算跑完 | 2026-09-02 |
+
+| **R-TABS** | 顶部导航 tab 的呈现开关(MCP 逐个开关三个 tab 露不露;隐藏 = 导航条不渲染 + 页面不可达,后端端点照常) | 🔄 实现与本机验收完成,待 codex 审查([任务卡](rounds/round-tabs/round-tabs.md));11 项验收全过,`dev.ps1 test` 16 文件 388 用例。**所有者裁定边界只到呈现层**,不碰任何后端端点 | — |
 
 ## 里程碑
 
