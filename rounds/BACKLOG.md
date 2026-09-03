@@ -240,6 +240,14 @@
 
 ## 功能提案(需所有者裁定)
 
+- [ ] **给 agent 加「运行内置 skills 与 skill 内 Python 脚本」的能力**(所有者提出,2026-09-03)。研究结论在
+      [`rounds/round-skills/research.md`](round-skills/research.md):**可行但不能按字面做** —— 「pi 守卫插件 + 虚拟环境」是策略层,
+      规则 9 的落点只能是独立容器。推荐形态:skills 随发布物走(构建期生成两端同源的清单 + sha256)、两个新工具
+      (`skill_load` 纯函数组 / `skill_run` 第四组「沙箱执行组」,首个 `dangerous=TRUE` 工具)、一个 `network_mode: none`
+      的常驻执行容器经 unix socket 被 api 调用、pi 侧 `xray-guard` / `xray-skills` 两个扩展把裁决写进既有 34 事件,
+      前端零样式改动。**需所有者先裁定 7 件事**(该文档 §6),其中规则 9 措辞(「一次性容器」→「常驻容器 + 一次性进程」)、
+      画板 1f/1g 加第四组、130 本轮改回必经三件是「先改文档 / 设计稿」类;spike 第 0 项(Encore bun 运行时里 `fetch` 走 unix socket)不过则整体重估 (2026-09-03)
+
 - [ ] R-IMAGEGEN **`generate_image` 是否给访客一个 `size` 入参**(横版 / 竖版 / 方图)。本轮裁定只控 `prompt`、尺寸是
       provider 配置(`image_size`)—— 外呼组约束 1 的最严读法。要做入参得两处一起动:`ToolParametersSchema` 加 `enum`
       关键字(pi 的 JSON Schema 校验器支持),`ToolsPanel.tsx` 的约束徽标学会画枚举值(R-TOOLS:面板永远不是第二个
