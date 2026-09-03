@@ -275,11 +275,19 @@
       Readability 同样超线性)。**所有者裁定 2026-09-03:暂不做。** `web_search` 已覆盖本站主流诉求
       (找资料 / 时效问答 / 多源综述 / 给来源);`web_fetch` 独有的「读指定网址 / 要原文 / 顺着来源继续读 / 未索引页」
       在本站频率偏低,代价却是新开一档安全约束 + Worker 新机制。报告留档不进轮次;访客贴网址的频率上来了再从报告 §5 重评 (2026-09-03)
+      → **2026-09-03 同日重评(R-SKILLS-2 裁定「做」之后)**:那两条代价都有了别的落点 —— 执行容器就是隔离边界(Worker 不需要),
+        「访客定向外呼」不再是 api 进程里的第四档工具而是沙箱执行组里一个声明了出网档次的 skill(`web-fetch`)。方案已重写为
+        [`rounds/round-webfetch/round-webfetch.md`](round-webfetch/round-webfetch.md);**所有者同日裁定十条,全部按建议**:同一 runner 镜像起第二个
+        只出公网的实例(默认实例的 `network_mode: none` 一字不改)、**访客给的 URL 不设域名限制、不维护任何域名黑白名单**(太多,无法维护;拒的是固定
+        内网地址段)、外呼组「不接受 URL 参数」的唯一例外认下、残余风险「经 URL 外泄本访客会话」认下、`network` 字段提前进 R-SKILLS-2 等。
+        已落为 **R-WEBFETCH**(文档就绪、未开工),规则 9「先改文档」已写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md` / `ROUNDS.md`;
+        代码零改动。预研 in-process 形态退役,`study.md` 降为实测附录
 - [ ] 预研 R-WEBFETCH 的**中间路径待验证**:把网址写进 `web_search` 的 query,由网关侧开页 —— 我们的进程不抓,零 SSRF 面。
       生产搜索 provider 是 OpenAI 系模型的 `web_search` 工具(有 search / open_page / find 三个动作),原则上可行。
       验证:在站上问「打开 <某网址> 并总结」,看 Timeline 里的来源是否就是那一个网址。成立则只改三处:
       `WEB_SEARCH_META` 描述与 `systemPromptFor` 里「不要放网址」两句、query 的 `maxLength`(现 300,放一个长网址就超)。
       属小修补,可直接 `main` (2026-09-03)
+      → 2026-09-03 同日 R-WEBFETCH 裁定「做」之后,本条降为 R-WEBFETCH 落地前的**过渡验证**(零成本、与 skill 形态不互斥);R-WEBFETCH 落地后关闭
 - [ ] R-SKILLS **agent 能否读 skills**(给 pi 配 `skills_list` / `skills_get` 这类只读工具,与 `notes_*` 同形态,让 Runtime 对话里能引用技能库)。
       R-SKILLS 裁定本轮 agent 侧不可读、新表不授权任何 agent 角色;要做需在那次迁移里显式 `GRANT SELECT` 给 `agent_ro`、
       走 `READ ONLY` 事务,并且 Tools 面板会自动多出这组工具(1f/1g 示例数据要跟)。属新功能,等所有者裁定 (2026-09-03)

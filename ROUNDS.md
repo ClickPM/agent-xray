@@ -70,6 +70,15 @@
 > sha256 一致 ∩ 工具闸开着;**改可用 skill = 发版**(裁定 6),库里只能在代码集合之内开关。规则 9 的「一次性沙箱容器」同日改为
 > 「独立容器可常驻 + 每次一次性进程」(裁定 2),130 预发非必经、隔离形态在生产冒烟验收(裁定 7)。七条裁定与依据见
 > [`rounds/round-skills/research.md`](rounds/round-skills/research.md),交付清单见 [`round-skills-2.md`](rounds/round-skills/round-skills-2.md)。
+>
+> **2026-09-03 第八次修订(R-WEBFETCH,建在 R-SKILLS-2 之上)**:所有者裁定让 agent 读**访客指定的公网网页**。同日早些时候对预研的
+> in-process 形态(`web_fetch` 工具 + Worker)裁定「暂不做」,R-SKILLS-2 裁定后重评:执行容器就是隔离边界,Worker 不再需要;
+> 「访客定向外呼」不再是 api 进程里的第四档工具,而是沙箱执行组里一个声明了出网档次的 skill `web-fetch`,由同一 runner 镜像的第二个实例
+> `skill-runner-egress`(只出公网、不在 `front` / `back`)跑。**不新增工具、画板、迁移、MCP 工具,前端零改动**;api 进程不碰 URL、不碰 HTML。
+> 所有者十条裁定:两实例容器;**访客给的 URL 不设域名限制、不维护任何域名黑白名单**(太多,无法维护)—— 拒的是固定内网地址段;
+> 外呼组「不接受 URL 参数」的唯一例外认下;残余风险「经 URL 外泄本访客会话内容」认下;准入清单加 egress 档例外;`network` 字段提前进 R-SKILLS-2;
+> egress 实例 `256m` + 并发 1;宿主 `DOCKER-USER` 出网过滤进服务器基线;`web-fetch` 出现在 Skills tab 认下;限额超时复用 R-SKILLS-2。
+> 方案与冲突清单见 [`rounds/round-webfetch/round-webfetch.md`](rounds/round-webfetch/round-webfetch.md),预研留档 [`study.md`](rounds/round-webfetch/study.md)。
 
 ## 进度表
 
@@ -97,6 +106,7 @@
 | **R-TABS** | 顶部导航 tab 的呈现开关(MCP 逐个开关三个 tab 露不露;隐藏 = 导航条不渲染 + 页面不可达,后端端点照常) | ✅ 已完成([任务卡](rounds/round-tabs/round-tabs.md));11 项验收全过,`dev.ps1 test` 16 文件 388 用例;真实 MCP 协议路径本机实跑通过(34 工具、enum 下发、拒未知 key、拒关最后一个可见 tab)。codex 首轮**零 findings**,缺陷门禁 PASS。**所有者裁定边界只到呈现层**,不碰任何后端端点。待发预发/生产(迁移 v10→v11) | 2026-09-03 |
 | **R-SKILLS** | Skills 技能库 tab(第四个顶部 tab:按用途分类的 skill 卡片 → 详情页目录树 + 逐文件预览(markdown / 代码带行号)+ 复制安装命令 / GitHub 外链 / 站内 zip;内容经 MCP 整包发布) | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills.md));设计稿 `2f–2h` 已于 2026-09-03 并入 `design/`(15 块,三方合并、本地动画/进度线优化保留);ROUNDS / CLAUDE.md / security / architecture 已按规则 9「先改文档」写入约束;四条裁定已落(2026-09-03:zip = `fflate`、第三方 LICENSE 与仓库链接**非必填**、仓库名按 skill 逐个必填、高亮按画板做三 token),文档已合并 `main`,待另开 session 开工 | — |
 | **R-SKILLS-2** | agent 使用 skills(`round-skills` 2.0 迭代):`skill_load` 注入 + `skill_run` 在独立无网络容器里跑 skill 自带的 Python 脚本(第四组「沙箱执行组」,首个 `dangerous=TRUE` 工具)· 守卫 / 注入 / 运行三条轨迹进既有 34 事件 · 可用集合 = 代码清单 ∩ 库里开关 ∩ hash 一致 | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills-2.md) · [研究与七条裁定](rounds/round-skills/research.md));规则 9 措辞、第四组、威胁模型 6、容器与供应链约束已按「先改文档」写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md`。**三个开工前置**:R-SKILLS(1.0)落地合并、画板 1f/1g 加第四组(所有者画布)、spike「Encore bun 运行时 `fetch` 走 unix socket」(不通则 BLOCKED 回所有者,不自行退到共网) | — |
+| **R-WEBFETCH** | agent 读访客指定的公网网页(建在 R-SKILLS-2 之上):不是新工具,是沙箱执行组的 egress 档 skill `web-fetch`,跑在同一 runner 镜像的第二个实例 `skill-runner-egress`(只出公网)里 · SSRF 防线 = 脚本逐地址校验 + 钉 IP 连 / 容器不在内部网络 / 宿主 `DOCKER-USER` 过滤 · 不维护域名黑白名单 · 零新工具 / 画板 / 迁移 / MCP 工具 / 前端改动 | 📝 **文档就绪、未开工**([任务卡](rounds/round-webfetch/round-webfetch.md) · [预研留档](rounds/round-webfetch/study.md));所有者十条裁定已落(2026-09-03),规则 9「先改文档」已写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md` / `research.md` §2.2 / `round-skills-2.md`(C6 提前)。**前置**:R-SKILLS-2 合并 `main`;所有者经 MCP 上传 `web-fetch` 展示副本 | — |
 
 ## 里程碑
 
@@ -526,6 +536,25 @@
 
 - 验收(16 项,细则在任务卡):①`check` + `test` 全绿;②spike 留证;③清单同源(重跑 `skills-gen` 零 diff,篡改一字节即红);④四个条件真值表;⑤入参闭集;⑥守卫五条 + 异常即拦截;⑦轨迹形状(faux provider 驱动真实 loop);⑧注入轨迹;⑨前端投影 + 无 `handlers` 时回归;⑩画板对照且 diff 无样式属性;⑪限额原子 / 超时 CHECK / 进程组不残留;⑫输出有界;⑬MCP 四工具、总数 46;⑭三镜像 + `-I` 生效;⑮**生产冒烟 4 条**(双闸关闭下跑);⑯生产端到端 + 两种关法各验一次
 - **前置(三个都要齐)**:R-SKILLS(1.0)合并 `main`;画板 1f/1g 加第四组;spike 通过。**止损**:`tool_config_set skill_run false` 当场停;`skills_agent_set <name> false` 单个下线;`compose stop skill-runner` 后工具以固定文案失败、站点其余照常;spike 不过 → BLOCKED 回所有者重裁裁定 4,不自行退到共网
+
+### R-WEBFETCH — agent 读访客指定的公网网页:`web-fetch` skill + egress 执行容器(建在 R-SKILLS-2 之上;所有者裁定 2026-09-03;文档就绪、未开工)
+
+> 任务卡 [`rounds/round-webfetch/round-webfetch.md`](rounds/round-webfetch/round-webfetch.md)(§3 十条裁定、§4 八条默认);预研留档 [`study.md`](rounds/round-webfetch/study.md)
+> (§3.1 请求链路与 §4 病态输入数据仍被引用)。**代码一行未写**。
+
+**问题**:`web_search` 覆盖「找资料」,覆盖不了「读这个网址 / 要原文 / 顺着来源继续读 / 未被索引的页」。预研的 in-process 形态被裁「暂不做」的两条理由
+(新开一档安全约束 + api 进程内 Worker)在 R-SKILLS-2 之后都有了别的落点。
+
+**形态(十条裁定的落点)**:
+- **不是新工具**:`runner/skills/web-fetch/`(`SKILL.md` + `xray.json` 声明 `network: egress` + `scripts/fetch.py` 单文件),经 `skill_run(web-fetch, fetch.py, {url})` 调用;走 R-SKILLS-2 的守卫 / 注入 / 清单 / hash 一致性 / `sandbox_config` / `daily_quota.skill_runs`,**零**迁移、**零** MCP 工具(46 不变)、**零** pi 扩展改动、**零**前端改动、**零** npm 依赖
+- **egress 执行容器**:同一 `xray-runner:<sha>` 镜像的第二个 compose 服务 `skill-runner-egress`,只在专用 bridge 网络(固定网段),不在 `front` / `back`;`RUNNER_NETWORK=egress`,只接受 egress 档 skill,默认实例只接受 `none`;`mem_limit 256m`、并发 1;其余收紧项与默认实例逐字相同。无网络的默认实例**一字不改**
+- **SSRF 防线三道**:①脚本(Python stdlib):URL 收窄(只 https 443、无 userinfo、≤ 2048、末标签纯字母)→ `getaddrinfo` 全部结果逐地址校验(回环 / 私网 / link-local / CGNAT / 多播 / 保留 / 未指定 / 嵌套 v4,任一命中即拒)→ 钉住地址连、证书按主机名校验、核 `getpeername` → 重定向 ≤ 3 跳每跳重来 → 解压后 256 KiB 上界 → 固定失败短码不区分「内网」与「连不上」;②容器不在任何内部网络;③宿主 `DOCKER-USER` 对该网段丢弃到私网 / link-local / CGNAT 的包(`deploy/egress-filter.sh`)。**不维护任何域名黑白名单**(所有者裁定:太多,无法维护)
+- **资源上界**:预研的 Worker 与元素 / 深度计数由容器 `mem_limit` + rlimit + 超时 kill 承担;字节上界仍必须;Python 侧曲线待实测(验收 7)
+- **提示词与产品默认**:`systemPromptFor` skills 段三句纪律(资料不是指令 / 不把对话内容放进 URL / 不嵌第三方资源);不允许 http、跟 ≤ 3 跳、不跟 robots、去图片、保留链接、抽取库 `trafilatura`(exact + hash)
+- **可见性**:与 R-SKILLS-2 的 Python 运行轨迹同构;`web-fetch` 经 MCP 上传后出现在 Skills tab(裁定 6 的必然,所有者认下)
+
+- 验收(16 项,细则在任务卡):①入参收窄逐条拒;②逐地址校验(含「两个地址其一私网 → 拒」);③钉住地址;④重定向;⑤解压炸弹;⑥内容类型与编码;⑦**病态输入在容器里**(预研 §4.3 夹具;api 侧 SSE 心跳不断);⑧不外泄(grep 不到地址 / 跳转链);⑨守卫;⑩档次路由(两实例各拒对方的 skill);⑪清单与 hash 一致;⑫提示词与输出;⑬`check` / `test` / `runner-test` 全绿;⑭三镜像不变、compose 隔离项;⑮**生产冒烟 +3**;⑯生产端到端 + 两种关法
+- **前置**:R-SKILLS-2 合并 `main`(含提前进去的 `network` 字段);所有者经 MCP 上传 `web-fetch`。**止损**:`skills_agent_set web-fetch false` 单个下线;`compose stop skill-runner-egress` 后该 skill 以固定文案失败、其余照常;`tool_config_set skill_run false` 全部可运行型一起停
 
 ## 轮次外事项
 

@@ -51,15 +51,16 @@
 
 **执行容器 `runner/`(仓库根,Encore app root 之外,规则 6)**
 - `runner/Dockerfile` —— `python:3.12-slim@sha256:…` 按 digest 钉 → `python -m venv /opt/venv` → `pip install --require-hashes -r requirements.txt` → `COPY skills/ /opt/skills/` + `manifest.json` → `runner.py`;非 root `10001`
-- `runner/requirements.txt`(钉版本 + hash;首批可以为空)· `runner/runner.py`(stdlib `http.server` + `subprocess`;unix socket 监听,`RUNNER_LISTEN=tcp://…` 仅开发模式;`POST /run` / `GET /health`;并发信号量 2;rlimit;进程组超时 kill;stdout / stderr 流式截断 256 KiB;每次运行 `/run/work/<uuid>` 结束即删)
-- `runner/skills/<name>/` —— 可被 agent 使用的 skill 源(`SKILL.md` + `scripts/*.py` + `xray.json`);首批:`text-tools`(可运行型,`wordfreq.py` / `json_pretty.py`,纯标准库)+ 所有者从 1.0 上传集合里挑的注入型(候选 `encore-api` / `encore-database` / `encore-testing`)
-- `tools/skills-manifest/`(node 脚本)—— 读 `runner/skills` → 生成 `apps/api/agent/skills.generated.ts`(name / description / SKILL.md 正文 / 每文件 sha256 / `xray.json` 的脚本与 schema)与 `runner/manifest.json`;`dev.ps1 skills-gen` 调它;生成物入库
+- `runner/requirements.txt`(钉版本 + hash;首批可以为空)· `runner/runner.py`(stdlib `http.server` + `subprocess`;unix socket 监听,`RUNNER_LISTEN=tcp://…` 仅开发模式;`POST /run` / `GET /health`;并发信号量 2;rlimit;进程组超时 kill;stdout / stderr 流式截断 256 KiB;每次运行 `/run/work/<uuid>` 结束即删;
+  读 daemon env `RUNNER_NETWORK`(缺省 `none`),`/run` 时清单里该 skill 的 `network` 与自己不等即拒,与非清单脚本同一拒绝路径 —— **R-WEBFETCH C6 裁定「提前」**,2026-09-03)
+- `runner/skills/<name>/` —— 可被 agent 使用的 skill 源(`SKILL.md` + `scripts/*.py` + `xray.json`;`xray.json` 顶层可选字段 `network`,取值 `none` / `egress`,缺省 `none`,**本轮只允许 `none`**,`egress` 档由 R-WEBFETCH 使用 —— 字段与判断提前进本轮,所有者裁定 2026-09-03 C6);首批:`text-tools`(可运行型,`wordfreq.py` / `json_pretty.py`,纯标准库)+ 所有者从 1.0 上传集合里挑的注入型(候选 `encore-api` / `encore-database` / `encore-testing`)
+- `tools/skills-manifest/`(node 脚本)—— 读 `runner/skills` → 生成 `apps/api/agent/skills.generated.ts`(name / description / SKILL.md 正文 / 每文件 sha256 / `xray.json` 的脚本与 schema / `network` 档次)与 `runner/manifest.json`(同样带 `network`);`dev.ps1 skills-gen` 调它;生成物入库
 
 **后端(`apps/api`)**
 - `agent/migrations/013_agent_skills.up.sql` —— `ALTER TABLE skills ADD COLUMN agent_enabled BOOLEAN NOT NULL DEFAULT FALSE`;`sandbox_config` 单行表(`daily_run_limit INT DEFAULT 0 CHECK ≥ 0`、`total_timeout_ms INT DEFAULT 30000 CHECK BETWEEN 5000 AND 120000`);`ALTER TABLE daily_quota ADD COLUMN skill_runs INT NOT NULL DEFAULT 0`;`tool_config` 种子 `('skill_load', FALSE, FALSE, …)`、`('skill_run', FALSE, TRUE, …)`。只有 ADD / CREATE,无不可逆语句
 - `agent/skills.generated.ts`(生成物)· `agent/skills-catalog.ts` —— `loadAgentSkills()`:代码清单 × 库(`name` 存在 ∧ `agent_enabled` ∧ 文件集合与 sha256 全等)→ 本次可用集合 + 指纹(并进 `EnabledTools.fingerprint`);漂移 / 未打开 / 库里没有分别记日志
 - `agent/sandbox-config.ts` —— 读 `sandbox_config`,与 `websearch-config.ts` 同构(读不到不是错:`skill_run` 这轮不注册)
-- `agent/skill-runner.ts` —— 与 runner 的协议:`fetch` 走 unix socket(`XRAY_SKILL_RUNNER_URL` 只在注册环节读、只接受 `unix:` 默认值或 `http://127.0.0.1:<port>`);总超时 = `sandbox_config.total_timeout_ms + 2000`;响应体经 `shared/http-body.ts` 带上界读取;错误在构造处不带容器内路径
+- `agent/skill-runner.ts` —— 与 runner 的协议:`fetch` 走 unix socket(`XRAY_SKILL_RUNNER_URL` 只在注册环节读、只接受 `unix:` 默认值或 `http://127.0.0.1:<port>`);总超时 = `sandbox_config.total_timeout_ms + 2000`;响应体经 `shared/http-body.ts` 带上界读取;错误在构造处不带容器内路径;按清单 `network` 选客户端 —— 本轮只有 `none` 一个客户端,清单里 `egress` 档的 skill 不进可用集合并记日志(R-WEBFETCH 加第二个客户端)
 - `agent/tools.ts` —— `SKILL_LOAD_META` / `SKILL_RUN_META`(META 在闭包外,`output` 必填,`phases` 四段);`skillLoad` 进 `TOOL_REGISTRY`;`makeSkillRunTool(cfg)` 第四条构造路径;`loadEnabledTools` 读 `skill_run` 时同时读 `sandbox_config` 与 `loadAgentSkills()`;`reserveSkillRun` 进 `quota.ts`
 - `agent/catalog.ts` —— `ToolGroup` 加 `"sandbox"`;`toolCatalog()` 加第四条路径;`catalog.test.ts` 的双向集合相等自动覆盖
 - `agent/guard.ts` —— `makeGuard(rec, ctx)`:`tool_call` 五条规则(research.md §2.5);`agent/skill-injector.ts` —— `makeSkillInjector(rec, ctx)`:`before_agent_start` 追加 `<available_skills>`;两者在 `runtime.ts` 里与 `makeObserver` 同款注册,顺序 `[injector, observer, guard]`;`capture()` 加可选 `handlers`;观测者不再订阅这两个事件
@@ -83,7 +84,7 @@
 |---|---|---|
 | 1 | 编译与全量测试 | `dev.ps1 check` 通过;`dev.ps1 test` 全绿(1.0 收口时的文件数 / 用例数 +N,回填) |
 | 2 | spike 留证 | Encore bun 运行时里经 unix socket 完成一次 `POST /run` 往返,记录在「本轮实测」;不通即 BLOCKED |
-| 3 | 清单同源 | `dev.ps1 skills-gen` 重跑后 `git diff` 为空;篡改 `runner/skills` 任一字节后漂移测试红 |
+| 3 | 清单同源 | `dev.ps1 skills-gen` 重跑后 `git diff` 为空;篡改 `runner/skills` 任一字节后漂移测试红;`network` 字段透传两份清单、缺省 `none`,手工把某 skill 改成 `egress` 后它不进可用集合且 runner 对它的 `/run` 拒绝(R-WEBFETCH C6) |
 | 4 | 四个条件真值表 | `skills-catalog.test.ts`:代码有 / 库无 → 不可用;库有未开 → 不可用;开了但 hash 不等 → 不可用且日志含 `drift`;四条全真 → 可用 |
 | 5 | 入参闭集 | `skill_run` 的 schema 只有 `skill / script / input` 三个 string;`/agent/tools` 响应里 grep 不到 `code` / `path` / `argv` / `interpreter` |
 | 6 | 守卫五条 | `guard.test.ts` 逐条:未知工具 / 未开放 skill / 非清单脚本 / 非法 input / 超会话次数 → `{block:true}`,`reason` 不含内部路径;守卫 handler 抛异常 → 仍是拦截 |
@@ -104,7 +105,7 @@
 
 - **`skill_run` 不得有 code / path / argv / interpreter 任何形式的入参**;不接受 `input` 之外的第二个自由文本字段。
 - **不开 pi 内置 `read` / `bash` / `write`**;loader 保持 `noSkills: true`;守卫与注入器**不得 `registerCommand`**。
-- **runner 不进任何 docker 网络**(`network_mode: none` 是硬约束,开发模式的 TCP 只在本机 `docker run`);api 进程**不 `spawn`**。
+- **默认 runner 实例不进任何 docker 网络**(`network_mode: none` 是硬约束,开发模式的 TCP 只在本机 `docker run`);R-WEBFETCH 的 egress 实例只在专用 egress 网络、不在 `front` / `back`,**不在本轮**;api 进程**不 `spawn`**。
 - 执行来源只有代码清单:**不从库里把脚本推给 runner**、不接受 `skills_upsert` 上传的文件作为执行输入。
 - 不给 `agent_ro` / `agent_title` / `agent_image` 授权 `skills` 三表或 `sandbox_config`(1.0 口径不变;一致性判据在注册环节用全权连接读,不在工具体内)。
 - 不新增事件类型(仍是 34 种);`handlers` 只放摘要,不放系统提示词原文与脚本输出原文。

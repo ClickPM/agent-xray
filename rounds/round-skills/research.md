@@ -93,6 +93,9 @@ flowchart LR
 - 只用标准库或 `runner/requirements.txt` 里钉住的依赖(新增依赖 = 发版);
 - 不 `import subprocess` / `os.system` / `socket` / `ctypes`,不 `eval` / `exec` 动态代码,不写 cwd 之外的路径(容器层面本来也做不到,这一条是审阅口径);
 - 确定性、单次 < 超时(默认 30 s)、不 fork;
+- **egress 档例外**(R-WEBFETCH,所有者裁定 2026-09-03):`xray.json` 声明 `network: egress` 的 skill 允许 `socket` / `ssl` / `http.client`
+  (仍禁 `subprocess` / `ctypes` / `eval`),「确定性」不要求;代价是审阅多一道 —— codex 审查按 `docs/security.md` §1 R-WEBFETCH 补记的
+  七点 SSRF 判据逐条判,且这类 skill 只会被路由到只出公网的 `skill-runner-egress` 实例;
 - `xray.json` 为每个脚本给 `description` 与入参 schema(`ToolParametersSchema` 同一子集:string / integer / boolean、required、长度上界);
 - SKILL.md 自包含(不依赖 `references/`,没有 `read` 工具读不到);写给 Claude Code 的调用方式(`python scripts/x.py --flag`)照留,**本站的调用方式由 `skill_load` 按 `xray.json` 自动追加**一段「在本站:`skill_run(skill, script, input)`」,不要求所有者改写 SKILL.md。
 
