@@ -3,9 +3,9 @@
 <!-- 命名轮,不属于 R0–R11 线性序列(先例 rounds/round-title / round-tools / round-perf)。
      拆解段待写入 ROUNDS.md「R-TOOLCARDS」(草稿在本文末尾),届时以那里为准。 -->
 
-> 状态:**未开始 —— 文档就绪,等三个前置**(2026-09-03)
+> 状态:**代码已落地,本机验收 #1–#10 通过,codex 两轮审查收口(整改后 PASS),已合并 `main`、待发版(验收 #11 随发版做)**(2026-09-03;分支 `round-toolcards` 从 `d58e141` 开出,代码提交 `c4d6f59` + 整改 `d5ee910`)
 >
-> 1. 所有者对本文「方案」段的裁定(尤其「数据形态」与「折叠范围」两处)
+> 1. ✅ 所有者 2026-09-03 裁定**按本文默认方案开工**:数据形态 = 偏移表(不选段数组),折叠范围 = 照 pi-web
 > 2. ✅ 画板 `2l` / `2m` 已由所有者在 Claude Design 画好并于 2026-09-03 拉回 `design/`(提示词 [`design-prompt.md`](design-prompt.md);
 >    新稿相对本地零删除行、只增 218 行,直接覆盖;`support.js` md5 一致;`design/README.md` / CLAUDE.md / ROUNDS.md 计数已改 18 → 20)。
 >    **画板裁定里两条会直接影响实现**:折叠行的「读者手动展开的状态不会被下一轮收回去」;卡片展开体的 `…(已截断)` 由**服务端**在切断处接上,
@@ -13,7 +13,7 @@
 > 3. ✅ R-PERF 已于 2026-09-03 合并 `main`(`d58e141`),可直接从 `main` 开 `round-toolcards` 分支;R-SKILLS-2 也已合并(`532c007`),
 >    `Workbench.tsx` 以 `main` 当前版本为基线
 >
-> 本轮**不动代码**之前,本文与提示词是仅有的两份产出。
+> 实测记录与偏离在文末「本轮实测」;审查记录在「代码审查」。
 
 ## 目标
 
@@ -179,17 +179,17 @@
 
 | # | 检查 | 命令 / 期望 | 结果 |
 |---|---|---|---|
-| 1 | 无回归 | `dev.ps1 check` + `dev.ps1 test` 全绿;`dev.ps1 gen` 后 `api-client.ts` 的 diff 只有 `ChatMessage.toolCalls` 一处 | |
-| 2 | 实时三态 | 本机起 `dev.ps1` + `next dev`,新会话问一句会触发 `notes_search` 的话:流式期间卡片夹在正文中间(对照 `1a`);`done` 后收成折叠行 + 最终回答(对照 `2l`);点折叠行展开、点卡片箭头展开(对照 `2m`)。截图三张进任务卡 | |
-| 3 | 回放与实时同源 | #2 结束后记录会话区 `innerHTML`;`F5` 重进同一会话再记一次;**逐字节相同**(折叠状态以初始态比) | |
-| 4 | 无工具的一轮零变化 | 问一句不触发工具的话(例如「你好」),会话区 `innerHTML` 与本轮改动前的构建**逐字节相同**;库里该助手行 `payload IS NULL` | |
-| 5 | 旧行退化正确 | 手工把一条助手行的 `payload` 置 NULL(或用本轮之前的库),打开会话:只有正文、无卡片、无折叠行、无报错 | |
-| 6 | 脱敏与体积 | `turn-recorder.test.ts`:入参 / 结果里塞 `apiKey` / `Authorization: Bearer …` → 摘要里是 `[redacted]`;超长入参 / 结果被截到 `previewText` 的上限;SSE 帧与 payload 里**没有** `args` / `result` 原始键 | |
-| 7 | 偏移正确 | 用例:文本 → 工具 → 文本 → 工具 → 工具 → 文本 / 一句话没说先调工具 / 以工具收尾 / 工具无 end 事件,断言 `at`、段切分、`isError`、`durationMs`、`modelRoundTrips` | |
-| 8 | 帧里没有配置面 | 抓一轮完整 SSE:`tool_start` / `tool_end` / `done` 帧里不含 model / provider / baseUrl / token 数 / 费用 | |
-| 9 | 幂等不破 | 同一 `seq` 重复 upsert(模拟重试)后 `payload` 与 `content` 都是最后一次的值,`jsonb_typeof(payload) = 'object'`(规则 4) | |
-| 10 | 样式零改动 | `git diff` 里既有元素没有样式属性改动;新增的折叠行 / 展开体的每个值都能在 `2l` / `2m` 上找到出处;`1a` 态的卡片 DOM 与改动前一致 | |
-| 11 | 发版后复核 | 生产上重跑 #2 / #3 / #4 各一次,`docs/releases.md` 记一行 | |
+| 1 | 无回归 | `dev.ps1 check` + `dev.ps1 test` 全绿;`dev.ps1 gen` 后 `api-client.ts` 的 diff 只有 `ChatMessage.toolCalls` 一处 | ✅ `check` 0 错;`test` api 26 文件 514 用例 + web 15 用例全绿;`tsc --noEmit` 0 错。`gen` 的 diff = `ChatMessage.turn` 一个字段 + `ToolCallRecord` / `TurnRecord` 两个新接口(+56 行),无 slug 噪音。字段名从 `toolCalls` 改成包着三项的 `turn`,理由见「本轮实测」偏离 ① |
+| 2 | 实时三态 | 本机起 `dev.ps1` + `next dev`,新会话问一句会触发 `notes_search` 的话:流式期间卡片夹在正文中间(对照 `1a`);`done` 后收成折叠行 + 最终回答(对照 `2l`);点折叠行展开、点卡片箭头展开(对照 `2m`)。截图三张进任务卡 | ✅ 本机假 provider 剧本 A(见「本轮实测」):流式期间「我先在教程库里搜一下。」→ 绿卡 `notes_search {"query":"agent loop"} 26ms ˅` → 「再列一下系列。」→ 绿卡 `notes_list_series {} 19ms ˅` 内联(1a);`done` 后收成「› 处理详情 · 3 次模型往返 · 2 次工具调用 · 4.7s」+ 最终回答(2l);点折叠行 → 箭头转 ˅、竖线区展开;点 `notes_list_series` 卡 → 箭头转 ˄、下接 INPUT / RESULT 展开体(2m)。三张截图在会话内逐一核对;DOM 逐节点记录在「本轮实测」 |
+| 3 | 回放与实时同源 | #2 结束后记录会话区 `innerHTML`;`F5` 重进同一会话再记一次;**逐字节相同**(折叠状态以初始态比) | ✅ 收尾后会话区 `innerHTML` 914 字节、sha256 `3cf1f230…1319de`;`F5` 后从左栏重开同一会话再取:同长度、同哈希 |
+| 4 | 无工具的一轮零变化 | 问一句不触发工具的话(例如「你好」),会话区 `innerHTML` 与本轮改动前的构建**逐字节相同**;库里该助手行 `payload IS NULL` | ✅ 「你好」一轮:会话区子节点 = 用户气泡 `div` + `div.md-chat`,两处 markup 在 diff 里零改动、走的是与改动前同一段 JSX(`<AssistantMessage key={i} text>`);没有做「同时跑旧构建」的逐字节比对(两个 dev server 共用这棵工作树,stash 会把另一会话的服务也切回旧代码),以 diff 零改动 + DOM 结构为证。库里该行 `payload IS NULL` |
+| 5 | 旧行退化正确 | 手工把一条助手行的 `payload` 置 NULL(或用本轮之前的库),打开会话:只有正文、无卡片、无折叠行、无报错 | ✅ 把剧本 B 的助手行 `payload` 置 NULL 后重开:只有一段正文(两段话拼在一起)、无卡片、无折叠行、控制台无错 |
+| 6 | 脱敏与体积 | `turn-recorder.test.ts`:入参 / 结果里塞 `apiKey` / `Authorization: Bearer …` → 摘要里是 `[redacted]`;超长入参 / 结果被截到 `previewText` 的上限;SSE 帧与 payload 里**没有** `args` / `result` 原始键 | ✅ `turn-recorder.test.ts` 12 例:`apiKey` 键与 `Bearer …` / `sk-…` 串都成 `[redacted]`;超长截到 400 接 `…(已截断)`;帧与 payload 的**键集合**逐个断言。浏览器剧本 B 的卡片实显 `{"query":12345,"apiKey":"[redacted]"}`,SSE 抓包无原始 key |
+| 7 | 偏移正确 | 用例:文本 → 工具 → 文本 → 工具 → 工具 → 文本 / 一句话没说先调工具 / 以工具收尾 / 工具无 end 事件,断言 `at`、段切分、`isError`、`durationMs`、`modelRoundTrips` | ✅ 服务端用例五种序列 + 前端 `turn-view.test.ts` 五种切段;剧本 A 落库 `at` = 11 / 18,与正文「我先在教程库里搜一下。」(11 字)「再列一下系列。」(7 字)切段一致;剧本 C(先调、以工具收尾)只剩折叠行「3 次模型往返 · 2 次工具调用」、下面不留空段 |
+| 8 | 帧里没有配置面 | 抓一轮完整 SSE:`tool_start` / `tool_end` / `done` 帧里不含 model / provider / baseUrl / token 数 / 费用 | ✅ 抓两轮完整 SSE(剧本 A / B):`tool_start` 只有 `toolCallId / name / at / inputPreview`,`tool_end` 只有 `toolCallId / resultPreview / isError / durationMs`,`done` 只有 `sessionId / modelRoundTrips / turnMs`;全文无 `"model"` / `"provider"` / `"baseUrl"` / `"tokens"` / `"cost"` / `"usage"` / `"args"` / `"result"` |
+| 9 | 幂等不破 | 同一 `seq` 重复 upsert(模拟重试)后 `payload` 与 `content` 都是最后一次的值,`jsonb_typeof(payload) = 'object'`(规则 4) | ✅ `store.test.ts` 新增用例:两次 upsert 后 `content` / `payload` 都是第二次的值,`jsonb_typeof = object`、`jsonb_array_length(payload->'toolCalls') = 1`;不传 payload 的第三次写 SQL NULL(不是 `jsonb 'null'`) |
+| 10 | 样式零改动 | `git diff` 里既有元素没有样式属性改动;新增的折叠行 / 展开体的每个值都能在 `2l` / `2m` 上找到出处;`1a` 态的卡片 DOM 与改动前一致 | ✅ diff 里既有元素唯一多出的样式属性是 `ToolChip` 根节点的 `cursor:pointer`(整卡可点的 affordance,非像素;理由见偏离 ④);折叠行 13px/1.7 `--text-muted` hover `--accent`、箭头 12px `--text-dim`、红点 6px `--err-text`、竖线 `1px --border` + `marginLeft 5` + `paddingLeft 14`、展开体 `marginTop 4` / r6 / `--bg-subtle` / 同卡描边 / 小标题 mono 10/600 0.08em / 正文 mono 11/1.6 `max-height 106` —— 逐值对应 `2l` / `2m` 的裁定面板 |
+| 11 | 发版后复核 | 生产上重跑 #2 / #3 / #4 各一次,`docs/releases.md` 记一行 | ⏳ 待发版 |
 
 ## 禁止
 
@@ -208,8 +208,24 @@
 - 审查方式:codex `/codex:review --background`(改动超过 1–2 个文件)
 - 轮次范围:第 1、2 轮全量;第 3 轮起 `--base <上一轮已审提交>`
 - 带给审查者的要求:只判定缺陷与严重级别,不展开设计;偏移表 vs 段数组是所有者裁定,不在审查范围
-- findings 处理:<逐条回填>
-- 结论:<PASS | 整改后 PASS>
+- findings 处理:
+  - **第 1 轮(全量,审 `c4d6f59` + 工作树文档改动)**:1 条 finding,0×high。
+    - P2「`MessageRow.payload` 改成必填后,`runtime.test.ts` 的 `msg` 夹具没带这个字段,`apps/api` 里 `bun x tsc --noEmit` 报 TS2741,与任务卡写的『零 TypeScript 错』不符」
+      —— **采纳整改**:夹具补 `payload: null`(最小改动;不把字段改回可选 —— 从库读出来的行这个列必然存在,可选会让端点层多一处判空)。
+      根因是 BACKLOG 已记的「门禁不做全量类型检查」(`check` / `test` 都不跑 tsc);本轮实测两个包各跑一次 `tsc --noEmit`,api / web 都是 0 错。
+    - 审查器推理里点到、但没列进 findings 的两项自查后一并处理(都是最小改动):① 前端 `finalize` 在**没有收尾帧**(连接中途断开)时原来也折叠,
+      折叠行会写「0 次模型往返 · 0ms」—— 改为不折叠、保持内联(与改动前「只把在途文本落地」同一行为);② recorder 的 `preview(undefined)` 回空串。
+    - 整改提交:见 `git log`(「codex 首轮 1×P2 整改 + 两处自查小项」)。
+  - **第 2 轮(全量,`--scope branch`,审 `d5ee910` 相对 `main`)**:1 条 finding,0×high。
+    - P2「展开体的 INPUT / RESULT 超过 6 行时,`max-height:106` + `overflow:hidden` 把服务端接在切断处的 `…(已截断)` 一起裁掉了
+      (400 字的用例 `scrollHeight` 211 px),读者看到的是戛然而止的文本、没有『不完整』的提示;建议在可见边界处夹断或把标记画在裁切区外」
+      —— **不采纳(本轮),记 BACKLOG 等所有者裁定**。理由:三条约束同时来自裁定,改任何一条都是设计层面的取舍,不是缺陷整改 ——
+      ① 截断上限与轨迹流**同一个函数、同一个上限(400)**(本文「方案 · 服务端」+ `docs/security.md` §2);② 画板 2m 裁定标记由服务端接在切断处;
+      ③ 画板 2m 裁定 `max-height:106px` + `overflow:hidden`、不做内部滚动、不放「展开全部」。文本一换行,400 字就超过 6 行,②③ 必然打架。
+      两条候选修法都要动画板(规则 7):`-webkit-line-clamp: 6`(浏览器省略号顶替 `…(已截断)`),或把标记单独画在裁切框外面一行。
+      审查边界(CLAUDE.md「开发模式」):findings 指向设计缺陷时回所有者层面重定方案,不在「整改 → 复审」里逐条堆补丁;P2 非阻塞,允许写明理由放行。
+    - 第 1 轮采纳的整改(`d5ee910`)在本轮的全量范围之内,未被再次点名。
+- 结论:**整改后 PASS**(第 1 轮 1×P2 采纳整改并经第 2 轮全量复审;第 2 轮 1×P2 写明理由记 BACKLOG;两轮 high 级为零,无丢数据 / 漏凭据 / 泄资源 / 逻辑错误类 findings)
 
 ## 失败处理
 
@@ -220,11 +236,62 @@
 
 ## 本轮实测
 
-<!-- 完成后回填:实际数字、踩的坑、与设计/计划的偏离及原因 -->
+### 验收环境:本机假 provider 驱动真实 pi loop
+
+前置里「本机 `llm_config` 配好一个能跑的 provider」**没满足**(本机开发库 `llm_config` 为空)。没有等,改用与
+`apps/api/agent/skills-e2e.test.ts` 同款的做法:一个本地 OpenAI `chat/completions` SSE 假服务(`127.0.0.1:4711`,每次往返延迟 1.5s
+好让「进行中」态停留够久),`llm_config` 种一行 `faux` provider(假 key 经本机 `ConfigEncryptionKey` 加密入库;脚本只输出密文,
+key 原文不进上下文)。pi loop、`notes_*` 工具、轨迹采集、落库、SSE 全是真的,只有模型是剧本:
+
+| 剧本 | 触发词 | 序列 | 结果 |
+|---|---|---|---|
+| A | 「查」 | 文本 → `notes_search` → 文本 → `notes_list_series` → 文本 | 3 次往返 · 2 次工具 · 4.7s;`at` = 11 / 18 |
+| B | 「错」 | 文本 → `notes_search({query:12345, apiKey:"sk-…"})`(schema 校验失败 → `isError`)→ 文本 | 红卡 + 折叠行红点;卡上 `apiKey` 显示 `[redacted]`;RESULT 红字 |
+| C | 「先调」 | 工具 → 工具 → 空正文收尾 | 只剩折叠行「3 次模型往返 · 2 次工具调用 · 4.6s」,下面无空段(2l 规则 3);`content` 为空串但行照落 |
+| D | 「长」 | `notes_search({query: 600 字})` → 文本 | 卡上与展开体 INPUT 都是 400 字 + `…(已截断)`(406 字符);展开体 `clientHeight 106` / `scrollHeight 211`,超出部分被 `overflow:hidden` 裁掉 |
+| E | 其它 | 纯文本 | 会话区 = 气泡 + `div.md-chat`;库里 `payload IS NULL` |
+
+假 provider 行验收完已从本机 `llm_config` 删除,脚本在会话 scratchpad、不入库。真实 provider 的复核随发版做(验收 #11)。
+
+### 实测数字
+
+- `dev.ps1 test`:api 26 文件 514 用例(新增 `turn-recorder.test.ts` 12 例、`store.test.ts` 1 例)+ web 15 用例(新增 `turn-view.test.ts` 6 例)。
+- 剧本 A 收尾后会话区 `innerHTML` 914 字节、sha256 `3cf1f230934eb1b6bdd0c15bed88a6247ace7943a9d930d72bc54819be1319de`;F5 后重开同一会话完全一致(验收 #3)。
+- 落库 payload(剧本 A):`{"v":1,"modelRoundTrips":3,"turnMs":4655,"toolCalls":[{"at":11,"name":"notes_search","durationMs":26,…},{"at":18,"name":"notes_list_series","durationMs":19,…}]}`,`jsonb_typeof = object`。
+- SSE 帧(剧本 B):`tool_start {"toolCallId":"call_bad","name":"notes_search","at":6,"inputPreview":"{\"query\":12345,\"apiKey\":\"[redacted]\"}"}` →
+  `tool_end {…,"isError":true,"durationMs":0}` → `done {"sessionId":…,"modelRoundTrips":2,"turnMs":3016}`。
+
+### 与任务卡 / 画板的偏离(都是小项,理由在此)
+
+① **`ChatMessage.turn` 而不是 `ChatMessage.toolCalls`**:折叠行在回放时也要「N 次模型往返 · 总耗时」,只透 `toolCalls` 的话这两个数没处放。
+   所以端点透出一个可选的 `turn = { modelRoundTrips, turnMs, toolCalls }`,仍是「一处」字段、仍按白名单投影(`turnFromPayload`)。
+② **收尾帧的两个数是平铺的**(`done {sessionId, modelRoundTrips, turnMs}`),且 **`error` 帧也带**:它们是「收尾帧」的语义,不是「成功帧」的;
+   provider 中途失败时前端同样要把在途的助手项标成 `done` 并折叠,否则那一轮永远停在内联态。旧客户端两个键都忽略,加法改动。
+③ **卡片与折叠行的耗时沿用 Timeline 的 `formatDuration`**(`26ms` / `4.7s`),而画板示例写的是 `0.3s`。不为一处再造一个格式器;
+   小于 1s 显示毫秒也更贴合右栏。
+④ **`ToolChip` 根节点多了 `onClick` + `cursor:pointer`**:画板只说「箭头可点」,但箭头只有 12px,整卡才是可用的点击面;`cursor` 不是像素,
+   是与折叠行同款的 affordance(2l 的折叠行画板自带 `cursor:pointer`)。这是 diff 里既有元素**唯一**多出的样式属性。
+⑤ **`resultPreview` 先把 AgentToolResult 的文本块拼起来再过 `previewText`**(与 `events.ts` 的 `summarizeMessage` 处理消息正文同一做法),
+   不然卡片上是 `{"content":[{"type":"text","text":"…` 的壳;没有文本块的结果(纯图片)整个值原样过 `previewText`,不猜结构。
+   脱敏与截断仍是同一个函数、同一上限;唯一的差别是尾标记按画板 2m 换成 `…(已截断)`(`turn-recorder.ts` 的 `preview`)。
+⑥ **有工具调用但正文为空的一轮也落行**(`content = ''` + payload):以前「`assistantText` 为空就不写行」,现在改成「有正文**或**有 payload 才写」,
+   否则剧本 C 那种「以工具收尾」的一轮重新打开就什么都没有,违反 2l 规则 3。两者都没有(provider 直接失败)仍与今天一样不写。
+⑦ **展开体的 RESULT 不做 `white-space: pre-wrap`**:画板 2m 只给了 `word-break: break-all`,所以多行结果(如 schema 校验错误)会折成一段。
+   照画板实现;要不要 `pre-wrap` 记 BACKLOG 等所有者在画布上定。
+⑧ **验收 #4 没有做「与旧构建并排」的逐字节比对**:两个 dev server(本会话 + 另一会话)共用这棵工作树,`git stash` 会把对方的服务也切回旧代码。
+   以 diff(用户气泡 / `AssistantMessage` / `ChatPane` 容器三处 markup 零改动)+ 实测 DOM(气泡 + `md-chat`)为证。
+
+### 踩的坑
+
+- Browser pane 的 `computer.type` / `key Return` 对这个页面的 `<input>` 不起作用(点击不聚焦),`form_input` 能写进 DOM 但 React 的 `draft` 不更新;
+  最后用 `javascript_tool` 走 native setter + `input` 事件 + `keydown Enter` 驱动 —— 与 R-SKILLS 时记的「只用 preview 那个 tab」同一类环境事实。
+- encore MCP 的 `query_database` 用的是 agent 服务的 DB 角色,对 `llm_config` 没有 INSERT 权限;本机种 provider 直接 `docker exec` 进
+  `sqldb-<slug>-default-*` 容器用 `postgres` 超级用户(容器 env `POSTGRES_USER=postgres`),不是 conn-uri 里的那个 `<slug>` 用户。
+- `notes_get_chapter` 对不存在的章节回的是**提示文本**不是错误(`isError=false`),想要错误卡得让 pi 的入参 schema 校验失败(传错类型 / 多余键)。
 
 ---
 
-## 待写入 ROUNDS.md 的三段(开工时搬过去,以 ROUNDS.md 为准)
+## 待写入 ROUNDS.md 的三段(✅ 2026-09-03 开工时已搬入 ROUNDS.md —— 头部第十次修订段、进度表行、「R-TOOLCARDS」拆解段;下面是当时的草稿,以 ROUNDS.md 为准)
 
 ### 头部「功能边界」第十次修订(草稿)
 
@@ -248,7 +315,7 @@
 折叠范围照 pi-web)· 五条交付(recorder 纯函数 / ask.ts 两种帧 / store & sessions 带 payload / 前端三态 / security §2 补记)·
 验收五条(实时三态 · 回放同源 · 无工具零变化 · 脱敏 · 无配置面)· 前置(画板 `2l`/`2m`、R-PERF 合并)。
 
-## BACKLOG 候选(本轮不做,开工时抄进 `rounds/BACKLOG.md`)
+## BACKLOG 候选(本轮不做;✅ 2026-09-03 开工时已抄进 `rounds/BACKLOG.md`,另加了三条实测里冒出来的:本机假 provider 固化、RESULT 多行折成一段、卡片耗时格式)
 
 - [ ] R-TOOLCARDS 卡片 ↔ Timeline 互相定位:两边都有 `toolCallId`,点卡片高亮右栏对应行(画板没画,等裁定)
 - [ ] R-TOOLCARDS `session_rename` 的卡片是否隐藏(默认显示;裁定隐藏再改)

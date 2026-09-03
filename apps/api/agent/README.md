@@ -5,6 +5,10 @@ pi SDK in-process 会话管理、对话流、只读工具组与限额。
 ## 端点
 
 - `POST /agent/ask`(`ask.ts`,`api.raw`)—— 创建/续接会话,对话流 SSE ← `session.subscribe()`。
+  帧:`session` / `delta` / **`tool_start` / `tool_end`**(R-TOOLCARDS)/ `error` / `done`;两种工具帧只带 `previewText` 摘要,
+  收尾帧追加 `modelRoundTrips` 与 `turnMs` 两个数(不带 model / provider / token / 费用)。累积逻辑在 `turn-recorder.ts`
+  (纯函数:偏移表 `at`、耗时、脱敏摘要、无 end 事件的兜底),一轮有工具调用时同一份摘要写进 `messages.payload`,
+  `GET /agent/sessions/:id` 经 `turnFromPayload` 白名单投影成 `ChatMessage.turn` 回放 —— 实时与回放同源。
   非 2xx 的 JSON 体是 `{error, code?}`:`error` 只供调试,访客文案由前端按 status/code 分档。
 - `GET /agent/sessions` · `GET /agent/sessions/:id` · `DELETE /agent/sessions/:id` ·
   `POST /agent/sessions`(`sessions.ts`)—— 会话列表 / 历史回放 / 删除 / 建空会话。

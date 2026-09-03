@@ -244,6 +244,18 @@
       但一份本机密钥材料不该出现在会被传输、留档的制品里。不当场改:要先核实 encore 有没有构建期排除机制
       (`.gitignore` 之外的 ignore 文件 / `encore.app` 的 build 段),再决定是排除还是构建前临时挪走 (2026-09-03)
 
+- [ ] R-TOOLCARDS **本机验收缺一个能跑的 provider**:本机开发库 `llm_config` 为空,验收 #2–#5 靠会话 scratchpad 里一个与 `skills-e2e.test.ts`
+      同款的假 OpenAI SSE 服务 + 手工种一行 `faux` provider(密文经本机 `ConfigEncryptionKey` 加密)跑完,验完删。这段是每次要在浏览器里验
+      agent 行为的轮次都会重做的事;可以固化成 `dev.ps1 faux-llm`(起假服务 + 种 / 删 provider 行),属工具链新增机制,等所有者裁定 (2026-09-03)
+- [ ] R-TOOLCARDS **展开体超过 6 行时 `…(已截断)` 标记被裁掉看不见**(codex 第 2 轮 P2,写明理由不采纳):服务端按与轨迹流同一上限(400 字)在切断处接标记,
+      前端按画板 2m 做 `max-height:106px` + `overflow:hidden`;文本一换行 400 字就超过 6 行(实测 400 字 `scrollHeight` 211 px),标记落在裁切区里。
+      三条约束(同一上限 / 标记在切断处 / 6 行裁切不滚动)都是裁定,改哪条都是设计取舍。候选:①展开体改 `-webkit-line-clamp: 6`(浏览器省略号顶替标记);
+      ②标记单独画在裁切框外一行。要先在画布上改 2m,再改 `Workbench.tsx` 的 `ToolCard` 一处 (2026-09-03)
+- [ ] R-TOOLCARDS **展开体 RESULT 的多行结果折成一段**:画板 2m 只给了 `word-break: break-all`,没给 `white-space`,所以像 schema 校验错误这种
+      带换行的结果在 6 行框里读起来是一段;要不要 `pre-wrap` 得在画布上定(规则 7),定了再改一行样式 (2026-09-03)
+- [ ] R-TOOLCARDS **卡片耗时格式**:实现沿用 Timeline 的 `formatDuration`(`26ms` / `4.7s`),画板 1a 示例写的是 `0.3s`;两种并存在同一块画板上,
+      本轮取「一个格式器」。所有者若更想要卡片一律秒制,改 `lib/turn-view.ts` 的 `toolDuration` 一处 (2026-09-03)
+
 ## 功能提案(需所有者裁定)
 
 - [x] **给 agent 加「使用 skills:注入 + 沙箱运行 Python 脚本」的能力**(所有者提出并于同日裁定,2026-09-03)——**已裁定「做」,落为 R-SKILLS-2**
@@ -266,6 +278,12 @@
       与 R-IMAGEGEN 那条「`size` 入参要加 `enum`」同一根源:扩 schema 关键字必须连 `ToolsPanel.tsx` 的约束徽标一起扩(面板永远不是第二个要改的地方)。
       属机制扩面,等所有者裁定;做了之后 `skill_run` 的 `input` 可以按脚本 schema 拆成真字段 (2026-09-03)
 
+- [ ] R-TOOLCARDS **卡片 ↔ Timeline 互相定位**:两边都有 `toolCallId`(`messages.payload.toolCalls[].toolCallId` 与轨迹的 `tool_execution_*`),
+      点卡片高亮右栏对应行技术上现成;画板没画,等裁定 (2026-09-03)
+- [ ] R-TOOLCARDS **`session_rename` 的卡片是否隐藏**:它也是一次工具调用,会以一张卡出现在首轮里(与 Timeline 的 `tool_call · session_rename` 对得上)。
+      默认显示(透明是卖点);裁定隐藏再改 (2026-09-03)
+- [ ] R-TOOLCARDS **会话区是否显示「思考」块**:pi-web 有;本站内核透明度靠右栏,画板 2l/2m 明确不放,默认不做 (2026-09-03)
+- [ ] R-TOOLCARDS **本轮之前的助手行没有 `payload`**,重新打开只显示正文(合并后的整段话);访客会话 3 天保留期后自然消失,不回填,记一笔备查 (2026-09-03)
 - [ ] R-IMAGEGEN **`generate_image` 是否给访客一个 `size` 入参**(横版 / 竖版 / 方图)。本轮裁定只控 `prompt`、尺寸是
       provider 配置(`image_size`)—— 外呼组约束 1 的最严读法。要做入参得两处一起动:`ToolParametersSchema` 加 `enum`
       关键字(pi 的 JSON Schema 校验器支持),`ToolsPanel.tsx` 的约束徽标学会画枚举值(R-TOOLS:面板永远不是第二个

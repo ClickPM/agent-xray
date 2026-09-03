@@ -106,8 +106,8 @@
 > 所有者裁定做到「重新打开会话也要在同一位置」,所以落库形态要改:一轮仍是一条助手消息,`payload` 里加工具调用的
 > **偏移表**(`messages.payload` 从 001 迁移起就为此留着),**无迁移**;旧行不回填,3 天保留期自然清空。
 > 提示词见 [`rounds/round-toolcards/design-prompt.md`](rounds/round-toolcards/design-prompt.md),
-> 拆解见 [`rounds/round-toolcards/round-toolcards.md`](rounds/round-toolcards/round-toolcards.md)(待所有者裁定方案后开工,
-> 排在 R-PERF 合并之后)。
+> 拆解见 [`rounds/round-toolcards/round-toolcards.md`](rounds/round-toolcards/round-toolcards.md)。**所有者同日裁定按任务卡默认方案开工**
+> (数据形态 = 偏移表、折叠范围 = 照 pi-web),分支 `round-toolcards` 从 R-PERF 合并后的 `main` 开出,代码同日落地。
 
 ## 进度表
 
@@ -137,6 +137,7 @@
 | **R-SKILLS-2** | agent 使用 skills(`round-skills` 2.0 迭代):`skill_load` 注入 + `skill_run` 在独立无网络容器里跑 skill 自带的 Python 脚本(第四组「沙箱执行组」,首个 `dangerous=TRUE` 工具)· 守卫 / 注入 / 运行三条轨迹进既有 34 事件 · 可用集合 = 代码清单 ∩ 库里开关 ∩ hash 一致 | 🔧 **代码已落地、待审查合并**([任务卡](rounds/round-skills/round-skills-2.md) · [研究与七条裁定](rounds/round-skills/research.md)):`runner/` 执行容器 + `tools/skills-manifest` 生成器 + 迁移 013 + 两个工具 / 两个扩展 / MCP +4(46)+ 前端三处投影;`dev.ps1 test` 全绿(api 24 文件 500 用例 + web 9 用例),含 faux provider 驱动真实 pi loop 的轨迹形状测试。spike 通过(两个 `network_mode: none` 容器经 unix socket,bun `fetch({unix})` 通)。画板 1f/1g 的第四组所有者尚未在画布上画,前端按任务卡建议值接上,**所有者裁定「正常展示出来就好了」**(不阻塞;补画记 BACKLOG)。生产冒烟 4 条与发版在合并 `main` 之后 | — |
 | **R-WEBFETCH** | agent 读访客指定的公网网页(建在 R-SKILLS-2 之上):不是新工具,是沙箱执行组的 egress 档 skill `web-fetch`,跑在同一 runner 镜像的第二个实例 `skill-runner-egress`(只出公网)里 · SSRF 防线 = 脚本逐地址校验 + 钉 IP 连 / 容器不在内部网络 / 宿主 `DOCKER-USER` 过滤 · 不维护域名黑白名单 · 零新工具 / 画板 / 迁移 / MCP 工具 / 前端改动 | 📝 **文档就绪、未开工**([任务卡](rounds/round-webfetch/round-webfetch.md) · [预研留档](rounds/round-webfetch/study.md));所有者十条裁定已落(2026-09-03),规则 9「先改文档」已写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md` / `research.md` §2.2 / `round-skills-2.md`(C6 提前)。**前置**:R-SKILLS-2 合并 `main`;所有者经 MCP 上传 `web-fetch` 展示副本 | — |
 | **R-PERF** | 软导航反馈 + 详情页载荷瘦身 + 错误边界(生产报障直接触发):T1 Skill 详情页只服务端渲染当前文件、标题 id 改 rehype 阶段赋值 · T2 `loading.tsx` · T3 `error.tsx` / 404 | 🚧 **审查收口(整改后 PASS),已合并 `main`,待发版**([任务卡](rounds/round-perf/round-perf.md) · [画布提示词](rounds/round-perf/design-prompt.md));画板 `2i`/`2j`/`2k` 已并入 `design/`(15 → 18 块),T1/T2/T3 三块代码已落。基线:`ppt-master` RSC 1.57 MB / 5.6–7.2 s、`diagram` 484 KB / 2.2–3.9 s、点击到 URL 变化 4.0 s、React #418 只在 `ppt-master` 复现。已量到:**标题 id 对 225 篇生产章节零漂移**(验收 #3)、详情页预渲染体积 −90.7%(ppt-master)/ −89.4%(diagram)、切文件零新请求;`test` 18 文件 414 用例全绿。codex 两轮(全量 / 全量)共 1 条 finding(0×high · 1×P2「隐藏 tab 的 404 主按钮指回自身」)**采纳整改**,末轮零 findings,缺陷门禁 PASS。验收 #2/#4/#7 的真实数字待发版后在生产复量 | — |
+| **R-TOOLCARDS** | 会话区工具调用卡:实时内联(`1a`)+ 跑完后折叠(`2l`)/ 展开(`2m`)+ `payload` 偏移表落库回放;无迁移、无新端点、前端一条渲染路径 | 🚧 **审查收口(整改后 PASS),已合并 `main`、待发版**([任务卡](rounds/round-toolcards/round-toolcards.md);分支 `round-toolcards`,`c4d6f59` + 整改 `d5ee910`);codex 两轮(全量 / 全量)共 2 条 P2、0×high:第 1 轮「`MessageRow.payload` 必填后测试夹具漏字段,tsc 报错」采纳整改,第 2 轮「展开体超 6 行时 `…(已截断)` 被裁切区盖住」属画板 2m 三条裁定互斥的设计取舍、写明理由记 BACKLOG。`check` / `test` 全绿(api 26 文件 514 用例 + web 15 用例);本机 `llm_config` 为空,验收 #2–#5 / #8 用与 `skills-e2e.test.ts` 同款的本地假 provider 驱动**真实** pi loop 跑通五个剧本(文本→工具→文本→工具→文本 / 工具出错 + 入参含 `apiKey` 已脱敏 / 一句话没说先调工具并以工具收尾 / 超长入参截到 400 接 `…(已截断)` / 无工具),F5 前后会话区 innerHTML 的 sha256 一致、无工具的一轮只有气泡 + `md-chat`;真实 provider 的复核随发版做(#11) | — |
 
 ## 里程碑
 
@@ -620,6 +621,34 @@
   (`grep -c '^<'` 判据为 0,直接覆盖;`support.js` md5 两边一致未动),画板计数 15 → 18,
   `CLAUDE.md` 规则 8 与本文功能边界段已同步改数。**止损**:T1 是纯渲染时机改动,回退 = revert 单个提交;
   T2/T3 各自独立文件,删掉即回到今天的行为
+
+### R-TOOLCARDS — 会话区工具调用卡:实时内联 + 跑完后折叠 + 落库回放(命名轮;所有者裁定 2026-09-03;代码已落地、审查中)
+
+> 任务卡 [`rounds/round-toolcards/round-toolcards.md`](rounds/round-toolcards/round-toolcards.md),
+> 给画布的提示词 [`design-prompt.md`](rounds/round-toolcards/design-prompt.md)。
+> **不是新功能,是丢了的功能**:画板 `1a–1d` / `1f–1g` 一直画着两张工具卡,首版 `bdc1ca4` 实现过,R3 `88dc2ae`
+> 切真实数据源时只映射了 `role` / `content`,`ToolChip` 留成死代码(头部第十次修订)。缺的两个态 `2l` / `2m` 先画、再开工。
+
+**形态裁定(所有者 2026-09-03,按任务卡默认方案)**:
+- 一轮仍是**一条**助手消息,`content` 语义与 `seq` 幂等键不动;`payload` 里加工具调用的**偏移表**
+  (`at` = 工具开始执行时正文已累积的 JS 字符串长度,前端按它切段把卡片插回去),没有工具调用的一轮**不写 payload**
+  —— 与今天的行完全一样,**无迁移**(`messages.payload` 从 001 起就留着);旧行不回填,3 天保留期自然清空
+- 会话区**不从轨迹流派生**:`/agent/ask` 与 `/trace/stream` 是两条独立 SSE,跨连接没有顺序保证;一份数据(recorder)、
+  两个消费者(实时帧 / 落库),实时与回放走同一条渲染路径 —— 「F5 之后 DOM 逐字节相同」靠的就是这个
+- 折叠范围照 pi-web:最终回答之前的一切(中间的话 + 全部卡片)进折叠行;`session_rename` 的卡**默认不隐藏**(透明是卖点)
+- 会话区**不显示**模型名 / provider 名 / 分段 token 与费用 / 「思考」块;两种预览一律 `previewText` 摘要,帧与库里都不带原始入参 / 出参
+  (`docs/security.md` §2 R-TOOLCARDS 补记,先于代码)
+
+**交付(五件)**:`agent/turn-recorder.ts` 纯函数(喂 pi 事件 → 帧 + payload;+ 测试)· `ask.ts` 的 `tool_start` / `tool_end` 帧与收尾帧的
+`modelRoundTrips` / `turnMs` · `store.ts` / `sessions.ts` 带 payload 并经 `turnFromPayload` 白名单投影成 `ChatMessage.turn` ·
+前端 `lib/turn-view.ts`(`splitTurn`,+ 测试)与 `Workbench` 的 `AssistantTurn` 三态 / `ToolCard` 展开体 / `FoldRow` 折叠行 · `docs/security.md` §2 补记。
+**不交付**:迁移、新端点、新 MCP 工具、轨迹流 / 三视图改动、卡片 ↔ Timeline 互相定位(记 BACKLOG)。
+
+- 验收(11 项,细则与结果在任务卡):①`check` / `test` 全绿、生成物 diff 只有 `ChatMessage.turn`;②实时三态对照 `1a` / `2l` / `2m`;
+  ③F5 后会话区 DOM 逐字节相同;④无工具的一轮零变化、`payload IS NULL`;⑤旧行只显示正文;⑥脱敏与截断;⑦偏移正确;
+  ⑧帧里没有配置面;⑨同一 seq 重复 upsert 幂等、`jsonb_typeof = object`;⑩样式零改动;⑪发版后生产复核
+- **前置(已满足)**:画板 `2l` / `2m` 已并入 `design/`(18 → 20 块);R-PERF 已合并 `main`。**止损**:无迁移,回退 = revert;
+  已写入的 `payload` 只是被忽略的 JSONB
 
 ## 轮次外事项
 

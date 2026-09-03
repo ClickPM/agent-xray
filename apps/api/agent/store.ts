@@ -18,6 +18,11 @@ export interface MessageRow {
   seq: number;
   role: MessageRole;
   content: string;
+  /**
+   * 结构化附加信息(JSONB,普通文本消息为 null)。R-TOOLCARDS 起助手行在有工具调用时写
+   * `turn-recorder.ts` 的 TurnPayload(偏移表);端点层只经 `turnFromPayload` 白名单投影,不透传。
+   */
+  payload: unknown;
   /** epoch ms */
   createdAt: number;
 }
@@ -161,7 +166,7 @@ export async function appendMessage(
     `INSERT INTO messages (session_id, seq, role, content, payload)
      SELECT $1::uuid, COALESCE(MAX(seq) + 1, 0), $2, $3, $4::text::jsonb
      FROM messages WHERE session_id = $1::uuid
-     RETURNING seq, role, content,
+     RETURNING seq, role, content, payload,
        (extract(epoch FROM created_at) * 1000)::double precision AS "createdAt"`,
     sessionId,
     role,
@@ -180,7 +185,7 @@ export async function appendMessage(
 
 export async function listMessages(sessionId: string): Promise<MessageRow[]> {
   return db.rawQueryAll<MessageRow>(
-    `SELECT seq, role, content,
+    `SELECT seq, role, content, payload,
        (extract(epoch FROM created_at) * 1000)::double precision AS "createdAt"
      FROM messages WHERE session_id = $1::uuid
      ORDER BY seq`,
@@ -245,7 +250,7 @@ export async function upsertMessage(
      ON CONFLICT (session_id, seq) DO UPDATE
        SET content = EXCLUDED.content, payload = EXCLUDED.payload
        WHERE messages.role = EXCLUDED.role
-     RETURNING seq, role, content,
+     RETURNING seq, role, content, payload,
        (extract(epoch FROM created_at) * 1000)::double precision AS "createdAt"`,
     sessionId,
     seq,

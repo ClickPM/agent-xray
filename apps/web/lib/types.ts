@@ -42,11 +42,38 @@ export interface TraceTurn {
   rows: TraceRow[];
 }
 
-export interface ChatItem {
-  kind: "user" | "assistant" | "tool";
-  text?: string;
-  tool?: { name: string; preview: string; dur: string; error: boolean };
+/**
+ * 会话区里的一次工具调用(画板 1a 的卡 + 2m 的展开体)。形状与后端 `ChatMessage.turn.toolCalls[]`
+ * 一致(`turn-recorder.ts` 的 ToolCallRecord),实时时由 SSE 的 tool_start / tool_end 两帧逐步填出。
+ * `at` = 工具开始执行时正文已累积的 JS 字符串长度,卡片插在这个偏移处。
+ * `durationMs` 缺省 = 还没等到 tool_end(实时)或没等到就结束了(回放,此时 isError 为 true)。
+ */
+export interface ToolCallView {
+  toolCallId: string;
+  name: string;
+  at: number;
+  inputPreview: string;
+  resultPreview: string;
+  isError: boolean;
+  durationMs?: number;
 }
+
+/** 一轮的处理过程(R-TOOLCARDS):折叠行(画板 2l)要的数据只有这些。 */
+export interface TurnView {
+  modelRoundTrips: number;
+  turnMs: number;
+  toolCalls: ToolCallView[];
+}
+
+/**
+ * 会话区的一项 = 一轮里的一方。助手项是 turn 级的:`turn` 只在本轮有工具调用时存在
+ * (没有就与改动前的纯正文渲染一字不差),`done` = 这一轮已收尾(折叠只在那一刻发生一次,画板 2l 规则 2)。
+ * 首版的 `kind: "tool"` 项(独立的一行工具卡)删除:R3 切真实数据源后从未被生产过,
+ * 现在卡片的位置由 `turn.toolCalls[].at` 决定,不再是独立的项。
+ */
+export type ChatItem =
+  | { kind: "user"; text: string }
+  | { kind: "assistant"; text: string; turn?: TurnView; done: boolean };
 
 /** Chain View(画板 1c):单个 chain 事件沿扩展链传递的过程 */
 export interface ChainStepLine {

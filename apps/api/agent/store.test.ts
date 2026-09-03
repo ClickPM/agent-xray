@@ -268,6 +268,54 @@ describe("访客隔离(R-VISITOR)", () => {
   });
 });
 
+describe("messages.payload 偏移表(R-TOOLCARDS 验收 #9)", () => {
+  it("同一 seq 重复 upsert:content 与 payload 都是最后一次的值,jsonb_typeof 为 object(规则 4);不传 payload 写 SQL NULL", async () => {
+    const s = await createSession(visitor.id);
+    const u = await appendMessage(s.id, "user", "帮我查一下");
+    const seq = u.seq + 1;
+    const p1 = {
+      v: 1,
+      modelRoundTrips: 1,
+      turnMs: 10,
+      toolCalls: [{ toolCallId: "c1", name: "notes_search", at: 0, inputPreview: "{}", resultPreview: "", isError: true }],
+    };
+    const p2 = {
+      ...p1,
+      modelRoundTrips: 2,
+      toolCalls: [{ ...p1.toolCalls[0], resultPreview: "找到 3 条", isError: false, durationMs: 12 }],
+    };
+    await upsertMessage(s.id, seq, "assistant", "第一次", p1);
+    const row = await upsertMessage(s.id, seq, "assistant", "第二次", p2);
+    expect(row?.content).toBe("第二次");
+    expect(row?.payload).toEqual(p2);
+
+    const list = await listMessages(s.id);
+    expect(list.map((m) => [m.role, m.content])).toEqual([
+      ["user", "帮我查一下"],
+      ["assistant", "第二次"],
+    ]);
+    expect(list[0].payload).toBeNull();
+    expect(list[1].payload).toEqual(p2);
+    const typed = await db.rawQueryRow<{ t: string; n: number }>(
+      `SELECT jsonb_typeof(payload) AS t, jsonb_array_length(payload -> 'toolCalls') AS n
+       FROM messages WHERE session_id = $1::uuid AND seq = $2`,
+      s.id,
+      seq,
+    );
+    expect(typed).toEqual({ t: "object", n: 1 });
+
+    // 没有工具调用的一轮重试同一 seq:不传 payload → SQL NULL(不是 jsonb 'null'),与今天的行一样
+    const again = await upsertMessage(s.id, seq, "assistant", "第三次");
+    expect(again?.payload).toBeNull();
+    const nul = await db.rawQueryRow<{ isNull: boolean }>(
+      `SELECT payload IS NULL AS "isNull" FROM messages WHERE session_id = $1::uuid AND seq = $2`,
+      s.id,
+      seq,
+    );
+    expect(nul?.isNull).toBe(true);
+  });
+});
+
 describe("turn 级去重键(R3 幂等落库)", () => {
   it("同一 seq 重复 upsert 只更新内容,不追加重复消息", async () => {
     const s = await createSession(visitor.id);

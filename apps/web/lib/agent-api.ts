@@ -80,13 +80,32 @@ export class AskError extends Error {
   }
 }
 
+/** 收尾帧(done / error)带的两个数(R-TOOLCARDS):折叠行的「N 次模型往返 · 总耗时」。 */
+export interface TurnSummary {
+  modelRoundTrips: number;
+  turnMs: number;
+}
+
 export interface AskHandlers {
   /** 首帧:服务端确定的会话 id(新会话由此得到 id) */
   onSession?: (sessionId: string) => void;
   /** 助手文本增量 */
   onDelta?: (text: string) => void;
-  /** 服务端以固定文案收尾的异常(内容已脱敏,可直接展示) */
-  onError?: (message: string) => void;
+  /** 工具开始执行(R-TOOLCARDS):`at` = 此刻正文已累积的长度,卡片插在这个偏移处;摘要已脱敏、已截断 */
+  onToolStart?: (call: { toolCallId: string; name: string; at: number; inputPreview: string }) => void;
+  /** 工具执行结束(R-TOOLCARDS) */
+  onToolEnd?: (end: { toolCallId: string; resultPreview: string; isError: boolean; durationMs: number }) => void;
+  /** 服务端以固定文案收尾的异常(内容已脱敏,可直接展示);summary 在旧服务端上缺省 */
+  onError?: (message: string, summary?: TurnSummary) => void;
+  /** 本轮正常收尾;summary 在旧服务端上缺省 */
+  onDone?: (summary?: TurnSummary) => void;
+}
+
+/** 收尾帧里的两个数:缺一个就当没有(帧契约是加法改动,旧服务端不带它们)。 */
+function summaryOf(d: Record<string, unknown>): TurnSummary | undefined {
+  return typeof d.modelRoundTrips === "number" && typeof d.turnMs === "number"
+    ? { modelRoundTrips: d.modelRoundTrips, turnMs: d.turnMs }
+    : undefined;
 }
 
 interface SseFrame {
@@ -157,11 +176,30 @@ export async function askStream(
         case "delta":
           handlers.onDelta?.((JSON.parse(frame.data) as { text: string }).text);
           break;
-        case "error":
-          handlers.onError?.((JSON.parse(frame.data) as { message: string }).message);
+        case "tool_start":
+          handlers.onToolStart?.(
+            JSON.parse(frame.data) as { toolCallId: string; name: string; at: number; inputPreview: string },
+          );
           break;
-        case "done":
+        case "tool_end":
+          handlers.onToolEnd?.(
+            JSON.parse(frame.data) as {
+              toolCallId: string;
+              resultPreview: string;
+              isError: boolean;
+              durationMs: number;
+            },
+          );
+          break;
+        case "error": {
+          const d = JSON.parse(frame.data) as { message: string } & Record<string, unknown>;
+          handlers.onError?.(d.message, summaryOf(d));
+          break;
+        }
+        case "done": {
+          handlers.onDone?.(summaryOf(JSON.parse(frame.data) as Record<string, unknown>));
           return;
+        }
       }
     }
   }

@@ -18,6 +18,7 @@ import { api, APIError, type Header, type Query } from "encore.dev/api";
 import "./purge";
 import { claim, disposeSession, getRuntimeSession, SessionBusyError } from "./runtime";
 import * as store from "./store";
+import { turnFromPayload, type TurnRecord } from "./turn-recorder";
 import { ensureVisitor, headersOfTyped, resolveVisitor } from "./visitor";
 
 export interface SessionSummary {
@@ -35,6 +36,12 @@ export interface ChatMessage {
   content: string;
   /** ISO 8601 */
   createdAt: string;
+  /**
+   * 这一轮的处理过程(R-TOOLCARDS):工具调用偏移表 + 往返数 + 总耗时,从 `messages.payload`
+   * 按字段白名单派生(`turnFromPayload`)。只有本轮有工具调用的助手行才有;旧行 / 无工具的一轮没有,
+   * 前端据此只显示正文。**不透传整个 payload**。
+   */
+  turn?: TurnRecord;
 }
 
 // 【关于下面每个响应接口里的 `visitorCookie: Header<string, "Set-Cookie">`】
@@ -163,12 +170,16 @@ export const getSession = api(
     const messages = await store.listMessages(req.id);
     return {
       session: toSummary(row),
-      messages: messages.map((m) => ({
-        seq: m.seq,
-        role: m.role,
-        content: m.content,
-        createdAt: toIso(m.createdAt),
-      })),
+      messages: messages.map((m) => {
+        const turn = turnFromPayload(m.payload);
+        return {
+          seq: m.seq,
+          role: m.role,
+          content: m.content,
+          createdAt: toIso(m.createdAt),
+          ...(turn ? { turn } : {}),
+        };
+      }),
       visitorCookie: visitor.setCookie,
     };
   },
