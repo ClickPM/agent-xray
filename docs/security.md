@@ -149,6 +149,10 @@ R-SKILLS-2 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日�
    stdin 是那个 JSON 写完即关;`-I` 隔离模式屏蔽 `PYTHON*` 变量与用户 site。**venv 由结构保证,不靠识别命令串**
 8. **三方核对才跑**:api 按清单传 sha256,执行容器按自己的 `manifest.json` 核对,并要求 `realpath` 仍在 `/opt/skills/<skill>/scripts/` 内、是普通文件。任一不符即拒
 
+**`skill_run` 的高危身份在代码里,不在表里**(codex 第 2 轮 P1,2026-09-03):R7 的双闸原本按 `tool_config.dangerous` 那一位判,而那一位是所有者经 MCP
+可改的 —— 持管理 token 的人把 `skill_run` 改成 `dangerous:false` 就绕过了 env 第二闸。落地改为按**工具名**判(`agent/tools.ts` 的 `DANGEROUS_TOOLS`,
+与表里那一位取「或」):表里只能把别的工具加进闸里,不能把 `skill_run` 放出去。管理 token 泄漏的后果仍是「能开关」,不是「能不经 env 就跑脚本」。
+
 **pi 侧的守卫扩展 `xray-guard` 是第二道,不是第一道**:它在 `tool_call` 上对 `skill_load` / `skill_run` 再核一遍清单、schema 与会话内次数,
 命中即 `{block:true, reason}`;守卫自身抛异常按拦截处理(fail closed)。它的价值在**策略与可见性**(裁决进轨迹),不承担隔离。
 注入扩展 `xray-skills` 在 `before_agent_start` 追加 `<available_skills>` 目录。两者都**不得 `registerCommand`**

@@ -78,7 +78,7 @@ META 定义在闭包**外面**:`cfg` / `ctx` 在那个作用域里不存在,配�
 
 | 层 | 落点 | 要点 |
 |---|---|---|
-| 1 · 工具白名单 | `tools.ts` + `runtime.ts` | `noTools:"all"` 起步 + `customTools` + `tools` 白名单三个参数一组闸;`TOOL_REGISTRY` + 四条工厂路径是**已实现工具的全部**,`tool_config` 只能开关它们,未知名字丢弃并记日志;`dangerous` 行另需 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1`(R-SKILLS-2 起 `skill_run` 是唯一的 dangerous 行);pi 侧 `xray-guard` 在 `tool_call` 上再核一遍(第二道) |
+| 1 · 工具白名单 | `tools.ts` + `runtime.ts` | `noTools:"all"` 起步 + `customTools` + `tools` 白名单三个参数一组闸;`TOOL_REGISTRY` + 四条工厂路径是**已实现工具的全部**,`tool_config` 只能开关它们,未知名字丢弃并记日志;dangerous 工具另需 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1`(R-SKILLS-2 起 `skill_run` 是唯一的 dangerous 工具,身份写在代码里的 `DANGEROUS_TOOLS`,表里那一位只能加不能减);pi 侧 `xray-guard` 在 `tool_call` 上再核一遍(第二道) |
 | 2 · 数据面只读 | `ro-db.ts` / `title-db.ts` / `image-db.ts` | 工具的唯一取数通道 `queryAsAgentRo`:事务内 `SET TRANSACTION READ ONLY` + `statement_timeout` + `SET LOCAL ROLE agent_ro`。角色只对 notes 三张表有 SELECT。两个刻意可写的例外各有自己的 NOLOGIN 角色:`agent_title`(只改 `sessions` 两列,R-TITLE)、`agent_image`(只 INSERT `generated_images`,R-IMAGEGEN) |
 | 3 · 容器隔离 | `deploy/` | 非 root / `read_only` / `cap_drop ALL` / `mem_limit`,不在本服务 |
 | 4 · 出网管控 | `quota.ts` / `websearch.ts` / `imagegen.ts` | 每日 token/费用计数(`daily_quota`)超限拒**新会话**;单会话轮数上限。限额值读 `llm_config` 默认行,0 = 不限。两个外呼工具各自计次(`searches` / `images`),各自一份目标域白名单(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`),双计时器 + 字节上界 + `redirect:"manual"` |

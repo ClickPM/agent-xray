@@ -422,6 +422,19 @@ describe("第 1 层 · 沙箱执行组 skill_load / skill_run 的注册闸(R-SKI
     expect(b.fingerprint).not.toBe(a.fingerprint);
   });
 
+  it("skill_run 的高危身份在代码里:经 MCP 把表里那一行改成 dangerous=false,缺 env 仍不注册(codex 第 2 轮 P1)", async () => {
+    await enable(["skill_run"], false); // 表里 dangerous=false
+    await seedTextTools(true);
+    expect((await loadEnabledTools()).names).toEqual([]);
+    process.env[UNLOCK_ENV] = "1";
+    expect((await loadEnabledTools()).names).toEqual(["skill_run"]);
+    // 反过来:表里把别的工具标成 dangerous 是能把它**加**进闸里的(R7 既有语义不变)
+    delete process.env[UNLOCK_ENV];
+    await db.exec`DELETE FROM tool_config`;
+    await db.rawExec(`INSERT INTO tool_config (name, enabled, dangerous) VALUES ('notes_search', TRUE, TRUE)`);
+    expect((await loadEnabledTools()).names).toEqual([]);
+  });
+
   it("skill_run 是 dangerous 行:缺 env 双闸 → 不注册;有 env 但 runner 地址不合法 → 不注册;合法 → 注册(沙箱执行组)", async () => {
     await enable(["skill_run"]);
     await seedTextTools(true);

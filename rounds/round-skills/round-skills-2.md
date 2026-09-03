@@ -133,7 +133,10 @@
   5. [P2] `EnabledTools.skills` 改成必填后 `imagegen.test.ts` / `title.test.ts` 的两个 fixture 缺字段,TS2741 —— **采纳整改**:补 `skills: emptySkills()`。教训:`dev.ps1 check`(encore check)不扫测试文件,**`npx tsc --noEmit -p apps/api` 要进本轮验证**(1.0 时也是这么做的,本轮漏了)。
   6. [P2] `json_pretty.py` 的深度把标量叶子也算一层,`{"a":1,"b":[1,2]}` 回 3,而 SKILL.md 示例写的是 2 —— **采纳整改**:深度只数容器嵌套(顶层标量为 0),自检回 2。
   整改后 `npx tsc --noEmit -p apps/api` 通过;相关测试全绿;清单重生成(`--check` 零漂移)。
-- 第 2 轮(复审,仍全量):<待回填>
+- **第 2 轮(2026-09-03,`4ccc92b`,仍全量)findings 2 条**:
+  1. [P1] `skill_run` 的 env 第二闸只按 `tool_config.dangerous` 那一位判,而那一位可经 MCP `tool_config_set` 改成 false,持管理 token 的人改一行就绕过了 env 闸 —— **采纳整改**(改判断,不加机制):`agent/tools.ts` 加代码常量 `DANGEROUS_TOOLS = {skill_run}`,高危 = 表里那一位 **或** 代码点名;表里只能把别的工具加进闸里,不能把 `skill_run` 放出去。`sandbox.test.ts` 加一条:表里改成 dangerous=false、缺 env 仍不注册;`docs/security.md` R-SKILLS-2 补记 / `deploy/.env.example` / agent README 同步。
+  2. [P1] 前端 Tools 面板的第四组「沙箱执行组」不在已入库的画板 1f/1g 与原型里,违反「设计稿是功能边界」与本卡「先改画板再进轮次」的前置 —— **不在代码里改,回所有者裁定**(CLAUDE.md「审查边界」:findings 指向设计层面的,停下回任务卡 / 所有者,不在整改循环里堆补丁)。事实:开工时核对过云端与本地画布都没有第四组(「本轮实测 · 前置核对」),前端按本卡建议值先接、`design/` 一字未动、已记 BACKLOG。两条出路都是所有者的:① 在画布上把第四组画上(本卡前置第 2 项原文),拉稿合并后按画板核对三处;② 裁定在画板补上之前前端**隐藏**沙箱执行组(代价:`skill_run` 在 Tools 面板上不可见,与 R-TOOLS「面板由后端目录派生」相悖)。合并 `main` 与发版等这条裁定。
+- 第 3 轮(只审第 2 轮整改 diff,`--base 4ccc92b`):<待回填>
 - 结论:<待回填>
 
 ## 失败处理

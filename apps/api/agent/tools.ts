@@ -155,6 +155,19 @@ export type MetaToolDefinition = ToolDefinition & ToolMeta;
 /** 高危工具的第二道闸:服务器 env(docs/security.md §1 第 1 层「双闸」)。 */
 const DANGEROUS_UNLOCK_ENV = "XRAY_UNLOCK_DANGEROUS_TOOLS";
 
+/**
+ * **高危身份在代码里**(codex 第 2 轮 P1):`tool_config.dangerous` 是所有者经 MCP 可改的一列,
+ * 只按它判的话,持管理 token 的人把 `skill_run` 那行改成 `dangerous:false` 就绕过了 env 第二闸 ——
+ * 双闸退化成单闸。所以 env 闸按**工具名**判:这个集合里的工具无论表里那一位怎么写都要 env;
+ * 表里的 `dangerous` 只能把别的工具**加**进闸里,不能把这里的工具放出去。
+ */
+const DANGEROUS_TOOLS: ReadonlySet<string> = new Set([SKILL_RUN_TOOL]);
+
+/** 表里标了 dangerous,或者代码里点名了 —— 两者任一为真就要过 env 第二闸 */
+function isDangerous(row: { name: string; dangerous: boolean }): boolean {
+  return row.dangerous || DANGEROUS_TOOLS.has(row.name);
+}
+
 interface ToolText {
   content: [{ type: "text"; text: string }];
   details: unknown;
@@ -1296,9 +1309,10 @@ let lastLoggedFingerprint: string | undefined;
  *      `SESSION_TOOL_REGISTRY`,或外呼组的 `web_search` / `generate_image` —— 它们不在任何表里,
  *      由 `makeWebSearchTool` / `makeGenerateImageTool` 按配置构造)。表是所有者可写的,
  *      而「凭一个名字就注册一个工具」这件事根本不存在 —— 落到这里的未知名字只会被丢掉。
- *   2. **dangerous 行需要服务器 env 双闸**。表里置 true 只是第一闸;
+ *   2. **dangerous 工具需要服务器 env 双闸**。表里 enabled=true 只是第一闸;
  *      没有 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 就不注册(docs/security.md §1 第 1 层)。
- *      注意本注册表目前**没有**任何 dangerous 实现,这段是给将来准备的闸,不是当前路径。
+ *      「谁是 dangerous」按代码里的 `DANGEROUS_TOOLS`(R-SKILLS-2 起是 `skill_run`)**或**表里的那一位判 ——
+ *      表里那一位只能加不能减,否则持管理 token 的人改一行就把 env 闸拆了(codex 第 2 轮 P1)。
  *
  * 读 env 发生在**注册**环节而不是工具体内 —— 工具本身仍是纯函数(见文件头第 1 条)。
  */
@@ -1313,21 +1327,22 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
   // 这里连 dangerous 闸一起判:被闸住的话这个名字后面本来就会被丢掉。
   const webSearchRow = rows.find((r) => r.name === WEB_SEARCH_TOOL_NAME);
   const webCfg =
-    webSearchRow && !(webSearchRow.dangerous && !unlocked)
+    webSearchRow && !(isDangerous(webSearchRow) && !unlocked)
       ? await loadActiveWebSearchConfig()
       : null;
   // 同一套判断,第二个外呼工具(R-IMAGEGEN)
   const imageGenRow = rows.find((r) => r.name === GENERATE_IMAGE_TOOL);
   const imgCfg =
-    imageGenRow && !(imageGenRow.dangerous && !unlocked)
+    imageGenRow && !(isDangerous(imageGenRow) && !unlocked)
       ? await loadActiveImageGenConfig()
       : null;
   // 【R-SKILLS-2】可用 skill 集合只在两个工具至少一个过了闸时才算(要读 skills 两张表并在 SQL 侧算哈希);
   // sandbox_config 只在 skill_run 过了闸时才读。运行器地址(env)也只在这里读一次 —— 工具体内不读 process.env。
+  // skill_run 的高危身份按代码里的 DANGEROUS_TOOLS 判,不只看表里那一位。
   const skillLoadRow = rows.find((r) => r.name === SKILL_LOAD_TOOL);
   const skillRunRow = rows.find((r) => r.name === SKILL_RUN_TOOL);
-  const skillLoadGated = !!skillLoadRow && !(skillLoadRow.dangerous && !unlocked);
-  const skillRunGated = !!skillRunRow && !(skillRunRow.dangerous && !unlocked);
+  const skillLoadGated = !!skillLoadRow && !(isDangerous(skillLoadRow) && !unlocked);
+  const skillRunGated = !!skillRunRow && !(isDangerous(skillRunRow) && !unlocked);
   const skills = skillLoadGated || skillRunGated ? await loadAgentSkills() : emptySkills();
   const sandbox = skillRunGated ? await loadSandboxConfig() : null;
   const runner = skillRunGated ? resolveRunnerTarget(process.env[RUNNER_URL_ENV]) : null;
@@ -1352,7 +1367,7 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
       dropped.push(`${row.name}(未实现)`);
       continue;
     }
-    if (row.dangerous && !unlocked) {
+    if (isDangerous(row) && !unlocked) {
       dropped.push(`${row.name}(dangerous,缺 ${DANGEROUS_UNLOCK_ENV}=1)`);
       continue;
     }
