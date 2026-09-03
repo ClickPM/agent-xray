@@ -968,7 +968,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       title: "显示 / 隐藏一个顶部导航 tab",
       description:
         "改完**下次渲染即生效**,不需要发版或重启(站点各页都是 force-dynamic 的 Server Component)。\n" +
-        "隐藏 `runtime` 时,站点根路径 `/` 会 302 到第一个仍可见的 tab —— 首页不会变成 404。\n" +
+        "隐藏 `runtime` 时,站点根路径 `/` 会 307 到第一个仍可见的 tab —— 首页不会变成 404。\n" +
         "**不许关掉最后一个可见的 tab**(会拒绝):全关之后站点上不剩任何入口。\n" +
         "**这只是呈现开关,不是停机开关**:被隐藏的 tab 其后端端点仍在服务," +
         "想让 agent 真的停下来,用 `tool_config_set` 关工具、或删掉默认 LLM provider。",
