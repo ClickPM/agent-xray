@@ -4,7 +4,11 @@
 
 > 状态:**已合并 `main` 并发版生产(`789007e`,2026-09-03)** —— 实现完成、本机验收 ①–⑭ 全过(⑫ 在发版时补齐)、
 > codex 三轮审查收口(整改后 PASS);生产迁移 11 → 12,冒烟第 1 / 3 条通过,`docs/releases.md` 已记一行。
-> **剩余一步**:所有者经 MCP 上传首批 skills(当前 `/skills` 是「共 0 个 skill」空态,tab 按所有者裁定保持可见)
+> **首批内容已上线**(同日):18 个 skill(encore ×8 = `encoredev/skills`、`skill-creator` = `anthropics/skills`、
+> 自研 ×9 = 新建的公开仓库 [`ClickPM/skills-hub`](https://github.com/ClickPM/skills-hub)),四分类 7·6·2·3;
+> zip 回 `application/zip` 且解开后逐文件 sha256 与源目录一致。**没发的四个与理由**(许可 / 体积 / vendor 许可文件名)
+> 记在 [`docs/releases.md`](../../docs/releases.md)「首批 skill 内容」——**发布前逐个看 skill 目录内的 LICENSE**,
+> 仓库公开不等于许可允许再分发。
 >
 > 开工前置动作已完成:任务卡与 ROUNDS.md 拆解已过目,「所有者裁定」四条已定(见下),文档已合并 `main`。
 > 开工分支 `claude/round-skill-phase-one-abc0e6`(worktree),实测与偏离见文末「本轮实测」。
