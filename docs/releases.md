@@ -38,7 +38,19 @@ healthy、`/health` 200,没有任何一处会报错。
 |---|---|---|
 | `encoredev/skills`(curated) | encore-api / auth / database / frontend / secret / service / testing / code-review | `.claude/skills-lock.json` 记的 source |
 | `anthropics/skills`(curated) | skill-creator | 该 skill 目录内是 **Apache 2.0** |
-| `ClickPM/skills-hub`(own) | defuddle · diagram · obsidian-markdown / cli / bases · wiki-init / compile / lint / query | 所有者裁定:没有公开出处的自研 skill 新建 `skills-hub` 公开仓库承接,再挂它 |
+| `kepano/obsidian-skills`(curated) | obsidian-bases | 与上游**逐字节一致**,不重复托管 |
+| `ClickPM/skills-hub`(own) | defuddle · obsidian-markdown · obsidian-cli(三个改自 `kepano/obsidian-skills`,MIT)· diagram · wiki-init / compile / lint / query | 所有者裁定:没有公开出处的自研 skill 新建 `skills-hub` 公开仓库承接,再挂它 |
+
+**「来自官方仓库」要逐文件比对,别信记忆**(2026-09-03 实测):所有者说 `defuddle` / `obsidian-markdown` /
+`obsidian-bases` 三个都来自 Obsidian 官方的 [`kepano/obsidian-skills`](https://github.com/kepano/obsidian-skills)(MIT)。
+`git clone` 上游逐文件 diff 之后:**只有 `obsidian-bases` 逐字节一致**,另外两个本机已改过(加了项目路径约定、
+本机实测结论、工作文档示例)。**照「上游原版」发会把本机改动当上游内容发出去,照「自研」发又抹掉上游署名** ——
+两种错法都靠这次 diff 才拦住。改动版按所有者裁定发,包内带上游 `LICENSE` 与 `## Attribution` 段(MIT 要求)。
+
+**公开前要洗的不止路径**:这批里洗掉了绝对路径(`D:/…/.claude/skills/diagram/scripts`)、vault 名
+(`VariFlightWork`)、私有 vault 统计(2710 files / 1669 orphans 这类)、公司文档标题当示例
+(`[[#5.1 客户端标识与路由维度]]`)、「本机实测」措辞。仓库那边还把首个提交的 author 邮箱从个人 gmail
+改成 GitHub noreply 后 force-push(公开仓库的 commit 元信息也是个人信息)。
 
 **没发的四个,理由要记住**:
 
