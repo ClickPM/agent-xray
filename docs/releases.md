@@ -17,6 +17,7 @@
 | 2026-09-02 | `b291eb1` | 9 → **10** | R-IMAGEGEN(`generate_image` + 对话框 markdown 出图 + MCP `imagegen_*` ×4,迁移 010)+ 修补 `b291eb1`(Notes 数学公式 KaTeX + 货币美元防误伤) | `.env` 补 `XRAY_IMAGEGEN_EXTRA_HOSTS`(生图白名单是独立一份)并重建 api;备份 `~/deploy/.env.bak-pre-b291eb1` | `5bd6ace` | 同日经 MCP 配好 imagegen provider 并 `tool_config_set generate_image true`,生产实跑出图通过(约 72s,PNG 落库,对话框渲染);此后 6 个工具全开 |
 | 2026-09-02 | `d2a87d0` | 10 | 纯前端修补两条:`9dd0c89` Timeline 进行中行波浪扫光 + 发送按钮生成期间转圈禁用;`d2a87d0` 文章页阅读进度线接真实滚动 | 无(`apps/api` 与 `deploy/` 零改动;`migrate.sh --status` 无待执行);备份 `~/deploy/.env.bak-pre-d2a87d0` | `b291eb1` | 三个 Tab 冒烟 |
 | 2026-09-03 | `da10f6e` | 10 → **11** | R-TABS(顶部 tab 呈现开关:迁移 011 + `site` 只读服务 + MCP `site_tabs_list` / `site_tab_set`)+ 构建修复:`site` 补进 `dev.ps1` 的 `--services` 白名单(R-TABS 漏补,按 `459b168` 构建会整站 500,见下) | 无(`deploy/` 四件资产零改动,未重传;`.env` 只改 `IMAGE_TAG`);备份 `~/deploy/.env.bak-pre-da10f6e` | `d2a87d0` | 三页 200 + `/api/site/tabs` 可读;bun 1.4.0 双容器、真 node 不存在;`server/discover` 回 2026-07-28、`tools/list` **34**。**发版后经 `site_tab_set` 隐藏 `runtime`**(所有者要求):`/` → **307** `/notes`、导航条只剩 Notes / About、`/rss.xml` 仍 200 |
+| 2026-09-03 | `789007e` | 11 → **12** | R-SKILLS 1.0(Skills 技能库 tab:迁移 012 三张表 + `apps/api/skills/` 只读面(首页 / 详情 / zip)+ MCP 八个 `skills_*`(工具 34 → **42**)+ 前端画板 2f/2g/2h + 四格 tab 三处登记)。发版时库里**还没有任何 skill**,`/skills` 是空态(所有者裁定「直接可见」,首批内容随后经 MCP 上传) | `deploy/Caddyfile` **有变更**(新增 `^/skills/[a-z0-9-]+\.zip$` → `/assets/skills/…` 扩展名分流),随 `dev.ps1 ship` 重传后 `caddy validate` + `caddy reload`(不重启容器);`.env` 只改 `IMAGE_TAG`;备份 `~/deploy/.env.bak-pre-789007e` | `da10f6e` | 冒烟:九个服务各取正式端点全部非 404(`/api/skills` 200、`/api/site/tabs` 200、`/api/t` 204、`/api/trace/stream` 400=非 404、`/api/mcp` 无 token 401);`/notes` `/skills` `/about` 200、`/` 仍 **307**(`runtime` 保持隐藏)、`/skills` 渲染「共 0 个 skill」空态;`/api/spike/*` 与 `/admin` 404;`/skills/<不存在>.zip` 回 **api 的 JSON 404**(证明新 Caddy 规则生效)、`/skills/<不存在>` 详情页 404;Notes 配图 200 + ETag、复请求 304(Caddy reload 无回归);`server/discover` 回 `2026-07-28`、`tools/list` **42** 含八个 `skills_*`;两容器 `process.versions.bun` = 1.4.0。**未验**:zip 的 `application/zip` 头(要等首批 skill 入库)、SSE 全链路(本次 diff 未触 `apps/api/agent` 运行代码,只加了迁移与测试) |
 
 ### `da10f6e` 那条「构建修复」是什么(2026-09-03,发版前拦下)
 
@@ -28,6 +29,20 @@ healthy、`/health` 200,没有任何一处会报错。
 
 `deploy-environments.md` 的冒烟清单第 1 条(「服务白名单逐项可达」)本就是为这类漏补设的,但它跑在部署**之后**;
 这次是在构建前读 diff 发现的。**新增 Encore 服务时,`dev.ps1` 的 `$hostedServices` 与轮次任务卡的改动清单要一起过。**
+
+### 合并轮次分支后,发版第一步是 `npm ci`(2026-09-03 实测,`789007e`)
+
+`round-skills` 在 worktree 里加了新依赖 `fflate`(`apps/api/package.json` + lockfile)。合并回 `main`
+之后主工作区的 `node_modules` 里**没有**它,`dev.ps1 check` 直接崩在 parser 上:
+
+```text
+check: failed to start app: error: unable to resolve module fflate: failed to get the node_modules path
+  --> apps/api/shared/skill-pack.ts:18:1
+```
+
+看着像编译错误,其实只是依赖没装。**轮次分支动过 `apps/api/package.json` 时,合并后发版前先在 `apps/api` 跑一次 `npm ci`**
+(`encore build docker` 同样要打包 `node_modules`,漏装会一路带到镜像里)。判据:`git diff <上一个发版 SHA>..HEAD -- apps/api/package.json`
+有输出就要装。
 
 ### SSH 传输:密集重连会把自己关在门外(2026-09-03 实测)
 
