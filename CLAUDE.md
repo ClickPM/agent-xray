@@ -28,7 +28,7 @@ apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。服务�
               一包文件的判据在 shared/skill-pack.ts);本文不再逐服务记状态
 design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token 速查)——实现时逐画板对照
 deploy/       docker compose + Caddyfile + migrate.sh(预发/生产共用的部署资产,R9/R11 定稿)
-docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署 / **生产发布记录(releases.md)**
+docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署 / MCP 管理面说明(mcp.md) / **生产发布记录(releases.md)**
 rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap 在根 ROUNDS.md
 tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。R5 的 notes-sync 管线已随 R6 删除;
               现在只有 `skills-manifest/generate.mjs`(R-SKILLS-2):读 runner/skills → 生成 api 与执行容器两份同源清单
@@ -135,6 +135,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
     - **调用 JS 可执行文件时必须 `bun --bun`**:不加时 bun 尊重脚本 shebang(`#!/usr/bin/env node`)而静默回落到 node。`apps/api` 的 test 脚本与 `apps/web` 的 CMD 都因此必须带 `--bun`;判据是 `process.versions.bun` 是否有值。
     - **运行时 ≠ 包管理器**:依赖安装仍走 `npm ci` + `package-lock.json`。pi SDK 自带 `npm-shrinkwrap.json` 锁定传递依赖而 bun 不读它,切 `bun install` 会丢掉这层供应链锁定且收益为零。`packageManager: "bun@…"` 字段只用于让 `encore test` 以 bun 执行脚本,不代表依赖由 bun 解析。
 12. **生产两条硬约束:JS 运行时 = bun(规则 11),MCP 管理面协议 = 2026-07-28**(所有者裁定 2026-09-03,站点投产后)。任何依赖升级或迭代(encore CLI / `bun-runtime` 实验位 / MCP SDK / MCP 客户端 / pi SDK)只要**可能**让二者之一不再满足——实验位改名或移除、SDK 新版本不再提供 2026-07-28、客户端不再按该协议连——必须**在动手之前**向所有者做风险告知并拿到裁定,不得在轮次内自行降级或绕过(例如退回 node 基座、退回 legacy 协商路径)。判据:`process.versions.bun` 有值(`docs/deploy-environments.md` 冒烟清单第 12 条)与 `server/discover` 回 `supportedVersions: ["2026-07-28"]`(同清单第 4 条)。
+13. **MCP 管理面工具变动必须同步更新 [`docs/mcp.md`](docs/mcp.md)**(所有者裁定 2026-09-03)。MCP 是站点唯一的写面与管理通道(原 `/admin` 后台与画板 3a–3e 已废弃),`docs/mcp.md` 是管理面契约的权威全景说明。任何轮次或改动只要涉及 MCP 工具的增删、签名/参数变更(入参 Zod schema)、返回值结构变更、权限/审计策略调整,或管理面协议与客户端接入机制变更,**必须在同轮次中同步修订该文档**,保持文档记载的工具总数、入参要求与行为说明与 `apps/api/mcp/tools.ts` 强一致;并在任务卡与提交中显式核对工具总数。
 
 ## 钉版本
 

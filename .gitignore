@@ -36,3 +36,5 @@ Thumbs.db
 
 # logs
 *.log
+.sessions/--G-agent-xray--/00d0a76e-f8a0-4d4f-a33a-686707f7bd94/
+.sessions/--G-agent-xray--/
