@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-skills/round-skills-2.md;与 1.0 的任务卡 round-skills.md 同目录。拆解见 ROUNDS.md「R-SKILLS-2」。 -->
 
-> 状态:**代码已落地(2026-09-03),`dev.ps1 check` / `dev.ps1 test` 全绿,待 codex 审查 → 合并 `main` → 发版 + 生产冒烟**
+> 状态:**代码已落地、codex 三轮审查收口(整改后 PASS,2026-09-03),待合并 `main` → 发版(三镜像)+ 生产冒烟 + 按顺序打开**
 >
 > 研究与取舍全文在 [`research.md`](research.md)(pi 内核实测依据在附 A);本卡只列交付与验收。
 > 三个前置里**第 2 项(画板 1f/1g 第四组)开工时未闭合**,处理方式见「本轮实测 · 前置核对」。
@@ -25,7 +25,7 @@
 | 前置 | 状态 | 说明 |
 |---|---|---|
 | **R-SKILLS(1.0)落地并合并 `main`** | ✅ 已合并(`789007e`) | 本轮的迁移 013 依赖 012;`skills_agent_set` 依赖 `skills` 表;hash 一致性判据依赖 `skill_files`。**首批 skills 所有者尚未上传**(2026-09-03 核对生产 `skills_list` 为空):不阻塞代码,上传时按「运维」段的顺序来 |
-| **画板 1f/1g 加第四组「沙箱执行组」** | ❌ **开工时未闭合**(云端 Claude Design 项目与本地 `design/` 的 Tools 面板示例数据都只有三组) | 与 R-TOOLS 同一顺序(先改设计稿);代码轮没有等:前端按本卡建议值接上(`#8b5cf6`、组名「沙箱执行组」、示例工具 `skill_run`),所有者画完后按画板核对这三处并拉稿合并;已记 BACKLOG |
+| **画板 1f/1g 加第四组「沙箱执行组」** | ⚠️ **开工时未闭合,所有者裁定不阻塞**(云端 Claude Design 项目与本地 `design/` 的 Tools 面板示例数据都只有三组;2026-09-03 所有者裁定「正常展示出来就好了」) | 前端按本卡建议值接上(`#8b5cf6`、组名「沙箱执行组」、示例工具 `skill_run`)并按此展示;所有者画完后按画板核对这三处并拉稿合并;已记 BACKLOG |
 | **spike:Encore 的 bun 运行时里 `fetch` 走 unix socket** | ✅ 通过(留证在「本轮实测」) | 两个 `--network none` 容器经命名卷 unix socket:bun 1.4.0 `fetch({unix})` 与 `node:http socketPath` 都完成 `POST /run` 往返;Encore 的 JS 运行时不改写全局 `fetch`(grep `encore.dev` 无 `globalThis.fetch =`) |
 
 无新凭据。新依赖:runner 镜像的 Python 基座与 `requirements.txt`(hash 锁定);api / web 侧零新增 npm 依赖。
@@ -117,6 +117,11 @@
 
 打开(每一步都可单独回退):发版(runner 镜像 + api + compose)→ 生产冒烟 4 条 → `tool_config_set skill_load true` → `skills_agent_set <name> true`(逐个)→ 服务器 `.env` 加 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 并 `docker compose up -d api` 重建 → `tool_config_set skill_run true`。
 
+**展示副本要与代码副本逐文件一致才会被注入**(`skills_agent_status` 的 `consistency: ok`),所以打开前先对齐库里的副本(2026-09-03 核对生产 `skills_list`):
+- `text-tools`:生产**没有**,经 `skills_upsert` 上传 `runner/skills/text-tools/` 的全部 4 个文件(SKILL.md / xray.json / scripts/wordfreq.py / scripts/json_pretty.py),`sourceType: own`、`repo: ClickPM/skills-hub`(自研 skill 的既定出处,先推到 skills-hub 再挂);
+- `encore-api` / `encore-database` / `encore-testing`:生产已有,但各只有 1 个文件(SKILL.md);代码副本现在是 **SKILL.md + 上游 Apache-2.0 `LICENSE`** 两个文件,发版后 `skills_agent_status` 会报 `drift: missing LICENSE, changed SKILL.md` —— 库里那份 SKILL.md 是 **CRLF**(经 `skills_file_get` 核对:8111 字节,代码副本 LF 7839 字节;上传源是本机 `.claude/skills/`,那里被 `core.autocrlf` 写成了 CRLF),而哈希按字节算。用 `skills_upsert` 整包重传 `runner/skills/<name>/` 的两个文件(LF)即可,两处漂移一起修掉。
+- 其余 15 个不在代码清单里,`skills_agent_set` 会拒绝,不用动。
+
 止损:`tool_config_set skill_run false` 当场停用运行(不发版);`skills_agent_set <name> false` 单个下线;`docker compose stop skill-runner` 后工具调用以固定文案失败、站点其余照常。
 回退成本:一条纯追加迁移 + 两个工具 + 两个扩展 + 一个容器;`.env` 去掉 `XRAY_UNLOCK_DANGEROUS_TOOLS` 并重建 api 即回到「注册表里没有 dangerous 实现」的状态。
 
@@ -135,9 +140,10 @@
   整改后 `npx tsc --noEmit -p apps/api` 通过;相关测试全绿;清单重生成(`--check` 零漂移)。
 - **第 2 轮(2026-09-03,`4ccc92b`,仍全量)findings 2 条**:
   1. [P1] `skill_run` 的 env 第二闸只按 `tool_config.dangerous` 那一位判,而那一位可经 MCP `tool_config_set` 改成 false,持管理 token 的人改一行就绕过了 env 闸 —— **采纳整改**(改判断,不加机制):`agent/tools.ts` 加代码常量 `DANGEROUS_TOOLS = {skill_run}`,高危 = 表里那一位 **或** 代码点名;表里只能把别的工具加进闸里,不能把 `skill_run` 放出去。`sandbox.test.ts` 加一条:表里改成 dangerous=false、缺 env 仍不注册;`docs/security.md` R-SKILLS-2 补记 / `deploy/.env.example` / agent README 同步。
-  2. [P1] 前端 Tools 面板的第四组「沙箱执行组」不在已入库的画板 1f/1g 与原型里,违反「设计稿是功能边界」与本卡「先改画板再进轮次」的前置 —— **不在代码里改,回所有者裁定**(CLAUDE.md「审查边界」:findings 指向设计层面的,停下回任务卡 / 所有者,不在整改循环里堆补丁)。事实:开工时核对过云端与本地画布都没有第四组(「本轮实测 · 前置核对」),前端按本卡建议值先接、`design/` 一字未动、已记 BACKLOG。两条出路都是所有者的:① 在画布上把第四组画上(本卡前置第 2 项原文),拉稿合并后按画板核对三处;② 裁定在画板补上之前前端**隐藏**沙箱执行组(代价:`skill_run` 在 Tools 面板上不可见,与 R-TOOLS「面板由后端目录派生」相悖)。合并 `main` 与发版等这条裁定。
-- 第 3 轮(只审第 2 轮整改 diff,`--base 4ccc92b`):<待回填>
-- 结论:<待回填>
+  2. [P1] 前端 Tools 面板的第四组「沙箱执行组」不在已入库的画板 1f/1g 与原型里,违反「设计稿是功能边界」与本卡「先改画板再进轮次」的前置 —— **不在代码里改,回所有者裁定**(CLAUDE.md「审查边界」:findings 指向设计层面的,停下回任务卡 / 所有者,不在整改循环里堆补丁)。事实:开工时核对过云端与本地画布都没有第四组(「本轮实测 · 前置核对」),前端按本卡建议值先接、`design/` 一字未动、已记 BACKLOG。两条出路都是所有者的:① 在画布上把第四组画上(本卡前置第 2 项原文),拉稿合并后按画板核对三处;② 裁定在画板补上之前前端**隐藏**沙箱执行组(代价:`skill_run` 在 Tools 面板上不可见,与 R-TOOLS「面板由后端目录派生」相悖)。
+     **所有者裁定(2026-09-03):「正常展示出来就好了」** —— 前端保持第四组按当前值(组名「沙箱执行组」/ `#8b5cf6` / 徽标「沙箱执行」)渲染,不隐藏;这条 finding **不采纳**(裁定即答案),不再阻塞合并与发版。画板 1f/1g 补画仍是所有者的 BACKLOG 事项,画完后按画板核对三处即可。
+- **第 3 轮(2026-09-03,`be05b94`,只审第 2 轮整改 diff,`--base 4ccc92b`)**:无 findings —— 「按代码里的清单判高危、同时保留表里的 dangerous 位对其它工具的作用,未见回归」(审查器的沙箱临时目录权限挡住了它自己跑测试,以代码审读为准;本机 `dev.ps1 test` 500 + 9 全绿)。
+- 结论:**整改后 PASS**。高级别 findings 清零(首轮 2 条 P1 整改、第 2 轮 1 条 P1 整改 + 1 条设计层面由所有者裁定「正常展示」);合并 `main` → 发版(三镜像)→ 生产冒烟第 19 / 20 条 → 按「运维」段顺序打开。
 
 ## 失败处理
 
