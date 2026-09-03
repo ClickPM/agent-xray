@@ -2,8 +2,13 @@
 
 <!-- 保存为 rounds/round-skills/round-skills.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**审查通过、待合并 `main`(2026-09-03)** —— 实现完成、本机验收 ①–⑪ / ⑬ / ⑭ 通过、codex 三轮审查收口(整改后 PASS);
-> 合并后进入发版步骤:`dev.ps1 build`(tag = 合并后 SHA)→ 冒烟第 1 / 3 条覆盖验收 ⑫ → `docs/releases.md` 记一行 → 所有者经 MCP 上传首批 skills
+> 状态:**已合并 `main` 并发版生产(`789007e`,2026-09-03)** —— 实现完成、本机验收 ①–⑭ 全过(⑫ 在发版时补齐)、
+> codex 三轮审查收口(整改后 PASS);生产迁移 11 → 12,冒烟第 1 / 3 条通过,`docs/releases.md` 已记一行。
+> **首批内容已上线**(同日):18 个 skill(encore ×8 = `encoredev/skills`、`skill-creator` = `anthropics/skills`、
+> 自研 ×9 = 新建的公开仓库 [`ClickPM/skills-hub`](https://github.com/ClickPM/skills-hub)),四分类 7·6·2·3;
+> zip 回 `application/zip` 且解开后逐文件 sha256 与源目录一致。**没发的四个与理由**(许可 / 体积 / vendor 许可文件名)
+> 记在 [`docs/releases.md`](../../docs/releases.md)「首批 skill 内容」——**发布前逐个看 skill 目录内的 LICENSE**,
+> 仓库公开不等于许可允许再分发。
 >
 > 开工前置动作已完成:任务卡与 ROUNDS.md 拆解已过目,「所有者裁定」四条已定(见下),文档已合并 `main`。
 > 开工分支 `claude/round-skill-phase-one-abc0e6`(worktree),实测与偏离见文末「本轮实测」。
@@ -206,7 +211,7 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
 | 9 | 画板 2g:面包屑 / 等宽 22px 标题 + 徽标 / `GitHub ↗` + `下载 zip · 3 KB` / INSTALL 面板 / 目录树(SKILL.md 首位、目录 ▾、大小列、选中行 `--bg-selected` + 600)/ frontmatter 键值块(`when_to_use` 折叠块并成一段)/ 正文 / 「本页目录」四项且锚点 id 与标题一致;画板 2h:点 `.py` → 行号列、三 token 高亮、「本页目录」消失、地址栏同步 `?file=scripts%2Freview.py`;`?file=` 深链直达;两处 copy 点击后显示绿色 `✓ copied`、1.5 s 后回落;`repoUrl` 为空的自研 skill 不渲染 `GitHub ↗` 与出处链接、版式不变(与 encore-api 那页对比) |
 | 10 | `site_tab_set{skills,false}` → `/notes` 上导航条三格、`/skills` 与 `/skills/<name>` 404、`/skills/<name>.zip` 与 `api /skills` 仍 200(边界只到呈现层);恢复 → 四格 |
 | 11 | 含 `<script>` / `<img onerror>` 的 SKILL.md 与 `.py`、含 `<script>` 的 summary 在页面上只是文本(DOM 里 0 个 `img`,无内容来源的 script);`repoUrl: javascript:` 写面拒、前端 `safeExternal` 二次拦;zip 响应 `nosniff`;`sandbox.test.ts`:`agent_ro` 读 skills 三表 `permission denied` |
-| 12 | `dev.ps1` 的 `$hostedServices` 已含 `skills`(构建命令行实看:`--services agent,…,site,skills`);**镜像构建与「镜像里 `GET /skills` 非 404」按顺序留到审查收口、合并 `main` 之后的发版步骤**(`docs/deploy-environments.md` 部署流 + 冒烟第 1 / 3 条)。本轮曾在审查未收口时误发起一次 `dev.ps1 build`,所有者指出后中止 —— 审查一旦要整改镜像就得重打,构建不该早于审查收口 |
+| 12 | `dev.ps1` 的 `$hostedServices` 已含 `skills`(构建命令行实看:`--services agent,…,site,skills`);**已于 `789007e` 发版时完成**(2026-09-03):构建命令行实看含 `skills`,生产 `GET /api/skills` 200、`/skills` 页 200 渲染空态、`/skills/<不存在>.zip` 回 api 的 JSON 404(新 Caddy 扩展名分流生效)。本轮曾在审查未收口时误发起一次 `dev.ps1 build`,所有者指出后中止 —— 审查一旦要整改镜像就得重打,构建不该早于审查收口 |
 | 13 | 真实 MCP 路径(2026-07-28 契约):`server/discover` 回 `["2026-07-28"]`,`tools/list` **42**;`skills_upsert` 发布仓库自带的 `encore-api` / `encore-database` / `encore-testing`(精选,`encoredev/skills`)+ 一个带 `scripts/*.py` 与 `references/*.md` 的自研示例 → 页面出现 → zip 解压与源目录逐文件一致 |
 | 14 | `dev.ps1 gen` 后 `api-client.ts` 含 `skills` 命名空间(`listSkills` / `getSkill`)、不含 `mcp`;生成物里被翻掉的三行 app slug 按 BACKLOG 先例还原 |
 
