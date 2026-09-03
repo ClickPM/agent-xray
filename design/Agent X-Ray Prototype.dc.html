@@ -21,7 +21,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
   <div style="height:44px;flex:none;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
     <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
     <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
-      <sc-for list="{{navTabs}}" as="t" hint-placeholder-count="3">
+      <sc-for list="{{navTabs}}" as="t" hint-placeholder-count="4">
         <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:{{t.color}};font-weight:{{t.fw}};background:{{t.bg}};border:1px solid {{t.border}};cursor:pointer" style-hover="color:#2563eb" onClick="{{t.go}}">{{t.label}}</div>
       </sc-for>
     </div>
@@ -325,6 +325,125 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
   </div>
   </sc-if>
 
+  <sc-if value="{{isSkills}}" hint-placeholder-val="{{false}}">
+  <div style="flex:1;min-height:0;overflow:auto">
+    <div style="max-width:1100px;margin:0 auto;padding:36px 32px 64px">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <div style="font-size:20px;font-weight:650">Skills · 技能库</div>
+          <div style="font-size:13px;color:#6b7280;margin-top:6px">我在 agent 开发里反复用到的 skill:自己写的与精选的第三方都在这里,每个都能看目录、读文件、一条命令装进 Claude Code / Codex。</div>
+        </div>
+      </div>
+      <sc-for list="{{skillCats}}" as="cat" hint-placeholder-count="4">
+        <div style="margin-top:32px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span style="width:10px;height:10px;border-radius:4px;background:{{cat.dot}}"></span><span style="font-size:13px;font-weight:600">{{cat.name}}</span><span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af">{{cat.slug}}</span></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+            <sc-for list="{{cat.cards}}" as="c" hint-placeholder-count="3">
+              <div style="background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:14px;cursor:pointer;box-sizing:border-box" style-hover="background:#eeeeee;border-color:rgba(37,99,235,0.35)" onClick="{{goSkill}}">
+                <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13px 'JetBrains Mono',monospace;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{c.name}}</span><span style="font:600 10px 'JetBrains Mono',monospace;color:{{c.badgeColor}};border:1px solid currentColor;border-radius:4px;padding:1px 5px;line-height:1.4;flex:none">{{c.badge}}</span></div>
+                <div style="font-size:12px;color:#6b7280;line-height:1.6;margin-top:5px;min-height:38px">{{c.desc}}</div>
+                <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{c.meta}}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+      <div style="font-size:11px;color:#9ca3af;margin-top:12px;line-height:1.9">
+        <div>共 9 个 skill · 最近更新:<span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">codex-review-loop</span> · 3 天前</div>
+        <div>skill = 一个目录:<span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">SKILL.md</span>(必需)+ <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">scripts/</span> + <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">references/</span>,放进 <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">.claude/skills/</span> 或 <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">.agents/skills/</span> 即生效。</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{isSkill}}" hint-placeholder-val="{{false}}">
+  <div style="flex:1;min-height:0;overflow:auto">
+    <div style="max-width:1100px;margin:0 auto;padding:30px 32px 64px">
+      <div style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px"><span style="color:#2563eb;cursor:pointer" onClick="{{goSkills}}">Skills</span><span>/</span><span style="color:#2563eb;cursor:pointer" onClick="{{goSkills}}">审查与质量</span><span>/</span><span style="font:400 12px 'JetBrains Mono',monospace;color:#6b7280">codex-review-loop</span></div>
+      <div style="display:flex;align-items:flex-start;gap:16px;margin-top:22px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font:650 22px 'JetBrains Mono',monospace;letter-spacing:-0.01em">codex-review-loop</span><span style="font:600 10px 'JetBrains Mono',monospace;color:#2563eb;border:1px solid currentColor;border-radius:4px;padding:1px 5px;line-height:1.4;flex:none">自研</span></div>
+          <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-top:6px;max-width:640px">用 codex 做独立代码审查的固定回路:发起 → 等结果 → findings 逐条裁定 → 只对整改 diff 复审,直到 high 级清零。</div>
+          <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:10px">v1.2 · 4 个文件 · 8.0 KB · 更新于 2026-08-31 · @ClickPM</div>
+        </div>
+        <div style="display:flex;gap:8px;flex:none;padding-top:2px">
+          <a href="https://github.com/cking000bigdemon" target="_blank" style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;white-space:nowrap" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">GitHub ↗</a>
+          <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer;white-space:nowrap" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">下载 zip · 6 KB</div>
+        </div>
+      </div>
+      <div style="margin-top:22px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px">
+        <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">INSTALL</div>
+        <div style="display:flex;align-items:center;gap:10px;background:#ffffff;border:1px solid #e0e0e0;border-radius:6px;padding:7px 10px">
+          <span style="font:400 12px 'JetBrains Mono',monospace;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">npx skills add ClickPM/agent-skills <span style="color:#9ca3af">--skill</span> codex-review-loop</span>
+          <div style="display:flex;align-items:center;gap:4px;color:{{installCopyColor}};font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="background:#eeeeee" onClick="{{copyInstall}}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>{{installCopyLabel}}</div>
+        </div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:8px;line-height:1.6">装进 <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">.claude/skills/codex-review-loop/</span>;Codex 读 <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">.agents/skills/</span>,同一目录结构。</div>
+      </div>
+      <div style="display:grid;grid-template-columns:240px minmax(0,1fr);gap:32px;margin-top:26px;align-items:start">
+        <div style="position:sticky;top:0">
+          <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">FILES</div>
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <sc-for list="{{skillTree}}" as="f" hint-placeholder-count="7">
+              <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 {{f.pad}}px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;font-weight:{{f.fw}};background:{{f.bg}};color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box" style-hover="background:#eeeeee" onClick="{{f.pick}}"><span style="font-size:9px;color:#9ca3af;width:9px;flex:none">{{f.chev}}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">{{f.name}}</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">{{f.size}}</span></div>
+            </sc-for>
+          </div>
+          <sc-if value="{{isMd}}" hint-placeholder-val="{{false}}">
+          <div style="margin-top:22px">
+            <div style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.05em;margin-bottom:8px">本页目录</div>
+            <sc-for list="{{skillToc}}" as="t" hint-placeholder-count="4">
+              <div style="font-size:11px;padding:4px 0 4px 10px;border-left:2px solid {{t.border}};color:{{t.color}};font-weight:{{t.fw}};cursor:pointer" style-hover="color:#2563eb">{{t.label}}</div>
+            </sc-for>
+          </div>
+          </sc-if>
+        </div>
+        <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03);min-width:0">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+            <span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280">{{filePath}}</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1">{{fileInfo}}</span>
+            <div style="display:flex;align-items:center;gap:4px;color:{{fileCopyColor}};font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="background:#eeeeee" onClick="{{copyFile}}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>{{fileCopyLabel}}</div>
+          </div>
+          <sc-if value="{{isMd}}" hint-placeholder-val="{{false}}">
+          <div style="padding:4px 24px 24px">
+            <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;margin-top:16px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:baseline">
+              <span style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280">name</span><span style="font:400 12px 'JetBrains Mono',monospace;line-height:1.6">codex-review-loop</span>
+              <span style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280">description</span><span style="font-size:12px;line-height:1.6">Run an independent codex code review as a fixed loop: kick off, wait, adjudicate findings one by one, re-review only the fix diff until high-severity findings are zero.</span>
+            </div>
+            <div style="font-size:18px;font-weight:650;margin-top:30px">codex-review-loop</div>
+            <div style="font-size:16px;font-weight:650;margin-top:30px">何时用</div>
+            <div style="font-size:14px;line-height:1.8;margin-top:12px">一轮实现完成、<span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">dev.ps1 test / check</span> 全过之后、准备合并 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">main</span> 之前。它只做<span style="font-weight:650">缺陷门禁</span>,不做设计评审;findings 指向设计缺陷时,停下回任务卡重定方案。</div>
+            <div style="font-size:16px;font-weight:650;margin-top:30px">回路</div>
+            <div style="font-size:14px;line-height:1.8;margin-top:12px;display:flex;flex-direction:column;gap:4px">
+              <div><span style="color:#9ca3af">1.</span> <span style="font-weight:650">发起</span>:改动超过 1–2 个文件带 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">--background</span>,用 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">status</span> / <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">result</span> 跟进。</div>
+              <div><span style="color:#9ca3af">2.</span> <span style="font-weight:650">逐条裁定</span>:采纳整改 / 不采纳写明理由,回填任务卡「代码审查」段。</div>
+              <div><span style="color:#9ca3af">3.</span> <span style="font-weight:650">复审</span>:只要有采纳整改的 findings 就再发一轮;<span style="font-weight:650">第 3 轮起只审整改 diff</span>。</div>
+            </div>
+            <div style="border:1px solid #e0e0e0;border-radius:7px;margin-top:14px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+              <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:1">bash</span></div>
+              <pre style="margin:0;padding:12px 14px;font:400 12px/1.7 'JetBrains Mono',monospace;overflow:auto">node &lt;codex-companion.mjs&gt; review --background --base &lt;上一轮已审提交&gt;</pre>
+            </div>
+            <div style="font-size:16px;font-weight:650;margin-top:30px">收口标准</div>
+            <div style="border-left:3px solid #b6bac2;border-radius:0 6px 6px 0;background:rgba(0,0,0,0.03);padding:10px 14px;margin-top:22px;font-size:14px;line-height:1.7;color:#6b7280">不得带 high 级、或任何会丢数据 / 漏凭据 / 泄资源 / 逻辑错误的 findings 收口。低危改进项写明理由记 BACKLOG 后放行。</div>
+            <div style="font-size:16px;font-weight:650;margin-top:30px">禁止</div>
+            <div style="font-size:14px;line-height:1.8;margin-top:12px;display:flex;flex-direction:column;gap:4px">
+              <div style="display:flex;gap:10px"><span style="color:#9ca3af;flex:none">·</span><span>以审查代替设计:在「整改 → 复审」循环里逐条堆补丁。</span></div>
+              <div style="display:flex;gap:10px"><span style="color:#9ca3af;flex:none">·</span><span>非严重 findings 新增机制类修复:新队列 / 新协议 / 新抽象 / 新配置 / 新导出面。</span></div>
+              <div style="display:flex;gap:10px"><span style="color:#9ca3af;flex:none">·</span><span>以「概率低」「会被替换」为由跳过整改。</span></div>
+            </div>
+          </div>
+          </sc-if>
+          <sc-if value="{{isCode}}" hint-placeholder-val="{{false}}">
+          <div style="display:grid;grid-template-columns:36px minmax(0,1fr);font:400 12px/1.7 'JetBrains Mono',monospace;padding:12px 0">
+            <sc-for list="{{fileLines}}" as="l" hint-placeholder-count="27">
+              <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">{{l.n}}</span><span style="padding:0 24px 0 14px;white-space:pre;overflow-x:auto">{{l.t}}</span>
+            </sc-for>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
   <sc-if value="{{isAbout}}" hint-placeholder-val="{{false}}">
   <div style="flex:1;min-height:0;overflow:auto">
     <div style="max-width:880px;margin:0 auto;padding:40px 32px 64px">
@@ -401,7 +520,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
   &quot;streamingPulse&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Runtime panel&quot;}
 }">
 class Component extends DCLogic {
-  state = { screen: 'notes', rssOpen: false, copied: '', panel: 'timeline', openTool: '' };
+  state = { screen: 'notes', rssOpen: false, copied: '', panel: 'timeline', openTool: '', skillFile: 'SKILL.md' };
   renderVals() {
     const go = screen => () => this.setState({ screen, rssOpen: false });
     const s = this.state.screen;
@@ -605,16 +724,156 @@ class Component extends DCLogic {
         ],
       },
     ];
+    const SK = (name, badge, desc, meta) => ({ name, badge, badgeColor: badge === '自研' ? '#2563eb' : '#9ca3af', desc, meta });
+    const skillCats = [
+      { name: '开发框架', slug: 'framework', dot: '#2563eb', cards: [
+        SK('encore-api', '精选', '在 Encore.ts 里定义类型化端点:路径 / 查询 / 头部参数、请求校验、APIError 的用法。', 'encoredev/skills · 1 个文件 · 更新于 12 天前'),
+        SK('encore-database', '精选', 'SQLDatabase 建表与迁移、查询写法、Drizzle / Prisma 的接法。', 'encoredev/skills · 1 个文件 · 更新于 12 天前'),
+        SK('encore-testing', '精选', '用 encore test 跑 vitest:隔离测试库、直接调 handler、外部依赖 mock。', 'encoredev/skills · 1 个文件 · 更新于 12 天前'),
+      ] },
+      { name: '工作流', slug: 'workflow', dot: '#16a34a', cards: [
+        SK('worktree-round', '自研', '开一轮:建 round 分支与 worktree、复制本地 secrets、npm ci 两次;收口时按安全闸清理。', '@ClickPM · 3 个文件 · 更新于 5 天前'),
+        SK('release-ship', '自研', '本机构建镜像(tag = git SHA)、送到服务器、compose 重建,把发版记进 releases.md。', '@ClickPM · 2 个文件 · 更新于 6 天前'),
+      ] },
+      { name: '审查与质量', slug: 'review', dot: '#f9c22e', cards: [
+        SK('codex-review-loop', '自研', '用 codex 做独立代码审查的固定回路:发起 → 逐条裁定 → 只对整改 diff 复审,直到 high 级清零。', '@ClickPM · 4 个文件 · 更新于 3 天前'),
+        SK('security-review', '精选', '对当前分支的改动做一次安全审查:输入边界、凭据、注入面、依赖。', 'anthropics/skills · 2 个文件 · 更新于 20 天前'),
+      ] },
+      { name: '写作与内容', slug: 'writing', dot: '#8b5cf6', cards: [
+        SK('notes-publish', '自研', '把一篇标准 markdown 连配图经 MCP 管理面发到 Notes:先传图再发文,幂等可重跑。', '@ClickPM · 3 个文件 · 更新于 8 天前'),
+        SK('pdf', '精选', '读取、合并、拆分、填表、加水印、OCR:凡是 PDF 文件的活都走它。', 'anthropics/skills · 5 个文件 · 更新于 30 天前'),
+      ] },
+    ];
+    const cur = this.state.skillFile;
+    const pick = key => () => this.setState({ skillFile: key });
+    const F = (name, key, size, pad, chev) => ({
+      name, size, pad, chev,
+      bg: cur === key ? '#e8e8e8' : 'transparent',
+      fw: cur === key ? 600 : 400,
+      pick: key ? pick(key) : () => {},
+    });
+    const skillTree = [
+      F('codex-review-loop/', '', '', 8, '▾'),
+      F('SKILL.md', 'SKILL.md', '3.8 KB', 20, ''),
+      F('scripts/', '', '', 20, '▾'),
+      F('review.py', 'scripts/review.py', '0.9 KB', 32, ''),
+      F('findings.py', 'scripts/findings.py', '1.9 KB', 32, ''),
+      F('references/', '', '', 20, '▾'),
+      F('findings-format.md', 'references/findings-format.md', '1.4 KB', 32, ''),
+    ];
+    skillTree[0].fw = 600;
+    const fileMeta = {
+      'SKILL.md': { path: 'SKILL.md', info: 'markdown · 3.8 KB · 96 行' },
+      'scripts/review.py': { path: 'scripts/review.py', info: 'python · 0.9 KB · 27 行' },
+      'scripts/findings.py': { path: 'scripts/findings.py', info: 'python · 1.9 KB · 58 行' },
+      'references/findings-format.md': { path: 'references/findings-format.md', info: 'markdown · 1.4 KB · 41 行' },
+    };
+    const pySrc = {
+      'scripts/review.py': [
+        '#!/usr/bin/env python3',
+        '"""Kick off a codex review and wait for the verdict."""',
+        'import json',
+        'import subprocess',
+        'import sys',
+        'from pathlib import Path',
+        '',
+        'COMPANION = Path(".claude/plugins/codex/companion.mjs")',
+        'HIGH = {"high", "critical"}',
+        '',
+        '',
+        'def run_review(base: str | None, background: bool = True) -> str:',
+        '    """Return the job id printed by codex-companion."""',
+        '    cmd = ["node", str(COMPANION), "review"]',
+        '    if background:',
+        '        cmd.append("--background")',
+        '    if base:',
+        '        cmd += ["--base", base]',
+        '    out = subprocess.run(cmd, capture_output=True, text=True, check=True)',
+        '    return out.stdout.strip().split()[-1]',
+        '',
+        '',
+        'def blocking(findings: list[dict]) -> list[dict]:',
+        '    # 收口标准:high 级一个都不能留',
+        '    return [f for f in findings if f.get("severity") in HIGH]',
+        '',
+        'if __name__ == "__main__":',
+      ],
+      'scripts/findings.py': [
+        '#!/usr/bin/env python3',
+        '"""Parse codex findings into an adjudication table."""',
+        'import json',
+        'import sys',
+        '',
+        'ORDER = ["critical", "high", "medium", "low"]',
+        '',
+        '',
+        'def load(path: str) -> list[dict]:',
+        '    with open(path, encoding="utf-8") as fh:',
+        '        return json.load(fh)["findings"]',
+        '',
+        '',
+        'def sort_key(finding: dict) -> tuple:',
+        '    sev = finding.get("severity", "low")',
+        '    return (ORDER.index(sev) if sev in ORDER else 9, finding["file"])',
+        '',
+        '',
+        'def table(findings: list[dict]) -> str:',
+        '    rows = ["| 严重度 | 文件 | 裁定 |", "| --- | --- | --- |"]',
+        '    for f in sorted(findings, key=sort_key):',
+        '        rows.append(f"| {f[\'severity\']} | {f[\'file\']} | 待裁定 |")',
+        '    return "\\n".join(rows)',
+      ],
+    };
+    const mdOther = [
+      '# findings 格式',
+      '',
+      '每条 finding 由 codex 以 JSON 给出,字段固定:',
+      '',
+      '- severity — critical / high / medium / low',
+      '- file — 仓库相对路径',
+      '- line — 起始行号',
+      '- title — 一句话结论',
+      '- detail — 复现路径与影响面',
+      '',
+      '裁定回填任务卡时,一条 finding 一行,注明「采纳整改」或「不采纳 + 理由」。',
+    ];
+    const meta = fileMeta[cur] || fileMeta['SKILL.md'];
+    const rawLines = pySrc[cur] || (cur === 'references/findings-format.md' ? mdOther : null);
+    const fileLines = (rawLines || []).map((t, i) => ({ n: i + 1, t }));
+    const tocOn = ['何时用', '回路', '收口标准', '禁止'];
+    const skillToc = tocOn.map((label, i) => ({
+      label,
+      border: i === 0 ? '#2563eb' : 'transparent',
+      color: i === 0 ? '#1a1a1a' : '#6b7280',
+      fw: i === 0 ? 600 : 400,
+    }));
+    const stamp = (key, text) => () => {
+      try { navigator.clipboard.writeText(text); } catch (e) {}
+      this.setState({ copied: key });
+      clearTimeout(this._ct);
+      this._ct = setTimeout(() => this.setState({ copied: '' }), 1500);
+    };
     return {
       siteName: this.props.siteName ?? 'Agent X-Ray',
       toolGroups,
       panelTabs: [panelTab('Timeline', 'timeline'), panelTab('Chain View', 'chain'), panelTab('Lifecycle Map', 'lifecycle'), panelTab('Tools', 'tools')],
       isTimeline: p === 'timeline', isChain: p === 'chain', isLifecycle: p === 'lifecycle', isTools: p === 'tools',
       lifeNodes,
-      navTabs: [tab('Runtime', 'runtime', ['runtime']), tab('Notes', 'notes', ['notes', 'series', 'article']), tab('About', 'about', ['about'])],
+      navTabs: [tab('Runtime', 'runtime', ['runtime']), tab('Notes', 'notes', ['notes', 'series', 'article']), tab('Skills', 'skills', ['skills', 'skill']), tab('About', 'about', ['about'])],
       isRuntime: s === 'runtime', isNotes: s === 'notes', isSeries: s === 'series', isArticle: s === 'article', isAbout: s === 'about',
       rssOpen: this.state.rssOpen,
       goNotes: go('notes'), goSeries: go('series'), goArticle: go('article'),
+      isSkills: s === 'skills', isSkill: s === 'skill',
+      goSkills: go('skills'), goSkill: go('skill'),
+      skillCats, skillTree, skillToc, fileLines,
+      isMd: cur === 'SKILL.md', isCode: !!pySrc[cur] || cur === 'references/findings-format.md',
+      filePath: meta.path, fileInfo: meta.info,
+      installCopyLabel: this.state.copied === 'install' ? 'copied' : 'copy',
+      installCopyColor: this.state.copied === 'install' ? '#16a34a' : '#9ca3af',
+      copyInstall: stamp('install', 'npx skills add ClickPM/agent-skills --skill codex-review-loop'),
+      fileCopyLabel: this.state.copied === 'file' ? 'copied' : 'copy',
+      fileCopyColor: this.state.copied === 'file' ? '#16a34a' : '#9ca3af',
+      copyFile: stamp('file', (rawLines || []).join('\n')),
       openRss: () => this.setState({ rssOpen: true }),
       closeRss: () => this.setState({ rssOpen: false }),
       t1rows, t2rows, sessions, noteCats, chapters, articleToc, rssAll, buildPoints, repos, langBar,

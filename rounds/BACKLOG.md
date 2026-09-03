@@ -238,6 +238,12 @@
       **Runtime**、Notes 保持可见 —— 为一个不会发生的配置去动定稿页面不划算。将来真要隐藏 Notes 时再改,
       改法是 About 页多取一次 `visibleTabKeys()`,那一句按 notes 是否可见渲染 (2026-09-03)
 
+- [ ] 预研 R-WEBFETCH **生产 api 镜像里带着本机的 `.secrets.local.cue`**:核对 `local/xray-api:da10f6e` 布局时发现
+      `/workspace/apps/api/.secrets.local.cue`(451 B)在镜像里 —— `encore build docker` 把 app root 整目录打了进去。
+      内容只是本机开发用的 `McpAuthTokenHash` / `ConfigEncryptionKey` 等,不含生产凭据(生产走 `.env`),
+      但一份本机密钥材料不该出现在会被传输、留档的制品里。不当场改:要先核实 encore 有没有构建期排除机制
+      (`.gitignore` 之外的 ignore 文件 / `encore.app` 的 build 段),再决定是排除还是构建前临时挪走 (2026-09-03)
+
 ## 功能提案(需所有者裁定)
 
 - [ ] **给 agent 加「运行内置 skills 与 skill 内 Python 脚本」的能力**(所有者提出,2026-09-03)。研究结论在
@@ -255,3 +261,19 @@
 - [ ] R-IMAGEGEN **画板 1f/1g 的示例工具清单没有 `generate_image`**。面板由后端目录驱动,实际页面会显示它;
       只是 `design/*.dc.html` 里那份示例数据停在五个工具(R-TOOLS 时的全集)。设计稿是 Claude Design 的导出存档,
       本轮没有手改;要同步由所有者在画布上加 (2026-09-02)
+- [x] 预研 **`web_fetch` 工具(集成 defuddle)**:预研报告在 [`rounds/round-webfetch/study.md`](round-webfetch/study.md)。
+      结论是可做但要开**第四档**(无凭据、访客定向的外呼)—— 与 `docs/security.md` §1 外呼组约束 1
+      「工具不接受任何形式的 URL 参数」正面冲突,且不在设计稿,属规则 8 + 规则 9 的双重例外。
+      技术上两条硬前提已实测成立:bun 1.4.0 下 `node:https` 的 `lookup` 钩子可钉 IP(挡 DNS rebinding);
+      Worker + 硬超时可隔离解析(defuddle 对嵌套深度超线性:11 KB 页 5.7 s、1.3 MB 表格页 883 MB RSS,
+      Readability 同样超线性)。**所有者裁定 2026-09-03:暂不做。** `web_search` 已覆盖本站主流诉求
+      (找资料 / 时效问答 / 多源综述 / 给来源);`web_fetch` 独有的「读指定网址 / 要原文 / 顺着来源继续读 / 未索引页」
+      在本站频率偏低,代价却是新开一档安全约束 + Worker 新机制。报告留档不进轮次;访客贴网址的频率上来了再从报告 §5 重评 (2026-09-03)
+- [ ] 预研 R-WEBFETCH 的**中间路径待验证**:把网址写进 `web_search` 的 query,由网关侧开页 —— 我们的进程不抓,零 SSRF 面。
+      生产搜索 provider 是 OpenAI 系模型的 `web_search` 工具(有 search / open_page / find 三个动作),原则上可行。
+      验证:在站上问「打开 <某网址> 并总结」,看 Timeline 里的来源是否就是那一个网址。成立则只改三处:
+      `WEB_SEARCH_META` 描述与 `systemPromptFor` 里「不要放网址」两句、query 的 `maxLength`(现 300,放一个长网址就超)。
+      属小修补,可直接 `main` (2026-09-03)
+- [ ] R-SKILLS **agent 能否读 skills**(给 pi 配 `skills_list` / `skills_get` 这类只读工具,与 `notes_*` 同形态,让 Runtime 对话里能引用技能库)。
+      R-SKILLS 裁定本轮 agent 侧不可读、新表不授权任何 agent 角色;要做需在那次迁移里显式 `GRANT SELECT` 给 `agent_ro`、
+      走 `READ ONLY` 事务,并且 Tools 面板会自动多出这组工具(1f/1g 示例数据要跟)。属新功能,等所有者裁定 (2026-09-03)
