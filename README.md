@@ -36,7 +36,7 @@ apps/api 进程内:
 - **pi in-process**:pi coding agent 以 SDK 方式嵌入 Encore.ts 进程,无 sidecar
 - **零侵入观测**:一个观测者扩展订阅全部 34 种事件,不改 pi 一行源码
 - **类型化 RPC**:前后端用 Encore 生成的类型化 client,不走 GraphQL;流式一律 SSE(`api.raw`)
-- **沙箱化工具执行**:agent 无 bash/read/write 等任何内置工具;业务工具分三组——纯函数组(教程库只读查询,走 SELECT-only 角色)、外呼组(联网搜索 / 生图:服务端持凭据、目标域白名单、双计时器、计入日限额)、会话绑定组(给本会话起标题,列级授权);详见 [docs/security.md](docs/security.md)
+- **沙箱化工具执行**:agent 无 bash/read/write 等任何内置工具;业务工具分三组——纯函数组(教程库只读查询,走 SELECT-only 角色)、外呼组(联网搜索 / 生图:服务端持凭据、目标域白名单、双计时器、计入日限额)、会话绑定组(给本会话起标题,列级授权);详见 [docs/security.md](docs/security.md)。第四组「沙箱执行组」(agent 在独立的无网络容器里跑 skill 自带的 Python 脚本)已于 2026-09-03 裁定、待实现(R-SKILLS-2)
 - **无界面管理面**:站点内容与配置经无状态 MCP 服务(协议 2026-07-28)维护,没有 `/admin` 后台
 - **运行时统一 bun**:开发 / 测试 / 预发 / 生产四个环境的 JS 运行时都是 bun,最终运行镜像不含 node
 

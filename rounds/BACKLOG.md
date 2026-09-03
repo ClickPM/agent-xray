@@ -246,6 +246,20 @@
 
 ## 功能提案(需所有者裁定)
 
+- [x] **给 agent 加「使用 skills:注入 + 沙箱运行 Python 脚本」的能力**(所有者提出并于同日裁定,2026-09-03)——**已裁定「做」,落为 R-SKILLS-2**
+      (`round-skills` 的 2.0 迭代;研究与七条裁定 [`rounds/round-skills/research.md`](round-skills/research.md),任务卡 [`round-skills-2.md`](round-skills/round-skills-2.md))。
+      七条:做;规则 9「一次性容器」→「独立容器可常驻 + 一次性进程」;第四组「沙箱执行组」先改画板 1f/1g;`network_mode: none` + unix socket(spike 不通停下重估);
+      首批 skills 在 1.0 里经 MCP 上传、默认只展示不注入;**改可用 skill = 发版**(可用集合在代码里,库只开关 + hash 一致性);130 非必经、生产冒烟验收。
+      文档已按规则 9 先改(`docs/security.md` / `CLAUDE.md` / `docs/architecture.md` / `ROUNDS.md`),代码零改动。派生出下面三条新记录 (2026-09-03)
+- [ ] R-SKILLS-2 **Skills 页(2f–2h)要不要显示「agent 可用」徽标**:哪些 skill 对站上 agent 开放,访客现在只能在 Runtime 的 `before_agent_start` 详情卡
+      与 `skill_load` 调用里看到,Skills 页本身不区分。画板没有这个徽标,规则 8 下本轮不做;要做先在画布上给卡片 / 详情页头部加一枚(可沿用出处微徽标的形制) (2026-09-03)
+- [ ] R-SKILLS-2 **注入型(纯文本)skill 能否直接从库注入、不发版**:与 `notes_get_chapter` 同一信任级(所有者经 MCP 发布的文本),
+      技术上只需给 `agent_ro` 显式 `GRANT SELECT` skills 三表并走 `READ ONLY` 事务。但它与裁定 6「改可用 skill = 发版」相反,
+      且会让「可用集合在代码里」这条原则对注入型失效(管理 token 泄漏 → 可往上下文里塞任意文本)。作为备选留档,要做先重裁裁定 6 (2026-09-03)
+- [ ] R-SKILLS-2 **`ToolParametersSchema` 只认 string / integer**,`skill_run` 因此把入参做成一个 JSON 文本(`input`)而不是结构化字段。
+      与 R-IMAGEGEN 那条「`size` 入参要加 `enum`」同一根源:扩 schema 关键字必须连 `ToolsPanel.tsx` 的约束徽标一起扩(面板永远不是第二个要改的地方)。
+      属机制扩面,等所有者裁定;做了之后 `skill_run` 的 `input` 可以按脚本 schema 拆成真字段 (2026-09-03)
+
 - [ ] R-IMAGEGEN **`generate_image` 是否给访客一个 `size` 入参**(横版 / 竖版 / 方图)。本轮裁定只控 `prompt`、尺寸是
       provider 配置(`image_size`)—— 外呼组约束 1 的最严读法。要做入参得两处一起动:`ToolParametersSchema` 加 `enum`
       关键字(pi 的 JSON Schema 校验器支持),`ToolsPanel.tsx` 的约束徽标学会画枚举值(R-TOOLS:面板永远不是第二个
@@ -269,3 +283,5 @@
 - [ ] R-SKILLS **agent 能否读 skills**(给 pi 配 `skills_list` / `skills_get` 这类只读工具,与 `notes_*` 同形态,让 Runtime 对话里能引用技能库)。
       R-SKILLS 裁定本轮 agent 侧不可读、新表不授权任何 agent 角色;要做需在那次迁移里显式 `GRANT SELECT` 给 `agent_ro`、
       走 `READ ONLY` 事务,并且 Tools 面板会自动多出这组工具(1f/1g 示例数据要跟)。属新功能,等所有者裁定 (2026-09-03)
+      → **2026-09-03 同日由 R-SKILLS-2 的裁定覆盖**:agent 不直接读库里的 skills;可用集合在代码里(`runner/skills/`),库只提供 `agent_enabled` 开关与
+        hash 一致性判据,agent 角色对 skills 三表仍无权限。「从库直读」降为上面「注入型 skill 能否不发版」那条备选。本条关闭,不再单独裁定

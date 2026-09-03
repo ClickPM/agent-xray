@@ -60,6 +60,16 @@
 > **按用途分类**(与 Notes 首页同构);收录 **自研 + 精选第三方**(卡片带出处与徽标);详情页必须**看得到目录树、能逐文件预览**(markdown 渲染、代码带行号)。
 > 整个 tab **只读**:无搜索 / 筛选、无点赞评论、不显示安装量、无 RSS。内容经 MCP 整包发布(与 notes 同一读写分工),
 > 文件一律当文本渲染、`.py` 永不执行,agent 侧本轮**不可读**(是否给 agent 加只读工具记 BACKLOG 待裁定)。
+>
+> **2026-09-03 第七次修订(R-SKILLS-2,`round-skills` 的 2.0 迭代)**:所有者裁定让 agent **使用** skills ——
+> `skill_load` 把一个 skill 的 `SKILL.md` 送进上下文,`skill_run` 在**独立的无网络执行容器**里跑该 skill 声明过的 Python 脚本(venv 解释器、
+> 一次性进程与工作目录),守卫 / 注入 / 运行三条轨迹在 Runtime 右栏看得见。这是产品能力扩面,所有者裁定「做」;
+> 唯一要动设计稿的地方是 Tools 面板多出第四组「沙箱执行组」——**先改画板 1f/1g、再进轮次**(R-TOOLS 顺序,是开工前置);
+> Timeline 的 `blocked` 徽标、详情卡的「EXTENSION RETURNED」、链式视图的多扩展步骤,画板 1a/1b/1c 早已画着,不新增画板。
+> **哪些 skill 可用**(建在 1.0 之上):代码清单 `runner/skills/` ∩ 库里 `skills.agent_enabled`(默认 FALSE = 只展示不注入)∩ 展示副本与代码副本
+> sha256 一致 ∩ 工具闸开着;**改可用 skill = 发版**(裁定 6),库里只能在代码集合之内开关。规则 9 的「一次性沙箱容器」同日改为
+> 「独立容器可常驻 + 每次一次性进程」(裁定 2),130 预发非必经、隔离形态在生产冒烟验收(裁定 7)。七条裁定与依据见
+> [`rounds/round-skills/research.md`](rounds/round-skills/research.md),交付清单见 [`round-skills-2.md`](rounds/round-skills/round-skills-2.md)。
 
 ## 进度表
 
@@ -86,6 +96,7 @@
 
 | **R-TABS** | 顶部导航 tab 的呈现开关(MCP 逐个开关三个 tab 露不露;隐藏 = 导航条不渲染 + 页面不可达,后端端点照常) | ✅ 已完成([任务卡](rounds/round-tabs/round-tabs.md));11 项验收全过,`dev.ps1 test` 16 文件 388 用例;真实 MCP 协议路径本机实跑通过(34 工具、enum 下发、拒未知 key、拒关最后一个可见 tab)。codex 首轮**零 findings**,缺陷门禁 PASS。**所有者裁定边界只到呈现层**,不碰任何后端端点。待发预发/生产(迁移 v10→v11) | 2026-09-03 |
 | **R-SKILLS** | Skills 技能库 tab(第四个顶部 tab:按用途分类的 skill 卡片 → 详情页目录树 + 逐文件预览(markdown / 代码带行号)+ 复制安装命令 / GitHub 外链 / 站内 zip;内容经 MCP 整包发布) | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills.md));设计稿 `2f–2h` 已于 2026-09-03 并入 `design/`(15 块,三方合并、本地动画/进度线优化保留);ROUNDS / CLAUDE.md / security / architecture 已按规则 9「先改文档」写入约束;四条裁定已落(2026-09-03:zip = `fflate`、第三方 LICENSE 与仓库链接**非必填**、仓库名按 skill 逐个必填、高亮按画板做三 token),文档已合并 `main`,待另开 session 开工 | — |
+| **R-SKILLS-2** | agent 使用 skills(`round-skills` 2.0 迭代):`skill_load` 注入 + `skill_run` 在独立无网络容器里跑 skill 自带的 Python 脚本(第四组「沙箱执行组」,首个 `dangerous=TRUE` 工具)· 守卫 / 注入 / 运行三条轨迹进既有 34 事件 · 可用集合 = 代码清单 ∩ 库里开关 ∩ hash 一致 | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills-2.md) · [研究与七条裁定](rounds/round-skills/research.md));规则 9 措辞、第四组、威胁模型 6、容器与供应链约束已按「先改文档」写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md`。**三个开工前置**:R-SKILLS(1.0)落地合并、画板 1f/1g 加第四组(所有者画布)、spike「Encore bun 运行时 `fetch` 走 unix socket」(不通则 BLOCKED 回所有者,不自行退到共网) | — |
 
 ## 里程碑
 
@@ -490,6 +501,31 @@
 - 验收(14 项,细则在任务卡):①`check` + `test` 全绿;②三处登记一致、enum 下发四值;③写面十二种非法输入逐条拒;④幂等;⑤级联删除与分类保护;⑥读面顺序 / 404;⑦zip 两条路径都通且解压回读一致;⑧⑨画板 2f / 2g / 2h 逐项对照(含 `?file=` 与两处 copy);⑩呈现开关藏 / 露;⑪安全(脚本注入只是文本、`javascript:` 拒、`agent_ro` 读新表被拒);⑫镜像白名单含 `skills`;⑬真实 MCP 协议路径发布仓库自带的 `encore-api` 全链路;⑭gen client
 - **所有者裁定四条(2026-09-03)**:zip 库 = `fflate`;第三方 skill 的 `LICENSE` 与仓库链接 `repoUrl` **均非必填**(写面不拦,`repoUrl` 空时 GitHub 按钮与出处链接不渲染,与 About `originUrl` 同一口径;许可合规由所有者收录时自行把关);仓库名不设全局默认,`repo` 是每个 skill 发布时的必填字段(画板里 `ClickPM/agent-skills` 只是示例数据);代码高亮按画板做三 token
 - **止损**:回退 = 删两个目录 + 登记表两行 + 两条路由 + 一条 `DROP` 迁移;临时下架只需 `site_tab_set{skills,false}`
+
+### R-SKILLS-2 — agent 使用 skills:注入 + 沙箱运行(`round-skills` 的 2.0 迭代;所有者裁定 2026-09-03;文档就绪、未开工)
+
+> 建在 R-SKILLS(1.0)之上,不另起一套 skill 存储。任务卡 [`rounds/round-skills/round-skills-2.md`](rounds/round-skills/round-skills-2.md),
+> 研究与七条裁定 [`research.md`](rounds/round-skills/research.md)(pi 0.84.3 内核实测依据在附 A)。**代码一行未写**。
+
+**问题**:1.0 让访客看得到、拿得走 skill,但站上的 agent 自己用不了它们 —— 而「agent 怎么用 skill、守卫怎么拦、脚本怎么跑」正是本站右栏最想展示的一段内核轨迹。
+所有者的原始要求六条:能运行 skills;能跑 skill 内的 Python 脚本;运行阶段有 pi 守卫插件;脚本必须在虚拟环境里;只能是内置 skill 与脚本、不许临时写脚本;三条轨迹在右栏可见。
+
+**为什么不能按字面做**:「pi 守卫插件 + 虚拟环境」是策略层,不是隔离边界;规则 9 写死了任意代码执行永久禁止进 in-process 进程。
+所以执行只能在独立容器里,守卫的价值在策略与可见性。
+
+**形态(七条裁定的落点)**:
+- **可用集合在代码里**(裁定 6):`runner/skills/<name>/`(`SKILL.md` + `scripts/*.py` + `xray.json` 声明脚本与入参 schema)是唯一执行来源,构建期生成 api 的 `skills.generated.ts` 与执行容器的 `manifest.json`(每文件 sha256)。
+  一个 skill 对 agent 可用 = 代码里有 ∩ 库里 `skills.agent_enabled`(迁移 013,默认 FALSE;裁定 5「默认只展示不注入」)∩ 库内 `skill_files` 与清单逐文件 hash 全等 ∩ `tool_config` 闸开着。漂移即不注入。
+  两个档次:**注入型**(只有 SKILL.md,`skill_load`)/ **可运行型**(有 `xray.json`,另可 `skill_run`);可运行脚本的准入清单在 research.md §2.2(stdin JSON → stdout、标准库或钉住的依赖、无 subprocess / socket / eval、确定性、有 schema)。
+- **两个工具**:`skill_load(name)` 纯函数组(读代码清单,不碰库);`skill_run(skill, script, input)` **第四组「沙箱执行组」**(裁定 3),入参只有这三个 string,没有 code / path / argv / interpreter;`tool_config` 种子 `dangerous=TRUE` —— R7 双闸首次真正用上。
+- **执行容器 `skill-runner`**(裁定 2、4):`network_mode: none`、api 经命名卷里的 unix socket 调它;只读根 FS + `tmpfs /run/work`(noexec)每次一个目录;非 root / `cap_drop ALL` / `mem 384m` / `pids 64` / `cpus 1`;子进程 `/opt/venv/bin/python -I -B`、env 清空、rlimit、超时 kill 进程组;并发 2;stdout / stderr 流式截 256 KiB;脚本 sha256 三方核对。
+- **pi 侧两个扩展**:`xray-guard`(`tool_call` 五条规则,命中即 `{block, reason}`,自身异常按拦截)与 `xray-skills`(`before_agent_start` 追加 `<available_skills>`);两者永远注册、**不 `registerCommand`**;「谁裁决谁记录」—— 它们各自把裁决作为派生字段 `handlers` 写进那条事件,观测者不再订阅这两个事件。理由是实测的短路语义(首个 block 后续 handler 看不到)。
+- **右栏可见性**:守卫拦截 = `tool_execution_start → tool_call[blocked] → tool_execution_end(isError)`(pi 先发 start 再问 call,与画板 1a 示例顺序不同,是现状);注入 = `before_agent_start` 详情卡 EXTENSION RETURNED · xray-skills;运行 = `tool_execution_update` 四阶段。不新增事件类型;前端只改 `trace-view.ts` 投影、`TimelineView.tsx` 一行注记绑定、`ToolsPanel.tsx` 加第四组,零样式改动。
+- **配置面**:MCP +4(`skills_agent_set` / `skills_agent_status` / `sandbox_config_get` / `sandbox_config_set`,42 → 46);`daily_quota.skill_runs`;打开顺序 = 发版(双闸关)→ 生产冒烟 4 条 → `skill_load` 开 → 逐 skill `agent_enabled` → `.env` 加 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 重建 api → `skill_run` 开。
+- **部署**:`dev.ps1 build` 第三个镜像 `xray-runner:<sha>`(Python 基座按 digest 钉,不是 JS 运行时、规则 11 不涉及);compose 五容器;主机预算 +384 MB;本机开发 runner 走 `docker run` + TCP 覆盖(`XRAY_SKILL_RUNNER_URL` 代码级闭集)。**130 非必经**(裁定 7):出不去 / 只读 / 拒非清单脚本三件事在生产冒烟验收。
+
+- 验收(16 项,细则在任务卡):①`check` + `test` 全绿;②spike 留证;③清单同源(重跑 `skills-gen` 零 diff,篡改一字节即红);④四个条件真值表;⑤入参闭集;⑥守卫五条 + 异常即拦截;⑦轨迹形状(faux provider 驱动真实 loop);⑧注入轨迹;⑨前端投影 + 无 `handlers` 时回归;⑩画板对照且 diff 无样式属性;⑪限额原子 / 超时 CHECK / 进程组不残留;⑫输出有界;⑬MCP 四工具、总数 46;⑭三镜像 + `-I` 生效;⑮**生产冒烟 4 条**(双闸关闭下跑);⑯生产端到端 + 两种关法各验一次
+- **前置(三个都要齐)**:R-SKILLS(1.0)合并 `main`;画板 1f/1g 加第四组;spike 通过。**止损**:`tool_config_set skill_run false` 当场停;`skills_agent_set <name> false` 单个下线;`compose stop skill-runner` 后工具以固定文案失败、站点其余照常;spike 不过 → BLOCKED 回所有者重裁裁定 4,不自行退到共网
 
 ## 轮次外事项
 
