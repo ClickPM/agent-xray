@@ -2,9 +2,9 @@
 
 <!-- 保存为 rounds/round-skills/round-skills.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**未开始(文档就绪,2026-09-03;所有者裁定「先写全文档、不写代码」)**
+> 状态:**未开始(文档就绪、四条裁定已落,2026-09-03;所有者要求另开 session 开工)**
 >
-> 开工前置动作:本任务卡与 ROUNDS.md R-SKILLS 拆解经所有者过目;下方「待所有者裁定」四条有答复(缺答复的按「默认」执行)。
+> 开工前置动作已完成:任务卡与 ROUNDS.md 拆解已过目,「所有者裁定」四条已定(见下),文档已合并 `main`。
 
 ## 目标
 
@@ -54,14 +54,14 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
 
 - `skills_categories(slug PK, name, dot, sort_order, updated_at)` —— 与 `notes_categories` 同形;种子四行 `framework / workflow / review / writing`(色点沿用 Notes 四色)。
 - `skills(name PK CHECK '^[a-z0-9][a-z0-9-]{0,63}$', category_slug FK, summary, source_type CHECK IN ('own','curated'), repo, repo_url, version NULL, sort_order, zip BYTEA, zip_size, created_at, updated_at)`
-  —— `name` 就是目录名与 URL 段;`repo` 是 `owner/repo`(安装命令用);`repo_url` 是 GitHub 目录外链;`zip` 在写入时打好存库(见下)。
+  —— `name` 就是目录名与 URL 段;`repo` 是 `owner/repo`(安装命令用,必填);`repo_url` 是 GitHub 目录外链(**可空**,所有者裁定 2026-09-03;空时 `GitHub ↗` 与「出处 ↗」不渲染,与 About `originUrl` 为空时不渲染同一口径);`zip` 在写入时打好存库(见下)。
 - `skill_files(skill_name FK ON DELETE CASCADE, path, kind, content TEXT, size_bytes, line_count, sort_order, PK(skill_name, path))`
   —— **只收文本**(UTF-8、无 NUL),`kind` 由扩展名派生、闭集:`markdown / python / shell / typescript / javascript / json / yaml / toml / text`;
   `SKILL.md` 必须存在且 `sort_order = 0`(排目录树首位)。
 - 同轮迁移里给 `site_tab_config` 种一行 `('skills', TRUE)`(R-TABS「新增 tab 要改三处」的第 2 处)。
 
 写面校验(全部在 `skills_upsert` 里做,库级 CHECK 兜底):文件 ≤ 64 个;单文件 ≤ 256 KB;整包 ≤ 512 KB;`path` 相对、无 `..`、不以 `/` 开头、段字符集 `[A-Za-z0-9._-]`、深度 ≤ 4;
-`SKILL.md` 的 frontmatter `name` 必须等于 skill `name`;`repo_url` 只收 http(s)(与 About `originUrl` 的 `isHttpUrl` 同一口径);未知分类拒;删除仍有 skill 的分类拒。
+`SKILL.md` 的 frontmatter `name` 必须等于 skill `name`;`repo_url` 可空、**有值时**只收 http(s)(与 About `originUrl` 的 `isHttpUrl` 同一口径);`LICENSE` 文件不强制(所有者裁定);未知分类拒;删除仍有 skill 的分类拒。
 内容与库内完全一致时整行不动(不刷新 `updated_at`,与 `notes_chapter_upsert` 同一约定)。
 
 ## 交付物
@@ -73,7 +73,7 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
   `GET /skills`(首页)· `GET /skills/:name`(详情,**含全部文件内容**,整包 ≤ 512 KB 所以一次取完、文件切换不打后端)·
   `GET /assets/skills/:name.zip`(`api.raw`,流式吐库内 `zip`,`Content-Disposition: attachment`、`nosniff`、一天缓存 + 强 ETag,**不用 `immutable`**,理由同 notes 供图)
 - `apps/api/mcp/store.ts` / `tools.ts` —— 八个工具:`skills_categories_list` / `skills_category_upsert` / `skills_category_delete` /
-  `skills_list` / `skills_get` / `skills_upsert`(整包:`name, categorySlug, summary, sourceType, repo, repoUrl, version?, files[{path, content}]`,**整包替换**文件集合)/ `skills_delete`;
+  `skills_list` / `skills_get` / `skills_upsert`(整包:`name, categorySlug, summary, sourceType, repo, repoUrl?, version?, files[{path, content}]`,**整包替换**文件集合)/ `skills_delete`;
   `skills_upsert` 在写入时用 zip 库打包并存 `skills.zip`(管理面工具总数 34 → 42)
 - `apps/api/mcp/server.ts` —— INSTRUCTIONS 的「顶部三个 tab」改「四个」,补一句 skills 发布约定
 - `apps/api/mcp/README.md` —— 工具表补八条;`apps/api/site/README.md` —— 四个 tab
@@ -106,13 +106,13 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
 |---|---|---|
 | 1 | 编译与全量测试 | `dev.ps1 check` 通过;`dev.ps1 test` 全绿(本轮之前 16 文件 388 用例,新增用例数回填) |
 | 2 | 三处登记齐 | `site/tabs.test.ts` 种子 ↔ 登记表一致通过;`site_tab_set` 的 enum 下发 `runtime, notes, skills, about` |
-| 3 | 写面校验 | `mcp.test.ts`:缺 `SKILL.md` / frontmatter `name` 不符 / `..` 路径 / 绝对路径 / 非法字符 / 深度 > 4 / 单文件 > 256 KB / 整包 > 512 KB / > 64 文件 / 含 NUL / 未知分类 / `repoUrl` 非 http(s) —— 逐条被拒,库无残留 |
+| 3 | 写面校验 | `mcp.test.ts`:缺 `SKILL.md` / frontmatter `name` 不符 / `..` 路径 / 绝对路径 / 非法字符 / 深度 > 4 / 单文件 > 256 KB / 整包 > 512 KB / > 64 文件 / 含 NUL / 未知分类 / `repoUrl` 有值但非 http(s) —— 逐条被拒,库无残留;**不带 `repoUrl`、不带 `LICENSE` 的 curated 包能发布**(所有者裁定非必填) |
 | 4 | 幂等 | 同内容重发 → `status: unchanged`,`updated_at` 不动;改一个文件 → `updated`,zip 重打 |
 | 5 | 级联与分类保护 | `skills_delete` 后 `skill_files` 无残留;`skills_category_delete` 对仍有 skill 的分类 → `ConflictError` |
 | 6 | 读面 | `GET /skills` 分类按 `sort_order`、卡片按 `sort_order`、页脚统计正确;`GET /skills/<name>` 文件顺序 `SKILL.md` 首位;未知 name → 404 |
 | 7 | zip | `GET /skills/<name>.zip` 200、`application/zip`、`Content-Disposition` 文件名 = `<name>.zip`;解压后文件集合与内容与库内一致(测试里回读);未知 → 404;**经 next dev 代理与经 Caddy 两条路径都通** |
 | 8 | 画板 2f 对照 | 本机实跑截图:四分类 + 色点、徽标色(自研蓝 / 精选灰)、卡片三行、页脚两行、hover 态 |
-| 9 | 画板 2g/2h 对照 | 默认 `SKILL.md`:frontmatter 块 + 正文 + 「本页目录」;点 `.py`:行号列、三 token 高亮、「本页目录」消失;`?file=` 深链直达;两处 copy 点击后 1.5s 显示 `copied` 再回落 |
+| 9 | 画板 2g/2h 对照 | 默认 `SKILL.md`:frontmatter 块 + 正文 + 「本页目录」;点 `.py`:行号列、三 token 高亮、「本页目录」消失;`?file=` 深链直达;两处 copy 点击后 1.5s 显示 `copied` 再回落;`repoUrl` 为空的 skill 不渲染 `GitHub ↗` 与出处链接、其余版式不变 |
 | 10 | 呈现开关 | `site_tab_set{skills,false}` → 导航条三格、`/skills` 与 `/skills/<name>` 404;恢复 → 四格,与画板 1a(四格版)一字不差 |
 | 11 | 安全 | 含 `<script>` / `<img onerror>` 的 md 与 py 文件在页面上只是文本;`repoUrl` 为 `javascript:` 时写面拒、前端 `safeExternal` 二次拦;zip 响应带 `nosniff`;`sandbox.test.ts`:`agent_ro` 读 skills 三表 `permission denied` |
 | 12 | 镜像白名单 | `dev.ps1 build` 的服务列表含 `skills`;镜像里 `GET /skills` 非 404(冒烟清单第 1 条,八服务) |
@@ -128,13 +128,14 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
 - 不在 `/skills` 之外新增站点路由;zip 的 API 侧路径固定 `/assets/skills/…`(与 notes 供图同一前缀策略,避开 Encore 同层字面量 / 通配撞车)。
 - 不动 `.secrets.local.cue` 与任何环境的 token / 密钥;不升级 encore CLI / MCP SDK(规则 12)。
 
-## 待所有者裁定(开工前;缺答复按「默认」)
+## 所有者裁定(2026-09-03,开工前四条已定)
 
-1. **zip 打包库**:默认 `fflate`(纯 JS、无原生依赖、`zipSync` 一次调用;bun 下可用,新增一个生产依赖记进本卡「本轮实测」)。
-   备选:自写 stored-method zip 写入器(~80 行,零依赖,但要自己算 CRC32 与目录结构)。
-2. **精选第三方 skill 的许可**:站内 zip 与全文预览是**再分发**。默认:`sourceType = curated` 的 skill 必须带 `LICENSE`(或 `LICENSE.*`)文件且 `repoUrl` 必填,`skills_upsert` 缺任一即拒;自研不要求。
-3. **自研 skill 的真实仓库**:画板里的 `ClickPM/agent-skills` 是占位。安装命令与 `GitHub ↗` 都指向它,需所有者给出真实 `owner/repo`(与 skills CLI 的 `npx skills add <owner>/<repo> --skill <name>` 形态匹配)。
-4. **代码高亮**:默认按画板做三 token 高亮(自写 tokenizer,不引高亮库);若所有者选「纯等宽 + 行号」,删 `lib/highlight.ts` 即可,画板 2h 的行号列不变。
+1. **zip 打包库 → 裁定:默认,`fflate`**(纯 JS、无原生依赖、`zipSync` 一次调用;bun 下可用)。新增一个生产依赖,落地时记进「本轮实测」并钉 exact 版本。
+   备选(未采用):自写 stored-method zip 写入器。
+2. **精选第三方 skill 的许可与仓库链接 → 裁定:均非必填**。`LICENSE` 文件不强制、`repoUrl` 可空,`skills_upsert` 不因缺它们拒绝;
+   许可合规由所有者在收录时自行把关(只收允许再分发的包)。`repoUrl` 有值时仍走 http(s) 两道校验;为空时前端不渲染 `GitHub ↗` 与出处链接(About `originUrl` 先例)。
+3. **自研 skill 的真实仓库 → 裁定:默认**,即**不设全局默认值**:`repo`(`owner/repo`)是每个 skill 发布时 `skills_upsert` 的必填字段,安装命令由它派生;画板里的 `ClickPM/agent-skills` 只是示例数据,不入库、不写死在代码里。
+4. **代码高亮 → 裁定:默认,按画板做三 token 高亮**(自写最小 tokenizer,只做 `python / typescript / javascript / shell`,不引高亮库)。
 
 ## 已知边界(不在本轮修,写明)
 

@@ -85,7 +85,7 @@
 | **R-IMAGEGEN** | agent 生图工具(`generate_image`:单工具 · provider 的 `api_style` 分两种协议 · 图片存库按访客归属供图 · 对话框 markdown 预览 · MCP 四个 `imagegen_*`) | ✅ 已完成并合并 `main`([任务卡](rounds/round-imagegen/round-imagegen.md));17 项验收 16 过、#17 外呼半边交接生产配好 provider 后跑(本机无凭据;前端半边已用种子数据实跑:对话框渲染出图、无 cookie 404);codex 三轮共 3 条 findings(0×P1 · 3×P2)**全部采纳整改**,第 3 轮零 findings,缺陷门禁 PASS;`dev.ps1 test` 15 文件 373 用例。**所有者裁定与后续更新一起发生产** —— 已于 2026-09-02 随 SHA `b291eb1` 上生产(迁移 v9→v10;生产 `.env` 已补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api)。**`generate_image` 已于 2026-09-02 在生产配好 provider 并打开**(`imagegen_provider_upsert` 经 MCP 写入、key 只贴进调用不落盘,`tool_config_set` 开;`.env` 补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api),验收 #17 外呼半边生产实跑通过(约 72s 出图、PNG 落 `generated_images`、对话框正常渲染);此后 6 个工具全开,发布细节见 `docs/releases.md` | 2026-09-02 |
 
 | **R-TABS** | 顶部导航 tab 的呈现开关(MCP 逐个开关三个 tab 露不露;隐藏 = 导航条不渲染 + 页面不可达,后端端点照常) | ✅ 已完成([任务卡](rounds/round-tabs/round-tabs.md));11 项验收全过,`dev.ps1 test` 16 文件 388 用例;真实 MCP 协议路径本机实跑通过(34 工具、enum 下发、拒未知 key、拒关最后一个可见 tab)。codex 首轮**零 findings**,缺陷门禁 PASS。**所有者裁定边界只到呈现层**,不碰任何后端端点。待发预发/生产(迁移 v10→v11) | 2026-09-03 |
-| **R-SKILLS** | Skills 技能库 tab(第四个顶部 tab:按用途分类的 skill 卡片 → 详情页目录树 + 逐文件预览(markdown / 代码带行号)+ 复制安装命令 / GitHub 外链 / 站内 zip;内容经 MCP 整包发布) | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills.md));设计稿 `2f–2h` 已于 2026-09-03 并入 `design/`(15 块,三方合并、本地动画/进度线优化保留);ROUNDS / CLAUDE.md / security / architecture 已按规则 9「先改文档」写入约束;开工前待所有者裁定四条(zip 库、第三方许可、自研仓库名、代码高亮)见任务卡 | — |
+| **R-SKILLS** | Skills 技能库 tab(第四个顶部 tab:按用途分类的 skill 卡片 → 详情页目录树 + 逐文件预览(markdown / 代码带行号)+ 复制安装命令 / GitHub 外链 / 站内 zip;内容经 MCP 整包发布) | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills.md));设计稿 `2f–2h` 已于 2026-09-03 并入 `design/`(15 块,三方合并、本地动画/进度线优化保留);ROUNDS / CLAUDE.md / security / architecture 已按规则 9「先改文档」写入约束;四条裁定已落(2026-09-03:zip = `fflate`、第三方 LICENSE 与仓库链接**非必填**、仓库名按 skill 逐个必填、高亮按画板做三 token),文档已合并 `main`,待另开 session 开工 | — |
 
 ## 里程碑
 
@@ -488,7 +488,7 @@
 - **安全口径**(已按规则 9 写进 `docs/security.md` §1 第 2 层 / §4 补记):文件当文本渲染、不执行、不收二进制、不做 markdown 改写;新表不授权任何 agent 角色;zip 响应 `nosniff` + `attachment`;`repoUrl` http(s) 两道校验。
 
 - 验收(14 项,细则在任务卡):①`check` + `test` 全绿;②三处登记一致、enum 下发四值;③写面十二种非法输入逐条拒;④幂等;⑤级联删除与分类保护;⑥读面顺序 / 404;⑦zip 两条路径都通且解压回读一致;⑧⑨画板 2f / 2g / 2h 逐项对照(含 `?file=` 与两处 copy);⑩呈现开关藏 / 露;⑪安全(脚本注入只是文本、`javascript:` 拒、`agent_ro` 读新表被拒);⑫镜像白名单含 `skills`;⑬真实 MCP 协议路径发布仓库自带的 `encore-api` 全链路;⑭gen client
-- **开工前待所有者裁定四条**(任务卡「待所有者裁定」):zip 库选型(默认 `fflate`)、第三方 skill 的许可要求(默认 curated 必须带 LICENSE 且 `repoUrl` 必填)、自研 skill 的真实仓库名(画板里 `ClickPM/agent-skills` 是占位)、代码高亮做不做(默认按画板做三 token)
+- **所有者裁定四条(2026-09-03)**:zip 库 = `fflate`;第三方 skill 的 `LICENSE` 与仓库链接 `repoUrl` **均非必填**(写面不拦,`repoUrl` 空时 GitHub 按钮与出处链接不渲染,与 About `originUrl` 同一口径;许可合规由所有者收录时自行把关);仓库名不设全局默认,`repo` 是每个 skill 发布时的必填字段(画板里 `ClickPM/agent-skills` 只是示例数据);代码高亮按画板做三 token
 - **止损**:回退 = 删两个目录 + 登记表两行 + 两条路由 + 一条 `DROP` 迁移;临时下架只需 `site_tab_set{skills,false}`
 
 ## 轮次外事项

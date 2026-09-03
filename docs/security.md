@@ -223,7 +223,7 @@ R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」——约�
 - **文件永远只是文本**:前端把内容当字符串交给 React(转义)与既有 `components/Markdown`(与 Notes 同一份,不开 raw HTML);`.py` / `.sh` / `.ts` 在服务端与前端**都不执行、不 import、不进 in-process 进程**——这与规则 9 的「bash / write / 任意代码执行类工具永久禁止」是同一条红线,只是入口换成了内容面
 - **zip 由服务端从库内 `skill_files` 打包**(写入时打好存 `skills.zip`,读面只吐字节),不落盘、不读文件系统;响应 `Content-Type: application/zip` + `Content-Disposition: attachment; filename="<name>.zip"` + `X-Content-Type-Options: nosniff`;条目名就是校验过的 `path`,不会有绝对路径或 `..`
 - `repo_url` 会进 `<a href>`:写面只收 http(s)(与 About `originUrl` 的 `isHttpUrl` 同一口径),前端再过一次 `safeExternal`(库是可以绕过 tool 直接改的)。安装命令由 `repo` + `name` 派生,两者都受正则约束,不接受任意字符串进 `npx skills add …` 那一行
-- 第三方 skill 的全文预览与 zip 是**再分发**:默认要求 `sourceType = curated` 的包必须带 `LICENSE` 文件且 `repo_url` 必填(待所有者裁定,见任务卡)
+- 第三方 skill 的全文预览与 zip 是**再分发**:所有者 2026-09-03 裁定 `LICENSE` 文件与 `repo_url` **均非必填**——写面不拦,许可合规由所有者在收录时自行把关(只收允许再分发的包);`repo_url` 有值时仍走上一条的两道校验,为空时前端不渲染外链
 
 ## 5. 服务器基线(境内轻量服务器)
 
