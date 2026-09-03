@@ -17,14 +17,14 @@
 |---|---|---|---|---|
 | 开发 | 本机 Windows | `dev.ps1` → `encore run :4000`;本地 Postgres 由 encore 经 Docker Desktop 管理 | bun(`encore.app` 的 `bun-runtime` 实验位) | 可用(R0 起) |
 | 测试 | 同上 | `dev.ps1 test` → `encore test` → `bun --bun vitest run` | bun | 可用(R-BUN 起) |
-| 预发 | 130 服务器 | docker compose(`deploy/`) | bun(`oven/bun:1.4.0-slim` 基座) | **可用**(R9,2026-09-01 全链路实测通过;`http://192.168.100.130`) |
-| 生产 | 境内轻量服务器 | docker compose,与预发**同一个镜像**(SHA 相同,不重新构建) | bun | R11 |
+| 预发 | 130 服务器 | docker compose(`deploy/`)。**可选环境**:有需要时先在 130 发版验证,不是发生产的前置(所有者裁定 2026-09-03);SHA 允许落后于生产 | bun(`oven/bun:1.4.0-slim` 基座) | **可用**(R9,2026-09-01 全链路实测通过;`http://192.168.100.130`,当前 `7cc17fe` / 迁移 7) |
+| 生产 | 境内轻量服务器 | docker compose;若经过 130 验证则原样提升**同一个镜像**(SHA 相同,不重新构建) | bun | **已投产**(R11,2026-09-02,`https://www.kzgai.cloud/`);逐次发版见 [`releases.md`](releases.md) |
 
 **运行时与包管理器是两件事:** bun 只做 JS 运行时与脚本执行器;依赖安装仍走 `npm ci` + `package-lock.json`,不切 `bun install`。理由见 [`rounds/round-bun/round-bun.md`](../rounds/round-bun/round-bun.md)「包管理器为何不切」——pi SDK 自带 `npm-shrinkwrap.json` 锁定传递依赖,bun 不读它,切过去等于丢掉这层供应链锁定,而收益为零。
 
 ## docker 部署流(预发/生产共用)
 
-镜像是**不可变制品**:同一个 git SHA 构建一次,预发验过之后原样提到生产,不重新构建。服务器上不装 encore CLI、不装 node/bun 工具链、不留 git 工作区,只有 docker + compose 加**四个部署资产**:`docker-compose.yml`、`Caddyfile`、`migrate.sh`、`.env`(由 `.env.example` 复制)。这四个文件首次部署时随镜像一起 scp 上去,之后仅在其有变更的发布中重传——`migrate.sh` 是部署序列的必经步骤,漏传就无法完成迁移。
+镜像是**不可变制品**:同一个 git SHA 构建一次;**经 130 预发验证是可选的**(所有者裁定 2026-09-03),验过就原样提升同一个镜像、不重新构建,没验就直接发生产。**每次生产发版记入 [`releases.md`](releases.md)**。服务器上不装 encore CLI、不装 node/bun 工具链、不留 git 工作区,只有 docker + compose 加**四个部署资产**:`docker-compose.yml`、`Caddyfile`、`migrate.sh`、`.env`(由 `.env.example` 复制)。这四个文件首次部署时随镜像一起 scp 上去,之后仅在其有变更的发布中重传——`migrate.sh` 是部署序列的必经步骤,漏传就无法完成迁移。
 
 1. **本机构建**(Windows,CLAUDE.md 规则 1/10):
 
@@ -32,7 +32,7 @@
    .\dev.ps1 build
    ```
 
-   该命令做三件事:拒绝在脏工作区构建 → `encore build docker --config deploy/infra-config.json --base oven/bun:1.4.0-slim --services agent,system` 出 api 镜像 → `docker build apps/web` 出 web 镜像。两个 tag 都是 git 短 SHA。
+   该命令做三件事:拒绝在脏工作区构建 → `encore build docker --config deploy/infra-config.json --base oven/bun:1.4.0-slim --services agent,trace,notes,mcp,metrics,about,system` 出 api 镜像 → `docker build apps/web` 出 web 镜像。两个 tag 都是 git 短 SHA。服务白名单以 `dev.ps1` 的 `$hostedServices` 为准,**新增服务必须补进去**,漏补的表现是镜像与健康检查都正常、该服务端点静默 404(冒烟清单第 1 条就是为它设的)。
 
    > ⚠️ `--base` 不能省。Encore 开启 `bun-runtime` 后会把镜像 ENTRYPOINT 改成 `bun run …`,却仍按默认基座 `node:slim` 打包,产出的镜像里没有 bun,`docker run` 直接报 `exec: "bun": executable file not found in $PATH`。`encore.app` 里的 `build.docker.base_image` 对本地构建**无效**(只对 Encore 自家 CI/CD 生效)。已固化进 `dev.ps1 build`,不要手敲 `encore build docker`。
    >
@@ -67,6 +67,7 @@
    #   / METRICS_IP_SALT / SITE_ORIGIN=<含 scheme 的对外地址>  ← 生成方式见 .env.example 里的注释
    # 生产另填:ICP_BEIAN=<备案号>(预发留空则底栏不渲染)/ SITE_ADDRESS=<域名>(预发留空 = :80)
    #   / SITE_REDIRECT_FROM=<裸域>(预发留空)/ XRAY_WEBSEARCH_EXTRA_HOSTS=<网关域名>(不补则搜索 provider 写不进去)
+   #   / XRAY_IMAGEGEN_EXTRA_HOSTS=<生图网关域名>(与上一条是两份清单,网关域名两处都写;不补则生图 provider 写不进去)
 
    docker compose up -d --wait postgres   # 1) 只起库,--wait 会阻塞到 healthy
    ./migrate.sh                           # 2) schema 就位(详见下一节)

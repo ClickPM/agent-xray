@@ -12,15 +12,20 @@ Caddy :443(自动 TLS,单机反代)
    └── /api/*       → apps/api  Encore.ts :4000
                         │
                         ├── agent 服务:createAgentSession(pi SDK in-process)
-                        │     ├── noTools:'all' + defineTool 业务工具(见 security.md 四层沙箱)
+                        │     ├── noTools:'all' + 三组业务工具:纯函数组 notes_*(agent_ro 只读角色)
+                        │     │   / 外呼组 web_search · generate_image(域白名单 + 双计时器 + 日限额)
+                        │     │   / 会话绑定组 session_rename(列级授权;见 security.md 四层沙箱)
                         │     ├── 观测者扩展:订阅 34 种内核事件 → 内存事件队列
-                        │     └── 对话 SSE ← session.subscribe()
+                        │     ├── 对话 SSE ← session.subscribe();GET /agent/tools 工具目录;GET /agent/images 按访客供图
+                        │     └── 访客 cookie 归属过滤 + 3 天保留期(R-VISITOR)
                         ├── trace 服务:GET /trace/stream(api.raw SSE ← 事件队列,推送前脱敏)
-                        ├── notes 服务:教程库查询(前端用)+ pi 只读工具组(agent_ro 角色)
-                        ├── mcp 服务:无状态 MCP 管理面 /api/mcp(内容发布 / 附件 / About / LLM 多 provider / 工具启停;静态 token,统计查询在 R8)
+                        ├── notes 服务:教程库查询(前端用)+ RSS + /assets/notes 正文配图供图
+                        ├── about 服务:GET /about(about_content 只读)
+                        ├── mcp 服务:无状态 MCP 管理面 /api/mcp(内容发布 / 附件 / About / LLM·搜索·生图 provider / 工具启停 / 统计查询;静态 token)
                         ├── site 服务:GET /site/tabs(顶部 tab 呈现开关的只读面,R-TABS)
-                        ├── metrics 服务:POST /t 访问打点
-                        └── Postgres(docker-compose 内)
+                        ├── metrics 服务:POST /t 访问打点(不存原始 IP)
+                        ├── system 服务:GET /health
+                        └── Postgres(docker-compose 内;单库 agent,迁移由 deploy/migrate.sh 施加)
 ```
 
 ## 关键决策(已定)
@@ -65,4 +70,4 @@ R4 落地轨迹流后补记两条实现约束:
 
 ## 设计稿
 
-见 [design/](../design/README.md) —— 10 画板静态稿 + 可交互原型,token 与组件语汇以其为准。
+见 [design/](../design/README.md) —— 12 块画板静态稿(1a–1g + 2a–2e)+ 可交互原型,token 与组件语汇以其为准。

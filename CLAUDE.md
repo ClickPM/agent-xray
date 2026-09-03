@@ -9,7 +9,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 ## 项目定位
 
-**Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。三个 Tab:Runtime 工作台 / Notes 研习库 / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。
+**Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。三个 Tab:Runtime 工作台 / Notes 研习库 / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。**站点已于 2026-09-02 投产**(https://www.kzgai.cloud/,R11),此后进入运维迭代:**较大迭代依旧延续轮次机制**(命名轮,所有者裁定 2026-09-03),小修补可直接 `main`;**每次生产发版必须记入 [`docs/releases.md`](docs/releases.md)**。
 
 - **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) 画板 1a–1g + 2a–2e(共 12 块)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,3a–3e 已废弃并同日从画布删除)。管理面范围以 ROUNDS.md R6 裁定清单为准。
 - 架构与既定决策:[`docs/architecture.md`](docs/architecture.md)(pi SDK in-process、Encore 类型化 RPC、SSE ×2、Postgres、单机 compose)。
@@ -20,20 +20,20 @@ This file provides guidance to Claude Code when working in this repository.
 ## 仓库结构
 
 ```
-apps/web      Next.js 15 前端(App Router)。三 Tab 已按画板实现,轮次实现 = 逐块换成真实
-              API(样式零改动,规则 7);/admin 六页已于 R6 整目录删除
-apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。agent/ trace/ notes/ mcp/ 已落地
-              (R3/R4/R5/R6);site/ 是顶部 tab 呈现开关的只读面(R-TABS);
-              metrics/ 只有 README(职责与安全约束已写明,实现按 ROUNDS.md)
+apps/web      Next.js 15 前端(App Router)。三 Tab 已按画板实现,接后端只换数据源
+              (样式零改动,规则 7);/admin 六页已于 R6 整目录删除
+apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。服务清单与各自边界以
+              `apps/api/<服务>/README.md` 为准(about / agent / mcp / metrics / notes / system / trace,
+              R-TABS 新增 site/ = 顶部 tab 呈现开关的只读面);本文不再逐服务记状态
 design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token 速查)——实现时逐画板对照
-deploy/       docker compose + Caddyfile(预发/生产共用;框架版,R9 定稿)
-docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署
+deploy/       docker compose + Caddyfile + migrate.sh(预发/生产共用的部署资产,R9/R11 定稿)
+docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署 / **生产发布记录(releases.md)**
 rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap 在根 ROUNDS.md
-tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。
-              目前为空:R5 的 notes-sync 管线已随 R6 删除,内容发布改走 MCP 管理服务
+tools/        预留给本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。
+              目前**没有这个目录**:R5 的 notes-sync 管线已随 R6 删除,内容发布改走 MCP 管理服务
 .claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
-              + MCP 启动脚本。`.mcp.json` 另注册了两个站点管理面:`xray-admin`(本机)
-              与 `xray-admin-130`(130 预发),token 各走各的环境变量、都不入库;
+              + MCP 启动脚本。`.mcp.json` 另注册了三个站点管理面(本机 / 130 / 生产),
+              token 各走各的环境变量、都不入库,分工见下方「本地开发」的表;
               自建 skill sync-notes 已随 R6 删除
 .agents/      `.claude/skills` 的镜像,给 codex 审查者用(生成物,`dev.ps1 skills` 同步)。
               实测:codex 只认仓库级 `.agents/skills` 与 `.codex/skills`,**不认 `.claude/skills`**
@@ -63,7 +63,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 - **审查边界(所有者裁定 2026-08-28)**:**严禁以审查代替设计**——审查是缺陷门禁,不负责长出方案;findings 若指向设计缺陷,停下回任务卡/所有者层面重定方案,不在「整改 → 复审」循环里逐条堆补丁。**非严重阻塞性 findings 严禁新增机制类修复**(新队列/新协议/新抽象/新配置/新导出面):只允许最小改动(改判断、改文案、删代码)或写明理由记 `rounds/BACKLOG.md`;机制类修复仅限严重阻塞性 bug/漏洞。发起复审时把本条作为审查要求带给审查者:只判定并报告缺陷与严重级别,不展开设计方案。
 - 降级到 Claude Code 自带 `/code-review` 只认硬失败(codex CLI 未安装/未登录/启动失败),降级原因写进任务卡;「等得久」「改动小」不是理由。
 - 同一验收项针对性整改后连续 2 次仍不过 → 写 `rounds/round-NN/BLOCKED.md` 停下呼人,禁止放宽验收(rounds/README.md)。
-- 分支:每轮在 `round-NN` 分支开发,审查通过后合并 `main`;纯文档与微修可直接 `main`。
+- 分支:每轮在 `round-NN` 分支开发,审查通过后合并 `main`;纯文档与微修可直接 `main`。**投产后(2026-09-02 起)较大迭代依旧走本流程**(命名轮 `round-<名字>`);任何发到生产的 SHA 都要在 `docs/releases.md` 加一行。
 - 跨轮次发现的问题写 `rounds/BACKLOG.md`,不当场顺手改。
 
 ## 硬性规则
@@ -90,7 +90,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       `apps/web/lib/tabs.ts`),缺哪一处的表现各不相同,文件头列了。
     - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用,新画板从 `1f` 顺延。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**;SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
-    - **工具分两组**(R-WEBSEARCH,2026-09-01 修订;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。完整口径见 `docs/security.md` §1「工具分两组」。
+    - **工具分三组**(R-WEBSEARCH 2026-09-01 定前两组、R-TITLE 同日补第三组;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。**会话绑定组**(`session_rename`;`generate_image` 同时也是会话绑定的)是「纯函数 / 数据面只读」的**唯一例外**:无网络、无凭据,只经专用 NOLOGIN 角色写**本会话那一行**的限定列(`agent_title` 只改 `sessions.title` 两列;`agent_image` 只 INSERT `generated_images`),会话 id 在建会话时闭包绑死、不是入参。完整口径见 `docs/security.md` §1「工具分两组」表与 R-TITLE / R-IMAGEGEN 补记。
 10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。**镜像一律本机构建后传输,服务器不构建、不留仓库与工具链**;tag 必须是 git SHA,禁止 `latest`。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。
 11. **生产 JS 运行时统一为 bun,且「开实验位」与「换基座」必须成对出现**(所有者裁定 2026-08-29,R-BUN)。开发/测试/预发/生产四个环境的**运行时**都是 bun,**最终运行镜像(final runtime image)里不含 node**。三处配置缺一不可:`apps/api/encore.app` 的 `"experiments": ["bun-runtime"]`、构建时的 `--base oven/bun:<钉住版本>-slim`、`apps/web/Dockerfile` 的 bun 基座。
     - **边界要说清,别理解成「项目已经不依赖 node/npm」**:node 与 npm 仍保留在**构建工具链**里——`apps/web/Dockerfile` 的 builder 阶段装 `nodejs`/`npm` 并用 `npm ci` + `npx next build`,只是这些都不进 runner 阶段。准确表述是「**Node 已从生产 runtime 与最终运行镜像中移除;构建阶段与依赖解析仍用 Node/npm**」。
@@ -98,6 +98,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
     - **只开实验位不换基座 = 产出一个必然启动失败的镜像**:Encore 会把 ENTRYPOINT 改成 `bun run …` 却仍用默认基座 `node:slim` 打包,`docker run` 报 `exec: "bun": executable file not found in $PATH`。`encore.app` 的 `build.docker.base_image` **对本地 `encore build docker` 无效**(仅作用于 Encore 自家 CI/CD),别往那里加。构建一律走 `dev.ps1 build`,不要手敲 encore 命令。
     - **调用 JS 可执行文件时必须 `bun --bun`**:不加时 bun 尊重脚本 shebang(`#!/usr/bin/env node`)而静默回落到 node。`apps/api` 的 test 脚本与 `apps/web` 的 CMD 都因此必须带 `--bun`;判据是 `process.versions.bun` 是否有值。
     - **运行时 ≠ 包管理器**:依赖安装仍走 `npm ci` + `package-lock.json`。pi SDK 自带 `npm-shrinkwrap.json` 锁定传递依赖而 bun 不读它,切 `bun install` 会丢掉这层供应链锁定且收益为零。`packageManager: "bun@…"` 字段只用于让 `encore test` 以 bun 执行脚本,不代表依赖由 bun 解析。
+12. **生产两条硬约束:JS 运行时 = bun(规则 11),MCP 管理面协议 = 2026-07-28**(所有者裁定 2026-09-03,站点投产后)。任何依赖升级或迭代(encore CLI / `bun-runtime` 实验位 / MCP SDK / MCP 客户端 / pi SDK)只要**可能**让二者之一不再满足——实验位改名或移除、SDK 新版本不再提供 2026-07-28、客户端不再按该协议连——必须**在动手之前**向所有者做风险告知并拿到裁定,不得在轮次内自行降级或绕过(例如退回 node 基座、退回 legacy 协商路径)。判据:`process.versions.bun` 有值(`docs/deploy-environments.md` 冒烟清单第 12 条)与 `server/discover` 回 `supportedVersions: ["2026-07-28"]`(同清单第 4 条)。
 
 ## 钉版本
 
@@ -105,8 +106,8 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 |---|---|---|
 | `@earendil-works/pi-coding-agent` | **0.84.3**(exact,lockfile 固定) | pi SDK 本体(`createAgentSession`/`defineTool`/扩展系统都在这个包);R1 实测通过。升级前先在本地过一遍 34 事件兼容性(`docs/security.md` §7) |
 | **bun** | **1.4.0** | 唯一 JS 运行时(规则 11)。三处必须同版本:`apps/web/Dockerfile` 的两个 `FROM oven/bun:1.4.0-slim`、`dev.ps1` 的 `$bunBase`、`apps/api/package.json` 的 `packageManager`。升级时四处一起改,并重跑 R-BUN 验收(尤其内存基线——bun 用 JSC 堆,RSS 语义与 V8 不同)。**本机 bun 解释器也要对齐**(`packageManager` 只选运行时不校验版本,`dev.ps1 test` 对漂移会告警;对齐:`npm i -g bun@1.4.0`) |
-| `@modelcontextprotocol/server`<br>`@modelcontextprotocol/node` | **2.0.0**(exact) | 官方 TS SDK **v2**,MCP 管理面用(R6)。**不是 `@modelcontextprotocol/sdk`**——那个包最新版(1.30.0)的 `LATEST_PROTOCOL_VERSION` 仍是 `2025-11-25`、没有 `server/discover`,支持 2026-07-28 的是以新包名发布的 v2。升级前确认 `createMcpHandler` 的 `legacy: 'stateless'` 默认值与 `maxSubscriptions` 语义未变(见 `apps/api/mcp/README.md` 的两条坑) |
-| **encore CLI** | **1.57.13** | `bun-runtime` 实验位在该版本已可用(二进制内含 `bun-runtime` 字面量,实测)。升级前确认实验位未改名/未移除,且同机共用 daemon 的 ticketBookingB2B 不受影响 |
+| `@modelcontextprotocol/server`<br>`@modelcontextprotocol/node` | **2.0.0**(exact) | 官方 TS SDK **v2**,MCP 管理面用(R6)。**不是 `@modelcontextprotocol/sdk`**——那个包最新版(1.30.0)的 `LATEST_PROTOCOL_VERSION` 仍是 `2025-11-25`、没有 `server/discover`,支持 2026-07-28 的是以新包名发布的 v2。升级前确认 `createMcpHandler` 的 `legacy: 'stateless'` 默认值与 `maxSubscriptions` 语义未变(见 `apps/api/mcp/README.md` 的两条坑);**2026-07-28 协议是生产强制要求,升级若可能丢掉它须提前风险告知(规则 12)** |
+| **encore CLI** | **1.57.13** | `bun-runtime` 实验位在该版本已可用(二进制内含 `bun-runtime` 字面量,实测)。升级前确认实验位未改名/未移除,且同机共用 daemon 的 ticketBookingB2B 不受影响;实验位若不可用属规则 12 的提前告知事项 |
 
 ## 本地开发
 
@@ -117,6 +118,8 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 gen        # encore gen client → apps/web/lib/api-client.ts(排除 mcp 服务)
 .\dev.ps1 db <名>    # encore db shell <数据库名>
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
+.\dev.ps1 ship <host> [sha]   # 镜像 + 四件部署资产送到服务器(不传 .env);发版后记 docs/releases.md
+.\dev.ps1 skills     # 把 .claude\skills 镜像到 .agents\skills(codex 审查者只认后者)
 .\dev.ps1 wt-clean   # 列出 .claude\worktrees 残留;带 <名字|all> 清理,--force 跳过安全闸
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```
@@ -137,9 +140,9 @@ cd apps\web; npm run dev   # 前端 next dev :3000
   看起来像 token 坏了,实际是请求根本没到端点(2026-09-02 实测:同一把 token 直连 www 拿得到 28 个工具)。
 - **token 丢了不用慌,轮换即可**(2026-09-01 对 130 实测):服务端只存 sha256,原文不可恢复但可换。流程 = 本机按 `deploy/.env.example` 的 CSPRNG 口径生成新 token → 新哈希写进目标环境的 `MCP_AUTH_TOKEN_HASH` → **`docker compose up -d api` 重建容器**(env 变了 `restart` 不生效)。**`CONFIG_ENCRYPTION_KEY` 绝不能跟着换**,否则 `llm_config` 里的 key 密文全解不开、agent 直接停摆。
 - **注册了但对端不在时,只在会话启动时报一次错**,中途起服务不会自动重连(见下条)。
-- **`.mcp.json` 的改动要重启会话才生效**,而且 MCP client 连不上时只在会话启动时报一次 `ConnectionRefused`——中途起后端不会自动重连。急着用可以直接对 `/mcp` 发 JSON-RPC,但要带齐 2026-07-28 的逐请求契约(`Accept` 同时含 `application/json` 与 `text/event-stream`、`Mcp-Method` 头、`params._meta` 里**带 `io.modelcontextprotocol/` 命名空间前缀的三个键** `…/protocolVersion` / `…/clientCapabilities` / `…/clientInfo`;`tools/call` 再加 `Mcp-Name`,精确形状照 `rounds/round-10/checklist.md` §9 抄,细节见 `apps/api/mcp/README.md`「三条容易改错的地方」第 3 条)。**键名不带前缀、或少了 `clientInfo`,同样静默落到 legacy 路径**(R11 实测:照本条旧措辞写的裸键名就是这么中招的)。**不带 `params._meta` 时 handler 会静默落到 2025-11-25 的 legacy 无状态路径**:`tools/list` / `tools/call` 照常可用、响应变成 SSE 帧,而 `server/discover` 回 `-32601 Method not found`——这不是端点坏了,是请求走错了协议时代(2026-09-02 对 130 实测;R10 留证里带齐契约的 `server/discover` 是通的)。
+- **`.mcp.json` 的改动要重启会话才生效**,而且 MCP client 连不上时只在会话启动时报一次 `ConnectionRefused`——中途起后端不会自动重连。急着用可以直接对 `/mcp` 发 JSON-RPC,但要带齐 2026-07-28 的逐请求契约,**正本在 `apps/api/mcp/README.md`「三条容易改错的地方」第 3 条**(精确请求形状照 `rounds/round-10/checklist.md` §9 抄)。最常中招的一条:`params._meta` 的三个键必须带 `io.modelcontextprotocol/` 命名空间前缀且不能少 `clientInfo`,否则 handler **静默**落到 2025-11-25 的 legacy 路径——`tools/*` 照常通、`server/discover` 却回 `-32601`,看起来像端点坏了,其实是请求走错了协议时代。
 - `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;自建的 `sync-notes` 已随 R5 管道废除(R6 删除)。
-- **worktree 用完必须 `dev.ps1 wt-clean` 删,别手删也别只跑 `git worktree remove`**(2026-08-31 实测)。在 `.claude\worktrees\<名字>` 里跑过 encore 之后,该目录会被两处占住:那个会话的 `encore mcp run`(`.claude\mcp-encore.ps1` 把 cwd 设进 `<worktree>\apps\api`,而 `encore.app` 的 `id` 为空、本地 app 只能靠 cwd 定位,换 `--app` 也绕不开),以及**注册过该 app 后同样握着句柄的 encore daemon**——单杀 MCP 无效,必须连 daemon 一起停。表现是 `git worktree remove` 报 `Permission denied`、目录删到一半只剩空壳,登记与磁盘长期不一致(本仓库曾同时积下 r3/r4/r5 三份)。`wt-clean` 把「安全闸 → 杀占用进程 → 长路径强删 → (仍在才)停 encore → prune → 拉回 daemon」固化成一条命令。**「仍删不掉」有两种原因,别一律当会话占用**(2026-09-02 实测):① **路径超过 MAX_PATH(260)**——残留全在 `apps\api\node_modules\@earendil-works\pi-coding-agent\node_modules\@aws-sdk\...\*.d.ts`(261–269 字符),没有任何进程持句柄,PowerShell 5.1 的 `Remove-Item` 就是过不去;脚本曾因此误判成占用、白白重启了同机共用的 daemon,现已改成先 `cmd /c rd /s /q "\\?\<路径>"`(实测能删;其退出码不可信,目录被占时照样回 0,成败看事后 `Test-Path`),只有它也失败才停 daemon;② **另一个 Claude Code 会话以该 worktree 为 cwd**——目录已空但 busy,用 CCD 的 `list_sessions` 按 `cwd` 找到那个会话,关掉后重跑;`archive_session` 得所有者明确同意,脚本不替你关。
+- **worktree 用完必须 `dev.ps1 wt-clean` 删,别手删也别只跑 `git worktree remove`**(2026-08-31 实测):在 worktree 里跑过 encore 之后,目录会被那个会话的 `encore mcp run` 与注册过该 app 的 encore daemon 一起握着句柄,`git worktree remove` 报 `Permission denied`、目录删到一半只剩空壳,登记与磁盘长期不一致。`wt-clean` 把「安全闸 → 杀占用进程 → 长路径强删 → (仍在才)停 encore → prune → 拉回 daemon」固化成一条命令。**「仍删不掉」有两种原因,别一律当会话占用**(2026-09-02 实测):① 路径超过 MAX_PATH(残留在深层 `node_modules`,没有任何进程持句柄),脚本已先走 `rd /s /q` 长路径删除、只有它也失败才停同机共用的 daemon;② 另一个 Claude Code 会话以该 worktree 为 cwd(目录已空但 busy),用 CCD 的 `list_sessions` 按 `cwd` 找到那个会话、关掉后重跑(`archive_session` 得所有者明确同意,脚本不替你关)。两种情况的判据与处理细节以 `dev.ps1` 里 `wt-clean` 的注释头为准,本文不复述。
 - **skill 升级或新增后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。
 
 ## 部署环境矩阵
@@ -150,7 +153,7 @@ cd apps\web; npm run dev   # 前端 next dev :3000
 |---|---|---|---|---|
 | 开发 | 本机 Windows | `dev.ps1` → encore run | bun | 可用 |
 | 测试 | 本机 Windows | `dev.ps1 test` → `bun --bun vitest run` | bun | 可用(R-BUN) |
-| 预发 | 130 服务器 | docker compose(`dev.ps1 build` 本机构建后传输) | bun | R9 落地 |
-| 生产 | 境内轻量服务器 | docker compose,**与预发同一个 SHA 镜像**,不重建 | bun | R11 |
+| 预发 | 130 服务器 | docker compose(`dev.ps1 build` 本机构建后传输)。**可选环境**:有需要时先在 130 发版验证,**不是发生产的前置**(所有者裁定 2026-09-03);130 与生产的 SHA 允许不一致 | bun | R9 落地 |
+| 生产 | 境内轻量服务器 | docker compose,镜像同样本机构建、tag = git SHA;若经过 130 验证则原样提升同一个镜像、不重建 | bun | **已投产**(R11,2026-09-02,https://www.kzgai.cloud/);发布记录 `docs/releases.md` |
 
 细节:[`docs/deploy-environments.md`](docs/deploy-environments.md);生产服务器初始化与 ICP 备案:[`docs/deploy-cn-lightweight.md`](docs/deploy-cn-lightweight.md)。

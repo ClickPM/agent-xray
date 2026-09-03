@@ -2,7 +2,7 @@
 
 <!-- 命名轮,先例见 rounds/round-bun / rounds/round-visitor;拆解以 ROUNDS.md 的「R-TITLE」段为准。 -->
 
-> 状态:代码与审查已收口,已合并 `main`(2026-09-02,与 R-WEBSEARCH 合流,迁移改号 009);验收 #1 / #7 交接 130 预发实测
+> 状态:**已完成**。代码与审查 2026-09-02 收口并合并 `main`(与 R-WEBSEARCH 合流,迁移改号 009);验收 #1 / #7 原交接 130,R11 跳过了 130,**两条均由所有者在生产验过**(#1 见 round-11 任务卡「全链路验收」;#7 所有者 2026-09-03 确认无问题)
 
 ## 目标
 
@@ -49,13 +49,13 @@
 
 | # | 检查 | 命令 / 期望 | 结果 |
 |---|---|---|---|
-| 1 | 新会话首轮拿到模型起的标题 | 开一轮真实对话,`GET /agent/sessions` 的 `title` 不等于首条消息首行截断 | ⏳ **本机验不了,交接 130**(见下方「实测」:本地库没有 LLM provider,`/agent/ask` 一律 503) |
+| 1 | 新会话首轮拿到模型起的标题 | 开一轮真实对话,`GET /agent/sessions` 的 `title` 不等于首条消息首行截断 | ✅ **生产实跑通过**(R11,2026-09-02):`title_source=agent`,标题由模型调 `session_rename` 起,见 round-11 任务卡「全链路验收」;本机验不了(本地库没有 LLM provider,`/agent/ask` 一律 503) |
 | 2 | 命名过程在右侧视图可见 | 一轮命名里 `tool_execution_start` / `tool_call` / `tool_result` / `tool_execution_end` 四个事件到达观测者,`toolName = session_rename`,入参预览就是那个标题 | ✅ faux 探针实跑,四个事件全到(事件清单见「实测」);`agent/events.ts` 的白名单本就含 `toolName` 与 `argsPreview` / `inputPreview` |
 | 3 | 一个会话只命名一次 | 已命名的会话冷启动不再注册该工具;直接写库也改不动(`WHERE title_source='derived'` 命中 0 行) | ✅ `title.test.ts`「只命名一次」段 |
 | 4 | 写面被 Postgres 限死 | 以 `agent_title` 改 `sessions.last_active_at` / `visitor_id` / 写 `messages` / `DELETE FROM sessions` / 读 `llm_config` / 读 `notes_chapters` / `SELECT created_at` 全部 `permission denied`;只有改 `title` / `title_source` 成功 | ✅ `title.test.ts`「agent_title 角色」段 |
 | 5 | 会话 id 不可由模型指定 | 工具 `parameters` 只有 `title` 且 `additionalProperties: false`;给会话 A 构建的工具即便被塞进 `sessionId: B` 也只改 A | ✅ `title.test.ts`「工具行为」段 |
 | 6 | sanitize 生效 | 多行 / 引号 / 尾部标点(半角与全角)/ 引号与标点互相嵌套 / 控制字符 / 超长 / 全空白 逐条断言 | ✅ `title.test.ts`「sanitizeTitle」段(**互相嵌套那条是探针抓出来的真 bug**,见「实测」) |
-| 7 | 可关停 | 经 MCP `tool_config_set session_rename enabled=false` 后新会话不注册该工具,标题回落首行截断 | ⏳ 逻辑侧已有用例(`loadEnabledTools` 丢弃 / `buildSessionTools` 不产出);**经 MCP 实调**要后端 + token,**交接 130** |
+| 7 | 可关停 | 经 MCP `tool_config_set session_rename enabled=false` 后新会话不注册该工具,标题回落首行截断 | ✅ 逻辑侧用例(`loadEnabledTools` 丢弃 / `buildSessionTools` 不产出)+ **所有者在生产经 MCP 实调验过**(2026-09-03 确认) |
 | 8 | 无回归 | `dev.ps1 check` + `dev.ps1 test` 全绿;`dev.ps1 gen` 后 `api-client.ts` 无接口面变化 | ✅ 12 文件 211 用例全过;check 通过;gen 只有已知的 app slug 噪音(BACKLOG R3/R6),**接口面零变化**,已还原该文件 |
 
 ## 禁止
@@ -198,6 +198,8 @@ tool_execution_end    toolName=session_rename  result={... "details":{"title":"�
   被空闲回收后重建的会话不会每轮都试着调一次命名工具再被库挡回去 —— 那会在轨迹面板上留下一串无意义的空转调用。
 
 ### 交接 R11(两条本机验不了的)
+
+> **结果(2026-09-03)**:R11 跳过了 130,两条都在**生产**验掉——#1 R11 当日(`title_source=agent`),#7 所有者确认。本段保留为交接记录。
 
 沿用 R-VISITOR 的先例(「本机验不了的在 130 上验掉」):
 

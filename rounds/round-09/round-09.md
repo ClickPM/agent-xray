@@ -57,7 +57,7 @@
   冒烟清单换成 R9 实际执行的那份 15 条(spike 撤下、SSE ×2 补上、服务白名单逐项、
   `agent_ro` 与容器约束核验),并新增「『镜像里没有 node』怎么查才是对的」
 - `CLAUDE.md` 规则 11 —— 补一条:别用 `command -v node` 验「最终镜像无 node」
-- **`docs/notes-content-spec.md`(新)** —— 所有者中途给了 `D:	mpgent-xray-notes`(211 篇 md + 56 图)
+- **`docs/notes-content-spec.md`(新)** —— 所有者中途给了 `D:\tmp\agent-xray-notes`(211 篇 md + 56 图)
   并裁定「先给一份修改要求,内容我让 AI 处理后再发」。这份文件就是那个要求:三层结构与 slug 规则、
   `series.json` manifest、正文与配图的硬约束、收录范围、逐条自检清单。**R9 不入库任何真实内容**
 - `ROUNDS.md` —— 进度表 R9 收口
@@ -171,7 +171,7 @@ api 日志没有任何释放迹象。加一层 Caddy 不改变 Encore 网关不�
 | # | 计划 | 实际 |
 |---|---|---|
 | 1 | 交付物里没有 `deploy/migrate.sh` | 加了一处**去噪**改动(advisory lock 从 `SELECT` 改 `DO/PERFORM`),行为不变;在隔离 compose 工程里从空库重跑 6 个迁移验证过 |
-| 2 | 交付物里没有 `docs/notes-content-spec.md` | 所有者中途给了 `D:	mpgent-xray-notes` 并裁定「先给修改要求」,于是产出这份内容标准化契约。**R9 仍不入库任何真实内容** |
+| 2 | 交付物里没有 `docs/notes-content-spec.md` | 所有者中途给了 `D:\tmp\agent-xray-notes` 并裁定「先给修改要求」,于是产出这份内容标准化契约。**R9 仍不入库任何真实内容** |
 | 3 | 计划只说「样本内容」 | 实际发布了四个分类 + 系列 `r9-smoke` + 2 篇文章 + 1 张配图 + 一份 About 内容 —— 因为验收 #7「三 Tab 渲染真实数据」在空库下验不了 About。这批样本要在真实内容到位时清掉(已记 BACKLOG) |
 | 4 | 计划里 MCP 冒烟只写「带 token 实连」 | 实际踩到 2026-07-28 的 per-request envelope 键必须**带 `io.modelcontextprotocol/` 命名空间**,少了直接 `-32602`。写进了 smoke.md,免得下次重踩 |
 

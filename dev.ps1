@@ -241,6 +241,8 @@ switch ($Cmd) {
         Write-Host "  docker compose up -d --wait postgres"
         Write-Host "  ./migrate.sh"
         Write-Host "  docker compose up -d"
+        Write-Host ""
+        Write-Host "发版后:docs/releases.md 加一行(日期 / SHA / 迁移版本 / 内容 / .env 变更)。生产发版必记(CLAUDE.md 项目定位)。"
     }
     "skills" {
         # 把 .claude\skills 镜像到 .agents\skills。

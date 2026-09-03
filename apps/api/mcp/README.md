@@ -80,7 +80,10 @@
    `Accept` 同时含 `application/json` 与 `text/event-stream`(缺了 `-32000 Not Acceptable`)·
    `Mcp-Method` 头(必须等于 body 的 `method`,缺了 `-32020`)· `tools/call` 时再加 `Mcp-Name` 头
    (必须等于 `params.name`,缺了 `-32020`)· `params._meta` 里带 `io.modelcontextprotocol/protocolVersion`
-   与 `io.modelcontextprotocol/clientCapabilities`(少任一键 `-32602 Invalid _meta envelope`)。
+   与 `io.modelcontextprotocol/clientCapabilities`(少任一键 `-32602 Invalid _meta envelope`)
+   与 `io.modelcontextprotocol/clientInfo`(`{name, version}`)。**三个键名都要带命名空间前缀**:
+   写成裸键名(`protocolVersion` / `clientCapabilities`)或缺 `clientInfo` 不报错,而是静默落到下面说的
+   legacy 路径(R11 对生产实测;CLAUDE.md 早先一版的措辞就是这么中招的)。
    `MCP-Protocol-Version: 2026-07-28` 头是客户端该带的,但**缺了不会被拒**(`server/discover` 与
    `tools/call` 都实测通),真正切换协议时代的是 `params._meta`。
    **整个 `_meta` 都不带时 handler 不报错,而是静默落到 2025-11-25 的 legacy 无状态路径**:

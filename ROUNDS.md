@@ -46,6 +46,12 @@
 > 一项(画板 2c 的正文配图样式,聊天区自 R9 起复用),**前端零改动**、不新造气泡与组件。
 > 图片存 Postgres、随会话级联删除、按访客归属供图(隐私口径写进 `docs/security.md` §6);
 > 端点 / 凭据 / 协议形态 / 限额经 MCP 配置,与 LLM、搜索 provider 同一套形态。
+>
+> **2026-09-03 裁定(投产后的运行口径)**:①站点已于 2026-09-02 正式投产,**后续较大迭代依旧延续轮次机制**(命名轮先例),
+> 小修补直接进 `main`,但**每次生产发版都记入 [`docs/releases.md`](docs/releases.md)**;②**130 保留为预发环境,但是可选项**——
+> 有需要时先在 130 发版验证,不是发生产的强制前置,130 与生产的 SHA 允许不一致(当前 130 停在 `7cc17fe` / 迁移 7);
+> ③**生产 JS 运行时 = bun、MCP 管理面协议 = 2026-07-28 是强制要求**(CLAUDE.md 规则 12):后续迭代若可能使二者之一不再满足,
+> 必须提前向所有者做风险告知,不得自行降级。
 
 ## 进度表
 
@@ -64,14 +70,13 @@
 | **R9** | 容器化 + 130 预发部署(docker compose 全链路) | ✅ 已完成([任务卡](rounds/round-09/round-09.md) · [冒烟留证](rounds/round-09/smoke.md)),18 项验收全过,130 预发可用;**所有者裁定本轮不走 codex 审查**(过程与残留风险见任务卡「代码审查」段)。同日按 `docs/notes-content-spec.md` 经 MCP 入库 13 系列 / 205 章节 / 103 配图 | 2026-09-01 |
 | **R10** | 安全加固 + 上线前检查单逐项 | ✅ 已完成([任务卡](rounds/round-10/round-10.md) · [检查单留证](rounds/round-10/checklist.md)),检查单 1–11 项在 130(SHA `5c98b3e`)全绿;**所有者裁定本轮不做限额演练(引 R9 留证)与 pg 备份**,不做安全响应头与 IP 白名单(均记 BACKLOG) | 2026-09-01 |
 | **R-VISITOR** | 访客会话隔离(24h 滑动 cookie · 归属过滤 · 3 天保留期 · 会话删除) | ✅ 已完成([任务卡](rounds/round-visitor/round-visitor.md) · [130 部署留证](rounds/round-visitor/round-visitor.md#130-预发部署留证2026-09-01)),12 项验收全过;codex 三轮共 6 条 findings(3×P1 · 3×P2),4 条采纳整改、1 条所有者裁定不修(130 内网)、1 条写明理由不采纳记 BACKLOG,第 3 轮零 findings,缺陷门禁 PASS。同日 130 预发升级到 `7cc17fe`(迁移 6→7),8 项冒烟全过,**本机验不了的「新建会话首帧带 Set-Cookie」在 130 上验掉,不再交接给 R11** | 2026-09-01 |
-| **R-WEBSEARCH** | agent 联网搜索工具(Responses API 网关 · 域白名单 · MCP 配 provider · DeepSeek 零分支兼容) | ✅ 已完成([任务卡](rounds/round-websearch/round-websearch.md)),本机验收 #1–#10、#14 全过;codex 四轮共 6 条 findings(3×P1 · 3×P2)**全部采纳整改**,第 4 轮零 findings,缺陷门禁 PASS;**所有者裁定本轮不构建镜像、不发 130**(#2/#11/#12/#13 四条 130 实跑验收并入下一次预发升级) | 2026-09-02 |
-| **R-TITLE** | 会话命名工具(`session_rename`:agent 自己给会话起名,轨迹可见,默认开启) | 🔄 已合并 `main`,待 130 预发验收 #1/#7([任务卡](rounds/round-title/round-title.md),8 项验收 6 过、2 项交接 130;codex 五轮共 4 条 findings(2×P1 · 2×P2):2 条 P2 采纳整改,1 条 P1 **所有者裁定不采纳并回滚**(记 BACKLOG),1 条 P1 随回滚作废,末轮零 findings,缺陷门禁 PASS) | — |
-| **R-TOOLS** | Tools 工具面板(右栏第 4 tab:工具名/描述/入参 schema/输出形态,只读) | ✅ 已完成并合并 `main`([任务卡](rounds/round-tools/round-tools.md);7 项验收全过,codex 两轮:1×P2 采纳整改 + 末轮零 findings,缺陷门禁 PASS)。**所有者 2026-09-02 裁定:先于 R11** —— 反正要走一次「构建 → 130 预发验 → 生产发」,带上它就只走一次,生产首发即最终形态;本轮无迁移、无新依赖,130 实跑随 R11 那次预发升级一并验 | 2026-09-02 |
+| **R-WEBSEARCH** | agent 联网搜索工具(Responses API 网关 · 域白名单 · MCP 配 provider · DeepSeek 零分支兼容) | ✅ 已完成([任务卡](rounds/round-websearch/round-websearch.md)),本机验收 #1–#10、#14 全过;codex 四轮共 6 条 findings(3×P1 · 3×P2)**全部采纳整改**,第 4 轮零 findings,缺陷门禁 PASS;**所有者裁定本轮不构建镜像、不发 130**(#2/#11/#12/#13 四条 130 实跑验收并入下一次预发升级——R11 按裁定跳过了 130,`web_search` 端到端已在**生产**实跑通过;130 那四条改为按需,130 已降为可选预发,2026-09-03 裁定) | 2026-09-02 |
+| **R-TITLE** | 会话命名工具(`session_rename`:agent 自己给会话起名,轨迹可见,默认开启) | ✅ 已完成([任务卡](rounds/round-title/round-title.md),8 项验收全过:6 项本机,#1/#7 **由所有者在生产验过**(#1 R11 当日 `title_source=agent`,#7 于 2026-09-03 确认);codex 五轮共 4 条 findings(2×P1 · 2×P2):2 条 P2 采纳整改,1 条 P1 **所有者裁定不采纳并回滚**(记 BACKLOG),1 条 P1 随回滚作废,末轮零 findings,缺陷门禁 PASS) | 2026-09-03 |
+| **R-TOOLS** | Tools 工具面板(右栏第 4 tab:工具名/描述/入参 schema/输出形态,只读) | ✅ 已完成并合并 `main`([任务卡](rounds/round-tools/round-tools.md);7 项验收全过,codex 两轮:1×P2 采纳整改 + 末轮零 findings,缺陷门禁 PASS)。**所有者 2026-09-02 裁定:先于 R11** —— 反正要走一次「构建 → 130 预发验 → 生产发」,带上它就只走一次,生产首发即最终形态;本轮无迁移、无新依赖;R11 跳过了 130,随生产首发 `5bd6ace` 实跑,Tools 目录在生产冒烟 ✅(R11 验收 9) | 2026-09-02 |
 | **R11** | 生产部署上线(服务器初始化 · 域名/备案/TLS) | ✅ 已完成([任务卡](rounds/round-11/round-11.md))。站点 **https://www.kzgai.cloud/** 于 2026-09-02 上线(SHA `5bd6ace`):备案号挂 footer、仅 HTTPS(80 无响应)、HTTP/3、六个安全头、裸域 301 到 www;内容从 130 库级拷入 + Encore 系列 22 篇经 MCP 发布;LLM/搜索 provider 不设限额;全链路(对话 / SSE ×2 / web_search / session_rename)生产实跑通过。验收 12 项中 11 项 ✅。**所有者裁定收工时不做四项**:上线检查单在生产重跑 / codex 审查 / token 轮换演练 / 首日观察 —— 代价见任务卡「收工」段 | 2026-09-02 |
+| **R-IMAGEGEN** | agent 生图工具(`generate_image`:单工具 · provider 的 `api_style` 分两种协议 · 图片存库按访客归属供图 · 对话框 markdown 预览 · MCP 四个 `imagegen_*`) | ✅ 已完成并合并 `main`([任务卡](rounds/round-imagegen/round-imagegen.md));17 项验收 16 过、#17 外呼半边交接生产配好 provider 后跑(本机无凭据;前端半边已用种子数据实跑:对话框渲染出图、无 cookie 404);codex 三轮共 3 条 findings(0×P1 · 3×P2)**全部采纳整改**,第 3 轮零 findings,缺陷门禁 PASS;`dev.ps1 test` 15 文件 373 用例。**所有者裁定与后续更新一起发生产** —— 已于 2026-09-02 随 SHA `b291eb1` 上生产(迁移 v9→v10;生产 `.env` 已补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api)。**`generate_image` 已于 2026-09-02 在生产配好 provider 并打开**(`imagegen_provider_upsert` 经 MCP 写入、key 只贴进调用不落盘,`tool_config_set` 开;`.env` 补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api),验收 #17 外呼半边生产实跑通过(约 72s 出图、PNG 落 `generated_images`、对话框正常渲染);此后 6 个工具全开,发布细节见 `docs/releases.md` | 2026-09-02 |
 
-| **R-IMAGEGEN** | agent 生图工具(`generate_image`:单工具 · provider 的 `api_style` 分两种协议 · 图片存库按访客归属供图 · 对话框 markdown 预览 · MCP 四个 `imagegen_*`) | ✅ 已完成并合并 `main`([任务卡](rounds/round-imagegen/round-imagegen.md));17 项验收 16 过、#17 外呼半边交接生产配好 provider 后跑(本机无凭据;前端半边已用种子数据实跑:对话框渲染出图、无 cookie 404);codex 三轮共 3 条 findings(0×P1 · 3×P2)**全部采纳整改**,第 3 轮零 findings,缺陷门禁 PASS;`dev.ps1 test` 15 文件 373 用例。**所有者裁定与后续更新一起发生产** —— 已于 2026-09-02 随 SHA `b291eb1` 上生产(迁移 v9→v10;生产 `.env` 已补 `XRAY_IMAGEGEN_EXTRA_HOSTS` 并重建 api)。**`generate_image` 在生产仍是 `enabled:false`**(迁移 010 的种子即默认关):要用它,所有者需先经 MCP `imagegen_provider_upsert` 配好 provider(key 只贴进调用、不落盘),再 `tool_config_set` 打开;验收 #17 的外呼半边到那时才算跑完 | 2026-09-02 |
-
-| **R-TABS** | 顶部导航 tab 的呈现开关(MCP 逐个开关三个 tab 露不露;隐藏 = 导航条不渲染 + 页面不可达,后端端点照常) | 🔄 实现与本机验收完成,待 codex 审查([任务卡](rounds/round-tabs/round-tabs.md));11 项验收全过,`dev.ps1 test` 16 文件 388 用例。**所有者裁定边界只到呈现层**,不碰任何后端端点 | — |
+| **R-TABS** | 顶部导航 tab 的呈现开关(MCP 逐个开关三个 tab 露不露;隐藏 = 导航条不渲染 + 页面不可达,后端端点照常) | ✅ 已完成([任务卡](rounds/round-tabs/round-tabs.md));11 项验收全过,`dev.ps1 test` 16 文件 388 用例;真实 MCP 协议路径本机实跑通过(34 工具、enum 下发、拒未知 key、拒关最后一个可见 tab)。codex 首轮**零 findings**,缺陷门禁 PASS。**所有者裁定边界只到呈现层**,不碰任何后端端点。待发预发/生产(迁移 v10→v11) | 2026-09-03 |
 
 ## 里程碑
 
@@ -236,7 +241,7 @@
 >    复测,能拿到断开信号就放宽」。实测**拿不到** —— 开满 8 条 `trace/stream` 后 `kill -9` 掉全部
 >    客户端,第 9 条仍 429。加一层 Caddy 不改变 Encore 网关不传导断开这件事。
 >    **让位机制与 `MAX_STREAM_MS` 上界都要留着**,三条 BACKLOG 全部保持打开。
-> 4. **多出一份 `docs/notes-content-spec.md`**:所有者中途给了 `D:	mpgent-xray-notes`
+> 4. **多出一份 `docs/notes-content-spec.md`**:所有者中途给了 `D:\tmp\agent-xray-notes`
 >    (211 篇 md + 56 图,是 vault 原导出而非标准化内容)并裁定「先给一份修改要求,
 >    我让 AI 处理后再发」。全量内容入库不在本轮 —— 那会重新造一遍 R6 已退役的 notes-sync 改写管线。
 >    R9 只发了验收所需的样本(四分类 + 系列 `r9-smoke` + 2 篇 + 1 图 + About),真实内容到位时清掉。
@@ -418,7 +423,7 @@
 - docker compose 部署;域名解析 + ICP 备案流程(`docs/deploy-cn-lightweight.md` §1)+ Caddy 自动 TLS;备案号挂 footer
 - 上线冒烟 + 首日观察(限额、内存、日志)
 - **前置(2026-09-02 更新)**:①ICP 备案已通过,`苏ICP备2025204887号-2`;②**R-TOOLS 先做**(所有者裁定);
-  ③**先把 `main` 发一次 130 预发**——130 停在 `7cc17fe`(迁移 7),`main` 已含 R-WEBSEARCH(008)与 R-TITLE(009)
+  ③~~**先把 `main` 发一次 130 预发**~~(**实际跳过**:所有者裁定直接从 `main` 打包发生产,理由见任务卡「跳过 130」段;2026-09-03 进一步裁定 130 为可选预发)——130 停在 `7cc17fe`(迁移 7),`main` 已含 R-WEBSEARCH(008)与 R-TITLE(009)
   两轮**从未在部署形态下跑过**的代码,且 R-TITLE 的验收 #1/#7 当初就交接给 130 实测、至今未验;
   ④生产是空库,notes 内容与 About 文案要在上线后经 MCP 重发
 - **R10 交接过来的四条**(②④已于 2026-09-02 裁定:白名单**不启用只靠 token**、安全响应头**上线时加**、
@@ -467,3 +472,6 @@
 | 2026-09-01 | R9 部署后所有者在 130 上发现两处:① Runtime 聊天区把助手回复当纯文本渲染,模型给的 markdown 全糊成一段;② 站点没有图标文件,浏览器落兜底图标 | 合入 `main`(merge `4b572c1`,含提交 `1d42a91` / `bcc39d6`)。**所有者裁定不走 codex 审查**。130 预发已由 `dbf61ce` 升级到 `4b572c1`(无新迁移,`migrate.sh --status` 停在版本 6),两处修复与三 Tab / 七服务端点 / RSS 均实测正常,流式渲染在 130 上实跑确认 |
 | 2026-09-01 | R-VISITOR 合并后 130 预发升级:`5c98b3e` → `7cc17fe`,迁移 `6 → 7`(007 访客隔离) | 按「先停 api/web、再 `migrate.sh`、后 `up -d`」顺序升级。8 项冒烟全过(留证在[任务卡](rounds/round-visitor/round-visitor.md#130-预发部署留证2026-09-01));**本机验不了的「新建会话首帧带 Set-Cookie」在这里验掉**。存量 12 条冒烟会话迁移后归属为 NULL、对所有访客不可见,由 3 天保留期清掉 |
 | 2026-09-01 | 所有者继续提两处:① 导航条没有 logo;② 右侧 Timeline 不跟随滚动,新事件到了还要手动划 | 合入 `main`(merge `5c98b3e`,含提交 `0f0325b`)。**所有者裁定不走 codex 审查**。logo 按 Pulse X 定稿的导航条实测图实现(44px / mark 20px / gap 9px / accent 明暗两态),`components/XrayMark.tsx` 与 `app/icon.svg` 是同一图形的两份载体、改图形要一起改。Timeline 改为**贴底才跟随**:上翻查看历史时不被新事件拽回,滚回底部自动恢复。130 已升到 `5c98b3e`,三种行为(跟随 / 上翻不被拽 / 回底恢复)在真实事件流下逐项实测 |
+| 2026-09-02 | Notes 正文里的数学公式原样漏出 `$…$`,且公式内的 `_` 被 markdown 当强调吃掉 | `b291eb1`:渲染器接 remark-math + rehype-katex(服务端编译,`trust:false`,katex.css 同源自托管),并按 Pandoc 美元规则挡住散文里的货币金额(本地 226 篇全量跑过:3 处金额拦下、162 个真公式全过)。随 R-IMAGEGEN 一起上生产,见 [`docs/releases.md`](docs/releases.md) |
+| 2026-09-02 | ① Timeline 进行中行整行明暗脉动没有方向感,长工具调用看着像卡住;② 生成期间发送按钮仍可点 | `9dd0c89`:进行中行改成自左向右的波浪扫光(只动 `background-position`,合成器属性),发送按钮生成期间转圈禁用、输入框不禁用;两份画板同步(规则 7/8) |
+| 2026-09-02 | 文章页顶端阅读进度线永远停在 31%(照抄了画板 2c 定格的那一帧) | `d2a87d0`:新增 `ReadingProgress.tsx` 接真实滚动(`transform: scaleX` + rAF 合帧写 ref,找最近可滚动祖先),样式一字未动;画板加注释说明 31% 是示意。与上一条一起以 `d2a87d0` 上生产,见 [`docs/releases.md`](docs/releases.md) |

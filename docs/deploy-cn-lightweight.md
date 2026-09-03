@@ -132,7 +132,9 @@ docker compose up -d                   # 3) 再起 api / web / caddy
 
 > **每个环境各过一遍**,不是过一次就完。130 预发的留证见
 > [`rounds/round-10/checklist.md`](../rounds/round-10/checklist.md)(R10,SHA `5c98b3e`,1–11 全绿);
-> 生产在 R11 重跑同一份。下面括号里的**判据**是 R9/R10 实测校准过的,照着核不会误判。
+> **生产尚未重跑**:R11 收工时所有者裁定不重跑,13 项里 6 项静态属性在生产没有留证(哪 6 项见
+> [`rounds/round-11/round-11.md`](../rounds/round-11/round-11.md)「收工」段);将来若重跑,留证补进 [`releases.md`](releases.md) 对应发版行。
+> 下面括号里的**判据**是 R9/R10 实测校准过的,照着核不会误判。
 
 - [ ] gitleaks 扫描仓库无密钥。**两条都要跑**:`gitleaks dir <repo>`(工作区)与 `gitleaks git <repo>`(历史),期望均为 `no leaks found`。判据由仓库根的 [`.gitleaks.toml`](../.gitleaks.toml) 定义(排除构建产物与 gitignored 的本地密钥文件,并按**具体的值**放行脱敏测试的假密钥字面量——不按文件放行,否则那两个文件会变成盲区)。**不带这个配置裸跑会报十几条全是噪音的命中**;改动这个配置后要跑一次证伪探针(往几处各插一行新的真实形状 key,确认都被抓到),做法见 [`rounds/round-10/checklist.md`](../rounds/round-10/checklist.md) §1
 - [ ] `.env` 权限 600;`docker compose config` 无明文 key 泄漏到镜像。判据:把 `.env` 里的密钥值逐个拿去比对 `docker history --no-trunc` 与镜像的 `Config.{Env,Cmd,Entrypoint,Labels}`,期望命中 **0**;密钥只应出现在**容器**的运行期 env 里

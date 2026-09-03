@@ -132,12 +132,13 @@
       (server 只校验不改写),判据是「正文第一个非空行是 `# X` 且 `X == title` → 删掉那行」。
       已把这条补进 `docs/notes-content-spec.md` §4 第 7 条与 §8 自检清单;修完重新 upsert 即可
       (幂等,未变的篇目回 `unchanged`) (2026-09-01)
-- [ ] R9 **`deploy/.env.example` 的 `SITE_ORIGIN` 注释举的是 `:8080` 的例子**,而 R9 按所有者裁定
+- [x] R9 **`deploy/.env.example` 的 `SITE_ORIGIN` 注释举的是 `:8080` 的例子**,而 R9 按所有者裁定
       用了 80(`http://192.168.100.130`,Caddyfile 与 compose 零改动)。注释本身没错(备案前两种都行),
       但和 130 上的真实配置不一致,照抄 8080 又不改 Caddyfile 就会得到一个连不上的站。
       下次动那个文件时顺手对齐 (2026-09-01)
+      → **已对齐**:R11 改 `.env.example` 时注释已写成「130 预发 http://192.168.100.130 ← 用了 80,不是 8080」,2026-09-03 核过关闭
 
-- [ ] R10 **站点一个安全响应头都没有**:`deploy/Caddyfile` 与 `apps/web/next.config.ts` 均未设
+- [x] R10 **站点一个安全响应头都没有**:`deploy/Caddyfile` 与 `apps/web/next.config.ts` 均未设
       `X-Content-Type-Options` / `Referrer-Policy` / `X-Frame-Options`(或 CSP `frame-ancestors`)/
       `Permissions-Policy`;`docs/security.md` 也没有对应条款。全站唯一带 `nosniff` 的是 R6 为存储型
       XSS 单独加的供图端点。**所有者 2026-09-01 裁定本轮不做**(不在 R10 拆解内,属新增约束)。
@@ -147,6 +148,7 @@
   → **所有者 2026-09-02 裁定:R11 上线时一并加保守一组,HSTS 随 TLS 一起开**(备案已通过,`苏ICP备2025204887号-2`)。
     范围与 `max-age` 起步值见 [round-11 任务卡](round-11/round-11.md)「2026-09-02 备案通过后的裁定」第 3 条;
     **CSP 主体仍不做**(Next inline script 要 nonce,属机制类改动)。本条在 R11 落地后关闭
+  → **已落地**(R11,`deploy/Caddyfile` 六个头 + HSTS `max-age=300` 起步,条款在 `docs/security.md` §5.1),2026-09-03 关闭;CSP 主体仍在 §5.1 里挂着
 - [ ] R10 **Postgres 备份始终没有落地**:`docs/deploy-cn-lightweight.md` §5 写着「每日 `pg_dump` 到
       本机 + 异地各一份,保留 14 天」,R10 拆解里也有「备份脚本与恢复演练」——**所有者 2026-09-01
       裁定本轮不做**。代价是显式的:`deploy-environments.md` 第 7 条与 §3 的「涉及不可逆迁移时先恢复
