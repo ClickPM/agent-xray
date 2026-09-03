@@ -177,6 +177,13 @@ export namespace agent {
          * ISO 8601
          */
         createdAt: string
+
+        /**
+         * 这一轮的处理过程(R-TOOLCARDS):工具调用偏移表 + 往返数 + 总耗时,从 `messages.payload`
+         * 按字段白名单派生(`turnFromPayload`)。只有本轮有工具调用的助手行才有;旧行 / 无工具的一轮没有,
+         * 前端据此只显示正文。**不透传整个 payload**。
+         */
+        turn?: TurnRecord
     }
 
     export interface CreateSessionResponse {
@@ -222,6 +229,38 @@ export namespace agent {
          * ISO 8601
          */
         lastActiveAt: string
+    }
+
+    /**
+     * 一次工具调用在会话区的记录(落库 payload 的元素,也是历史回放端点透出的形状)。
+     */
+    export interface ToolCallRecord {
+        /**
+         * 与轨迹流同一 id,将来可互相定位(本轮不做)
+         */
+        toolCallId: string
+
+        name: string
+        /**
+         * 工具开始执行时 content 已累积的 JS 字符串长度 —— 卡片插在这个偏移处
+         */
+        at: number
+
+        /**
+         * previewText(args):单行、截断、凭据脱敏
+         */
+        inputPreview: string
+
+        /**
+         * previewText(result 的文本);无 end 事件(provider 中途 abort)时为空串
+         */
+        resultPreview: string
+
+        isError: boolean
+        /**
+         * 无 end 事件时缺省 —— 前端显示为错误态、耗时留空
+         */
+        durationMs?: number
     }
 
     /**
@@ -308,6 +347,23 @@ export namespace agent {
         properties: { [key: string]: ToolParamSchema }
         required: string[]
         additionalProperties: false
+    }
+
+    /**
+     * 一轮的处理过程摘要:折叠行(画板 2l)要的四项里的三项,第四项(有无失败)由 toolCalls 派生。
+     */
+    export interface TurnRecord {
+        /**
+         * 本轮助手 message_end 计数(= Timeline 的 Turn 数)
+         */
+        modelRoundTrips: number
+
+        /**
+         * 访客消息落库 → 收尾的总耗时
+         */
+        turnMs: number
+
+        toolCalls: ToolCallRecord[]
     }
 
     export class ServiceClient {

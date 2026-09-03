@@ -1,11 +1,18 @@
 // R3 正式对话流:`POST /agent/ask`(`api.raw` SSE ← `session.subscribe()`)。
 //
-// SSE 帧契约(前端 apps/web/lib/agent-api.ts 消费):
-//   event: session  {sessionId}     首帧,新会话由此把 id 交给客户端
-//   event: delta    {text}          助手文本增量(逐字渲染)
-//   event: done     {sessionId}     本轮正常收尾
-//   event: error    {message}       本轮异常收尾,message 是**固定文案**
-//   `: hb` 注释帧                    15s 心跳,穿透反代空闲超时
+// SSE 帧契约(前端 apps/web/lib/agent-api.ts 消费;R-TOOLCARDS 加两种工具帧与收尾帧的两个数):
+//   event: session     {sessionId}     首帧,新会话由此把 id 交给客户端
+//   event: delta       {text}          助手文本增量(逐字渲染)
+//   event: tool_start  {toolCallId, name, at, inputPreview}
+//                                      工具开始执行;at = 此刻正文已累积的 JS 字符串长度,卡片插在这个偏移处
+//   event: tool_end    {toolCallId, resultPreview, isError, durationMs}
+//                                      工具执行结束;两种预览都是 previewText 摘要,永不带 args / result 原始结构
+//   event: done        {sessionId, modelRoundTrips, turnMs}
+//                                      本轮正常收尾;两个数给折叠行(画板 2l),不带 model / provider / token / 费用
+//   event: error       {message, modelRoundTrips, turnMs}
+//                                      本轮异常收尾,message 是**固定文案**
+//   `: hb` 注释帧                       15s 心跳,穿透反代空闲超时
+// 工具帧与 payload 的累积逻辑在 turn-recorder.ts(纯函数,可直接测),这里只发帧与落库。
 //
 // 错误口径(docs/security.md §2,消化 rounds/BACKLOG.md 两条 R2 遗留):
 // SSE 只出固定文案,provider / 数据库的原始错误一律只进服务端日志——
@@ -35,6 +42,7 @@ import {
   sessionOwnedBy,
   upsertMessage,
 } from "./store";
+import { createTurnRecorder, type TurnPayload } from "./turn-recorder";
 import { ensureVisitor, headersOfRaw, resolveVisitor, type Visitor } from "./visitor";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -122,15 +130,19 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * 助手回复按「turn 级去重键」幂等落库:seq 在用户消息落库时就定死(userSeq+1),
  * 重试写同一个 seq 只会更新内容,不会追加重复消息——覆盖「提交成功但连接断开」
  * 这类不确定路径(rounds/BACKLOG.md R2 遗留)。全部尝试失败才返回 false。
+ *
+ * `payload`(R-TOOLCARDS)只在本轮有工具调用时传;不传写 NULL,与今天的行完全一样。
+ * 重试写同一 seq 时 content 与 payload 一起被最后一次覆盖(store.upsertMessage 的 DO UPDATE 两列都 SET)。
  */
 async function persistAssistant(
   sessionId: string,
   seq: number,
   content: string,
+  payload?: TurnPayload,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < PERSIST_ATTEMPTS; attempt++) {
     try {
-      const row = await upsertMessage(sessionId, seq, "assistant", content);
+      const row = await upsertMessage(sessionId, seq, "assistant", content, payload);
       if (row) return true;
       // seq 被别的角色占用:重试也不会好转,直接判失败(store.upsertMessage 护栏)
       console.error(
@@ -302,7 +314,10 @@ export const ask = api.raw(
     resp.writeHead(200, { ...SSE_HEADERS, ...(visitor ? { "Set-Cookie": visitor.setCookie } : {}) });
     sse(resp, "session", { sessionId: id });
 
-    let assistantText = "";
+    // R-TOOLCARDS:文本 delta、工具调用(偏移 / 摘要 / 耗时)与往返计数都由 recorder 累积,
+    // 这里只把它吐出的帧原样发出去,收尾时再从它拿落库的 payload。计时起点就是这里 ——
+    // 访客消息刚落库、模型还没开始。
+    const recorder = createTurnRecorder();
     // pi 把 provider 失败(401/超时/限流)吞在内部:`prompt()` 正常 resolve,
     // 助手消息以 stopReason="error" 收尾且正文为空。**实测**:只靠 try/catch 会把
     // 失败的一轮当成功报 done,访客看到「什么都没发生」。判据取助手 message_end 的
@@ -313,15 +328,7 @@ export const ask = api.raw(
     let turnTokens = 0;
     let turnCostMicros = 0;
     const unsubscribe = rec.session.subscribe((event) => {
-      if (event.type === "message_update") {
-        const e = (event as { assistantMessageEvent?: { type?: string; delta?: string } })
-          .assistantMessageEvent;
-        if (e?.type === "text_delta" && typeof e.delta === "string") {
-          assistantText += e.delta;
-          sse(resp, "delta", { text: e.delta });
-        }
-        return;
-      }
+      for (const frame of recorder.feed(event)) sse(resp, frame.event, frame.data);
       if (event.type === "message_end") {
         const m = (
           event as {
@@ -366,18 +373,23 @@ export const ask = api.raw(
         console.error(`turn ended with error for session ${id}: ${previewText(turnErrorDetail)}`);
       }
 
+      // 收尾:没等到 end 的工具调用按错误态兜底;summary 只有往返数与总耗时两个数
+      // (docs/security.md §2 R-TOOLCARDS 补记:不带 model / provider / token / 费用)。
+      const { summary, payload } = recorder.finish();
       let persistFailed = false;
-      if (assistantText) {
-        persistFailed = !(await persistAssistant(id, userSeq + 1, assistantText));
+      // 有正文**或**有工具调用才落行:模型以工具调用收尾、一句话没说的一轮,重新打开也要能
+      // 回放出折叠行(画板 2l 规则 3);两者都没有(provider 直接失败)与今天一样不写行。
+      if (recorder.text || payload) {
+        persistFailed = !(await persistAssistant(id, userSeq + 1, recorder.text, payload));
       }
 
       if (promptFailed || persistFailed) {
         const parts: string[] = [];
         if (promptFailed) parts.push(ERR_PROVIDER);
         if (persistFailed) parts.push(ERR_NOT_PERSISTED);
-        sse(resp, "error", { message: parts.join(" ") });
+        sse(resp, "error", { message: parts.join(" "), ...summary });
       } else {
-        sse(resp, "done", { sessionId: id });
+        sse(resp, "done", { sessionId: id, ...summary });
       }
     } finally {
       // 用量计数是**尽力而为**的资源闸,不是账单:失败只记日志,绝不把已经完成的

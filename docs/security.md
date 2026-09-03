@@ -284,6 +284,20 @@ R-IMAGEGEN 落地补记(2026-09-02,`apps/api/agent/imagegen.ts` + `imagegen-conf
 - `before_provider_request` / `before_provider_headers` 中的 Authorization / api-key 字段永不出服务端
 - 工具入参/出参截断到固定长度再推送
 
+R-TOOLCARDS 补记(2026-09-03,所有者裁定;规则 9「先改文档」—— 落点:`apps/api/agent/turn-recorder.ts` / `ask.ts` / `sessions.ts`):
+**对话流(`/agent/ask`)也开始带工具调用**,口径与轨迹流完全相同、不新造第二套脱敏:
+
+- 对话流新增两种帧 `tool_start { toolCallId, name, at, inputPreview }` / `tool_end { toolCallId, resultPreview, isError, durationMs }`。
+  帧里**只有摘要字符串,永不带 `args` / `result` 的原始结构**;`inputPreview` / `resultPreview` 一律经 `shared/redact.ts` 的 `previewText`
+  ——与轨迹流 `tool_execution_start.argsPreview` / `tool_execution_end.resultPreview` 是**同一个函数、同一个截断上限(400)、同一套凭据键 / 值清洗**。
+  唯一的差别是截断标记:画板 `2m` 裁定卡片展开体的截断由服务端在切断处接 `…(已截断)`,所以对话流把 `previewText` 尾部的 `…[+N chars]` 换成这四个字,
+  截断位置与长度不变。
+- 落库的 `messages.payload`(一轮有工具调用时才写)存的也是**同一份摘要**(`{v, modelRoundTrips, turnMs, toolCalls[]}`),不存原始入参 / 出参;
+  历史回放端点 `GET /agent/sessions/:id` 从 payload **按字段白名单**派生 `turn`(`turnFromPayload`),不透传整个 JSONB。
+- `done` / `error` 收尾帧只追加 `modelRoundTrips` 与 `turnMs` 两个数;**不带 model / provider / baseUrl / token 数 / 费用**(与 R-TOOLS「不公开配置面」同一口径;
+  token 与费用只走 `quota.ts` 的服务端计数)。
+- 对话流与轨迹流是两条独立 SSE,文本 delta 与工具事件跨连接没有顺序保证,所以会话区**不从轨迹流派生**;一份数据(recorder)、两个消费者(实时帧 / 落库)。
+
 ## 3. 凭据管理
 
 - LLM key:经 MCP 管理面写入 → 服务端加密存储(Postgres);任何读接口**含 MCP tool result**只返回掩码(`sk-…abcd`)——tool result 会进入 MCP 客户端的模型上下文,掩码必须在服务端完成

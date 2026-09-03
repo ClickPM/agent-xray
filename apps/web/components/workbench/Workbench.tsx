@@ -10,10 +10,12 @@ import {
   relativeTime,
   AskError,
   type SessionSummary,
+  type TurnSummary,
 } from "@/lib/agent-api";
 import { openTraceStream } from "@/lib/trace-api";
 import { toChainView, toLifecycleNodes, toTimelineTurns } from "@/lib/trace-view";
-import type { ChatItem, TraceEvent } from "@/lib/types";
+import { foldLabel, hasFailure, splitTurn, toolDuration, type TurnSegment } from "@/lib/turn-view";
+import type { ChatItem, ToolCallView, TraceEvent, TurnView } from "@/lib/types";
 import { GhostButton } from "@/components/ui";
 import { Markdown } from "@/components/Markdown";
 import { mono } from "@/lib/styles";
@@ -117,21 +119,100 @@ function SessionSidebar({
   );
 }
 
-function ToolChip({ name, preview, dur, error }: { name: string; preview: string; dur: string; error: boolean }) {
+/**
+ * 工具调用卡(画板 1a;R-TOOLCARDS 重新接上数据源 —— 首版 `bdc1ca4` 画好之后 R3 切真实数据源时断了来源)。
+ *
+ * 卡片解剖一字不改:左 工具名 mono 12/600、中 入参摘要 mono 11 弱化色单行省略、右 耗时 11px tabular、末 12px 箭头。
+ * 相对首版只多两件事:整卡可点(切换画板 2m 的展开体;箭头只有 12px,整卡才是可用的点击面)与随之的
+ * `cursor:pointer`;箭头随 `open` 转向 —— 收起沿用 1a 的 ˅,展开转成 ˄(画板 2m:只转向,不换图标、尺寸、颜色)。
+ */
+function ToolChip({
+  name,
+  preview,
+  dur,
+  error,
+  open,
+  onToggle,
+}: {
+  name: string;
+  preview: string;
+  dur: string;
+  error: boolean;
+  open: boolean;
+  onToggle: () => void;
+}) {
   return (
     <div
+      onClick={onToggle}
       style={{
         background: error ? "var(--err-bg)" : "var(--ok-bg)",
         border: `1px solid ${error ? "var(--err-border)" : "var(--ok-border)"}`,
         borderRadius: 7, padding: "7px 10px", display: "flex", alignItems: "center", gap: 8,
+        cursor: "pointer",
       }}
     >
       <span style={{ ...mono(12, 600), color: error ? "var(--err-text)" : "var(--ok-text)" }}>{name}</span>
       <span style={{ ...mono(11), color: "var(--text-dim)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{preview}</span>
       <span style={{ fontSize: 11, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{dur}</span>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="6 9 12 15 18 9" />
+        <polyline points={open ? "18 15 12 9 6 15" : "6 9 12 15 18 9"} />
       </svg>
+    </div>
+  );
+}
+
+/**
+ * 一张卡 + 它的展开体(画板 2m)。收起时就是裸的 ToolChip(2m 里 read_file 卡的样子);
+ * 展开时套一层 div,展开体紧贴卡下 4px、r6 + `--bg-subtle` 底 + 与卡片同色的 1px 描边,
+ * INPUT / RESULT 两段各 `max-height:106px`(mono 11 × 1.6 六行)+ `overflow:hidden`,
+ * 超出部分的 `…(已截断)` 由服务端在切断处接好(turn-recorder.ts),这里不再截。
+ * 不做内部滚动、不放「展开全部」;要看全量去右栏 Timeline 对应的 tool_call / tool_result 事件。
+ */
+function ToolCard({ call, open, onToggle }: { call: ToolCallView; open: boolean; onToggle: () => void }) {
+  const error = call.isError;
+  const chip = (
+    <ToolChip name={call.name} preview={call.inputPreview} dur={toolDuration(call)} error={error} open={open} onToggle={onToggle} />
+  );
+  if (!open) return chip;
+  const body = { font: "400 11px/1.6 var(--font-mono)", maxHeight: 106, overflow: "hidden", wordBreak: "break-all" } as const;
+  const label = { ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.08em" } as const;
+  return (
+    <div>
+      {chip}
+      <div
+        style={{
+          background: "var(--bg-subtle)",
+          border: `1px solid ${error ? "var(--err-border)" : "var(--ok-border)"}`,
+          borderRadius: 6, padding: "10px 12px", marginTop: 4,
+        }}
+      >
+        <div style={{ ...label, marginBottom: 3 }}>INPUT</div>
+        <div style={{ ...body, color: "var(--text)" }}>{call.inputPreview}</div>
+        <div style={{ ...label, margin: "10px 0 3px" }}>RESULT</div>
+        <div style={{ ...body, color: error ? "var(--err-text)" : "var(--text)" }}>{call.resultPreview}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 折叠行(画板 2l):一行导航,不是卡片 —— 13px/1.7 次级色、无底色 / 边框 / 圆角,hover 转品牌色;
+ * 行首 12px 箭头(› 收起 / ˅ 展开,与卡片箭头同一图标),行尾 6px 红点 = 里面有一次工具调用出错或被拦截
+ * (只提示,不占整行、不写字)。展开 / 收起不做动画(现有三个动效都是「还在跑」的语义)。
+ */
+function FoldRow({ turn, open, onToggle }: { turn: TurnView; open: boolean; onToggle: () => void }) {
+  return (
+    <div
+      onClick={onToggle}
+      style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-muted)", cursor: "pointer" }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points={open ? "6 9 12 15 18 9" : "9 6 15 12 9 18"} />
+      </svg>
+      <span style={{ fontSize: 13, lineHeight: 1.7 }}>{foldLabel(turn)}</span>
+      {hasFailure(turn) && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--err-text)", flex: "none" }} />}
     </div>
   );
 }
@@ -160,9 +241,55 @@ const AssistantMessage = memo(function AssistantMessage({ text }: { text: string
   );
 });
 
+/**
+ * 有工具调用的一轮(R-TOOLCARDS)。两个态、一条渲染路径(`splitTurn`,实时与回放同源):
+ *   - 进行中(`!done`):按 `at` 切段内联 —— 话 / 卡 / 话 / 卡 / 话(画板 1a);
+ *   - 已收尾(`done`):最终回答之前的一切进折叠行(画板 2l,照 pi-web),点开原位展开(画板 2m),
+ *     展开区左侧 1px 竖线 + 左内边距 14 做边界,最终回答留在竖线之外;最终回答为空时只剩折叠行(2l 规则 3)。
+ * 折叠状态与每张卡的展开状态各自独立、都只在本组件里(纯前端状态,不产生事件);
+ * 从进行中切到已收尾时组件实例不变,所以读者已点开的卡不会被收回去,折叠行则以收起态出现 —— 折叠只发生这一次。
+ *
+ * 每个文本段各自过 memo 的 `AssistantMessage`:流式期间只有正在长的那一段重新解析 markdown(R9 的 O(n) 性质保住)。
+ * 外层 gap 14 与 ChatPane 的 gap 相同,所以内联态的段间距与它们直接躺在会话列里时一样。
+ */
+const AssistantTurn = memo(function AssistantTurn({ text, turn, done }: { text: string; turn: TurnView; done: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [openCards, setOpenCards] = useState<Record<number, boolean>>({});
+  const { process, final } = useMemo(() => splitTurn(text, turn.toolCalls), [text, turn.toolCalls]);
+  const toggleCard = (index: number) => setOpenCards((prev) => ({ ...prev, [index]: !prev[index] }));
+  const segment = (seg: TurnSegment, i: number) =>
+    seg.kind === "text" ? (
+      <AssistantMessage key={i} text={seg.text} />
+    ) : (
+      <ToolCard key={i} call={seg.call} open={!!openCards[seg.index]} onToggle={() => toggleCard(seg.index)} />
+    );
+  const finalAnswer = final.trim() !== "" ? <AssistantMessage text={final} /> : null;
+  if (!done) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+        {process.map(segment)}
+        {finalAnswer}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+      <FoldRow turn={turn} open={open} onToggle={() => setOpen((o) => !o)} />
+      {open && (
+        <div style={{ borderLeft: "1px solid var(--border)", marginLeft: 5, paddingLeft: 14, display: "flex", flexDirection: "column", gap: 14 }}>
+          {process.map(segment)}
+        </div>
+      )}
+      {finalAnswer}
+    </div>
+  );
+});
+
 function ChatPane({ items }: { items: ChatItem[] }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const tail = items[items.length - 1]?.text?.length ?? 0;
+  // 末项的「长度」= 正文长度 + 工具卡数:卡片到达而正文没变的那一帧也要跟着滚到底
+  const last = items[items.length - 1];
+  const tail = (last?.text.length ?? 0) + (last?.kind === "assistant" ? (last.turn?.toolCalls.length ?? 0) : 0);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [items.length, tail]);
@@ -178,10 +305,9 @@ function ChatPane({ items }: { items: ChatItem[] }) {
             </div>
           );
         }
-        if (item.kind === "tool" && item.tool) {
-          return <ToolChip key={i} {...item.tool} />;
-        }
-        return <AssistantMessage key={i} text={item.text ?? ""} />;
+        // R-TOOLCARDS:有工具调用的一轮走 AssistantTurn;没有的与改动前一字不差(任务卡验收 #4)
+        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} />;
+        return <AssistantMessage key={i} text={item.text} />;
       })}
     </div>
   );
@@ -341,7 +467,15 @@ export function Workbench() {
       getSession(id)
         .then(({ messages }) => {
           if (loadSeq.current !== seq) return; // 已被更晚的选择/新建取代
-          setItems(messages.map((m) => ({ kind: m.role, text: m.content })));
+          // 回放:`turn` 只在有工具调用的助手行上存在(服务端从 payload 白名单派生),
+          // 旧行 / 无工具的一轮没有它,渲染成纯正文 —— 与实时收尾后的形状是同一份(验收 #3 / #5)
+          setItems(
+            messages.map((m) =>
+              m.role === "user"
+                ? { kind: "user", text: m.content }
+                : { kind: "assistant", text: m.content, turn: m.turn, done: true },
+            ),
+          );
         })
         .catch((err) => console.error("load session failed:", err))
         .finally(() => {
@@ -402,36 +536,78 @@ export function Workbench() {
     setItems((prev) => [...prev, { kind: "user", text: prompt }]);
     setStreaming(true);
 
-    // 首个 delta 到达时才建助手气泡(避免先渲染一个空行),之后每个 delta 就地替换它。
-    // 「是否首帧」在调用点定死,不在 setItems 更新函数里读可变量——更新函数由 React
-    // 择时执行,读到的会是变更后的值。
+    // 首个 delta **或首个 tool_start** 到达时才建助手项(避免先渲染一个空行;模型可能一句话没说先调工具),
+    // 之后每一帧就地替换它。「是否首帧」在调用点定死,不在 setItems 更新函数里读可变量——
+    // 更新函数由 React 择时执行,读到的会是变更后的值。
     //
     // 服务端 delta 是**逐 token** 发的(apps/api/agent/ask.ts),一条长回复几千帧;
     // 助手气泡改渲染 markdown 之后,一帧一次 setItems 就等于一帧解析一遍整篇正文。
-    // 这里按动画帧合帧:攒在 assistant 里,一帧最多提交一次,渲染开销与 token 速率脱钩。
-    // 帧回调在页面隐藏时不跑,所以每个出口都要先 flushNow() 把攒下的文本落地。
+    // 这里按动画帧合帧:攒在 assistant / turn 里,一帧最多提交一次,渲染开销与 token 速率脱钩;
+    // 工具帧走同一个合帧出口。帧回调在页面隐藏时不跑,所以每个出口都要先 flushNow() 把攒下的落地。
+    //
+    // R-TOOLCARDS:`turn` 只在第一个 tool_start 到达时建(没有工具调用的一轮不会有它,渲染与改动前一字不差),
+    // 卡片按服务端给的 `at` 落位;提交时深拷贝一份给 React,本地这份继续原地累积。
     let assistant = "";
+    let turn: TurnView | undefined;
     let started = false;
+    let finalized = false;
     let pending = false;
     let frame = 0;
-    const commit = () => {
-      const snapshot = assistant;
+    const snapshot = (done: boolean): ChatItem => ({
+      kind: "assistant",
+      text: assistant,
+      turn: turn ? { ...turn, toolCalls: turn.toolCalls.map((c) => ({ ...c })) } : undefined,
+      done,
+    });
+    const commit = (done = false) => {
+      const item = snapshot(done);
       const first = !started;
       started = true;
-      setItems((prev) =>
-        first
-          ? [...prev, { kind: "assistant", text: snapshot }]
-          : [...prev.slice(0, -1), { kind: "assistant", text: snapshot }],
-      );
+      setItems((prev) => (first ? [...prev, item] : [...prev.slice(0, -1), item]));
     };
     const flushNow = () => {
       if (frame) { cancelAnimationFrame(frame); frame = 0; }
       if (pending) { pending = false; commit(); }
     };
-    const onDelta = (text: string) => {
-      assistant += text;
+    const schedule = () => {
       pending = true;
       if (!frame) frame = requestAnimationFrame(() => { frame = 0; flushNow(); });
+    };
+    const onDelta = (text: string) => {
+      assistant += text;
+      schedule();
+    };
+    const onToolStart = (call: { toolCallId: string; name: string; at: number; inputPreview: string }) => {
+      turn ??= { modelRoundTrips: 0, turnMs: 0, toolCalls: [] };
+      turn.toolCalls.push({ ...call, resultPreview: "", isError: false });
+      schedule();
+    };
+    const onToolEnd = (end: { toolCallId: string; resultPreview: string; isError: boolean; durationMs: number }) => {
+      const call = turn?.toolCalls.find((c) => c.toolCallId === end.toolCallId);
+      if (!call) return;
+      call.resultPreview = end.resultPreview;
+      call.isError = end.isError;
+      call.durationMs = end.durationMs;
+      schedule();
+    };
+    // 收尾(done / error / 网络断开三处都走这里,只生效一次):先把在途帧落地,再把助手项标成 done ——
+    // 折叠只在这一刻发生一次(画板 2l 规则 2)。没等到 tool_end 的卡按服务端同一条兜底规则标成错误态、
+    // 耗时留空(turn-recorder.ts 的 finish),实时与回放看到的因此是同一份(验收 #3)。
+    const finalize = (summary?: TurnSummary) => {
+      if (finalized) return;
+      finalized = true;
+      flushNow();
+      if (!started) return;
+      if (turn) {
+        if (summary) {
+          turn.modelRoundTrips = summary.modelRoundTrips;
+          turn.turnMs = summary.turnMs;
+        }
+        for (const c of turn.toolCalls) {
+          if (c.durationMs === undefined) { c.isError = true; c.resultPreview = ""; }
+        }
+      }
+      commit(true);
     };
 
     askStream(
@@ -439,21 +615,23 @@ export function Workbench() {
       {
         onSession: setSessionId,
         onDelta,
-        // 先把在途文本落地再追加错误行:否则后到的 flush 会以「就地替换末项」的
-        // 语义把这条错误消息顶掉。
-        onError: (message) => {
-          flushNow();
-          setItems((prev) => [...prev, { kind: "assistant", text: message }]);
+        onToolStart,
+        onToolEnd,
+        onDone: finalize,
+        // 先收尾再追加错误行:否则后到的 flush 会以「就地替换末项」的语义把这条错误消息顶掉。
+        onError: (message, summary) => {
+          finalize(summary);
+          setItems((prev) => [...prev, { kind: "assistant", text: message, done: true }]);
         },
       },
     )
       .catch((err) => {
         console.error("ask failed:", err);
-        flushNow();
-        setItems((prev) => [...prev, { kind: "assistant", text: askErrorText(err) }]);
+        finalize();
+        setItems((prev) => [...prev, { kind: "assistant", text: askErrorText(err), done: true }]);
       })
       .finally(() => {
-        flushNow();
+        finalize();
         setStreaming(false);
         refreshSessions();
       });
