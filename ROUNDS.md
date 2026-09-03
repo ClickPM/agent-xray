@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01、2026-09-02 三次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1g + 2a–2h(共 15 块;2f–2h 于 2026-09-03 新增,见第六次修订)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01、2026-09-02 三次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) 画板 1a–1g + 2a–2k(共 18 块;2f–2h 与 2i–2k 于 2026-09-03 新增,见第六、第九次修订)+ 可交互原型为唯一边界,加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 >
 > **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
 > 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
@@ -79,6 +79,20 @@
 > 外呼组「不接受 URL 参数」的唯一例外认下;残余风险「经 URL 外泄本访客会话内容」认下;准入清单加 egress 档例外;`network` 字段提前进 R-SKILLS-2;
 > egress 实例 `256m` + 并发 1;宿主 `DOCKER-USER` 出网过滤进服务器基线;`web-fetch` 出现在 Skills tab 认下;限额超时复用 R-SKILLS-2。
 > 方案与冲突清单见 [`rounds/round-webfetch/round-webfetch.md`](rounds/round-webfetch/round-webfetch.md),预研留档 [`study.md`](rounds/round-webfetch/study.md)。
+>
+> **2026-09-03 第九次修订(R-PERF)**:所有者在生产上报两个现象 —— `/skills/ppt-master` 白屏报
+> `Application error`,以及「点 Skills 卡片经常没反应、点 Notes 有时候也会」。定位结论:①全站**没有任何
+> `loading.tsx`**,而 7 个 page 全 `force-dynamic`,App Router 的软导航在服务端 RSC 返回前一个像素都不动
+> —— 点 `diagram` 卡片实测 4.0 秒界面完全静止,「没反应」不是崩溃是在等;②`/skills/ppt-master` 的 HTML 有
+> 1.92 MB、RSC 载荷 1.57 MB / 5.6–7.2 秒,水合时文档没到齐,React 报 #418 后整页重渲,重渲出岔就是那块白屏。
+> 两者同一个根因:Skill 详情页把整包**全部 markdown** 在服务端预渲染,而页面只显示一个。
+> **本轮的性质要分清**:T1(只渲染当前文件)**不碰任何设计稿**,是规则 7 明确允许的「只换取数来源与渲染时机」;
+> T2(加载态)与 T3(错误态)则是**画板上没有的新视觉**,按 R-TOOLS / R-SKILLS 的同一顺序处理 ——
+> **先把 `2i`(Skills 详情页加载态)/ `2j`(Notes 章节页加载态)/ `2k`(错误态 + 找不到)三块画进 `design/`,再进轮次**,
+> 不是规则 8 的例外。给画布的提示词见 [`rounds/round-perf/design-prompt.md`](rounds/round-perf/design-prompt.md);
+> **三块画板已于同日画好并拉回 `design/`(画板计数 15 → 18)**,T2/T3 的前置随之解除。
+> 顺带记一笔:现在的 404 也是 Next 默认的英文 `This page could not be found`,已并入 `2k` 一起解决。
+> 画板带来的唯一新语汇是 `2k` 的**品牌色实心主按钮**(既有按钮语汇只有 ghost),由画板明确定为出口层级,不是实现自造。
 
 ## 进度表
 
@@ -107,6 +121,7 @@
 | **R-SKILLS** | Skills 技能库 tab(第四个顶部 tab:按用途分类的 skill 卡片 → 详情页目录树 + 逐文件预览(markdown / 代码带行号)+ 复制安装命令 / GitHub 外链 / 站内 zip;内容经 MCP 整包发布) | ✅ **已合并 `main` 并发版生产**(`789007e`,2026-09-03,迁移 11 → 12;[发布记录](docs/releases.md));codex 三轮审查收口(整改后 PASS)([任务卡](rounds/round-skills/round-skills.md),分支 `claude/round-skill-phase-one-abc0e6`):迁移 `012` 三张表 + `apps/api/skills/` 只读面(首页 / 详情 / zip)+ `shared/skill-pack.ts` 判据与 fflate 打包 + mcp 八个 `skills_*`(工具 34 → 42)+ 前端 2f/2g/2h + 四格 tab 三处登记;`check` / `test` 全绿(18 文件 / 413 用例)、本机验收 ①–⑪ / ⑬ / ⑭ 通过(真实 MCP 路径发布 `encore-api` 等四个 skill,zip 解压逐文件一致);codex 三轮(全量 / 全量 / 整改 diff)共 4 P2 + 1 P3 全部整改,high 级为零;镜像验收 ⑫ 已在 `789007e` 发版时完成(`--services` 含 `skills`,生产 `/api/skills` 200)。设计稿 `2f–2h` 已于同日并入 `design/`;四条裁定(zip = `fflate`、第三方 LICENSE 与仓库链接**非必填**、仓库名按 skill 逐个必填、高亮三 token)全部按裁定落地 | — |
 | **R-SKILLS-2** | agent 使用 skills(`round-skills` 2.0 迭代):`skill_load` 注入 + `skill_run` 在独立无网络容器里跑 skill 自带的 Python 脚本(第四组「沙箱执行组」,首个 `dangerous=TRUE` 工具)· 守卫 / 注入 / 运行三条轨迹进既有 34 事件 · 可用集合 = 代码清单 ∩ 库里开关 ∩ hash 一致 | 📝 **文档就绪、未开工**([任务卡](rounds/round-skills/round-skills-2.md) · [研究与七条裁定](rounds/round-skills/research.md));规则 9 措辞、第四组、威胁模型 6、容器与供应链约束已按「先改文档」写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md`。**三个开工前置**:R-SKILLS(1.0)落地合并、画板 1f/1g 加第四组(所有者画布)、spike「Encore bun 运行时 `fetch` 走 unix socket」(不通则 BLOCKED 回所有者,不自行退到共网) | — |
 | **R-WEBFETCH** | agent 读访客指定的公网网页(建在 R-SKILLS-2 之上):不是新工具,是沙箱执行组的 egress 档 skill `web-fetch`,跑在同一 runner 镜像的第二个实例 `skill-runner-egress`(只出公网)里 · SSRF 防线 = 脚本逐地址校验 + 钉 IP 连 / 容器不在内部网络 / 宿主 `DOCKER-USER` 过滤 · 不维护域名黑白名单 · 零新工具 / 画板 / 迁移 / MCP 工具 / 前端改动 | 📝 **文档就绪、未开工**([任务卡](rounds/round-webfetch/round-webfetch.md) · [预研留档](rounds/round-webfetch/study.md));所有者十条裁定已落(2026-09-03),规则 9「先改文档」已写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md` / `research.md` §2.2 / `round-skills-2.md`(C6 提前)。**前置**:R-SKILLS-2 合并 `main`;所有者经 MCP 上传 `web-fetch` 展示副本 | — |
+| **R-PERF** | 软导航反馈 + 详情页载荷瘦身 + 错误边界(生产报障直接触发):T1 Skill 详情页只服务端渲染当前文件、标题 id 改 rehype 阶段赋值 · T2 `loading.tsx` · T3 `error.tsx` / 404 | 🚧 **审查收口(整改后 PASS),已合并 `main`,待发版**([任务卡](rounds/round-perf/round-perf.md) · [画布提示词](rounds/round-perf/design-prompt.md));画板 `2i`/`2j`/`2k` 已并入 `design/`(15 → 18 块),T1/T2/T3 三块代码已落。基线:`ppt-master` RSC 1.57 MB / 5.6–7.2 s、`diagram` 484 KB / 2.2–3.9 s、点击到 URL 变化 4.0 s、React #418 只在 `ppt-master` 复现。已量到:**标题 id 对 225 篇生产章节零漂移**(验收 #3)、详情页预渲染体积 −90.7%(ppt-master)/ −89.4%(diagram)、切文件零新请求;`test` 18 文件 414 用例全绿。codex 两轮(全量 / 全量)共 1 条 finding(0×high · 1×P2「隐藏 tab 的 404 主按钮指回自身」)**采纳整改**,末轮零 findings,缺陷门禁 PASS。验收 #2/#4/#7 的真实数字待发版后在生产复量 | — |
 
 ## 里程碑
 
@@ -555,6 +570,41 @@
 
 - 验收(16 项,细则在任务卡):①入参收窄逐条拒;②逐地址校验(含「两个地址其一私网 → 拒」);③钉住地址;④重定向;⑤解压炸弹;⑥内容类型与编码;⑦**病态输入在容器里**(预研 §4.3 夹具;api 侧 SSE 心跳不断);⑧不外泄(grep 不到地址 / 跳转链);⑨守卫;⑩档次路由(两实例各拒对方的 skill);⑪清单与 hash 一致;⑫提示词与输出;⑬`check` / `test` / `runner-test` 全绿;⑭三镜像不变、compose 隔离项;⑮**生产冒烟 +3**;⑯生产端到端 + 两种关法
 - **前置**:R-SKILLS-2 合并 `main`(含提前进去的 `network` 字段);所有者经 MCP 上传 `web-fetch`。**止损**:`skills_agent_set web-fetch false` 单个下线;`compose stop skill-runner-egress` 后该 skill 以固定文案失败、其余照常;`tool_config_set skill_run false` 全部可运行型一起停
+
+### R-PERF — 软导航反馈 + 详情页载荷瘦身 + 错误边界(命名轮;生产报障触发 2026-09-03;进行中)
+
+> 任务卡 [`rounds/round-perf/round-perf.md`](rounds/round-perf/round-perf.md),
+> 给画布的提示词 [`design-prompt.md`](rounds/round-perf/design-prompt.md)。
+> **不是功能轮,是生产可用性修复轮**:所有者在真实使用中撞到,定位过程与基线数字全部写在任务卡「背景」段。
+
+**问题(两个现象、一个根因)**:
+- 「点了没反应」——`apps/web/app/` 下**没有任何 `loading.tsx`**,7 个 page 全 `force-dynamic`。
+  App Router 的软导航在服务端 RSC 返回之前 UI 一动不动。实测点 `diagram` 卡片 **4.0 秒**界面完全静止;
+  Notes 章节 0.1–3.4 秒(`stage-01-lecture` 49 KB 却要 3.35 s,是**服务端渲染耗时在抖**,不是载荷)。
+- 「Application error 白屏」——只有 `/skills/ppt-master` 复现 React **#418**(hydration failed),且是间歇的。
+  逐字节比对证明**不是服务端与客户端渲染结果不同**(SSR HTML 与水合后 DOM 113,498 字节完全一致),
+  而是那一页 1.92 MB、分段到达,水合时文档没到齐 → 整页客户端重渲 → 偶发出岔即白屏。
+- 根因同一个:`skills/[name]/page.tsx` 把整包**全部 markdown**(`ppt-master` 21 个 / 289 KB 原文)
+  在服务端预渲染成 ReactNode,而页面只显示一个 —— 载荷 1.57 MB,且每次请求都要把 21 篇各过一遍
+  remark + rehype-katex(耗时的大头)。
+
+**三个任务**:
+- **T1(零样式改动,可立即开工)**:只为 `initialPath` 预渲染;其余 markdown 切到时在客户端渲染
+  (整包原文本来就在客户端,`copy` 与 `CodeView` 在用 —— **口径「切换文件不打后端」不变**)。
+  为此把 `Markdown.tsx` 的标题 id **从渲染期计数改为 rehype 阶段一次性赋值**,与渲染次数解耦
+  (顺带根治 dev StrictMode 下 id 漂移成 `xxx-1` 的隐患)。**硬约束:id 与今天逐字相同**,
+  否则 Notes 正文里已有的 `[见](#锚点)` 会集体失效 —— 这条不许放宽,量不出零差异就回滚改窄口径。
+- **T2**:`skills/[name]/loading.tsx` + `notes/[series]/[chapter]/loading.tsx`;> 300 ms 的路由才加。
+- **T3**:`(site)/error.tsx`(带 `reset()` 重试)+ 404 文案(现在是 Next 默认英文页)。
+
+- 验收(9 项,细则在任务卡):①`check`/`test` 全绿;②`ppt-master` RSC **< 500 KB**、`diagram` **< 200 KB**;
+  ③**标题 id 零漂移**;④连开 5 次零 #418;⑤切文件零新请求、`?file=` 与两处 copy 行为不变;
+  ⑥`git diff` 里没有样式属性改动、`2g`/`2h` 仍一字不差;⑦软导航 200 ms 内出现加载态且对照 `2i`/`2j`;
+  ⑧人为抛错走 `2k` 而非默认白屏、重试可恢复;⑨发版后在生产复量 ②④⑦
+- **前置(已满足)**:画板 `2i`/`2j`/`2k` 于 2026-09-03 由所有者画好、经 DesignSync 拉回 `design/`
+  (`grep -c '^<'` 判据为 0,直接覆盖;`support.js` md5 两边一致未动),画板计数 15 → 18,
+  `CLAUDE.md` 规则 8 与本文功能边界段已同步改数。**止损**:T1 是纯渲染时机改动,回退 = revert 单个提交;
+  T2/T3 各自独立文件,删掉即回到今天的行为
 
 ## 轮次外事项
 

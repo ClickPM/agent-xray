@@ -11,7 +11,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 **Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。四个 Tab:Runtime 工作台 / Notes 研习库 / **Skills 技能库(R-SKILLS,2026-09-03 裁定并落地)** / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。**站点已于 2026-09-02 投产**(https://www.kzgai.cloud/,R11),此后进入运维迭代:**较大迭代依旧延续轮次机制**(命名轮,所有者裁定 2026-09-03),小修补可直接 `main`;**每次生产发版必须记入 [`docs/releases.md`](docs/releases.md)**。
 
-- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) 画板 1a–1g + 2a–2h(共 15 块)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h 于 2026-09-03 新增,3a–3e 已废弃并于 2026-09-02 从画布删除)。管理面范围以 ROUNDS.md R6 裁定清单为准。
+- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) 画板 1a–1g + 2a–2k(共 18 块)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h 与 2i–2k 于 2026-09-03 新增,3a–3e 已废弃并于 2026-09-02 从画布删除)。管理面范围以 ROUNDS.md R6 裁定清单为准。
 - 架构与既定决策:[`docs/architecture.md`](docs/architecture.md)(pi SDK in-process、Encore 类型化 RPC、SSE ×2、Postgres、单机 compose)。
 - 安全强约束:[`docs/security.md`](docs/security.md)——威胁模型、四层沙箱、脱敏、凭据管理;**是约束不是建议**(规则 9)。
 
@@ -82,7 +82,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 5. **`secret()` 只能在 service 目录内声明**(Encore 限制);共享库里不出现 `secret()`,需要密钥的共享代码收「已取好的值」作参数。
 6. **`apps/api` 是 Encore app root,不做 npm workspaces 提升**(规避 encore#1723:app root 下无关 node_modules/.ts 干扰 parser)。web 与 api 不手工共享源码文件;类型经 `encore gen client` 产物(`apps/web/lib/api-client.ts`)流向前端,该文件是生成物,不许手改。
 7. **非必要不得修改前端页面样式,不做视觉 review**。画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。(2026-08-31 修订:3a–3e 废弃,对应 `/admin` 六页按所有者裁定于 R6 整目录删除——属本条允许的结构性改动;同轮的 `next.config.ts` 配图 rewrite 亦然,理由=图片改从 Postgres 供,对外 URL 不变。)
-8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02、2026-09-03 多次修订)。站点访客功能范围 = `design/` 画板 1a–1g + 2a–2h + 可交互原型;**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
+8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02、2026-09-03 多次修订)。站点访客功能范围 = `design/` 画板 1a–1g + 2a–2k + 可交互原型;**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
     - **2026-09-02 修订(R-TOOLS)**:所有者裁定新增 **Tools 工具面板**,设计稿随之扩到 12 块(新增 `1f` 列表态 / `1g` 展开态,同日删除废弃的 `3a–3e`)。**扩边界的正确顺序是「先改设计稿、再进轮次」**——本条不是被绕过,是先被改了。面板是访客可见的**只读**能力说明(工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组),**不显示**启停开关、日限额与剩余次数、provider 与 model 名(那些是服务端配置,公开即泄配置面)。
     - **2026-09-03 修订(R-TABS)**:所有者裁定新增**顶部 tab 的呈现开关**(经 MCP 逐个开关三个 tab 露不露)。
       这**是**本条的例外(与 R-VISITOR 的会话删除入口同类,不同于 R-TOOLS 的「先改设计稿」):画板 1a 的导航条
@@ -110,7 +110,12 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       不在 `front` / `back`)跑;api 进程不碰 URL、不碰 HTML。不新增工具、画板、迁移、MCP 工具,前端零改动。**访客给的 URL 不设域名限制、
       不维护任何域名黑白名单**(所有者裁定:太多,无法维护);拒的是固定的内网地址段(SSRF 防线,见规则 9)。残余风险「经 URL 外泄本访客会话内容」
       所有者已认。方案与十条裁定见 `rounds/round-webfetch/round-webfetch.md`;预研的 in-process 形态(`study.md`)退役。
-    - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用,新画板从 `2i` 顺延(`1a–1g`、`2a–2h` 已用)。
+    - **2026-09-03 修订(R-PERF)**:站点投产后所有者报障「点卡片经常没反应」与 `/skills/ppt-master` 白屏。定位结论是站点**没有任何加载态与错误边界**——
+      软导航在服务端 RSC 返回前 UI 一动不动(点 `diagram` 实测 4.0 秒静止),渲染失败掉到 Next 默认英文白屏。与 R-TOOLS / R-SKILLS 同一顺序、**不是**规则 8 的例外:
+      设计稿先扩到 **18 块**(`2i` Skill 详情页加载态 / `2j` Notes 章节页加载态 / `2k` 错误态 A 出错 B 找不到,2026-09-03 并入 `design/`),**再**进轮次。
+      骨架不新造视觉语言(填充 `--bg-hover`、压灰面降一档 `--border`,动效只复用 `omPulseBg` / `omSpin`);**唯一新增的语汇是 `2k` 的品牌色实心主按钮**
+      (既有按钮语汇只有 ghost),由画板明确定为出口层级。同轮的载荷瘦身(详情页只预渲染当前文件)**不碰设计稿**,属规则 7 允许的「只换渲染时机」。
+    - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用,新画板从 `2l` 顺延(`1a–1g`、`2a–2k` 已用)。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**(执行类能力只能在独立沙箱容器里:容器可常驻,每次运行必须是一次性的进程与工作目录 —— 所有者裁定 2026-09-03,R-SKILLS-2);SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
     - **工具分四组**(R-WEBSEARCH 2026-09-01 定前两组、R-TITLE 同日补第三组、R-SKILLS-2 2026-09-03 裁定第四组「沙箱执行组」待实现;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。**会话绑定组**(`session_rename`;`generate_image` 同时也是会话绑定的)是「纯函数 / 数据面只读」的**唯一例外**:无网络、无凭据,只经专用 NOLOGIN 角色写**本会话那一行**的限定列(`agent_title` 只改 `sessions.title` 两列;`agent_image` 只 INSERT `generated_images`),会话 id 在建会话时闭包绑死、不是入参。**沙箱执行组**(`skill_run`,待实现)是第四档:api 进程内同样不碰文件系统 / 子进程,只经 **unix socket** 调独立的 `skill-runner` 容器(默认实例 `network_mode: none`、只读、rlimit;R-WEBFETCH 2026-09-03 裁定加**同一镜像的 egress 实例**,只出公网、不在 `front` / `back`,只跑 `xray.json` 声明 `network: egress` 的 skill,首个是 `web-fetch` —— 它是外呼组「不接受 URL 参数」的唯一例外,SSRF 防线 = 脚本逐地址校验 + 钉 IP 连、容器不在内部网络、宿主 `DOCKER-USER` 过滤;**不维护域名黑白名单**,拒的是固定内网地址段);入参只有 `skill` / `script`(闭集)与 `input`(JSON,过 schema),**可执行的 skill 集合在代码里**(`runner/skills/`,改 = 发版),库里只能在集合之内开关;八条附加约束见 `docs/security.md` §1 R-SKILLS-2 补记,egress 档的第九条见 R-WEBFETCH 补记。完整口径见 `docs/security.md` §1「工具分两组」表与 R-TITLE / R-IMAGEGEN / R-SKILLS-2 补记。
 10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。**镜像一律本机构建后传输,服务器不构建、不留仓库与工具链**;tag 必须是 git SHA,禁止 `latest`。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。

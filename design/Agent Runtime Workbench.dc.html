@@ -1284,6 +1284,301 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
 </div>
 </div>
 
+<!-- ━━━ 2i 画板 N · Skill 详情页 加载态 ━━━ -->
+<div id="2i" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2i</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 N · Skill 详情页 加载态(点卡片后 0.1–5s,骨架照 <a href="#2g" style="font-size:12px">2g</a> 版式)</span></div>
+<div data-screen-label="N Skill详情 加载态" style="width:1440px;min-height:1020px;background:#ffffff;border:1px solid #e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;box-sizing:border-box">
+  <!-- 44px 导航条:加载态里它是完整实体,不做骨架 —— 它的内容与被点的 skill 无关,而且是访客改主意时唯一的出口。 -->
+  <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
+    <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
+    <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Runtime</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Notes</div>
+      <div style="font-size:12px;font-weight:600;padding:4px 14px;border-radius:5px;background:#ffffff;color:#1a1a1a;border:1px solid #e0e0e0">Skills</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">About</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:flex-end"><div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div></div>
+  </div>
+  <div style="width:1100px;margin:0 auto;padding:30px 0 64px">
+    <!-- 面包屑:Skills 真实(层级已知),后两级骨架。骨架条 10px 高压在 12px 文字行的视觉中线上,文字到达不跳行。 -->
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9ca3af;min-height:17px">
+      <a href="#2f" style="font-size:12px">Skills</a><span>/</span>
+      <div style="width:56px;height:10px;border-radius:4px;background:#eeeeee"></div><span>/</span>
+      <div style="width:108px;height:10px;border-radius:4px;background:#eeeeee"></div>
+      <div style="flex:1"></div>
+      <!-- 唯一一处「已经收到你的点击」的明说:omSpin 0.8s + mono 小标题。骨架说「这里会有东西」,这行说「在取了」。 -->
+      <div style="display:flex;align-items:center;gap:6px;color:#9ca3af;font:600 10px 'JetBrains Mono',monospace;letter-spacing:0.08em">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>正在取…
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:16px;margin-top:22px">
+      <div style="flex:1;min-width:0">
+        <!-- 22px 标题条:29px 行高与 2g 的 mono 650/22px 一致;带 omPulseBg 1.8s(全页唯一的两处动效之一)。 -->
+        <div style="display:flex;align-items:center;gap:10px;height:29px">
+          <div style="width:260px;height:22px;border-radius:6px;background:#eeeeee;animation:omPulseBg 1.8s ease-in-out infinite"></div>
+          <div style="width:34px;height:16px;border-radius:4px;background:#eeeeee"></div>
+        </div>
+        <div style="max-width:640px;margin-top:6px">
+          <div style="height:21px;display:flex;align-items:center"><div style="width:640px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="height:21px;display:flex;align-items:center"><div style="width:384px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        </div>
+        <div style="height:15px;display:flex;align-items:center;margin-top:10px"><div style="width:300px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+      </div>
+      <!-- 右上两枚 ghost 按钮:画成骨架块而非禁用态。见画板下方裁定说明。外形(32px / radius 7 / #e0e0e0 边框)照 2g 原样保留,内部一条 #e0e0e0 占位 —— 叠在 #eeeeee 面上时骨架色降一档才看得见。 -->
+      <div style="display:flex;gap:8px;flex:none;padding-top:2px">
+        <div style="display:flex;align-items:center;justify-content:center;width:90px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;border-radius:7px;box-sizing:border-box"><div style="width:52px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+        <div style="display:flex;align-items:center;justify-content:center;width:118px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;border-radius:7px;box-sizing:border-box"><div style="width:74px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+      </div>
+    </div>
+    <div style="margin-top:22px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px">
+      <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">INSTALL</div>
+      <!-- 命令行骨架:白底 + border + radius 6 的外壳照 2g 保留(它是「可复制的一行」这个语义的载体);命令未到,不画 copy —— 复制只会拿到空串。命令到达后 copy 出现在这一行右侧,行高不变。 -->
+      <div style="display:flex;align-items:center;gap:10px;background:#ffffff;border:1px solid #e0e0e0;border-radius:6px;padding:7px 10px">
+        <div style="width:420px;height:12px;border-radius:4px;background:#eeeeee;animation:omPulseBg 1.8s ease-in-out infinite"></div>
+      </div>
+      <div style="height:17px;display:flex;align-items:center;margin-top:8px"><div style="width:330px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:240px minmax(0,1fr);gap:32px;margin-top:26px;align-items:start">
+      <div>
+        <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">FILES</div>
+        <!-- 8 行 26px,缩进照 2g 的 8 / 20 / 32(根 / 一级 / 二级),9px 折叠箭头位留空。文件树到达时行数变化,但每行的高度与缩进不动。 -->
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;box-sizing:border-box"><span style="width:9px;flex:none"></span><div style="width:118px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;box-sizing:border-box"><span style="width:9px;flex:none"></span><div style="width:78px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;box-sizing:border-box"><span style="width:9px;flex:none"></span><div style="width:66px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;box-sizing:border-box"><span style="width:9px;flex:none"></span><div style="width:84px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;box-sizing:border-box"><span style="width:9px;flex:none"></span><div style="width:92px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;box-sizing:border-box"><span style="width:9px;flex:none"></span><div style="width:88px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;box-sizing:border-box"><span style="width:9px;flex:none"></span><div style="width:128px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;box-sizing:border-box"><span style="width:9px;flex:none"></span><div style="width:74px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        </div>
+        <div style="margin-top:22px">
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.05em;margin-bottom:8px">本页目录</div>
+          <!-- 目录来自文件正文,所以是骨架;但 2px 左边框位先占住(transparent),真实目录高亮那条切成 #2563eb 时不横移。 -->
+          <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:56px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:40px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:68px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:32px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+        </div>
+      </div>
+      <!-- 预览卡:边框 + radius 7 + #f5f5f5 头部条全部保留实体(它们是容器,不是内容);只有头部的文件名 / 元信息和正文是骨架。 -->
+      <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03);min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0;height:31px;box-sizing:border-box">
+          <div style="width:68px;height:11px;border-radius:4px;background:#e0e0e0"></div>
+          <div style="width:150px;height:10px;border-radius:4px;background:#e0e0e0"></div>
+        </div>
+        <div style="padding:4px 24px 24px">
+          <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;margin-top:16px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:14px"><div style="width:44px;height:10px;border-radius:4px;background:#e0e0e0"></div><div style="width:180px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+            <div style="display:flex;align-items:center;gap:14px"><div style="width:68px;height:10px;border-radius:4px;background:#e0e0e0"></div><div style="width:420px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+          </div>
+          <!-- 正文 10 行:行距照 2g 的 14px×1.8 = 25.2px,小节标题条前留 30px。长短不一,读起来是一份文档的轮廓。 -->
+          <div style="height:25px;display:flex;align-items:center;margin-top:30px"><div style="width:210px;height:16px;border-radius:5px;background:#eeeeee"></div></div>
+          <div style="margin-top:12px">
+            <div style="height:25px;display:flex;align-items:center"><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+            <div style="height:25px;display:flex;align-items:center"><div style="width:94%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+            <div style="height:25px;display:flex;align-items:center"><div style="width:62%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          </div>
+          <div style="height:25px;display:flex;align-items:center;margin-top:30px"><div style="width:150px;height:16px;border-radius:5px;background:#eeeeee"></div></div>
+          <div style="margin-top:12px">
+            <div style="height:25px;display:flex;align-items:center"><div style="width:97%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+            <div style="height:25px;display:flex;align-items:center"><div style="width:88%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+            <div style="height:25px;display:flex;align-items:center"><div style="width:46%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          </div>
+          <div style="border:1px solid #e0e0e0;border-radius:7px;margin-top:14px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+            <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0;height:27px;box-sizing:border-box"><div style="width:44px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+              <div style="width:70%;height:11px;border-radius:4px;background:#eeeeee"></div>
+              <div style="width:52%;height:11px;border-radius:4px;background:#eeeeee"></div>
+            </div>
+          </div>
+          <div style="margin-top:14px">
+            <div style="height:25px;display:flex;align-items:center"><div style="width:92%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+            <div style="height:25px;display:flex;align-items:center"><div style="width:74%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2i · 骨架 TOKEN 与裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· 骨架填充统一 <span style="color:#1a1a1a">#eeeeee</span>(= 现有 ghost 按钮底色);叠在 <span style="color:#1a1a1a">#f5f5f5</span> / <span style="color:#1a1a1a">#eeeeee</span> 面上的骨架条降一档取 <span style="color:#1a1a1a">#e0e0e0</span>(边框色)才看得见。无新增色值。</div>
+    <div>· 圆角:文本条 4 · 小节标题条 5 · 22px 大标题条 6 · 按钮块与卡片 7 —— 全部照现有 5 / 6–7 档,不新造。</div>
+    <div>· 动效只用 <span style="color:#1a1a1a">omPulseBg 1.8s</span>,且只给两块:22px 标题条 + INSTALL 命令行。其余骨架静态。理由:整页同相位脉动=闪屏,访客只需要一个「在动」的锚点;omWaveSweep 已被 Timeline 的「进行中行」占用语义,不挪用;omSpin 只出现在面包屑右侧那一行状态里。</div>
+    <div>· 右上两枚 ghost 按钮画成<span style="color:#1a1a1a">骨架块</span>而非禁用态:①「下载 zip · 6 KB」的文案本身含还没取回的数据,做禁用态就得先编一个假体积;② 灰掉的实体按钮仍然像可点,访客会去点一个还没有 href 的目标。骨架块只表达「还没到」,没有第二种读法。按钮外形(32px / radius 7 / <span style="color:#1a1a1a">#e0e0e0</span> 边框)原样保留,到达时零跳版。</div>
+    <div>· INSTALL 行不画 copy:命令未到,复制只会拿到空串;命令到达后 copy 出现在同一行右侧(padding 2px 6px),行高不变。</div>
+    <div>· 对位:标题行 29px · 描述行 21px · meta 行 15px · FILES 行 26px(缩进 8 / 20 / 32)· 预览正文行距 14px×1.8=25.2px · 小节标题前 30px —— 逐项取自 <a href="#2g" style="font:400 11px 'JetBrains Mono',monospace">2g</a>。</div>
+    <div>· 两条实现备注:骨架建议延迟 ~200ms 再出(0.1s 就返回的请求不该闪一层灰条);若路由里已带 slug,末级面包屑与大标题条可以直接出真实文字,骨架位不变。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━ 2j 画板 O · Notes 章节页 加载态 ━━━ -->
+<div id="2j" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2j</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 O · Notes 章节页 加载态(骨架照 <a href="#2c" style="font-size:12px">2c</a> 版式)</span></div>
+<div data-screen-label="O 文章阅读 加载态" style="width:1440px;min-height:1020px;background:#ffffff;border:1px solid #e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;box-sizing:border-box;position:relative">
+  <!-- 阅读进度线:此处「不出现」。裁定理由见画板下方。它是 position:absolute,到达时不占布局,零跳版。 -->
+  <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
+    <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
+    <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Runtime</div>
+      <div style="font-size:12px;font-weight:600;padding:4px 14px;border-radius:5px;background:#ffffff;color:#1a1a1a;border:1px solid #e0e0e0">Notes</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Skills</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">About</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:flex-end"><div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div></div>
+  </div>
+  <div style="width:1000px;margin:0 auto;padding:28px 0 56px;display:grid;grid-template-columns:720px 1fr;gap:56px;align-items:start">
+    <div style="min-width:0">
+      <div style="display:flex;align-items:center;gap:6px;min-height:17px">
+        <div style="width:240px;height:10px;border-radius:4px;background:#eeeeee"></div>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:6px;color:#9ca3af;font:600 10px 'JetBrains Mono',monospace;letter-spacing:0.08em">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>正在取…
+        </div>
+      </div>
+      <!-- 大标题条:31px 行高对上 2c 的 22px/1.4;omPulseBg 只给它一处。 -->
+      <div style="height:31px;display:flex;align-items:center;margin-top:18px"><div style="width:460px;height:22px;border-radius:6px;background:#eeeeee;animation:omPulseBg 1.8s ease-in-out infinite"></div></div>
+      <div style="height:15px;display:flex;align-items:center;margin-top:8px"><div style="width:210px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+      <!-- 正文骨架:段内 14px×1.7=23.8px 行距、段间 12–14px、小节标题前 30px —— 全部照 2c。刻意长短不一 + 一段代码卡片形状 + 一段三行列表形状。 -->
+      <div style="margin-top:22px">
+        <div style="height:24px;display:flex;align-items:center"><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:24px;display:flex;align-items:center"><div style="width:96%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:24px;display:flex;align-items:center"><div style="width:58%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+      </div>
+      <div style="height:26px;display:flex;align-items:center;margin-top:30px"><div style="width:168px;height:16px;border-radius:5px;background:#eeeeee"></div></div>
+      <div style="margin-top:12px">
+        <div style="height:24px;display:flex;align-items:center"><div style="width:98%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:24px;display:flex;align-items:center"><div style="width:92%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:24px;display:flex;align-items:center"><div style="width:71%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;margin-top:14px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+        <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0;height:27px;box-sizing:border-box"><div style="width:66px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+          <div style="width:58%;height:11px;border-radius:4px;background:#eeeeee"></div>
+          <div style="width:74%;height:11px;border-radius:4px;background:#eeeeee;margin-left:16px"></div>
+          <div style="width:46%;height:11px;border-radius:4px;background:#eeeeee;margin-left:16px"></div>
+          <div style="width:22%;height:11px;border-radius:4px;background:#eeeeee"></div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <div style="height:24px;display:flex;align-items:center"><div style="width:95%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:24px;display:flex;align-items:center"><div style="width:64%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+      </div>
+      <div style="height:26px;display:flex;align-items:center;margin-top:30px"><div style="width:196px;height:16px;border-radius:5px;background:#eeeeee"></div></div>
+      <!-- 三行列表形状:6px 方点 + 长短不一的条,照 2c 「禁止」类列表的 gap 4 与 1.8 行距。 -->
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:4px">
+        <div style="height:25px;display:flex;align-items:center;gap:10px"><div style="width:6px;height:6px;border-radius:4px;background:#e0e0e0;flex:none"></div><div style="width:78%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:25px;display:flex;align-items:center;gap:10px"><div style="width:6px;height:6px;border-radius:4px;background:#e0e0e0;flex:none"></div><div style="width:88%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:25px;display:flex;align-items:center;gap:10px"><div style="width:6px;height:6px;border-radius:4px;background:#e0e0e0;flex:none"></div><div style="width:56%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+      </div>
+      <div style="margin-top:14px">
+        <div style="height:24px;display:flex;align-items:center"><div style="width:99%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:24px;display:flex;align-items:center"><div style="width:86%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        <div style="height:24px;display:flex;align-items:center"><div style="width:38%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+      </div>
+      <!-- 上/下一章按钮:章节名未知,与 2i 的 ghost 按钮同一裁定 —— 骨架块,保留 32px / radius 7 外形。 -->
+      <div style="display:flex;justify-content:space-between;margin-top:40px">
+        <div style="display:flex;align-items:center;justify-content:center;width:150px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;border-radius:7px;box-sizing:border-box"><div style="width:98px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+        <div style="display:flex;align-items:center;justify-content:center;width:150px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;border-radius:7px;box-sizing:border-box"><div style="width:98px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+      </div>
+    </div>
+    <div style="padding-top:60px">
+      <div style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.05em;margin-bottom:8px">本章目录</div>
+      <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:64px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+      <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:88px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+      <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:52px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+      <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:76px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+      <div style="padding:4px 0 4px 10px;border-left:2px solid transparent"><div style="width:44px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+    </div>
+  </div>
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2j · 进度线裁定与骨架 TOKEN</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· 顶端阅读进度线:<span style="color:#1a1a1a">不出现</span>(三选一)。这条线的语义是「你读到哪」,正文没到就不存在「哪」。归零(0 宽)视觉上等价,但实现里留一条 0 宽实体容易在首帧闪出一个 2px 蓝点;改成不确定进度动效更糟 —— 同一条线会背上第二套语义(下载进度),真实滚动上线后读者会误读它。它是 <span style="color:#1a1a1a">position:absolute</span>,内容到达时插入不占布局。</div>
+    <div>· 「已收到点击」只由两处表达:面包屑右侧 <span style="color:#1a1a1a">omSpin 0.8s</span> + 「正在取…」,以及大标题条的 <span style="color:#1a1a1a">omPulseBg 1.8s</span>。其余骨架静态,不引入新 keyframes。</div>
+    <div>· 骨架色与圆角同 <a href="#2i" style="font:400 11px 'JetBrains Mono',monospace">2i</a>:填充 <span style="color:#1a1a1a">#eeeeee</span>,压在灰面上的条用 <span style="color:#1a1a1a">#e0e0e0</span>;文本条 r4、小节标题条 r5、大标题条 r6、卡片与按钮 r7。</div>
+    <div>· 对位:标题行 31px(22px/1.4)· meta 行 15px · 段内行距 14px×1.7=23.8px · 段间 12–14px · 小节标题前 30px · 列表 gap 4 —— 逐项取自 <a href="#2c" style="font:400 11px 'JetBrains Mono',monospace">2c</a>。</div>
+    <div>· 段落宽度 100% / 96% / 58% 之类的收尾短行 + 一张代码卡片形状 + 一组三行列表,是为了让轮廓读起来像一篇文章;等长横条会让人以为页面坏了。</div>
+    <div>· 上/下一章按钮与 2i 右上按钮同一裁定:骨架块,不做禁用态 —— 章节名未知,禁用态要编假文案。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━ 2k 画板 P · 错误态 A/B ━━━ -->
+<div id="2k" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2k</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 P · 错误态(A 页面出错 / B 找不到,同一版式)</span></div>
+<div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">A · 页面出错</span><span style="font-size:12px;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">替换 Next 默认的 Application error 白屏</span></div>
+<div data-screen-label="P 错误态A 页面出错" style="width:1440px;height:480px;background:#ffffff;border:1px solid #e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;box-sizing:border-box">
+  <!-- 导航条:四格都不高亮 —— 出错时当前路由已经无效,高亮任何一格都是假信息;四格保持常态可点,本身就是最快的出口。 -->
+  <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
+    <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
+    <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Runtime</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Notes</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Skills</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">About</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:flex-end"><div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div></div>
+  </div>
+  <div style="height:434px;display:flex;align-items:center;justify-content:center;box-sizing:border-box">
+    <div style="width:460px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:4px;background:#ef4444"></span><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">HTTP 500</span></div>
+      <div style="font-size:16px;font-weight:650;margin-top:12px">这一页没能取回来</div>
+      <div style="font-size:13px;color:#6b7280;line-height:1.7;margin-top:8px;text-wrap:pretty">服务端在处理这次请求时出错了,不是你操作的问题。重试通常就好;要是反复出现,把下面这个标识发我,我能在日志里对上这一次。</div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:20px">
+        <div style="display:flex;align-items:center;height:32px;padding:0 16px;background:#2563eb;border:1px solid #2563eb;color:#ffffff;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer" style-hover="background:#1d4ed8;border-color:#1d4ed8">重试</div>
+        <a href="#2a" style="font-size:12px;color:#6b7280" style-hover="color:#2563eb">返回首页</a>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;padding:7px 10px;margin-top:22px">
+        <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">err_7f3a2c14 · 2026-09-03 06:41 UTC</span>
+        <div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="color:#2563eb;background:#eeeeee"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="align-items:center;gap:8px;margin:20px 0 8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">B · 找不到</span><span style="font-size:12px;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">替换 Next 默认的 404 | This page could not be found</span></div>
+<div data-screen-label="P 错误态B 找不到" style="width:1440px;height:480px;background:#ffffff;border:1px solid #e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;box-sizing:border-box">
+  <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
+    <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
+    <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Runtime</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Notes</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Skills</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">About</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:flex-end"><div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div></div>
+  </div>
+  <div style="height:434px;display:flex;align-items:center;justify-content:center;box-sizing:border-box">
+    <div style="width:460px">
+      <!-- 方点用 #9ca3af 不用 #ef4444:找不到不是系统故障,不该染成红色。 -->
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:4px;background:#9ca3af"></span><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">HTTP 404</span></div>
+      <div style="font-size:16px;font-weight:650;margin-top:12px">这个地址没有对应的内容</div>
+      <div style="font-size:13px;color:#6b7280;line-height:1.7;margin-top:8px;text-wrap:pretty">链接可能过期了,或者这一篇 / 这个 skill 改了名字。从列表里找一遍通常能找到它。</div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:20px">
+        <div style="display:flex;align-items:center;height:32px;padding:0 16px;background:#2563eb;border:1px solid #2563eb;color:#ffffff;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer" style-hover="background:#1d4ed8;border-color:#1d4ed8">回 Skills 列表</div>
+        <a href="#2a" style="font-size:12px;color:#6b7280" style-hover="color:#2563eb">返回首页</a>
+      </div>
+      <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/skills/codex-review-lop</div>
+    </div>
+  </div>
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2k · 错误态裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· A/B 共用版式:44px 完整导航条 + 434px 垂直居中内容区 + 460px 单列(方点/eyebrow → 16px 标题 → 13px 说明 → 主按钮 + 次级链接)。只换文案与出口,不换任何尺寸。</div>
+    <div>· 导航条四格都不高亮:错误页的当前路由已经无效,高亮任何一格都是假信息;四格保持常态可点 —— 这本身就是最快的出口。</div>
+    <div>· <span style="color:#1a1a1a">A 显示可复制的错误标识</span>(mono 11px <span style="color:#1a1a1a">#9ca3af</span>,<span style="color:#1a1a1a">#f5f5f5</span> 底 + r6,copy 按钮沿用现有样式)。裁定理由:这站是 DevTools 调性、访客多半是开发者,一个 <span style="color:#1a1a1a">err_ + UTC 时间戳</span>让他们能把问题带走,也是服务端日志里唯一能对上这一次请求的钩子。只给短标识,不展开堆栈 —— 堆栈是给我看的。</div>
+    <div>· <span style="color:#1a1a1a">B 不显示标识</span>:404 背后没有服务端异常可对账,给一串 id 只会让人误以为出了故障。B 末尾只回显它访问的那个路径(mono 11px #9ca3af),让人一眼看出是拼错还是改名。</div>
+    <div>· 错误红 <span style="color:#1a1a1a">#ef4444</span> 全站只用在 A 的 10px 方点这一处;B 的方点用 <span style="color:#1a1a1a">#9ca3af</span>。方点尺寸(10px / r4)取自 <a href="#2f" style="font:400 11px 'JetBrains Mono',monospace">2f</a> 的分类点。</div>
+    <div>· 出口层级:主按钮各一枚(A=重试,B=回上一层列表)用品牌色实心 32px / r7;次级出口(返回首页)用 12px 文字链 #6b7280,与既有 ghost 层级一致。无插画、无吉祥物、无大号 404 数字、无新配色。</div>
+  </div>
+</div>
+</div>
+
 </section>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{

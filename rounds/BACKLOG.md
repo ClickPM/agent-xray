@@ -294,3 +294,12 @@
       → **2026-09-03 同日由 R-SKILLS-2 的裁定覆盖**:agent 不直接读库里的 skills;可用集合在代码里(`runner/skills/`),库只提供 `agent_enabled` 开关与
         hash 一致性判据,agent 角色对 skills 三表仍无权限。「从库直读」降为上面「注入型 skill 能否不发版」那条备选。本条关闭,不再单独裁定
 - [ ] R-SKILLS **`notes/assets.ts` 与 `notes/rss.ts` 的 `decodeURIComponent` 未捕获 URIError**:`/notes/<系列>/%ZZ.webp`、`/rss/%ZZ.xml` 这类坏编码的公开地址会让 raw 端点回 500 而不是 404。codex 首轮审查在 R-SKILLS 的 zip 端点(`skills/zip.ts`)上报了同一模式(P2,已整改),这两处是既有代码、不在本轮 diff 里,按「跨轮次发现的问题不当场顺手改」记这里;修法就是 try/catch 后走同一个 404(小修补,可直接 `main`) (2026-09-03)
+- [ ] R-PERF **引用块里的 H2 会拿到锚点 id,却不进「本页/本章目录」**:`extractToc` 按原始行匹配 `^\s{0,3}##\s+`,
+      `> ## 标题` 这种被引用块包着的标题匹配不上(前面有 `>`);而渲染器把它当 h2 渲染,照样挂 id。
+      R-PERF 的验收 #3 全量跑了 281 篇正文,发现 2 篇有这个偏差(`codex-harness/chapter-14` 多 1 个、
+      `ppt-master:SKILL.md` 多 4 个 —— 后者是 `> [!IMPORTANT]` 里的标题)。**与本轮改动无关**:
+      同一批正文对生产 HTML 的 id 逐条比对是零漂移,说明改动前就是这样。
+      危害有限但真实:目录里少几条(无害),以及**引用块标题若与后文某个真标题同名,后者会被去重成 `xxx-1`
+      而目录仍写着基名,锚点点了不跳**。修法二选一 —— ①`extractToc` 也跳过引用块内的 `##`(与渲染侧仍不一致,
+      但目录与 id 的对应关系不受影响);②渲染侧不给引用块内的 h2 挂 id(改 `rehypeHeadingIds`,判父节点是不是
+      `blockquote`)。②更贴近「目录 = 正文骨架」的语义。按「跨轮次发现的问题不当场顺手改」记这里 (2026-09-03)

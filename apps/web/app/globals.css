@@ -142,10 +142,29 @@ code {
   }
 }
 
-/* 发送按钮在回复生成期间的转圈 */
+/* 发送按钮在回复生成期间的转圈。画板 2i / 2j 的「正在取…」也用它。 */
 @keyframes omSpin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* 加载骨架的显形闸(R-PERF)。**它不是视觉语汇,是一个 200ms 的延迟开关** ——
+   画板 2i 的实现备注:「骨架建议延迟 ~200ms 再出(0.1s 就返回的请求不该闪一层灰条)」。
+   Next 的 loading.tsx 是立刻挂上的,没有别的地方能表达这 200ms,所以只能落在 CSS 上。
+
+   骨架自身的动效仍然只用既有的 omPulseBg / omSpin 两个(画板 2i / 2j 的裁定),
+   这条 keyframe 不参与其中:它只做 0 → 1 的不透明度,时长 0.12s、延迟 0.2s。
+   `both` 让延迟期间保持 0% 那一帧(否则第一帧就是全显,延迟等于没有)。
+
+   prefers-reduced-motion 下全站 animation:none —— 那时骨架按自然状态直接显示,
+   只是没有这 200ms 的宽限,行为仍然正确。 */
+@keyframes omSkeletonIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
