@@ -14,8 +14,9 @@ const TOKEN_COLOR: Record<TokenType, string | undefined> = {
 };
 
 export function CodeView({ kind, content }: { kind: string; content: string }) {
-  // 末尾换行不另起一行:与服务端 line_count 的口径一致(a\nb\n 是 2 行)
-  const lines = highlight(kind, content);
+  // 行数口径与服务端 line_count 一致:空文件 0 行(不画一个编号 1 的空行,头部写的是 `0 行`),
+  // 末尾换行不另起一行(a\nb\n 是 2 行)
+  const lines = content === "" ? [] : highlight(kind, content);
   if (lines.length > 1 && content.endsWith("\n")) lines.pop();
 
   return (

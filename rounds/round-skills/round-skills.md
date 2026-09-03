@@ -169,8 +169,12 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
      **采纳整改**:捕获后走同一个 404;`skills/skills.test.ts` 加 `%ZZ.zip` / 截断的多字节编码两例。`notes/assets.ts` 与 `notes/rss.ts` 是同一写法但属既有代码、不在本轮 diff,按「跨轮次问题不顺手改」记 `rounds/BACKLOG.md`。
   - 审查推理里提到但未列为 finding 的两处,顺手做了一字改动(非机制):clipboard `writeText` 的异步 reject 补 `.catch`;`[name]/page.tsx` 给 `SkillDetail` 按 skill 名加 `key`,客户端在两个详情页之间导航时选中文件 / copied 态不跨 skill 残留。
   - 整改后:`check` 通过、`dev.ps1 test` **18 文件 / 414 用例全绿**、`tsc` 通过、本机实探(详情 / 首页 / `%ZZ.zip` → 404)正常。
-- **第 2 轮**:<待整改提交后发起(全量范围)>
-- 结论:<待第 2 轮>
+- **第 2 轮**(全量范围,审 `0f9c958`):1 条 P2 + 1 条 P3,无 high 级。逐条:
+  1. [P2] `mcp/store.ts` 的 `getSkill`(管理端 `skills_get`)仍是两条查询各看各的快照 —— 与首轮 #2 同一类,首轮只改了访客读面。
+     **采纳整改**:两条查询进同一个 `REPEATABLE READ, READ ONLY` 事务(复用 `inTransaction`)。
+  2. [P3] `CodeView` 对空文件渲染一个编号 1 的空行,而头部按 `line_count` 写 `0 行`。**采纳整改**:空内容渲染 0 行。
+- **第 3 轮**:<按 CLAUDE.md「第 3 轮起只审整改 diff」,`--base 0f9c958`;待发起>
+- 结论:<待第 3 轮>
 
 ## 失败处理
 

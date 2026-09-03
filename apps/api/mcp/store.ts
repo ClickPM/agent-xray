@@ -1528,26 +1528,35 @@ export interface SkillFileMetaRow {
   lineCount: number;
 }
 
-/** 元信息 + 文件清单(**不含内容**:一包最多 512 KB,整包回给管理端会灌满模型上下文) */
+/**
+ * 元信息 + 文件清单(**不含内容**:一包最多 512 KB,整包回给管理端会灌满模型上下文)。
+ *
+ * 两条查询放进一个 REPEATABLE READ 的只读事务(codex 第 2 轮 P2,与访客读面 `skills/store.ts`
+ * 的 readSnapshot 同一处理):两次 `skills_upsert` 并发时,管理端不会拿到旧版 fileCount 配新版文件清单。
+ * `SET TRANSACTION` 必须是事务里的第一条语句。
+ */
 export async function getSkill(
   name: string,
 ): Promise<(SkillMetaRow & { files: SkillFileMetaRow[] }) | null> {
-  const meta = await db.rawQueryRow<SkillMetaRow>(
-    `SELECT s.name, s.category_slug AS "categorySlug", s.summary, s.source_type AS "sourceType",
-            s.repo, s.repo_url AS "repoUrl", s.version, s.sort_order AS "sortOrder",
-            (SELECT COUNT(*)::int FROM skill_files f WHERE f.skill_name = s.name) AS "fileCount",
-            s.zip_size AS "zipSize", ${ms("s.updated_at", "updatedAt")}
-       FROM skills s WHERE s.name = $1`,
-    name,
-  );
-  if (!meta) return null;
-  const files = await db.rawQueryAll<SkillFileMetaRow>(
-    `SELECT path, kind, size_bytes AS "sizeBytes", line_count AS "lineCount"
-       FROM skill_files WHERE skill_name = $1
-      ORDER BY sort_order, path`,
-    name,
-  );
-  return { ...meta, files };
+  return inTransaction(async (tx) => {
+    await tx.rawExec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
+    const meta = await tx.rawQueryRow<SkillMetaRow>(
+      `SELECT s.name, s.category_slug AS "categorySlug", s.summary, s.source_type AS "sourceType",
+              s.repo, s.repo_url AS "repoUrl", s.version, s.sort_order AS "sortOrder",
+              (SELECT COUNT(*)::int FROM skill_files f WHERE f.skill_name = s.name) AS "fileCount",
+              s.zip_size AS "zipSize", ${ms("s.updated_at", "updatedAt")}
+         FROM skills s WHERE s.name = $1`,
+      name,
+    );
+    if (!meta) return null;
+    const files = await tx.rawQueryAll<SkillFileMetaRow>(
+      `SELECT path, kind, size_bytes AS "sizeBytes", line_count AS "lineCount"
+         FROM skill_files WHERE skill_name = $1
+        ORDER BY sort_order, path`,
+      name,
+    );
+    return { ...meta, files };
+  });
 }
 
 /** 单个文件的原文(改文件前先读回来,免得整包覆盖丢内容) */
