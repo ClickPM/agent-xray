@@ -1579,6 +1579,213 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
 </div>
 </div>
 
+<!-- ━━━ 2l 画板 Q · 会话区 · 一轮已完成(折叠态) ━━━ -->
+<div id="2l" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2l</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 Q · 会话区 · 一轮已完成(处理过程折叠)</span></div>
+<div data-screen-label="Q 会话区 折叠态" style="width:1440px;height:900px;background:#ffffff;border:1px solid #e0e0e0;display:flex;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a">
+  <div style="width:260px;flex:none;background:#f5f5f5;border-right:1px solid #e0e0e0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:15px;font-weight:700;letter-spacing:-0.01em;flex:1">agent-xray</div>
+      <div style="display:flex;align-items:center;gap:6px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;height:28px;padding:0 10px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">+ New</div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+    </div>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{sessions}}" as="s" hint-placeholder-count="5">
+        <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee">
+          <div style="font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{s.title}}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">{{s.time}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:13px;font-weight:600;flex:1">演示:危险命令拦截</div>
+      <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>12.4k tokens</span><span>·</span><span>$0.038</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>ctx 6%</span><span>·</span><span>47 events</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+        <div style="flex:1;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">帮我把 /etc/hosts 里的旧条目清掉</div></div>
+          <!-- 折叠行:一行导航,不是卡片。13px/1.7 #6b7280(hover 品牌色)+ 行首 12px 向右箭头(与卡片箭头同一图标)。行尾 6px #ef4444 圆点 = 里面有一次工具调用没成功,只是提示,不是警告条。 -->
+          <div style="display:flex;align-items:center;gap:8px;color:#6b7280;cursor:pointer" style-hover="color:#2563eb">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg>
+            <span style="font-size:13px;line-height:1.7">处理详情 · 2 次模型往返 · 2 次工具调用 · 0.4s</span>
+            <span style="width:6px;height:6px;border-radius:50%;background:#ef4444;flex:none"></span>
+          </div>
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">这条命令被 permission-gate 拦截了——它匹配到了 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">sudo sed</span> 写系统文件的模式,所以没有执行。你可以手动改:用编辑器打开 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">/etc/hosts</span>,删掉带 legacy 的那两行再保存;或者把上面那条命令原样拿到你自己的终端里跑一遍。</div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
+          <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
+          <!-- 一轮已结束:发送按钮回到常态(可点、有 hover),与 1a 的 omSpin 禁用态互为一对。 -->
+          <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+        </div>
+      </div>
+      <div style="width:500px;flex:none;display:flex;flex-direction:column">
+        <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:12px;font-weight:600;padding:8px 14px;background:#ffffff;color:#1a1a1a;border-right:1px solid #e0e0e0">Timeline</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Chain View</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Lifecycle Map</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:10px 14px">
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 1</div>
+          <sc-for list="{{t1rows}}" as="r" hint-placeholder-count="7">
+            <div>
+              <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+                <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+                <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+              </div>
+            </div>
+          </sc-for>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:14px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 2</div>
+          <sc-for list="{{t2done}}" as="r" hint-placeholder-count="8">
+            <div>
+              <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span><sc-if value="{{r.hasBadge}}" hint-placeholder-val="{{false}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#ef4444;color:#ffffff;border-radius:4px;padding:1px 5px">blocked</span></sc-if></div>
+                <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+                <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+              </div>
+              <sc-if value="{{r.hasNote}}" hint-placeholder-val="{{false}}"><div style="font:400 11px 'JetBrains Mono',monospace;color:#ef4444;padding:1px 4px 3px 22px">└ permission-gate returned {block: true}</div></sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2l · 折叠行裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· 折叠行规格:<span style="color:#1a1a1a">13px / 行高 1.7 / #6b7280</span>,hover 转 <span style="color:#1a1a1a">#2563eb</span>;行首 <span style="color:#1a1a1a">12px 箭头</span>(stroke #9ca3af,与卡片右侧那个是同一个图标 —— 向右 = 收起、向下 = 展开)。字号刻意低于正文 14px,且无底色 / 无边框 / 无圆角:它是导航,不是内容,任何容器化都会让它被读成第三种卡片。</div>
+    <div>· 行上只放拿得到的四项:<span style="color:#1a1a1a">模型往返次数 · 工具调用次数 · 本轮总耗时 · 是否有工具出错或被拦截</span>。没有模型名与 provider 名(服务端配置,公开即泄配置面)、没有分段 token 与费用(只在顶栏统计条按会话汇总)、没有「思考」块(内核透明度由右栏承担)。</div>
+    <div>· 出错标记 = 行尾 <span style="color:#1a1a1a">6px #ef4444 圆点</span>,与文本间距 8,尺寸取自顶栏 ctx 点。放行尾而非行首:行首是箭头的位置,红点抢在箭头前会先被读成「这一行坏了」。它只提示「里面有一次没成功」,不占整行、不加底色、不写字 —— 要看是哪一次,展开或看右栏。</div>
+    <div>· <span style="color:#1a1a1a">规则 1</span>:一轮里没有任何工具调用时不出现折叠行 —— 折叠的对象是「中间说的话 + 工具卡」,没有卡就没有可折的东西,会话区与今天完全一样(只有用户气泡 + 回答)。</div>
+    <div>· <span style="color:#1a1a1a">规则 2</span>:一轮还在进行中时不折叠,保持 <a href="#1a" style="font:400 11px 'JetBrains Mono',monospace">1a</a> 的卡片内联。折叠只在最终回答结束的那一刻发生一次,之后不再自动变化(读者手动展开的状态不会被下一轮收回去)。</div>
+    <div>· <span style="color:#1a1a1a">规则 3</span>:最终回答为空(模型以工具调用收尾、之后没再说话)时只剩折叠行,下面不留空段 —— 不插占位、不写「(无回答)」。</div>
+    <div>· 输入栏:发送按钮回到常态(#eeeeee 底 + #e0e0e0 边 + #6b7280 图标,hover 品牌色描边、cursor:pointer),与 1a 的 <span style="color:#1a1a1a">omSpin</span> 禁用态互为一对;右栏 Turn 2 末行不再扫光,补 <span style="color:#1a1a1a">message_end / turn_end</span> 两行收尾。折叠与 turn_end 落地是同一时刻的两个视图。</div>
+    <div>· 本板不带 44px 站点导航条:1a 的工作台主屏本来就没有它(顶栏是 40px 会话头 = 标题 + 统计条 + 主题键)。「照抄 1a」优先于「每块都带导航条」,否则这两块与 1a 并排时骨架就错开 44px。</div>
+    <div>· 动效:本板一处不用(omPulseBg / omWaveSweep / omSpin 全部退场),因为这一板画的就是「什么都不在跑」的那一刻。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━ 2m 画板 R · 会话区 · 折叠行展开 + 一张卡展开 ━━━ -->
+<div id="2m" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2m</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 R · 会话区 · 折叠行展开 + bash 卡展开</span></div>
+<div data-screen-label="R 会话区 展开态" style="width:1440px;height:900px;background:#ffffff;border:1px solid #e0e0e0;display:flex;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a">
+  <div style="width:260px;flex:none;background:#f5f5f5;border-right:1px solid #e0e0e0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:15px;font-weight:700;letter-spacing:-0.01em;flex:1">agent-xray</div>
+      <div style="display:flex;align-items:center;gap:6px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;height:28px;padding:0 10px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">+ New</div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+    </div>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{sessions}}" as="s" hint-placeholder-count="5">
+        <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee">
+          <div style="font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{s.title}}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">{{s.time}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:13px;font-weight:600;flex:1">演示:危险命令拦截</div>
+      <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>12.4k tokens</span><span>·</span><span>$0.038</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>ctx 6%</span><span>·</span><span>47 events</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+        <div style="flex:1;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">帮我把 /etc/hosts 里的旧条目清掉</div></div>
+          <!-- 展开态:折叠行留在原位当这一段的标题,箭头转向下;字号与颜色不变 —— 展开不是「变成标题」,只是同一行的第二个状态。 -->
+          <div style="display:flex;align-items:center;gap:8px;color:#6b7280;cursor:pointer" style-hover="color:#2563eb">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <span style="font-size:13px;line-height:1.7">处理详情 · 2 次模型往返 · 2 次工具调用 · 0.4s</span>
+            <span style="width:6px;height:6px;border-radius:50%;background:#ef4444;flex:none"></span>
+          </div>
+          <!-- 边界:左侧 1px #e0e0e0 竖线 + 左内边距 14,线压在折叠行箭头中线(x=5)。不加底色、不加圆角 —— 它标的是「这一段属于上面那一行」的范围,不是一个新容器。 -->
+          <div style="border-left:1px solid #e0e0e0;margin-left:5px;padding-left:14px;display:flex;flex-direction:column;gap:14px">
+            <div style="font-size:14px;line-height:1.7">我需要先看一下当前的 hosts 文件内容。</div>
+            <div style="background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px">
+              <span style="font:600 12px 'JetBrains Mono',monospace;color:#16a34a">read_file</span>
+              <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"path": "/etc/hosts"}</span>
+              <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">0.3s</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+            <div>
+              <div style="background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.3);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px">
+                <span style="font:600 12px 'JetBrains Mono',monospace;color:#ef4444">bash</span>
+                <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">sudo sed -i '/legacy/d' /etc/hosts</span>
+                <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">0.1s</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+              </div>
+              <!-- 卡片展开体:紧贴卡片下方 4px,r6 + rgba(0,0,0,.03) 底 + 卡片同一条错误色描边;两段各自 max-height 106px(11px×1.6 六行)、overflow hidden、超出接 …(已截断)。 -->
+              <div style="background:rgba(0,0,0,0.03);border:1px solid rgba(248,113,113,0.3);border-radius:6px;padding:10px 12px;margin-top:4px">
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:3px">INPUT</div>
+                <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a;max-height:106px;overflow:hidden;word-break:break-all">sudo sed -i '/legacy/d' /etc/hosts</div>
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin:10px 0 3px">RESULT</div>
+                <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#ef4444;max-height:106px;overflow:hidden;word-break:break-all">permission-gate: blocked — matches rule "sudo sed on system file"</div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">这条命令被 permission-gate 拦截了——它匹配到了 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">sudo sed</span> 写系统文件的模式,所以没有执行。你可以手动改:用编辑器打开 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">/etc/hosts</span>,删掉带 legacy 的那两行再保存;或者把上面那条命令原样拿到你自己的终端里跑一遍。</div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
+          <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
+          <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+        </div>
+      </div>
+      <div style="width:500px;flex:none;display:flex;flex-direction:column">
+        <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:12px;font-weight:600;padding:8px 14px;background:#ffffff;color:#1a1a1a;border-right:1px solid #e0e0e0">Timeline</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Chain View</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Lifecycle Map</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:10px 14px">
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 1</div>
+          <sc-for list="{{t1rows}}" as="r" hint-placeholder-count="7">
+            <div>
+              <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+                <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+                <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+              </div>
+            </div>
+          </sc-for>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:14px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 2</div>
+          <sc-for list="{{t2done}}" as="r" hint-placeholder-count="8">
+            <div>
+              <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span><sc-if value="{{r.hasBadge}}" hint-placeholder-val="{{false}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#ef4444;color:#ffffff;border-radius:4px;padding:1px 5px">blocked</span></sc-if></div>
+                <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+                <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+              </div>
+              <sc-if value="{{r.hasNote}}" hint-placeholder-val="{{false}}"><div style="font:400 11px 'JetBrains Mono',monospace;color:#ef4444;padding:1px 4px 3px 22px">└ permission-gate returned {block: true}</div></sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2m · 展开态裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· 折叠行本身不变:<span style="color:#1a1a1a">13px / 1.7 / #6b7280</span>,只把箭头从 › 转成 ˅,留在原位当这一段的标题。展开 / 收起<span style="color:#1a1a1a">不做动画</span>,直接切换 —— 现有三个动效(omPulseBg / omWaveSweep / omSpin)都是「还在跑」的语义,拿来做展开会撒谎。</div>
+    <div>· <span style="color:#1a1a1a">边界怎么画:左侧 1px #e0e0e0 竖线 + 左内边距 14</span>(竖线压在折叠行箭头中线 x=5,所以线与箭头同一列)。理由:处理过程会长到需要滚动,只靠 14px 间距时读者无法判断哪一段还属于折叠行、最终回答从哪一行开始;竖线给这一段一个明确的下边缘,而且它比背景块便宜 —— 不引入新底色、新圆角、新阴影,卡片仍然是这一区唯一的容器。</div>
+    <div>· 展开区内部沿用会话区原有节奏:项间距 <span style="color:#1a1a1a">14</span>、正文 14/1.7、卡片解剖与 <a href="#1a" style="font:400 11px 'JetBrains Mono',monospace">1a</a> 一字不差。最终回答在竖线之外,与竖线段之间同样是 14 —— 它不属于处理过程。</div>
+    <div>· 卡片展开体:紧贴卡片下方 <span style="color:#1a1a1a">4px</span>(视觉上是这张卡的延长,不是新块),<span style="color:#1a1a1a">r6</span> + <span style="color:#1a1a1a">rgba(0,0,0,.03)</span> 底 + <span style="color:#1a1a1a">1px rgba(248,113,113,.3)</span> 描边 —— 描边直接取卡片那条错误色边,错误态的归属一眼可见;成功态的卡照此换成 rgba(34,197,94,.25)。小标题 INPUT / RESULT 用现有语汇 mono 10/600 #9ca3af 0.08em,正文 mono 11/1.6,RESULT 出错时字色 #ef4444。</div>
+    <div>· <span style="color:#1a1a1a">上限与截断:每段最多 6 行</span> —— 11px × 1.6 = 17.6px,<span style="color:#1a1a1a">max-height: 106px + overflow: hidden</span>;超出的部分由服务端在切断处接 <span style="color:#1a1a1a">…(已截断)</span>。不做内部滚动(滚动区套在会话区滚动里,滚轮会被抢)、不放「展开全部」;要看全量去右栏 Timeline 对应的 tool_call / tool_result 事件。</div>
+    <div>· 箭头方向:折叠行是 <span style="color:#1a1a1a">›(收起)/ ˅(展开)</span>;卡片收起沿用 1a 的 <span style="color:#1a1a1a">˅</span> 一字不改,展开时把同一个图标转成 <span style="color:#1a1a1a">˄</span>。卡片若展开也画向下,两个状态同形、状态就读不出来 —— 这里只转向,不换图标、不换尺寸、不换颜色。</div>
+    <div>· <span style="color:#1a1a1a">read_file 卡保持收起</span>:每张卡各自一个 open 状态,互不影响;折叠行的展开状态与卡片的展开状态也互不影响(收起折叠行不会重置卡片状态)。</div>
+    <div>· 右栏与 <a href="#2l" style="font:400 11px 'JetBrains Mono',monospace">2l</a> 完全相同:会话区的展开是纯前端状态,不产生新事件,Timeline 不应该有任何变化。</div>
+  </div>
+</div>
+</div>
+
 </section>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{
@@ -1766,6 +1973,17 @@ class Component extends DCLogic {
       siteName: this.props.siteName ?? 'Agent X-Ray',
       pmCards, ddCards, engCards, ftCards, chapters, articleToc, rssCats, buildPoints, repos, langBar,
       t1rows, t2rows: [ctx2, ...t2rest], t2rest,
+      // 2l / 2m:同一轮跑完之后的 Turn 2 —— 末行不再扫光,补 message_end / turn_end 收尾。
+      t2done: [
+        ctx2,
+        row('before_provider_request', 4, '4ms', '#2563eb'),
+        row('tool_call · bash', 18, '18ms', '#ef4444', { hasBadge: true, hasNote: true }),
+        row('tool_result', 6, '6ms', '#2563eb'),
+        row('message_start', 1, '1ms', '#9ca3af'),
+        row('message_update', 2, '2ms', '#9ca3af'),
+        row('message_end', 1, '1ms', '#9ca3af'),
+        row('turn_end', 1, '1ms', '#2563eb'),
+      ],
       ctx2sel: { ...ctx2 },
       sessions: sess(true), sessionsIdle: sess(false),
       lifeNodes, lifeIdle,
