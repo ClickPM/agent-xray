@@ -247,3 +247,6 @@
 - [ ] R-IMAGEGEN **画板 1f/1g 的示例工具清单没有 `generate_image`**。面板由后端目录驱动,实际页面会显示它;
       只是 `design/*.dc.html` 里那份示例数据停在五个工具(R-TOOLS 时的全集)。设计稿是 Claude Design 的导出存档,
       本轮没有手改;要同步由所有者在画布上加 (2026-09-02)
+- [ ] R-SKILLS **agent 能否读 skills**(给 pi 配 `skills_list` / `skills_get` 这类只读工具,与 `notes_*` 同形态,让 Runtime 对话里能引用技能库)。
+      R-SKILLS 裁定本轮 agent 侧不可读、新表不授权任何 agent 角色;要做需在那次迁移里显式 `GRANT SELECT` 给 `agent_ro`、
+      走 `READ ONLY` 事务,并且 Tools 面板会自动多出这组工具(1f/1g 示例数据要跟)。属新功能,等所有者裁定 (2026-09-03)

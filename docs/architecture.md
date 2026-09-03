@@ -7,8 +7,9 @@
    │ HTTPS
    ▼
 Caddy :443(自动 TLS,单机反代)
-   ├── /            → apps/web  Next.js(Runtime 工作台 / Notes / About;/admin 已于 R6 整目录删除)
+   ├── /            → apps/web  Next.js(Runtime 工作台 / Notes / Skills(R-SKILLS 待实现)/ About;/admin 已于 R6 整目录删除)
    ├── /notes/**.webp → 按扩展名分流到 api 的 /assets/notes/…(正文配图存 Postgres,R6)
+   ├── /skills/*.zip  → 按扩展名分流到 api 的 /assets/skills/…(skill 目录打包下载,R-SKILLS 待实现)
    └── /api/*       → apps/api  Encore.ts :4000
                         │
                         ├── agent 服务:createAgentSession(pi SDK in-process)
@@ -23,6 +24,7 @@ Caddy :443(自动 TLS,单机反代)
                         ├── about 服务:GET /about(about_content 只读)
                         ├── mcp 服务:无状态 MCP 管理面 /api/mcp(内容发布 / 附件 / About / LLM·搜索·生图 provider / 工具启停 / 统计查询;静态 token)
                         ├── site 服务:GET /site/tabs(顶部 tab 呈现开关的只读面,R-TABS)
+                        ├── skills 服务:GET /skills · GET /skills/:name · GET /assets/skills/:name.zip(技能库只读面;写面在 mcp;R-SKILLS 待实现)
                         ├── metrics 服务:POST /t 访问打点(不存原始 IP)
                         ├── system 服务:GET /health
                         └── Postgres(docker-compose 内;单库 agent,迁移由 deploy/migrate.sh 施加)
@@ -42,6 +44,7 @@ Caddy :443(自动 TLS,单机反代)
 | MCP SDK 选型 | `@modelcontextprotocol/server` + `@modelcontextprotocol/node` **2.0.0**(不是 `@modelcontextprotocol/sdk`) | R6 实测:旧包最新版(1.30.0)的 `LATEST_PROTOCOL_VERSION` 仍是 `2025-11-25`、没有 `server/discover`;2026-07-28 由 SDK v2 以新包名提供。`createMcpHandler` 默认 `legacy:'stateless'`,同一份工具定义同时服务两个时代 |
 | LLM 凭据与模型 | 全部来自 `llm_config` 表(多 provider,key 经 AES-256-GCM 加密入库),**无引导 secret** | 2026-08-31 裁定。`agent/runtime.ts` 在冷启动与**每一轮热路径**上都读一次配置并比对指纹:**配置变了,会话在下一轮被重建到新配置上**(走空闲回收同一条重建路径,库内历史照常注入)。这条统一规则是四轮 codex review 收敛出来的——只让新会话跟上配置,会留下「已在内存的会话拿着新 key 打旧端点」这类撤销漏洞 |
 | notes 附件 | 存 Postgres,运行期由 api 供图;**镜像内不烧任何 notes 内容** | 2026-08-31 裁定。对外 URL 保持 `/notes/<系列>/<哈希>.webp` 不变(免改写存量正文);API 侧走 `/assets/notes/…`,因为 Encore 路由里 `/notes/:series/:file` 会与 `/notes/series/:slug` 撞车 |
+| Skills 内容 | 与 notes 同形:所有者经 MCP **整包**发布(`SKILL.md` + `scripts/` + `references/` 的文本文件入库 `skill_files`),读面只读、文件一律当文本渲染、zip 写入时打好存库由读面吐;**agent 侧本轮不可读**(新表不授权任何 agent 角色) | 2026-09-03 裁定(R-SKILLS,待实现);约束见 security.md §1 第 2 层 / §4 的 R-SKILLS 补记;对外 zip URL `/skills/<name>.zip`,API 侧 `/assets/skills/…`(与 notes 配图同一前缀策略) |
 
 ## 事件模式与观测
 
@@ -70,4 +73,4 @@ R4 落地轨迹流后补记两条实现约束:
 
 ## 设计稿
 
-见 [design/](../design/README.md) —— 12 块画板静态稿(1a–1g + 2a–2e)+ 可交互原型,token 与组件语汇以其为准。
+见 [design/](../design/README.md) —— 15 块画板静态稿(1a–1g + 2a–2h;2f–2h 为 Skills 技能库,2026-09-03 新增)+ 可交互原型,token 与组件语汇以其为准。
