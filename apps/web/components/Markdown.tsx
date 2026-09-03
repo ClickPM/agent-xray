@@ -73,13 +73,51 @@ function headingText(raw: string): string {
     .trim();
 }
 
-/** 渲染后的 React 子树 → 纯文本,用于给标题算 id */
-function textOf(node: ReactNode): string {
-  if (node === null || node === undefined || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(textOf).join("");
-  const el = node as { props?: { children?: ReactNode } };
-  return el.props ? textOf(el.props.children) : "";
+/** hast 里我们真正会读的那几个字段,不为此引 @types/hast */
+type HastNode = {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+};
+
+/** hast 子树 → 纯文本,用于给标题算 id */
+function hastText(node: HastNode): string {
+  if (node.type === "text") return node.value ?? "";
+  return (node.children ?? []).map(hastText).join("");
+}
+
+/**
+ * 给 H2 挂锚点 id。**必须在 rehype 阶段做,不能在渲染期数**(R-PERF)。
+ *
+ * 早先这里是 `Markdown()` 闭包里的一个 `seen` Map,由 `components.h2` 在渲染时递增 ——
+ * 于是「同一段正文渲染了几次」会改变 id:React 开发态的 StrictMode 双调用渲染函数,
+ * 而 `seen` 活在外层闭包里不跟着重建,第二遍就把 id 数成了 `何时用-1`,与
+ * `extractToc` 算出来的目录对不上(2026-09-03 实测:水合警告)。当时的绕法是
+ * 「`Markdown` 只许在服务端渲染」,把这个组件钉死在 Server Component 里;
+ * R-PERF 要让 Skill 详情页在客户端渲染非首个 markdown 文件,那条约束必须解掉。
+ *
+ * 放到 rehype 阶段之后,id 由 hast 树一次算定,与渲染几次无关。
+ *
+ * **排在 rehype-katex 之后**:改动前 id 取自渲染期的 children 文本,那时公式已经被
+ * katex 换成了 span(含 `<annotation>` 里的 TeX 源码);排在它之后看到的是同一段文本,
+ * 存量正文的 id 因此逐字不变 —— 这是本轮验收 #3(标题里带公式的那几篇尤其靠它)。
+ */
+function rehypeHeadingIds() {
+  return (tree: HastNode) => {
+    // 与 extractToc 共用同一套 slug + 同名去重规则,两边各自从头计数即可对齐
+    const seen = new Map<string, number>();
+    const walk = (node: HastNode) => {
+      for (const child of node.children ?? []) {
+        if (child.type === "element" && child.tagName === "h2") {
+          child.properties = { ...child.properties, id: uniqueId(seen, hastText(child)) };
+        }
+        walk(child);
+      }
+    };
+    walk(tree);
+  };
 }
 
 /** mdast 里我们真正会读的那几个字段,不为此引 @types/mdast */
@@ -189,22 +227,25 @@ export function extractToc(md: string): { id: string; text: string }[] {
  *   会在同一个文档里撞成重复 id(HTML 非法,锚点跳转与读屏都指到第一条)。
  */
 export function Markdown({ children, headingIds = true }: { children: string; headingIds?: boolean }) {
-  // 与 extractToc 共用同一套 slug + 同名去重规则,两边各自从头计数即可对齐
-  const seen = new Map<string, number>();
-
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkDollarGuard]}
       // 公式写错时 rehype-katex 自己兜住 ParseError(不会把整页渲染带崩),
-      // 退化成「原文标红」;这里只把那个红换成现成的 --err-text(规则 7:不新增视觉语言)
-      rehypePlugins={[[rehypeKatex, { errorColor: "var(--err-text)" }]]}
+      // 退化成「原文标红」;这里只把那个红换成现成的 --err-text(规则 7:不新增视觉语言)。
+      // 不挂 id 时连 rehypeHeadingIds 都不装,聊天区因此一个 id 都不会产出(见上方 headingIds 的说明)
+      rehypePlugins={
+        headingIds
+          ? [[rehypeKatex, { errorColor: "var(--err-text)" }], rehypeHeadingIds]
+          : [[rehypeKatex, { errorColor: "var(--err-text)" }]]
+      }
       components={{
         h1: ({ children }) => (
           <h2 style={{ fontSize: 18, fontWeight: 650, marginTop: 30, marginBottom: 0 }}>{children}</h2>
         ),
-        h2: ({ children }) => (
+        // id 由 rehypeHeadingIds 在 hast 上挂好后原样透传;这里不再计数(理由见那个插件)
+        h2: ({ children, id }) => (
           <h2
-            id={headingIds ? uniqueId(seen, textOf(children)) : undefined}
+            id={id}
             style={{ fontSize: 16, fontWeight: 650, marginTop: 30, marginBottom: 0, scrollMarginTop: 16 }}
           >
             {children}

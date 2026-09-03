@@ -3,13 +3,14 @@
 // Skill 详情页(设计稿画板 2g / 2h):头部 + INSTALL 面板 + 「左目录树 / 右文件预览」。
 // 交互只有三样:目录树点选切换预览(并同步 `?file=`)、两处 copy 的 1.5s 回落、GitHub / zip 两枚 ghost 按钮。
 // 数据在 app/(site)/skills/[name]/page.tsx 服务端取好传进来;整包内容一次到位,切换文件不打后端。
-// markdown 文件由服务端预渲染成 ReactNode(`mdViews`,理由见 MarkdownFile.tsx),这里只决定显示哪一个;
-// 代码文件在这里用 CodeView 渲染(纯函数,无水合差异)。
+// 打开时显示的那个 markdown 由服务端预渲染成 ReactNode 传进来(`mdViews`,R-PERF 后只有它一个);
+// 切到别的 markdown 时在这里用 MarkdownFile 就地渲染,代码文件用 CodeView —— 两者都是纯函数,无水合差异。
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "@/components/ui";
 import { CodeView } from "@/components/skills/CodeView";
+import { MarkdownFile } from "@/components/skills/MarkdownFile";
 import { mono } from "@/lib/styles";
 
 export interface DetailFile {
@@ -190,7 +191,7 @@ export function SkillDetail({
   files: DetailFile[];
   /** 服务端按 `?file=` 选好的初始文件(不存在时已回落到 SKILL.md) */
   initialPath: string;
-  /** markdown 文件的服务端预渲染结果,按 path 取;非 markdown 文件没有条目 */
+  /** 服务端预渲染结果,按 path 取。R-PERF 后**只含 `initialPath` 那一个**;取不到就在客户端现渲 */
   mdViews: Record<string, ReactNode>;
   /** 每个 markdown 文件的「本页目录」(H2 列表),与预渲染的标题 id 同一套算法 */
   tocs: Record<string, TocItem[]>;
@@ -344,7 +345,9 @@ export function SkillDetail({
                 <CopyButton copied={copied === "file"} onClick={() => stamp("file", file.content)} />
               </div>
               {file.kind === "markdown" ? (
-                mdViews[file.path]
+                // 服务端只预渲染了打开时的那一个文件(R-PERF);切到别的 markdown 就在这里就地渲染,
+                // 原文本来就在手上(files[].content),不打后端
+                (mdViews[file.path] ?? <MarkdownFile key={file.path} content={file.content} />)
               ) : (
                 <CodeView key={file.path} kind={file.kind} content={file.content} />
               )}

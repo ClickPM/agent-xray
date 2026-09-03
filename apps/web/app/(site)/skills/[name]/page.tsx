@@ -33,13 +33,21 @@ export default async function SkillPage({
   const wanted = Array.isArray(file) ? file[0] : file;
   const initialPath = wanted && data.files.some((f) => f.path === wanted) ? wanted : "SKILL.md";
 
-  // markdown 文件在服务端预渲染(理由见 components/skills/MarkdownFile.tsx),目录用同一份正文算:
-  // Markdown 的标题 id 与 extractToc 两边各自从头计数,只要输入同一段 body 就对得上(Notes 文章页同一做法)
+  // 【R-PERF】markdown **只预渲染当前要显示的那一个**。早先这里把整包全部 markdown 都渲染进
+  // 载荷,而页面同一时刻只显示一个文件 —— ppt-master 因此是 21 篇各过一遍 remark + rehype-katex,
+  // RSC 载荷 1.57 MB、软导航 5–7 秒,HTML 1.92 MB 还偶发水合失败(React #418,整页在客户端重渲)。
+  // 其余 markdown 由 SkillDetail 在客户端就地渲染:整包原文本来就已经在客户端(copy 按钮与
+  // CodeView 在用 files[].content),所以「切换文件不打后端」的口径不变。
+  const initial = data.files.find((f) => f.path === initialPath);
   const mdViews: Record<string, ReactNode> = {};
+  if (initial?.kind === "markdown") mdViews[initial.path] = <MarkdownFile content={initial.content} />;
+
+  // 「本页目录」只有 H2 的 id 与文本,整包一次算好也很小,切文件时目录立刻就在。
+  // 与渲染侧共用同一套 slug + 同名去重规则(Markdown.tsx 的 rehypeHeadingIds),
+  // 两边各自从头计数即可对齐 —— 服务端渲染的那篇与客户端渲染的那几篇一视同仁。
   const tocs: Record<string, TocItem[]> = {};
   for (const f of data.files) {
     if (f.kind !== "markdown") continue;
-    mdViews[f.path] = <MarkdownFile content={f.content} />;
     tocs[f.path] = extractToc(splitFrontmatter(f.content).body);
   }
 
