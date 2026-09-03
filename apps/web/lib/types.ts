@@ -29,6 +29,8 @@ export interface TraceRow {
   color: string;
   hasBadge?: boolean;
   hasNote?: boolean;
+  /** 注记「└ <扩展名> returned {block: true}」里的扩展名;由事件的 `handlers` 派生(R-SKILLS-2),hasNote 为真时必有 */
+  blockedBy?: string;
   streaming?: boolean;
   /** 点击可展开详情(画板 1b 的 context 行) */
   expandable?: boolean;

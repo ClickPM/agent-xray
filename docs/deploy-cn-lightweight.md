@@ -44,7 +44,8 @@ mem_limit  = API_RSS_p95 × 1.3(突发余量)
 | api(`mem_limit 1g`) | 1 GiB 上限 |
 | web(`mem_limit 384m`,常态 ~100–150MB) | 384 MB 上限 |
 | caddy(`mem_limit 128m`) | ~30–50 MB |
-| filesystem cache 与余量 | 剩余 ~600 MB–1 GiB |
+| skill-runner(`mem_limit 384m`,R-SKILLS-2;常态 ~20 MB,跑脚本时每个子进程 rlimit AS 256 MB、并发 2) | 384 MB 上限 |
+| filesystem cache 与余量 | 剩余 ~300–700 MB(加 runner 之后;OS 那一行按下限算才剩 ~900 MB) |
 
 > **关于 api 的 1g**:这是**初始生产上限**,依据是「Bun 口径实测基座 162.5MB + 事件缓冲的结构性上限 + 3.6GiB 主机的总预算」三者取平衡。**它不代表「已证明 1GB 足够所有真实负载」**——`S_active_p95` 目前是空值,任何容量结论都还缺这一项。
 >

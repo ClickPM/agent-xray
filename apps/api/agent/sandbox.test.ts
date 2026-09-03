@@ -8,7 +8,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { encryptSecret } from "../shared/crypto";
 import { db } from "./db";
 import { queryAsAgentRo } from "./ro-db";
-import { checkQuota, recordUsage } from "./quota";
+import { checkQuota, recordUsage, reserveSkillRun } from "./quota";
 import { configEncryptionKey } from "./secrets";
 import {
   buildSessionTools,
@@ -60,6 +60,13 @@ async function restoreToolSeeds() {
       name,
     );
   }
+  // 迁移 013 的种子(R-SKILLS-2):两个都默认关;skill_run 是唯一的 dangerous 行
+  await db.rawExec(
+    `INSERT INTO tool_config (name, enabled, dangerous, note) VALUES
+       ('skill_load', FALSE, FALSE, 'R-SKILLS-2 纯函数组'),
+       ('skill_run',  FALSE, TRUE,  'R-SKILLS-2 沙箱执行组')
+     ON CONFLICT (name) DO NOTHING`,
+  );
 }
 
 async function seedNotes() {
@@ -333,6 +340,177 @@ describe("第 1 层 · 外呼组 generate_image 的注册闸(R-IMAGEGEN)", () =>
   });
 });
 
+describe("第 1 层 · 沙箱执行组 skill_load / skill_run 的注册闸(R-SKILLS-2)", () => {
+  const RUNNER_ENV = "XRAY_SKILL_RUNNER_URL";
+  const UNLOCK_ENV = "XRAY_UNLOCK_DANGEROUS_TOOLS";
+  const saved: Record<string, string | undefined> = {};
+
+  /** 把某个代码副本(runner/skills/<name>/ 的全部文件)种进库并按需打开(与所有者经 MCP 上传 + skills_agent_set 的效果相同) */
+  async function seedCodeSkill(name: string, enabled = true) {
+    const { readFileSync, readdirSync, statSync } = await import("node:fs");
+    const { join, relative, resolve, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const dir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "runner", "skills", name);
+    const walk = (d: string, base = d): string[] =>
+      readdirSync(d).flatMap((n) => {
+        const f = join(d, n);
+        return statSync(f).isDirectory() ? walk(f, base) : [relative(base, f).split("\\").join("/")];
+      });
+    await db.rawExec(
+      `INSERT INTO skills (name, category_slug, summary, source_type, repo, sort_order, zip, zip_size, content_hash, agent_enabled)
+       VALUES ($1, 'framework', '', 'own', 'ClickPM/agent-skills', 0, decode('', 'hex'), 0, 'h', $2)`,
+      name,
+      enabled,
+    );
+    for (const p of walk(dir)) {
+      const content = readFileSync(join(dir, p), "utf8");
+      await db.rawExec(
+        `INSERT INTO skill_files (skill_name, path, kind, content, size_bytes, line_count, sort_order)
+         VALUES ($1, $2, 'text', $3, $4, 1, 0)`,
+        name,
+        p,
+        content,
+        Buffer.byteLength(content, "utf8"),
+      );
+    }
+  }
+  const seedTextTools = (enabled = true) => seedCodeSkill("text-tools", enabled);
+
+  async function enable(names: string[], dangerousRun = true) {
+    await db.exec`DELETE FROM tool_config`;
+    for (const name of names) {
+      await db.rawExec(`INSERT INTO tool_config (name, enabled, dangerous) VALUES ($1, TRUE, $2)`, name, name === "skill_run" && dangerousRun);
+    }
+  }
+
+  beforeEach(async () => {
+    for (const k of [RUNNER_ENV, UNLOCK_ENV]) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    await db.exec`DELETE FROM skill_files`;
+    await db.exec`DELETE FROM skills`;
+  });
+
+  afterAll(async () => {
+    for (const k of [RUNNER_ENV, UNLOCK_ENV]) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    await db.exec`DELETE FROM skill_files`;
+    await db.exec`DELETE FROM skills`;
+    await restoreToolSeeds();
+  });
+
+  it("skill_load 开着但没有对 agent 开放的 skill → 不注册(不给模型一个必然失败的工具)", async () => {
+    await enable(["skill_load"]);
+    const enabled = await loadEnabledTools();
+    expect(enabled.names).toEqual([]);
+    expect(enabled.skills.skills).toEqual([]);
+  });
+
+  it("skill_load:库里有一致副本且打开 → 注册;可用集合进 EnabledTools.skills;关掉 skill 后指纹变、工具消失", async () => {
+    await enable(["skill_load"]);
+    await seedTextTools(true);
+    const a = await loadEnabledTools();
+    expect(a.names).toEqual(["skill_load"]);
+    expect(a.skills.skills.map((s) => s.name)).toEqual(["text-tools"]);
+    expect(a.definitions[0].name).toBe("skill_load");
+    await db.rawExec(`UPDATE skills SET agent_enabled = FALSE WHERE name = 'text-tools'`);
+    const b = await loadEnabledTools();
+    expect(b.names).toEqual([]);
+    expect(b.fingerprint).not.toBe(a.fingerprint);
+  });
+
+  it("skill_run 的高危身份在代码里:经 MCP 把表里那一行改成 dangerous=false,缺 env 仍不注册(codex 第 2 轮 P1)", async () => {
+    await enable(["skill_run"], false); // 表里 dangerous=false
+    await seedTextTools(true);
+    expect((await loadEnabledTools()).names).toEqual([]);
+    process.env[UNLOCK_ENV] = "1";
+    expect((await loadEnabledTools()).names).toEqual(["skill_run"]);
+    // 反过来:表里把别的工具标成 dangerous 是能把它**加**进闸里的(R7 既有语义不变)
+    delete process.env[UNLOCK_ENV];
+    await db.exec`DELETE FROM tool_config`;
+    await db.rawExec(`INSERT INTO tool_config (name, enabled, dangerous) VALUES ('notes_search', TRUE, TRUE)`);
+    expect((await loadEnabledTools()).names).toEqual([]);
+  });
+
+  it("skill_run 是 dangerous 行:缺 env 双闸 → 不注册;有 env 但 runner 地址不合法 → 不注册;合法 → 注册(沙箱执行组)", async () => {
+    await enable(["skill_run"]);
+    await seedTextTools(true);
+    expect((await loadEnabledTools()).names).toEqual([]); // 缺 XRAY_UNLOCK_DANGEROUS_TOOLS
+    process.env[UNLOCK_ENV] = "1";
+    process.env[RUNNER_ENV] = "http://runner:8000"; // 闭集之外
+    expect((await loadEnabledTools()).names).toEqual([]);
+    process.env[RUNNER_ENV] = "http://127.0.0.1:8000";
+    const ok = await loadEnabledTools();
+    expect(ok.names).toEqual(["skill_run"]);
+    expect(ok.definitions[0].name).toBe("skill_run");
+    // 明文里找不到运行器地址 / 超时 / 限额(它们只活在闭包里)
+    expect(JSON.stringify(ok.definitions[0])).not.toContain("127.0.0.1");
+    delete process.env[RUNNER_ENV]; // 缺省 = unix 默认值,同样合法
+    expect((await loadEnabledTools()).names).toEqual(["skill_run"]);
+  });
+
+  it("skill_run:可用集合里没有可运行型(只有注入型)→ 不注册", async () => {
+    await enable(["skill_run"]);
+    process.env[UNLOCK_ENV] = "1";
+    // 只种 encore-api(注入型,无脚本;整包 = SKILL.md + 上游 LICENSE)
+    await seedCodeSkill("encore-api", true);
+    const enabled = await loadEnabledTools();
+    expect(enabled.skills.skills.map((s) => s.name)).toEqual(["encore-api"]);
+    expect(enabled.names).toEqual([]);
+  });
+
+  it("展示副本漂移 → 不注入,且不影响其它工具", async () => {
+    await enable(["skill_load", "notes_search"]);
+    await seedTextTools(true);
+    await db.rawExec(`UPDATE skill_files SET content = content || ' ' WHERE skill_name = 'text-tools' AND path = 'SKILL.md'`);
+    const enabled = await loadEnabledTools();
+    expect(enabled.names).toEqual(["notes_search"]);
+    expect(enabled.skills.dropped.some((d) => d.includes("drift"))).toBe(true);
+  });
+
+  it("改 sandbox_config 会改变指纹(两个上限被闭包定格在旧会话里)", async () => {
+    await enable(["skill_run"]);
+    await seedTextTools(true);
+    process.env[UNLOCK_ENV] = "1";
+    const a = await loadEnabledTools();
+    await db.rawExec(`UPDATE sandbox_config SET total_timeout_ms = 45000 WHERE id = 1`);
+    try {
+      const b = await loadEnabledTools();
+      expect(a.names).toEqual(b.names);
+      expect(a.fingerprint).not.toBe(b.fingerprint);
+    } finally {
+      await db.rawExec(`UPDATE sandbox_config SET total_timeout_ms = 30000 WHERE id = 1`);
+    }
+  });
+});
+
+describe("第 4 层 · 每日运行次数闸 reserveSkillRun(R-SKILLS-2,验收 ⑪)", () => {
+  beforeEach(async () => {
+    await db.exec`DELETE FROM daily_quota`;
+  });
+  afterAll(async () => {
+    await db.exec`DELETE FROM daily_quota`;
+  });
+
+  it("原子:上限 5、并发 20 次只放行 5 次", async () => {
+    const results = await Promise.all(Array.from({ length: 20 }, () => reserveSkillRun(5)));
+    expect(results.filter(Boolean)).toHaveLength(5);
+    const row = await db.rawQueryRow<{ n: number }>(`SELECT skill_runs::double precision AS n FROM daily_quota`);
+    expect(row?.n).toBe(5);
+  });
+
+  it("0 = 不限;与 searches / images 各计各的", async () => {
+    for (let i = 0; i < 7; i++) expect(await reserveSkillRun(0)).toBe(true);
+    const row = await db.rawQueryRow<{ runs: number; searches: number; images: number }>(
+      `SELECT skill_runs::double precision AS runs, searches::double precision AS searches, images::double precision AS images FROM daily_quota`,
+    );
+    expect(row).toEqual({ runs: 7, searches: 0, images: 0 });
+  });
+});
+
 describe("第 2 层 · agent_ro 只读(ROUNDS.md R7 验收:写库必须失败)", () => {
   beforeEach(seedNotes);
 
@@ -403,6 +581,9 @@ describe("第 2 层 · agent_ro 只读(ROUNDS.md R7 验收:写库必须失败)",
       "skills_categories",
       "skills",
       "skill_files",
+      // R-SKILLS-2:沙箱配置面同样不授权任何 agent 角色(迁移 013 不写 GRANT 就是全部答案);
+      // skills.agent_enabled 在 skills 表上,上面那一行已经盖住
+      "sandbox_config",
     ];
     for (const table of denied) {
       const tx = await db.begin();

@@ -2,10 +2,10 @@
 
 <!-- 保存为 rounds/round-skills/round-skills-2.md;与 1.0 的任务卡 round-skills.md 同目录。拆解见 ROUNDS.md「R-SKILLS-2」。 -->
 
-> 状态:**未开始(文档就绪、七条裁定已落,2026-09-03;等三个前置齐了另开 session 开工)**
+> 状态:**代码已落地、codex 三轮审查收口(整改后 PASS,2026-09-03),待合并 `main` → 发版(三镜像)+ 生产冒烟 + 按顺序打开**
 >
 > 研究与取舍全文在 [`research.md`](research.md)(pi 内核实测依据在附 A);本卡只列交付与验收。
-> 前置见下;**代码一行未写**。
+> 三个前置里**第 2 项(画板 1f/1g 第四组)开工时未闭合**,处理方式见「本轮实测 · 前置核对」。
 
 ## 目标
 
@@ -24,9 +24,9 @@
 
 | 前置 | 状态 | 说明 |
 |---|---|---|
-| **R-SKILLS(1.0)落地并合并 `main`** | 未开工 | 本轮的迁移 013 依赖 012;`skills_agent_set` 依赖 `skills` 表;hash 一致性判据依赖 `skill_files`。所有者在 1.0 里经 MCP 上传首批 skills(裁定 5) |
-| **画板 1f/1g 加第四组「沙箱执行组」** | 待所有者在画布上改 | 与 R-TOOLS 同一顺序(先改设计稿);建议沿用既有语义色 `#8b5cf6`、示例工具加 `skill_run`;改完更新 `design/README.md` 增删记录与 token 一行 |
-| **spike:Encore 的 bun 运行时里 `fetch` 走 unix socket** | 未做,可与 1.0 并行 | 不通试 `node:http` 的 `socketPath`;两条都不通 → 写 BLOCKED 回所有者重裁裁定 4,**不自行退到共网** |
+| **R-SKILLS(1.0)落地并合并 `main`** | ✅ 已合并(`789007e`) | 本轮的迁移 013 依赖 012;`skills_agent_set` 依赖 `skills` 表;hash 一致性判据依赖 `skill_files`。**首批 skills 所有者尚未上传**(2026-09-03 核对生产 `skills_list` 为空):不阻塞代码,上传时按「运维」段的顺序来 |
+| **画板 1f/1g 加第四组「沙箱执行组」** | ⚠️ **开工时未闭合,所有者裁定不阻塞**(云端 Claude Design 项目与本地 `design/` 的 Tools 面板示例数据都只有三组;2026-09-03 所有者裁定「正常展示出来就好了」) | 前端按本卡建议值接上(`#8b5cf6`、组名「沙箱执行组」、示例工具 `skill_run`)并按此展示;所有者画完后按画板核对这三处并拉稿合并;已记 BACKLOG |
+| **spike:Encore 的 bun 运行时里 `fetch` 走 unix socket** | ✅ 通过(留证在「本轮实测」) | 两个 `--network none` 容器经命名卷 unix socket:bun 1.4.0 `fetch({unix})` 与 `node:http socketPath` 都完成 `POST /run` 往返;Encore 的 JS 运行时不改写全局 `fetch`(grep `encore.dev` 无 `globalThis.fetch =`) |
 
 无新凭据。新依赖:runner 镜像的 Python 基座与 `requirements.txt`(hash 锁定);api / web 侧零新增 npm 依赖。
 
@@ -58,10 +58,10 @@
 
 **后端(`apps/api`)**
 - `agent/migrations/013_agent_skills.up.sql` —— `ALTER TABLE skills ADD COLUMN agent_enabled BOOLEAN NOT NULL DEFAULT FALSE`;`sandbox_config` 单行表(`daily_run_limit INT DEFAULT 0 CHECK ≥ 0`、`total_timeout_ms INT DEFAULT 30000 CHECK BETWEEN 5000 AND 120000`);`ALTER TABLE daily_quota ADD COLUMN skill_runs INT NOT NULL DEFAULT 0`;`tool_config` 种子 `('skill_load', FALSE, FALSE, …)`、`('skill_run', FALSE, TRUE, …)`。只有 ADD / CREATE,无不可逆语句
-- `agent/skills.generated.ts`(生成物)· `agent/skills-catalog.ts` —— `loadAgentSkills()`:代码清单 × 库(`name` 存在 ∧ `agent_enabled` ∧ 文件集合与 sha256 全等)→ 本次可用集合 + 指纹(并进 `EnabledTools.fingerprint`);漂移 / 未打开 / 库里没有分别记日志
+- `shared/skills.generated.ts`(生成物;**落在 shared/ 而不是 agent/**,理由见「本轮实测 · 偏离 1」)· `shared/skill-manifest.ts`(类型 + 一致性判据)· `agent/skills-catalog.ts` —— `loadAgentSkills()`:代码清单 × 库(`name` 存在 ∧ `agent_enabled` ∧ 文件集合与 sha256 全等)→ 本次可用集合 + 指纹(并进 `EnabledTools.fingerprint`);漂移 / 未打开 / 库里没有分别记日志
 - `agent/sandbox-config.ts` —— 读 `sandbox_config`,与 `websearch-config.ts` 同构(读不到不是错:`skill_run` 这轮不注册)
 - `agent/skill-runner.ts` —— 与 runner 的协议:`fetch` 走 unix socket(`XRAY_SKILL_RUNNER_URL` 只在注册环节读、只接受 `unix:` 默认值或 `http://127.0.0.1:<port>`);总超时 = `sandbox_config.total_timeout_ms + 2000`;响应体经 `shared/http-body.ts` 带上界读取;错误在构造处不带容器内路径;按清单 `network` 选客户端 —— 本轮只有 `none` 一个客户端,清单里 `egress` 档的 skill 不进可用集合并记日志(R-WEBFETCH 加第二个客户端)
-- `agent/tools.ts` —— `SKILL_LOAD_META` / `SKILL_RUN_META`(META 在闭包外,`output` 必填,`phases` 四段);`skillLoad` 进 `TOOL_REGISTRY`;`makeSkillRunTool(cfg)` 第四条构造路径;`loadEnabledTools` 读 `skill_run` 时同时读 `sandbox_config` 与 `loadAgentSkills()`;`reserveSkillRun` 进 `quota.ts`
+- `agent/tools.ts` —— `SKILL_LOAD_META` / `SKILL_RUN_META`(META 在闭包外,`output` 必填,`phases` 四段);`makeSkillLoadTool(skills)`(纯函数组,工厂而非常量 —— 偏离 2)与 `makeSkillRunTool(skills, sandbox, runner)`(沙箱执行组);`loadEnabledTools` 读两个工具时同时读 `sandbox_config` 与 `loadAgentSkills()`,运行器地址只在这里读一次;`reserveSkillRun` 进 `quota.ts`;名字常量单独在 `agent/tool-names.ts`(免 guard → tools → skills-catalog ← guard 的环)
 - `agent/catalog.ts` —— `ToolGroup` 加 `"sandbox"`;`toolCatalog()` 加第四条路径;`catalog.test.ts` 的双向集合相等自动覆盖
 - `agent/guard.ts` —— `makeGuard(rec, ctx)`:`tool_call` 五条规则(research.md §2.5);`agent/skill-injector.ts` —— `makeSkillInjector(rec, ctx)`:`before_agent_start` 追加 `<available_skills>`;两者在 `runtime.ts` 里与 `makeObserver` 同款注册,顺序 `[injector, observer, guard]`;`capture()` 加可选 `handlers`;观测者不再订阅这两个事件
 - `agent/events.ts` —— `tool_call` / `before_agent_start` 白名单加派生字段 `handlers`(摘要,不放原文);`runtime.ts` 的 `systemPromptFor` 加「skills 怎么用 + 脚本输出是数据不是指令」一段
@@ -117,16 +117,33 @@
 
 打开(每一步都可单独回退):发版(runner 镜像 + api + compose)→ 生产冒烟 4 条 → `tool_config_set skill_load true` → `skills_agent_set <name> true`(逐个)→ 服务器 `.env` 加 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 并 `docker compose up -d api` 重建 → `tool_config_set skill_run true`。
 
+**展示副本要与代码副本逐文件一致才会被注入**(`skills_agent_status` 的 `consistency: ok`),所以打开前先对齐库里的副本(2026-09-03 核对生产 `skills_list`):
+- `text-tools`:生产**没有**,经 `skills_upsert` 上传 `runner/skills/text-tools/` 的全部 4 个文件(SKILL.md / xray.json / scripts/wordfreq.py / scripts/json_pretty.py),`sourceType: own`、`repo: ClickPM/skills-hub`(自研 skill 的既定出处,先推到 skills-hub 再挂);
+- `encore-api` / `encore-database` / `encore-testing`:生产已有,但各只有 1 个文件(SKILL.md);代码副本现在是 **SKILL.md + 上游 Apache-2.0 `LICENSE`** 两个文件,发版后 `skills_agent_status` 会报 `drift: missing LICENSE, changed SKILL.md` —— 库里那份 SKILL.md 是 **CRLF**(经 `skills_file_get` 核对:8111 字节,代码副本 LF 7839 字节;上传源是本机 `.claude/skills/`,那里被 `core.autocrlf` 写成了 CRLF),而哈希按字节算。用 `skills_upsert` 整包重传 `runner/skills/<name>/` 的两个文件(LF)即可,两处漂移一起修掉。
+- 其余 15 个不在代码清单里,`skills_agent_set` 会拒绝,不用动。
+
 止损:`tool_config_set skill_run false` 当场停用运行(不发版);`skills_agent_set <name> false` 单个下线;`docker compose stop skill-runner` 后工具调用以固定文案失败、站点其余照常。
 回退成本:一条纯追加迁移 + 两个工具 + 两个扩展 + 一个容器;`.env` 去掉 `XRAY_UNLOCK_DANGEROUS_TOOLS` 并重建 api 即回到「注册表里没有 dangerous 实现」的状态。
 
 ## 代码审查
 
-<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
+<!-- 审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:<codex /codex:review --background(改动跨 runner / api / web / deploy)>;**审查要求带上**:`runner/skills/*/scripts/*.py` 按 research.md §2.2 准入清单逐条判
-- findings 处理:<逐条:采纳整改 / 不采纳及理由>
-- 结论:<PASS | 整改后 PASS>
+- 审查方式:codex `/codex:review --background --scope branch`(分支全量 diff against main;改动跨 runner / api / web / deploy)。前两轮全量,第 3 轮起只审整改 diff(CLAUDE.md「审查范围」)
+- **第 1 轮(2026-09-03,`886d8b0`)findings 6 条,逐条处理**:
+  1. [P1] `runner/manifest.json` 引用了三个 `LICENSE` 而 diff 里没有这些文件 —— **采纳,但不是缺陷本身**:审查跑到一半时我为 encore-* 三个上游原版补了 Apache-2.0 `LICENSE`(再分发要附许可证)并重生成了清单,文件还没提交;随整改一起提交即闭合。
+  2. [P1] `runner.py` 的 `reap_orphans()` 用 `waitpid(-1, WNOHANG)`,两次运行并发时会把**另一个请求还没 wait 的直接子进程**先收走,那边 `Popen.wait` 撞 ECHILD 记成退出码 0,非零退出的脚本被报成成功 —— **采纳整改**:删掉 runner 内的 reaper,改由容器的 PID 1 收孤儿(compose `init: true`,docker 自带的 tini;`dev.ps1 runner` 与自检脚本都加 `--init`),runner.py 只 wait 自己的直接子进程;若被当成 PID 1 起(缺 init)则启动时记一行 WARNING。自检复跑:结束时容器里只剩 tini + runner,fork 炸弹的孤儿全部被收走。
+  3. [P2] 测试对 `InlineExtension`(联合类型)直接 `.factory(...)`,strict tsc 报 TS2339 —— **采纳整改**:`makeGuard` / `makeSkillInjector` 的返回类型收窄为具名对象 `NamedExtension { name; factory }`(可直接放进 `extensionFactories`),测试不用 narrowing。
+  4. [P2] `skill-runner.test.ts` 假服务的 `Route` 返回了 `res.end()` 的 `ServerResponse`,TS2322 —— **采纳整改**:两处箭头函数改成块体。
+  5. [P2] `EnabledTools.skills` 改成必填后 `imagegen.test.ts` / `title.test.ts` 的两个 fixture 缺字段,TS2741 —— **采纳整改**:补 `skills: emptySkills()`。教训:`dev.ps1 check`(encore check)不扫测试文件,**`npx tsc --noEmit -p apps/api` 要进本轮验证**(1.0 时也是这么做的,本轮漏了)。
+  6. [P2] `json_pretty.py` 的深度把标量叶子也算一层,`{"a":1,"b":[1,2]}` 回 3,而 SKILL.md 示例写的是 2 —— **采纳整改**:深度只数容器嵌套(顶层标量为 0),自检回 2。
+  整改后 `npx tsc --noEmit -p apps/api` 通过;相关测试全绿;清单重生成(`--check` 零漂移)。
+- **第 2 轮(2026-09-03,`4ccc92b`,仍全量)findings 2 条**:
+  1. [P1] `skill_run` 的 env 第二闸只按 `tool_config.dangerous` 那一位判,而那一位可经 MCP `tool_config_set` 改成 false,持管理 token 的人改一行就绕过了 env 闸 —— **采纳整改**(改判断,不加机制):`agent/tools.ts` 加代码常量 `DANGEROUS_TOOLS = {skill_run}`,高危 = 表里那一位 **或** 代码点名;表里只能把别的工具加进闸里,不能把 `skill_run` 放出去。`sandbox.test.ts` 加一条:表里改成 dangerous=false、缺 env 仍不注册;`docs/security.md` R-SKILLS-2 补记 / `deploy/.env.example` / agent README 同步。
+  2. [P1] 前端 Tools 面板的第四组「沙箱执行组」不在已入库的画板 1f/1g 与原型里,违反「设计稿是功能边界」与本卡「先改画板再进轮次」的前置 —— **不在代码里改,回所有者裁定**(CLAUDE.md「审查边界」:findings 指向设计层面的,停下回任务卡 / 所有者,不在整改循环里堆补丁)。事实:开工时核对过云端与本地画布都没有第四组(「本轮实测 · 前置核对」),前端按本卡建议值先接、`design/` 一字未动、已记 BACKLOG。两条出路都是所有者的:① 在画布上把第四组画上(本卡前置第 2 项原文),拉稿合并后按画板核对三处;② 裁定在画板补上之前前端**隐藏**沙箱执行组(代价:`skill_run` 在 Tools 面板上不可见,与 R-TOOLS「面板由后端目录派生」相悖)。
+     **所有者裁定(2026-09-03):「正常展示出来就好了」** —— 前端保持第四组按当前值(组名「沙箱执行组」/ `#8b5cf6` / 徽标「沙箱执行」)渲染,不隐藏;这条 finding **不采纳**(裁定即答案),不再阻塞合并与发版。画板 1f/1g 补画仍是所有者的 BACKLOG 事项,画完后按画板核对三处即可。
+- **第 3 轮(2026-09-03,`be05b94`,只审第 2 轮整改 diff,`--base 4ccc92b`)**:无 findings —— 「按代码里的清单判高危、同时保留表里的 dangerous 位对其它工具的作用,未见回归」(审查器的沙箱临时目录权限挡住了它自己跑测试,以代码审读为准;本机 `dev.ps1 test` 500 + 9 全绿)。
+- 结论:**整改后 PASS**。高级别 findings 清零(首轮 2 条 P1 整改、第 2 轮 1 条 P1 整改 + 1 条设计层面由所有者裁定「正常展示」);合并 `main` → 发版(三镜像)→ 生产冒烟第 19 / 20 条 → 按「运维」段顺序打开。
 
 ## 失败处理
 
@@ -135,7 +152,56 @@ spike(验收 2)不过属前置未满足,同样写 BLOCKED 回所有者重裁裁�
 
 ## 本轮实测
 
-<!-- 完成后回填:spike 记录、实际数字、踩的坑、与设计/计划的偏离及原因 -->
+### 前置核对(2026-09-03 开工时)
+
+- 1.0 已合并 `main`(`789007e`);生产 `skills_list` 回 `[]` —— 所有者还没上传首批 skills。不阻塞:一致性判据只在 skill 打开时才起作用,上传步骤写进「运维」段。
+- **画板 1f/1g 第四组未画**:经 DesignSync 拉云端 `Agent Runtime Workbench.dc.html` 与本地 diff,两边的 `toolGroups` 都只有三组,没有「沙箱执行」/ `skill_run` 字样。
+  按「先做不依赖答案的事」处理:前端 `ToolsPanel.tsx` 的第四组按本卡建议值接上(组名「沙箱执行组」、色 `#8b5cf6`、徽标「沙箱执行」、
+  注记「独立无网络容器里跑 skill 自带的脚本 · 只能跑清单里的」),`design/` 一字未动(所有者的画布,不替他画)。**待所有者画完后核对三处**,记 BACKLOG。
+- spike(验收 2):`python:3.12-slim` 里一个 `ThreadingHTTPServer` 绑 `/run/runner/runner.sock`(命名卷),`oven/bun:1.4.0-slim` 里
+  `fetch("http://skill-runner/run", { method: "POST", unix: sock })` → `200` 回显请求体;`GET /health` 同;备选 `node:http.request({ socketPath })` 也通。
+  两个容器都是 `--network none`。Encore 的 JS 运行时不改写 `globalThis.fetch`(grep `apps/api/node_modules/encore.dev` 无命中),生产 api 进程用的就是 Bun 的全局 fetch。
+
+### 执行容器自检(本机 docker,`runner/runner.py`)
+
+用一份测试 skill(`sleep.py` / `flood.py` / `fork.py` / `net.py` / `probe.py` / `mem.py`)以 bind mount 覆盖 `/opt/skills` 与 `/opt/manifest.json`,TCP 开发模式起容器
+(`--read-only --tmpfs /run/work:noexec,… --cap-drop ALL --pids-limit 64 --memory 384m --cpus 1.0`),逐项打:
+
+| 项 | 结果 |
+|---|---|
+| `wordfreq.py` / `json_pretty.py` | exit 0、stdout 是 JSON;坏 JSON 输入 exit 2 且 stdout 是 `{"error":"invalid_json"}`;中文与 emoji 往返无损 |
+| 非清单 skill / 脚本(`rm.py`)/ 哈希不符 / `../runner.py` / input 不是对象 | `404 unknown_skill` / `404 unknown_script` / `409 hash_mismatch` / `400 bad_request` / `400 bad_request` |
+| 只读 / env / 隔离模式 | `/opt/skills/x` 写入 OSError;cwd 是 `/run/work/<uuid>` 可写;env 只有 `HOME` / `LANG` / `PATH`;`sys.flags.isolated == 1`、`sys.prefix == /opt/venv` |
+| 超时 3 s 的 `sleep 60` | 2.99 s 回 `timedOut: true, exitCode: null`,stdout 只有超时前的 `start` |
+| 10 MB stdout + 300 KB stderr | 各截到 262144 字节,`stdoutBytes: 10485760` 如实计数,内存无事 |
+| fork 炸弹 | `fork stopped at 11 BlockingIOError`(NPROC 16 减去 runner 自己的线程)。**踩坑**:第一版用 `BufferedReader.read(65536)`,它攒够 n 字节或 EOF 才返回,孙进程握着管道时最后一行输出永远读不到、且 11 个睡 30 s 的孤儿留在容器里 —— 改成 `read1` + **无论超时与否都 killpg** + 收尾 `waitpid(-1, WNOHANG)` 收僵尸;改后测试结束时容器里只剩 runner 自己(验收 ⑪「进程组不残留」) |
+| 400 MB `bytearray` | rlimit AS 256 MB → `MemoryError` exit 1,traceback 只在 stderr(api 不转发) |
+| 3 个并发 `sleep`(超时 4 s) | 两个跑到超时被 kill,第三个 `503 queue_timeout`(排队计入总时长) |
+| 镜像 | `pip` 已从 venv 删除(`No module named pip`);`python -I` 隔离位为 1;`--network none` 起容器 `socket.create_connection(('1.1.1.1',53))` 抛 OSError、`/proc/net/route` 无路由、`touch /opt/skills/x` 失败 |
+
+### 与任务卡的偏离(理由)
+
+1. **生成物路径**:`apps/api/agent/skills.generated.ts` → **`apps/api/shared/skills.generated.ts`**。mcp 的 `skills_agent_status` / `skills_agent_set` 也要同一份代码清单,而两个服务不互相 import(R4 口径),shared/ 是既有的落点(`site-tabs.ts` / `skill-pack.ts` 同款)。清单类型与一致性判据也在 `shared/skill-manifest.ts`。
+2. **`skill_load` 不在 `TOOL_REGISTRY` 常量表里**,而是工厂 `makeSkillLoadTool(skills)`:它要在注册环节拿到「本会话可用集合」(读库算出来的),常量表里放不下 —— 与 `web_search` 走工厂是同一个理由。分组仍是纯函数组(`catalog.ts` 显式列),`catalog.test.ts` 的集合相等已把它算进去。
+3. **前端测试的运行方式**:`apps/web` 原本没有任何测试运行器,任务卡又写了 `trace-view.test.ts`。用 `node:test` 写法 + `bun test lib` 跑(bun 原生支持 node:test),零新增 npm 依赖;`dev.ps1 test` 不带参数时收尾多跑这一步。记 BACKLOG 一条(将来 web 测试变多再考虑 vitest)。
+4. **`skill_run` 的 `network` 路由**:本轮只有 `none` 一个客户端;`runner/skills` 里声明 `egress` 的 skill 不进可用集合(`dropped` 记原因),runner 侧也按 `RUNNER_NETWORK` 拒(R-WEBFETCH C6 提前进本轮,与任务卡一致)。
+5. **runner 的 rlimit 不用 `preexec_fn`**(Python 文档:多线程程序里不安全),改为一个启动器进程 `launch.py` 先 `setrlimit` 再 `execv` 成 `python -I -B <脚本>`。效果相同、路径多一跳,自检里 `probe.py` 打印的 rlimit 已核。
+6. **观测者不再订阅两个事件**(`tool_call` / `before_agent_start`)是研究文档 §2.5 定的,这里只是实现;`events.ts` 的白名单加了派生字段 `handlers`,只按名取两个键、`returned` 仍过 `sanitizeValue`。
+
+### 数字
+
+- `dev.ps1 check` 通过;`npx tsc --noEmit -p apps/api` 与 `-p apps/web` 通过(encore check 不扫测试文件,codex 首轮抓到 12 处 strict 报错后补进验证);`dev.ps1 test`:api **25 文件 / 500 用例**全绿(本轮前 18 / 413;新增 `guard.test.ts` 12、`skill-injector.test.ts` 6、`skills-catalog.test.ts` 12、`skills-manifest.test.ts` 10、`skill-runner.test.ts` 21、`skills-e2e.test.ts` 1、`mcp/agent-skills.test.ts` 10,既有文件补 15);web **9 用例**全绿(`bun test lib`)。
+- 验收 ⑦ / ⑧ 用 `skills-e2e.test.ts` 钉住:一个本地 OpenAI chat/completions SSE 假服务(pi 以 `openai-completions` 协议打它)+ 一个假执行容器,驱动**真实**的 `acquireSession → session.prompt`;
+  断言的事件序列:`before_agent_start.handlers = [{xray-skills, {systemPromptDelta>0, skills:[text-tools]}}]`;拦截 = `tool_execution_start → tool_call(handlers[0].returned.block===true) → tool_execution_end(isError)` 且无 `tool_result`;
+  放行 = `tool_call(returned 为空) → tool_execution_update ×≥3 → tool_execution_end(isError=false, resultPreview 含 exit=0) → tool_result`;执行容器收到的是清单里的 sha256 与过了 schema 的对象;`daily_quota.skill_runs` 计 1;整段轨迹 JSON 里搜不到 socket 路径 / 运行器地址 / 超时数字 / key。
+- MCP:`tools/list` **46**(42 + 4);`skills_agent_status` 四种状态在 `mcp/agent-skills.test.ts` 逐一断言。
+
+### 验收表当前状态
+
+① ✅ ② ✅ ③ ✅(`skills-gen --check` 零漂移;`skills-manifest.test.ts` 逐文件核;`network` 缺省 none、egress 不进集合 + runner 拒)④ ✅ ⑤ ✅ ⑥ ✅ ⑦ ✅ ⑧ ✅ ⑨ ✅
+⑩ **部分**:1a 拦截行徽标 / 注记、1b 详情卡、1c 链式步骤按画板;Tools 面板第四组**画板未画**,按建议值接;`git diff` 无样式属性改动(三处都是投影 / 绑定 / 一条 `Record` 项)
+⑪ ✅(并发 20 只放行 5;CHECK 5000–120000 在 `agent-skills.test.ts`;进程组不残留在自检)⑫ ✅ ⑬ ✅ ⑭ **部分**:本机 `docker build runner/` 通过、`-I` 隔离位 1、`pip` 不可用;`dev.ps1 build` 三镜像要等审查收口后跑(所有者纠正过:审查没过不打镜像)
+⑮ ⑯ **生产冒烟与端到端**:发版之后跑(冒烟清单已加第 19 / 20 条)
 
 ### 文档轮留证(2026-09-03)
 

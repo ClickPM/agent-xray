@@ -30,12 +30,13 @@ design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token �
 deploy/       docker compose + Caddyfile + migrate.sh(预发/生产共用的部署资产,R9/R11 定稿)
 docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署 / **生产发布记录(releases.md)**
 rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap 在根 ROUNDS.md
-tools/        预留给本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。
-              目前**没有这个目录**:R5 的 notes-sync 管线已随 R6 删除,内容发布改走 MCP 管理服务;
-              R-SKILLS-2 将放 skills 清单生成器(读 runner/skills → 生成 api 与执行容器两份同源清单)
-runner/       **待实现(R-SKILLS-2)**:agent 可运行 skills 的执行容器(Python 基座 + venv + `runner.py`)与可被 agent 使用的
-              skill 源(`runner/skills/<name>/`)。刻意在 Encore app root 之外;它不是 JS 运行时,规则 11 不涉及。
-              R-WEBFETCH:同一镜像起第二个只出公网的实例,`runner/skills/web-fetch` 是首个 egress 档 skill
+tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。R5 的 notes-sync 管线已随 R6 删除;
+              现在只有 `skills-manifest/generate.mjs`(R-SKILLS-2):读 runner/skills → 生成 api 与执行容器两份同源清单
+              (`apps/api/shared/skills.generated.ts` + `runner/manifest.json`,都是生成物、都入库),`dev.ps1 skills-gen` 调它
+runner/       **R-SKILLS-2 已落地**:agent 可运行 skills 的执行容器(`Dockerfile` Python 基座按 digest 钉 + venv + `runner.py` /
+              `launch.py`)与可被 agent 使用的 skill 源(`runner/skills/<name>/`:SKILL.md + 可选 xray.json + scripts/*.py)。
+              刻意在 Encore app root 之外;它不是 JS 运行时,规则 11 不涉及。布局与协议见 `runner/README.md`。
+              R-WEBFETCH(待实现):同一镜像起第二个只出公网的实例,`runner/skills/web-fetch` 是首个 egress 档 skill
 .claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
               + MCP 启动脚本。`.mcp.json` 另注册了三个站点管理面(本机 / 130 / 生产),
               token 各走各的环境变量、都不入库,分工见下方「本地开发」的表;
@@ -99,12 +100,14 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       (markdown 渲染 / 代码带行号)+ 复制安装命令 / GitHub 外链 / 站内 zip;按用途分类;**只读**(无搜索 / 筛选 / 点赞 / 安装量 / RSS)。
       **文件一律当文本渲染、永不执行、不收二进制**;新表不授权任何 agent 角色(规则 9,`docs/security.md` R-SKILLS 补记)。
       新增 tab 仍按 R-TABS 的「三处登记」走,`GlobalNav` 与既有三 tab 页面零改动。
-    - **2026-09-03 修订(R-SKILLS-2,`round-skills` 的 2.0 迭代,待实现)**:所有者裁定让 agent **使用** skills —— `skill_load` 把 `SKILL.md`
+    - **2026-09-03 修订(R-SKILLS-2,`round-skills` 的 2.0 迭代;同日代码落地)**:所有者裁定让 agent **使用** skills —— `skill_load` 把 `SKILL.md`
       送进上下文,`skill_run` 在独立的无网络执行容器里跑该 skill 声明过的 Python 脚本。这是产品能力扩面,所有者裁定「做」;
       Tools 面板多出第四组「沙箱执行组」,**先改画板 1f/1g、再进轮次**(R-TOOLS 顺序,是 2.0 的开工前置)。Timeline / 详情卡 / 链式视图
       的拦截徽标与「EXTENSION RETURNED」卡画板 1a/1b/1c 早已画着,不新增画板。**哪些 skill 可用**:代码清单(`runner/skills/`)∩ 库里
       `skills.agent_enabled`(默认 FALSE,只展示不注入)∩ 展示副本与代码副本 sha256 一致 ∩ 工具闸开着;改可用 skill = 发版(所有者裁定)。
       Skills 页**不**显示「agent 可用」徽标(画板没有,记 BACKLOG)。七条裁定与依据见 `rounds/round-skills/research.md`,交付清单见 `round-skills-2.md`。
+      **落地时的一处未闭合**:画板 1f/1g 的第四组在开工时云端与本地画布都还没画(所有者画布未改),前端 `ToolsPanel.tsx` 的第四组按任务卡建议值
+      (`#8b5cf6`、组名「沙箱执行组」)先接上,待所有者在画布上定稿后按画板核对(记在任务卡「本轮实测」与 BACKLOG)。
     - **2026-09-03 修订(R-WEBFETCH,建在 R-SKILLS-2 之上,待实现)**:所有者裁定让 agent 读**访客指定的公网网页** —— 不是新工具,是沙箱执行组里
       一个声明了出网档次(`xray.json` 的 `network: egress`)的 skill `web-fetch`,由同一镜像的第二个执行容器实例 `skill-runner-egress`(只出公网,
       不在 `front` / `back`)跑;api 进程不碰 URL、不碰 HTML。不新增工具、画板、迁移、MCP 工具,前端零改动。**访客给的 URL 不设域名限制、
@@ -112,7 +115,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       所有者已认。方案与十条裁定见 `rounds/round-webfetch/round-webfetch.md`;预研的 in-process 形态(`study.md`)退役。
     - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用,新画板从 `2i` 顺延(`1a–1g`、`2a–2h` 已用)。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**(执行类能力只能在独立沙箱容器里:容器可常驻,每次运行必须是一次性的进程与工作目录 —— 所有者裁定 2026-09-03,R-SKILLS-2);SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
-    - **工具分四组**(R-WEBSEARCH 2026-09-01 定前两组、R-TITLE 同日补第三组、R-SKILLS-2 2026-09-03 裁定第四组「沙箱执行组」待实现;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。**会话绑定组**(`session_rename`;`generate_image` 同时也是会话绑定的)是「纯函数 / 数据面只读」的**唯一例外**:无网络、无凭据,只经专用 NOLOGIN 角色写**本会话那一行**的限定列(`agent_title` 只改 `sessions.title` 两列;`agent_image` 只 INSERT `generated_images`),会话 id 在建会话时闭包绑死、不是入参。**沙箱执行组**(`skill_run`,待实现)是第四档:api 进程内同样不碰文件系统 / 子进程,只经 **unix socket** 调独立的 `skill-runner` 容器(默认实例 `network_mode: none`、只读、rlimit;R-WEBFETCH 2026-09-03 裁定加**同一镜像的 egress 实例**,只出公网、不在 `front` / `back`,只跑 `xray.json` 声明 `network: egress` 的 skill,首个是 `web-fetch` —— 它是外呼组「不接受 URL 参数」的唯一例外,SSRF 防线 = 脚本逐地址校验 + 钉 IP 连、容器不在内部网络、宿主 `DOCKER-USER` 过滤;**不维护域名黑白名单**,拒的是固定内网地址段);入参只有 `skill` / `script`(闭集)与 `input`(JSON,过 schema),**可执行的 skill 集合在代码里**(`runner/skills/`,改 = 发版),库里只能在集合之内开关;八条附加约束见 `docs/security.md` §1 R-SKILLS-2 补记,egress 档的第九条见 R-WEBFETCH 补记。完整口径见 `docs/security.md` §1「工具分两组」表与 R-TITLE / R-IMAGEGEN / R-SKILLS-2 补记。
+    - **工具分四组**(R-WEBSEARCH 2026-09-01 定前两组、R-TITLE 同日补第三组、R-SKILLS-2 2026-09-03 裁定并落地第四组「沙箱执行组」;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。**会话绑定组**(`session_rename`;`generate_image` 同时也是会话绑定的)是「纯函数 / 数据面只读」的**唯一例外**:无网络、无凭据,只经专用 NOLOGIN 角色写**本会话那一行**的限定列(`agent_title` 只改 `sessions.title` 两列;`agent_image` 只 INSERT `generated_images`),会话 id 在建会话时闭包绑死、不是入参。**沙箱执行组**(`skill_run`,R-SKILLS-2 已落地)是第四档:api 进程内同样不碰文件系统 / 子进程,只经 **unix socket** 调独立的 `skill-runner` 容器(默认实例 `network_mode: none`、只读、rlimit;R-WEBFETCH 2026-09-03 裁定加**同一镜像的 egress 实例**,只出公网、不在 `front` / `back`,只跑 `xray.json` 声明 `network: egress` 的 skill,首个是 `web-fetch` —— 它是外呼组「不接受 URL 参数」的唯一例外,SSRF 防线 = 脚本逐地址校验 + 钉 IP 连、容器不在内部网络、宿主 `DOCKER-USER` 过滤;**不维护域名黑白名单**,拒的是固定内网地址段);入参只有 `skill` / `script`(闭集)与 `input`(JSON,过 schema),**可执行的 skill 集合在代码里**(`runner/skills/`,改 = 发版),库里只能在集合之内开关;八条附加约束见 `docs/security.md` §1 R-SKILLS-2 补记,egress 档的第九条见 R-WEBFETCH 补记。完整口径见 `docs/security.md` §1「工具分两组」表与 R-TITLE / R-IMAGEGEN / R-SKILLS-2 补记。
 10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。**镜像一律本机构建后传输,服务器不构建、不留仓库与工具链**;tag 必须是 git SHA,禁止 `latest`。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。
 11. **生产 JS 运行时统一为 bun,且「开实验位」与「换基座」必须成对出现**(所有者裁定 2026-08-29,R-BUN)。开发/测试/预发/生产四个环境的**运行时**都是 bun,**最终运行镜像(final runtime image)里不含 node**。三处配置缺一不可:`apps/api/encore.app` 的 `"experiments": ["bun-runtime"]`、构建时的 `--base oven/bun:<钉住版本>-slim`、`apps/web/Dockerfile` 的 bun 基座。
     - **边界要说清,别理解成「项目已经不依赖 node/npm」**:node 与 npm 仍保留在**构建工具链**里——`apps/web/Dockerfile` 的 builder 阶段装 `nodejs`/`npm` 并用 `npm ci` + `npx next build`,只是这些都不进 runner 阶段。准确表述是「**Node 已从生产 runtime 与最终运行镜像中移除;构建阶段与依赖解析仍用 Node/npm**」。
@@ -142,9 +145,14 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
 .\dev.ps1 ship <host> [sha]   # 镜像 + 四件部署资产送到服务器(不传 .env);发版后记 docs/releases.md
 .\dev.ps1 skills     # 把 .claude\skills 镜像到 .agents\skills(codex 审查者只认后者)
+.\dev.ps1 skills-gen # 读 runner\skills 生成两份同源清单(runner\manifest.json + apps\api\shared\skills.generated.ts;R-SKILLS-2)
+.\dev.ps1 runner     # 本机起 skill-runner 执行容器(TCP 开发模式 127.0.0.1:8000;api 侧设 $env:XRAY_SKILL_RUNNER_URL="http://127.0.0.1:8000")
 .\dev.ps1 wt-clean   # 列出 .claude\worktrees 残留;带 <名字|all> 清理,--force 跳过安全闸
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```
+
+- **`dev.ps1 test` 跑两处**(R-SKILLS-2 起):`encore test`(api)之后再在 `apps/web` 跑 `bun test lib`(前端纯函数投影测试,`node:test` 写法、零新增依赖);
+  带文件参数时只筛 api 侧。`dev.ps1 build` 出**三个**镜像(api / web / runner),构建前先 `--check` 清单是否与 `runner/skills` 一致。
 
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。

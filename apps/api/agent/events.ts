@@ -187,7 +187,20 @@ const EVENT_DERIVED: Record<string, (e: Record<string, unknown>) => Record<strin
   tool_result: (e) => ({ contentPreview: previewText(e.content) }),
 };
 
-export function sanitizeEvent(eventType: string, event: unknown): unknown {
+/**
+ * 带派生字段 `handlers` 的事件(R-SKILLS-2):`tool_call` 由守卫扩展落笔、`before_agent_start` 由注入扩展落笔
+ * (「谁裁决,谁记录」,agent/guard.ts 文件头)。`handlers` 是 `[{extension, returned}]` 的**摘要**:
+ * 守卫的 `returned` 是 `{block, reason≤200}`、注入器的是 `{systemPromptDelta, skills:[名字]}`,
+ * 不放系统提示词原文、不放脚本输出原文。其它事件即使传了 handlers 也不透出 —— 白名单的意义就是不认识的不放行。
+ */
+const HANDLER_EVENTS = new Set(["tool_call", "before_agent_start"]);
+
+export interface EventHandlerRecord {
+  extension: string;
+  returned?: unknown;
+}
+
+export function sanitizeEvent(eventType: string, event: unknown, handlers?: EventHandlerRecord[]): unknown {
   if (typeof event !== "object" || event === null) return { type: eventType };
   const src = event as Record<string, unknown>;
   const out: Record<string, unknown> = {};
@@ -196,6 +209,13 @@ export function sanitizeEvent(eventType: string, event: unknown): unknown {
   }
   const derive = EVENT_DERIVED[eventType];
   if (derive) Object.assign(out, derive(src));
+  if (handlers !== undefined && HANDLER_EVENTS.has(eventType)) {
+    // 只按名取两个字段,不 spread:将来 HandlerRecord 上多出什么,这里不点名就出不去
+    out.handlers = handlers.map((h) => ({
+      extension: typeof h.extension === "string" ? h.extension.slice(0, 64) : "?",
+      ...(h.returned !== undefined && { returned: sanitizeValue(h.returned) }),
+    }));
+  }
   // 单事件总量上限:进内存队列 / SSE 前的最终断言(adversarial review 整改)
   try {
     if (JSON.stringify(out).length > MAX_EVENT_BYTES) return { type: eventType, oversized: true };

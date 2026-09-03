@@ -916,13 +916,13 @@ describe("imagegen 管理 tool 的入参 schema", () => {
     return z.object(t!.config.inputSchema!);
   };
 
-  it("四个 imagegen tool 都注册了;总数 42", () => {
+  it("四个 imagegen tool 都注册了;总数 46", () => {
     for (const name of ["imagegen_providers_list", "imagegen_provider_upsert", "imagegen_set_default", "imagegen_provider_delete"]) {
       expect(registered.map((r) => r.name)).toContain(name);
     }
     // 总数是一道「别不小心多注册一个管理面工具」的闸,加工具时**要**改这个数字
-    // (R-TABS:32 → 34;R-SKILLS:34 → 42,分类三个 + skill 五个)
-    expect(registered).toHaveLength(42);
+    // (R-TABS:32 → 34;R-SKILLS:34 → 42,分类三个 + skill 五个;R-SKILLS-2:42 → 46,agent 开关两个 + 沙箱配置两个)
+    expect(registered).toHaveLength(46);
   });
 
   it("baseUrl 被拒时给出能行动的理由;搜索白名单里的域在这里也被拒", () => {

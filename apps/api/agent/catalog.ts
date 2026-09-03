@@ -13,6 +13,8 @@ import {
   GENERATE_IMAGE_META,
   MAX_RESULT_CHARS,
   SESSION_TOOL_REGISTRY,
+  SKILL_LOAD_META,
+  SKILL_RUN_META,
   TOOL_REGISTRY,
   WEB_SEARCH_META,
   type ToolMeta,
@@ -20,14 +22,18 @@ import {
 } from "./tools";
 
 /**
- * 工具分组 = 注册路径(docs/security.md §1「工具分两组」+ R-TITLE 补记的第三档):
- *   pure     —— 在 `TOOL_REGISTRY`(纯函数组:只读 notes 三张表,不联网)
+ * 工具分组 = 注册路径(docs/security.md §1「工具分四组」):
+ *   pure     —— 在 `TOOL_REGISTRY`(纯函数组:只读 notes 三张表,不联网),或经 `makeSkillLoadTool` 构造
+ *               (R-SKILLS-2 的 `skill_load`:读的是编译进 api 的代码清单,不碰库不碰文件系统 —— 性质是纯函数,
+ *               只是它要在注册环节拿到「本次可用集合」,所以与 web_search 一样走工厂而不是常量表)
  *   outbound —— 经 `makeWebSearchTool` / `makeGenerateImageTool` 构造(外呼组:持服务端凭据打白名单域;
  *               `generate_image` 同时按会话绑定,但它的**性质**是外呼 —— 分组按「凭据从哪来」判)
  *   session  —— 在 `SESSION_TOOL_REGISTRY`(会话绑定组:闭包绑定会话 id,只写本会话标题)
+ *   sandbox  —— 经 `makeSkillRunTool` 构造(沙箱执行组,R-SKILLS-2:api 进程只发一个 HTTP 请求,
+ *               执行发生在独立的无网络容器里;访客驱动的是一个解释器,所以单独一档)
  * 前端按这个值挑分组文案与颜色,**不按工具名**。
  */
-export type ToolGroup = "pure" | "outbound" | "session";
+export type ToolGroup = "pure" | "outbound" | "session" | "sandbox";
 
 /** 面板上一条工具的全部内容。字段集就是白名单:多一个要在 `publicEntry` 里点名。 */
 export interface ToolCatalogEntry {
@@ -46,7 +52,7 @@ export interface ToolCatalogEntry {
 }
 
 export interface ToolCatalogResponse {
-  /** 按分组顺序:纯函数组 → 外呼组 → 会话绑定组;组内按注册顺序 */
+  /** 按分组顺序:纯函数组 → 外呼组 → 会话绑定组 → 沙箱执行组;组内按注册顺序 */
   tools: ToolCatalogEntry[];
   /**
    * 单个工具结果**正文**的字符上限(`capText` 的预算),面板脚注「工具结果正文统一 N 字符上限」用。
@@ -81,25 +87,31 @@ function publicEntry(meta: ToolMeta, group: ToolGroup): ToolCatalogEntry {
 }
 
 /**
- * 目录:**从三条构造路径派生**,不手工维护(所有者裁定 2026-09-02:面板永远不是第二个要改的地方)。
+ * 目录:**从构造路径派生**,不手工维护(所有者裁定 2026-09-02:面板永远不是第二个要改的地方)。
  *
  *   - `TOOL_REGISTRY` 的每一项 → 纯函数组(定义对象就是 `{ ...META, execute }`,META 在对象上)
+ *   - `SKILL_LOAD_META` → 纯函数组(R-SKILLS-2;`makeSkillLoadTool(skills)` 要在注册环节拿到可用集合,
+ *     所以是工厂,但 META 是模块常量 —— 目录里看不到任何一个 skill 名字,那是会话级的事)
  *   - `WEB_SEARCH_META` / `GENERATE_IMAGE_META` → 外呼组(它们没有注册表:`makeWebSearchTool(cfg)` /
  *     `makeGenerateImageTool(cfg, ctx)` 没配置就构造不出来,但 META 是模块常量,不依赖 cfg / ctx ——
  *     这正是「未配置时也照样列出、且不暴露配置缺失细节」的来源)
  *   - `SESSION_TOOL_REGISTRY` 的每一项 → 会话绑定组(工厂带 `meta`,不用先造一个假会话)
+ *   - `SKILL_RUN_META` → 沙箱执行组(R-SKILLS-2;`makeSkillRunTool(skills, sandbox, runner)` 的三个参数
+ *     在 META 的作用域里都不存在:socket 路径 / 超时 / 限额 / skill 名进不了描述与 schema)
  *
- * 【已知的一个洞,不要假装没有】派生只覆盖它**认识**的构造路径 —— 今天是这四条。将来有人加
- * **第五条**构造路径且不进 META,这里看不见它。兜底不在这里,在 catalog.test.ts 的双向集合相等:
- * 目录的 name 集合必须等于「两个注册表 + web_search + generate_image」的并集,**且**迁移里
- * `tool_config` 种下的每个名字都要有目录项。新工具必经这两处(注册 + 种启停行),漏一处就红。
+ * 【已知的一个洞,不要假装没有】派生只覆盖它**认识**的构造路径 —— 今天是这六条。将来有人加
+ * **第七条**构造路径且不进 META,这里看不见它。兜底不在这里,在 catalog.test.ts 的双向集合相等:
+ * 目录的 name 集合必须等于「两个注册表 + web_search + generate_image + skill_load + skill_run」的并集,
+ * **且**迁移里 `tool_config` 种下的每个名字都要有目录项。新工具必经这两处(注册 + 种启停行),漏一处就红。
  */
 export function toolCatalog(): ToolCatalogEntry[] {
   return [
     ...Object.values(TOOL_REGISTRY).map((definition) => publicEntry(definition, "pure")),
+    publicEntry(SKILL_LOAD_META, "pure"),
     publicEntry(WEB_SEARCH_META, "outbound"),
     publicEntry(GENERATE_IMAGE_META, "outbound"),
     ...Object.values(SESSION_TOOL_REGISTRY).map((factory) => publicEntry(factory.meta, "session")),
+    publicEntry(SKILL_RUN_META, "sandbox"),
   ];
 }
 

@@ -255,7 +255,7 @@ export namespace agent {
 
     export interface ToolCatalogResponse {
         /**
-         * 按分组顺序:纯函数组 → 外呼组 → 会话绑定组;组内按注册顺序
+         * 按分组顺序:纯函数组 → 外呼组 → 会话绑定组 → 沙箱执行组;组内按注册顺序
          */
         tools: ToolCatalogEntry[]
 
@@ -274,21 +274,25 @@ export namespace agent {
     }
 
     /**
-     * 工具分组 = 注册路径(docs/security.md §1「工具分两组」+ R-TITLE 补记的第三档):
-     * pure     —— 在 `TOOL_REGISTRY`(纯函数组:只读 notes 三张表,不联网)
+     * 工具分组 = 注册路径(docs/security.md §1「工具分四组」):
+     * pure     —— 在 `TOOL_REGISTRY`(纯函数组:只读 notes 三张表,不联网),或经 `makeSkillLoadTool` 构造
+     * (R-SKILLS-2 的 `skill_load`:读的是编译进 api 的代码清单,不碰库不碰文件系统 —— 性质是纯函数,
+     * 只是它要在注册环节拿到「本次可用集合」,所以与 web_search 一样走工厂而不是常量表)
      * outbound —— 经 `makeWebSearchTool` / `makeGenerateImageTool` 构造(外呼组:持服务端凭据打白名单域;
      * `generate_image` 同时按会话绑定,但它的**性质**是外呼 —— 分组按「凭据从哪来」判)
      * session  —— 在 `SESSION_TOOL_REGISTRY`(会话绑定组:闭包绑定会话 id,只写本会话标题)
+     * sandbox  —— 经 `makeSkillRunTool` 构造(沙箱执行组,R-SKILLS-2:api 进程只发一个 HTTP 请求,
+     * 执行发生在独立的无网络容器里;访客驱动的是一个解释器,所以单独一档)
      * 前端按这个值挑分组文案与颜色,**不按工具名**。
      */
-    export type ToolGroup = "pure" | "outbound" | "session"
+    export type ToolGroup = "pure" | "outbound" | "session" | "sandbox"
 
     /**
      * 单个入参的 JSON Schema 子集。**只列本仓库工具实际用到的关键字**:类型不认的关键字进不了
      * META,也就进不了面板 —— 想用新关键字先扩这里,前端才知道怎么画它。
      */
     export interface ToolParamSchema {
-        type: "string" | "integer"
+        type: "string" | "integer" | "boolean"
         description: string
         minLength?: number
         maxLength?: number

@@ -24,7 +24,7 @@
 | `endpoint.ts` | `api.raw` 入口。**先认证再交给 SDK**:未认证的请求不该有机会让服务端构造 server 实例、解析 JSON-RPC |
 | `auth.ts` | bearer 校验。服务端只存 sha256,比较走定长摘要的常数时间比较;失败一律同一句 `unauthorized` |
 | `server.ts` | `createMcpHandler` 装配(每请求一个 `McpServer` 实例)+ `toNodeHandler` 适配 |
-| `tools.ts` | 42 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
+| `tools.ts` | 46 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
 | `store.ts` | 全部 SQL。**明文 LLM key 不出本文件** |
 | `content.ts` | 入库前的派生:字数、章节内容哈希 |
 | `audit.ts` | `mcp_audit` 写入;永不 reject(审计是旁路,不能让已完成的写操作变成 500) |
@@ -33,7 +33,7 @@
 加解密原语在 `apps/api/shared/crypto.ts`——mcp(写)与 agent(读)两个服务都要用,
 按规则 5 由各自的 service 取好 secret 值再传进去,共享库里不出现 `secret()`。
 
-## 工具(42)
+## 工具(46)
 
 - notes 三张表 CRUD:分类 / 系列 / 章节。**入参即标准 markdown,server 只校验不改写**
 - 附件:`notes_asset_put` / `notes_asset_delete` / `notes_assets_list`。存 Postgres,
@@ -47,6 +47,13 @@
   且 frontmatter `name` = skill 名;任一不合规整包不入库。zip 在这里打好存 `skills.zip`(fflate,mtime 钉死),
   读面 `apps/api/skills/` 只吐字节。同内容重发 `status: unchanged`、`updated_at` 不动。
   `repo`(`owner/repo`)必填、`repoUrl` 与 `LICENSE` 非必填(所有者裁定 2026-09-03)
+- **agent 使用 skills(R-SKILLS-2,四个)**:`skills_agent_set(name, enabled)` 只能在**代码清单**之内开关(清单 = `shared/skills.generated.ts`,
+  由 `runner/skills` 生成;不在清单里的名字被拒,改可用集合要发版);`skills_agent_status` 是给所有者看的镜子 —— 代码清单里每个 skill
+  的 `inLibrary` / `agentEnabled` / `consistency`(`ok` / `drift` / `missing`,drift 时列 missing / extra / changed 的路径)/ `available`,
+  另回两个工具闸;`sandbox_config_get` / `sandbox_config_set`(部分更新:`dailyRunLimit` 0 = 不限、`totalTimeoutMs` 5000–120000,
+  库级 CHECK)。**打开顺序**在 `server.ts` 的 INSTRUCTIONS 与任务卡「运维」段:发版 → 生产冒烟 → `tool_config_set skill_load` →
+  逐 skill `skills_agent_set` → 服务器 `.env` 加 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 重建 api → `tool_config_set skill_run`。
+  一致性判据实现在 `shared/skill-manifest.ts`(agent 侧注册环节用同一份)
 - About 内容(`about_get` / `about_set`)。R8 起前端 `/about` 直接读这张表
   (`apps/api/about/`),并新增「公开仓库 / 语言构成」两块。
   **`about_set` 是部分更新**(R8 改口径):省略的字段保留原值,清空是显式动作

@@ -26,6 +26,7 @@ import { publicImageUrl } from "./images";
 import { reserveImage } from "./quota";
 import { createSession } from "./store";
 import { buildSessionTools, GENERATE_IMAGE_TOOL, imageAltText, type EnabledTools } from "./tools";
+import { emptySkills } from "./skills-catalog";
 import { checkBaseUrl as checkSearchBaseUrl } from "../shared/websearch-hosts";
 
 /** 一把一眼能认出来的假 key:凡是它出现在不该出现的地方,断言就该红。 */
@@ -663,6 +664,7 @@ describe("generate_image 工具(经真实构造路径 + 注入 fetch)", () => {
     definitions: [],
     sessionScoped: [GENERATE_IMAGE_TOOL],
     imageGen: cfg(over),
+    skills: emptySkills(),
     fingerprint: "ig-only",
   });
 
