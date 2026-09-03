@@ -18,7 +18,46 @@
 | 2026-09-02 | `d2a87d0` | 10 | 纯前端修补两条:`9dd0c89` Timeline 进行中行波浪扫光 + 发送按钮生成期间转圈禁用;`d2a87d0` 文章页阅读进度线接真实滚动 | 无(`apps/api` 与 `deploy/` 零改动;`migrate.sh --status` 无待执行);备份 `~/deploy/.env.bak-pre-d2a87d0` | `b291eb1` | 三个 Tab 冒烟 |
 | 2026-09-03 | `da10f6e` | 10 → **11** | R-TABS(顶部 tab 呈现开关:迁移 011 + `site` 只读服务 + MCP `site_tabs_list` / `site_tab_set`)+ 构建修复:`site` 补进 `dev.ps1` 的 `--services` 白名单(R-TABS 漏补,按 `459b168` 构建会整站 500,见下) | 无(`deploy/` 四件资产零改动,未重传;`.env` 只改 `IMAGE_TAG`);备份 `~/deploy/.env.bak-pre-da10f6e` | `d2a87d0` | 三页 200 + `/api/site/tabs` 可读;bun 1.4.0 双容器、真 node 不存在;`server/discover` 回 2026-07-28、`tools/list` **34**。**发版后经 `site_tab_set` 隐藏 `runtime`**(所有者要求):`/` → **307** `/notes`、导航条只剩 Notes / About、`/rss.xml` 仍 200 |
 | 2026-09-03 | `789007e` | 11 → **12** | R-SKILLS 1.0(Skills 技能库 tab:迁移 012 三张表 + `apps/api/skills/` 只读面(首页 / 详情 / zip)+ MCP 八个 `skills_*`(工具 34 → **42**)+ 前端画板 2f/2g/2h + 四格 tab 三处登记)。发版时库里**还没有任何 skill**,`/skills` 是空态(所有者裁定「直接可见」,首批内容随后经 MCP 上传) | `deploy/Caddyfile` **有变更**(新增 `^/skills/[a-z0-9-]+\.zip$` → `/assets/skills/…` 扩展名分流),随 `dev.ps1 ship` 重传后 `caddy validate` + `caddy reload`(不重启容器);`.env` 只改 `IMAGE_TAG`;备份 `~/deploy/.env.bak-pre-789007e` | `da10f6e` | 冒烟:九个服务各取正式端点全部非 404(`/api/skills` 200、`/api/site/tabs` 200、`/api/t` 204、`/api/trace/stream` 400=非 404、`/api/mcp` 无 token 401);`/notes` `/skills` `/about` 200、`/` 仍 **307**(`runtime` 保持隐藏)、`/skills` 渲染「共 0 个 skill」空态;`/api/spike/*` 与 `/admin` 404;`/skills/<不存在>.zip` 回 **api 的 JSON 404**(证明新 Caddy 规则生效)、`/skills/<不存在>` 详情页 404;Notes 配图 200 + ETag、复请求 304(Caddy reload 无回归);`server/discover` 回 `2026-07-28`、`tools/list` **42** 含八个 `skills_*`;两容器 `process.versions.bun` = 1.4.0。发版当日随即上传首批 **18 个 skill**(见下),补验:`/skills/<name>.zip` 回 **`application/zip`**、zip 解开后逐文件 sha256 与源目录一致(diagram 11/11);`/api/skills` 回 total 18 / 四分类 7·6·2·3。**未验**:SSE 全链路(本次 diff 未触 `apps/api/agent` 运行代码,只加了迁移与测试) |
-| 2026-09-03 | `c1ee245` | 12 → **13** | 一次发三轮:**R-SKILLS-2**(agent 使用 skills —— `skill_load` 注入 + `skill_run` 在独立无网络执行容器里跑脚本;迁移 013 + **第三个镜像 `xray-runner`** + MCP 42 → **46**)、**R-PERF**(软导航加载态 / 详情页载荷瘦身 / 错误边界,画板 2i–2k)、**R-TOOLCARDS**(会话区工具调用卡:实时内联 + 跑完折叠 2l / 展开 2m,`messages.payload` 加工具调用偏移表可回放)。**双闸保持关闭**:迁移种下的 `skill_load` / `skill_run` 都是 `enabled=false`,`.env` 未加 `XRAY_UNLOCK_DANGEROUS_TOOLS` —— 本次只发版,打开按 `round-skills-2.md`「运维」段的顺序另做 | `deploy/docker-compose.yml` **有变更**(新增 `skill-runner` service:`network_mode: none` / `init: true` / 只读 / noexec tmpfs / cap_drop ALL / pids 64 / mem 384m、命名卷 `runner_sock` 与 api 的 unix socket 挂载、透传 `XRAY_UNLOCK_DANGEROUS_TOOLS`),随 `dev.ps1 ship` 重传后由 `up -d` 建卷建容器;`Caddyfile` 无变更(重传同内容,未 reload);`.env` 只改 `IMAGE_TAG`;备份 `~/deploy/.env.bak-pre-c1ee245` | `789007e` | 冒烟:九服务正式端点全部非 404(`/api/notes/series` 200、`/api/site/tabs` 200、`/api/skills` 200 total 19、`/api/t` 405=非 404、`/api/trace/stream` 400、`/api/mcp` 无 token 401、带 token GET 405);`/notes` `/skills` `/about` 200、`/` 仍 **307 → /notes**;`/api/spike/*` 与 `/admin` 404;`/skills/diagram.zip` 回 `application/zip`;Notes 配图 200 + ETag、复请求 **304**;`http://` 无响应、裸域 **301** 带路径到 www;两容器 `process.versions.bun` = 1.4.0 且真实 node 不存在、`dpkg` 无 nodejs;`server/discover` 回 `supportedVersions:["2026-07-28"]`、`tools/list` **46**(含 `skills_agent_set` / `skills_agent_status`)。**第 19 条 skill-runner 隔离四项全过**(双闸关闭状态下):healthy、容器内 `create_connection(1.1.1.1:53)` 抛 `Network is unreachable` 且 `/proc/net/route` 只有表头、`touch /opt/skills/x` 回 Read-only、经 unix socket 发清单外脚本名回 `404 unknown_script`;`docker inspect` 核到 `NetworkMode=none` / `ReadonlyRootfs=true` / `CapDrop=[ALL]` / `PidsLimit=64` / `Memory=384m` / tmpfs `noexec`。**SSE ×2 用一轮真实对话验**(验后删会话):`/agent/ask` 流式出字 + `tool_start`/`tool_end` 各 2、`done` 回 `modelRoundTrips:3 turnMs:7053`;回放 `GET /agent/sessions/:id` 拿到 R-TOOLCARDS 的 `turn.toolCalls`(`at` 偏移 / `durationMs` / 入参与结果摘要 / `isError`),`/trace/stream?afterSeq=0` 回放 18 种事件类型;两条流的原始字节里 `Authorization`/`api-key`/`sk-`/`baseUrl`/`/run/runner`/`unix:` 均 **0** 次 |
+| 2026-09-03 | `c1ee245` | 12 → **13** | 一次发三轮:**R-SKILLS-2**(agent 使用 skills —— `skill_load` 注入 + `skill_run` 在独立无网络执行容器里跑脚本;迁移 013 + **第三个镜像 `xray-runner`** + MCP 42 → **46**)、**R-PERF**(软导航加载态 / 详情页载荷瘦身 / 错误边界,画板 2i–2k)、**R-TOOLCARDS**(会话区工具调用卡:实时内联 + 跑完折叠 2l / 展开 2m,`messages.payload` 加工具调用偏移表可回放)。发版时双闸关闭(迁移种下的 `skill_load` / `skill_run` 都是 `enabled=false`),**当日随即按 `round-skills-2.md`「运维」段的顺序全部打开**(见下) | `deploy/docker-compose.yml` **有变更**(新增 `skill-runner` service:`network_mode: none` / `init: true` / 只读 / noexec tmpfs / cap_drop ALL / pids 64 / mem 384m、命名卷 `runner_sock` 与 api 的 unix socket 挂载、透传 `XRAY_UNLOCK_DANGEROUS_TOOLS`),随 `dev.ps1 ship` 重传后由 `up -d` 建卷建容器;`Caddyfile` 无变更(重传同内容,未 reload);`.env` 发版时只改 `IMAGE_TAG`(备份 `~/deploy/.env.bak-pre-c1ee245`),**当日打开双闸时第二次改**:第 89 行 `#XRAY_UNLOCK_DANGEROUS_TOOLS=` → `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 并 `up -d api` 重建(备份 `~/deploy/.env.bak-pre-unlock-dangerous`) | `789007e` | 冒烟:九服务正式端点全部非 404(`/api/notes/series` 200、`/api/site/tabs` 200、`/api/skills` 200 total 19、`/api/t` 405=非 404、`/api/trace/stream` 400、`/api/mcp` 无 token 401、带 token GET 405);`/notes` `/skills` `/about` 200、`/` 仍 **307 → /notes**;`/api/spike/*` 与 `/admin` 404;`/skills/diagram.zip` 回 `application/zip`;Notes 配图 200 + ETag、复请求 **304**;`http://` 无响应、裸域 **301** 带路径到 www;两容器 `process.versions.bun` = 1.4.0 且真实 node 不存在、`dpkg` 无 nodejs;`server/discover` 回 `supportedVersions:["2026-07-28"]`、`tools/list` **46**(含 `skills_agent_set` / `skills_agent_status`)。**第 19 条 skill-runner 隔离四项全过**(双闸关闭状态下):healthy、容器内 `create_connection(1.1.1.1:53)` 抛 `Network is unreachable` 且 `/proc/net/route` 只有表头、`touch /opt/skills/x` 回 Read-only、经 unix socket 发清单外脚本名回 `404 unknown_script`;`docker inspect` 核到 `NetworkMode=none` / `ReadonlyRootfs=true` / `CapDrop=[ALL]` / `PidsLimit=64` / `Memory=384m` / tmpfs `noexec`。**SSE ×2 用一轮真实对话验**(验后删会话):`/agent/ask` 流式出字 + `tool_start`/`tool_end` 各 2、`done` 回 `modelRoundTrips:3 turnMs:7053`;回放 `GET /agent/sessions/:id` 拿到 R-TOOLCARDS 的 `turn.toolCalls`(`at` 偏移 / `durationMs` / 入参与结果摘要 / `isError`),`/trace/stream?afterSeq=0` 回放 18 种事件类型;两条流的原始字节里 `Authorization`/`api-key`/`sk-`/`baseUrl`/`/run/runner`/`unix:` 均 **0** 次 |
+
+### R-SKILLS-2 双闸打开(2026-09-03,`c1ee245` 发版当日)
+
+按 `rounds/round-skills/round-skills-2.md`「运维」段的顺序做完五步,四个 skill 对 agent 可用:
+
+1. **对齐展示副本**(不对齐 `consistency` 就不是 ok,不会被注入):`text-tools` 生产没有 —— 先推到
+   [`ClickPM/skills-hub`](https://github.com/ClickPM/skills-hub/tree/main/text-tools)(`cfc317d`,自研 skill 的既定出处,
+   站内安装命令由 `repo` 派生,不推那条命令就是假的)再 `skills_upsert` 上传 4 个文件;`encore-api` /
+   `encore-database` / `encore-testing` 各只有 1 个 SKILL.md 且是 **CRLF**(上传源 `.claude/skills/` 被 `core.autocrlf`
+   写成了 CRLF,而哈希按字节算),整包重传 LF 的 SKILL.md + 上游 Apache-2.0 `LICENSE`,两处漂移一起修掉
+2. `tool_config_set skill_load true`
+3. `skills_agent_set` 四个全 true → `skills_agent_status` 四个 `consistency: ok` / `available: true`
+4. 服务器 `.env` 加 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` → `docker compose up -d api` 重建(env 变了 `restart` 不生效)
+5. `tool_config_set skill_run true`
+
+**冒烟清单第 20 条(端到端)逐项留证**,四个测试会话验后即删:
+
+- ② 「用 text-tools 统计词频」→ `skill_load` → `skill_run(wordfreq.py)` **exit=0 · 117ms**,回复给出正确词频,一轮 12s
+- ③ 拦截:直接问「跑 `scripts/rm.py`」**触发不了 guard** —— `skill_load` 已把 SKILL.md 送进上下文,
+  模型自己就回「只开放了两个脚本」。要让 guard 真的裁决得走**入参不过 schema** 那条(`top=999`,上限 50)。
+  轨迹里是验收要的形状,且**全程没有 `tool_result`**(同一条流里另两个成功工具各有一条):
+
+  ```text
+  seq=101 tool_execution_start  skill_run
+  seq=102 tool_call             skill_run  handlers=[{"extension":"xray-guard","returned":{"block":true,"reason":"字段 top 不能大于 50"}}]
+  seq=103 tool_execution_end    skill_run  isError=True
+  ```
+
+  `durationMs: 0` 说明请求根本没到执行容器
+- ④ `/agent/ask` 与 `/trace/stream` 原始字节里 `/run/runner` / `unix:` / `runner.sock` / `MAX_RUNS` /
+  `Authorization` / `api-key` 均 **0** 次;`/api/agent/tools` 里唯一的 `limit` 命中是 `notes_search` 的公开
+  入参 schema(`maximum: 20`),不是限额
+- ⑤ 止损:`tool_config_set skill_run false` 之后**新会话**里 agent 只剩 `session_rename` + `skill_load`,
+  明确回「当前会话未提供 `skill_run`」;开回来即恢复
+
+> **别拿 `/api/agent/tools` 判「工具关掉了没有」。** 它是**静态**目录,`catalog.ts` 开头就写明刻意不读
+> `tool_config`(「回答的是这个 agent 具备什么能力,与有没有正在运行的会话无关」),
+> 所以关掉的工具照样列在面板上。第 20 条 ⑤ 的唯一判据是**会话里实际拿到的工具集**,
+> 本次先按 catalog 判过一次,是错的。
 
 ### `da10f6e` 那条「构建修复」是什么(2026-09-03,发版前拦下)
 
