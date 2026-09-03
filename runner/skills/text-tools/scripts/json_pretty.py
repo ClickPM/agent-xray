@@ -12,25 +12,29 @@ MAX_INDENT = 8
 MAX_DEPTH = 64
 
 
-def measure(value, depth=1):
-    """返回 (键数, 最大深度)。键数只数对象里的键,数组元素不算键。"""
+def measure(value):
+    """返回 (键数, 容器嵌套深度)。
+
+    键数只数对象里的键,数组元素不算键。深度只数**容器**(对象 / 数组)的嵌套层数,标量不加层:
+    `{"a":1,"b":[1,2]}` 是 2(外层对象 + 内层数组),与 SKILL.md 的示例一致;顶层就是标量时为 0。
+    """
     if isinstance(value, dict):
         keys = len(value)
-        deepest = depth
+        deepest = 0
         for v in value.values():
-            k, d = measure(v, depth + 1)
+            k, d = measure(v)
             keys += k
             deepest = max(deepest, d)
-        return keys, deepest
+        return keys, 1 + deepest
     if isinstance(value, list):
         keys = 0
-        deepest = depth
+        deepest = 0
         for v in value:
-            k, d = measure(v, depth + 1)
+            k, d = measure(v)
             keys += k
             deepest = max(deepest, d)
-        return keys, deepest
-    return 0, depth
+        return keys, 1 + deepest
+    return 0, 0
 
 
 def type_name(value) -> str:

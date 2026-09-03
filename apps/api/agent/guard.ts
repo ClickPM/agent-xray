@@ -17,7 +17,7 @@
 //
 // 【不做的事】不 registerCommand(访客输入以 `/` 开头会被 pi 当命令分发,附 A-4)、不读 process.env、不碰库、
 // 不 ctx.ui.notify(headless)。`reason` 里只出现工具名 / skill 名 / 字段名与上下界 —— 不含任何内部路径与配置值。
-import type { ExtensionAPI, InlineExtension } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { safeErrorText } from "../shared/redact";
 import { findScript, findSkill, validateSkillInput, type AvailableSkills } from "./skills-catalog";
 import { SKILL_LOAD_TOOL, SKILL_RUN_TOOL } from "./tool-names";
@@ -41,6 +41,16 @@ export interface HandlerRecord {
 
 /** 由 runtime.ts 提供:把事件 + 裁决落进轨迹(脱敏 → 待落库队列 → 总线) */
 export type CaptureFn = (eventType: string, event: unknown, handlers: HandlerRecord[]) => void;
+
+/**
+ * pi `InlineExtension` 的**具名对象**形态(那个类型是「工厂函数 | {name, factory}」的联合)。
+ * 本站的扩展都带名字 —— 名字会进 `handlers[].extension`;返回这个收窄后的类型,调用方与测试
+ * 不用再对联合类型做 narrowing 就能拿到 `factory`(codex 首轮 P2)。它可直接放进 `extensionFactories`。
+ */
+export interface NamedExtension {
+  name: string;
+  factory: (pi: ExtensionAPI) => void;
+}
 
 export interface GuardContext {
   /** 本会话注册的工具名(createAgentSession 的 `tools` 白名单) */
@@ -120,7 +130,7 @@ function summarize(decision: GuardDecision | undefined): unknown {
  * 守卫扩展。与 `makeObserver` 同款的 InlineExtension,拿着本会话的上下文闭包;永远注册(不随 skills 开关)。
  * 注册顺序由 runtime.ts 决定:[xray-skills, xray-observer, xray-guard]。
  */
-export function makeGuard(ctx: GuardContext, capture: CaptureFn): InlineExtension {
+export function makeGuard(ctx: GuardContext, capture: CaptureFn): NamedExtension {
   const counters: GuardCounters = { turnRuns: 0, sessionRuns: 0 };
   return {
     name: GUARD_EXTENSION,

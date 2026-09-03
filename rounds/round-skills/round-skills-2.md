@@ -124,8 +124,16 @@
 
 <!-- 审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:codex `/codex:review --background`(改动跨 runner / api / web / deploy);**审查要求带上**:`runner/skills/*/scripts/*.py` 按 research.md §2.2 准入清单逐条判;只判定并报告缺陷与严重级别,不展开设计方案
-- findings 处理:<待回填>
+- 审查方式:codex `/codex:review --background --scope branch`(分支全量 diff against main;改动跨 runner / api / web / deploy)。前两轮全量,第 3 轮起只审整改 diff(CLAUDE.md「审查范围」)
+- **第 1 轮(2026-09-03,`886d8b0`)findings 6 条,逐条处理**:
+  1. [P1] `runner/manifest.json` 引用了三个 `LICENSE` 而 diff 里没有这些文件 —— **采纳,但不是缺陷本身**:审查跑到一半时我为 encore-* 三个上游原版补了 Apache-2.0 `LICENSE`(再分发要附许可证)并重生成了清单,文件还没提交;随整改一起提交即闭合。
+  2. [P1] `runner.py` 的 `reap_orphans()` 用 `waitpid(-1, WNOHANG)`,两次运行并发时会把**另一个请求还没 wait 的直接子进程**先收走,那边 `Popen.wait` 撞 ECHILD 记成退出码 0,非零退出的脚本被报成成功 —— **采纳整改**:删掉 runner 内的 reaper,改由容器的 PID 1 收孤儿(compose `init: true`,docker 自带的 tini;`dev.ps1 runner` 与自检脚本都加 `--init`),runner.py 只 wait 自己的直接子进程;若被当成 PID 1 起(缺 init)则启动时记一行 WARNING。自检复跑:结束时容器里只剩 tini + runner,fork 炸弹的孤儿全部被收走。
+  3. [P2] 测试对 `InlineExtension`(联合类型)直接 `.factory(...)`,strict tsc 报 TS2339 —— **采纳整改**:`makeGuard` / `makeSkillInjector` 的返回类型收窄为具名对象 `NamedExtension { name; factory }`(可直接放进 `extensionFactories`),测试不用 narrowing。
+  4. [P2] `skill-runner.test.ts` 假服务的 `Route` 返回了 `res.end()` 的 `ServerResponse`,TS2322 —— **采纳整改**:两处箭头函数改成块体。
+  5. [P2] `EnabledTools.skills` 改成必填后 `imagegen.test.ts` / `title.test.ts` 的两个 fixture 缺字段,TS2741 —— **采纳整改**:补 `skills: emptySkills()`。教训:`dev.ps1 check`(encore check)不扫测试文件,**`npx tsc --noEmit -p apps/api` 要进本轮验证**(1.0 时也是这么做的,本轮漏了)。
+  6. [P2] `json_pretty.py` 的深度把标量叶子也算一层,`{"a":1,"b":[1,2]}` 回 3,而 SKILL.md 示例写的是 2 —— **采纳整改**:深度只数容器嵌套(顶层标量为 0),自检回 2。
+  整改后 `npx tsc --noEmit -p apps/api` 通过;相关测试全绿;清单重生成(`--check` 零漂移)。
+- 第 2 轮(复审,仍全量):<待回填>
 - 结论:<待回填>
 
 ## 失败处理
@@ -173,7 +181,7 @@ spike(验收 2)不过属前置未满足,同样写 BLOCKED 回所有者重裁裁�
 
 ### 数字
 
-- `dev.ps1 check` 通过;`dev.ps1 test`:api **25 文件 / 500 用例**全绿(本轮前 18 / 413;新增 `guard.test.ts` 12、`skill-injector.test.ts` 6、`skills-catalog.test.ts` 12、`skills-manifest.test.ts` 10、`skill-runner.test.ts` 21、`skills-e2e.test.ts` 1、`mcp/agent-skills.test.ts` 10,既有文件补 15);web **9 用例**全绿(`bun test lib`)。
+- `dev.ps1 check` 通过;`npx tsc --noEmit -p apps/api` 与 `-p apps/web` 通过(encore check 不扫测试文件,codex 首轮抓到 12 处 strict 报错后补进验证);`dev.ps1 test`:api **25 文件 / 500 用例**全绿(本轮前 18 / 413;新增 `guard.test.ts` 12、`skill-injector.test.ts` 6、`skills-catalog.test.ts` 12、`skills-manifest.test.ts` 10、`skill-runner.test.ts` 21、`skills-e2e.test.ts` 1、`mcp/agent-skills.test.ts` 10,既有文件补 15);web **9 用例**全绿(`bun test lib`)。
 - 验收 ⑦ / ⑧ 用 `skills-e2e.test.ts` 钉住:一个本地 OpenAI chat/completions SSE 假服务(pi 以 `openai-completions` 协议打它)+ 一个假执行容器,驱动**真实**的 `acquireSession → session.prompt`;
   断言的事件序列:`before_agent_start.handlers = [{xray-skills, {systemPromptDelta>0, skills:[text-tools]}}]`;拦截 = `tool_execution_start → tool_call(handlers[0].returned.block===true) → tool_execution_end(isError)` 且无 `tool_result`;
   放行 = `tool_call(returned 为空) → tool_execution_update ×≥3 → tool_execution_end(isError=false, resultPreview 含 exit=0) → tool_result`;执行容器收到的是清单里的 sha256 与过了 schema 的对象;`daily_quota.skill_runs` 计 1;整段轨迹 JSON 里搜不到 socket 路径 / 运行器地址 / 超时数字 / key。

@@ -11,9 +11,9 @@
 // 【谁裁决,谁记录】与 guard.ts 同理:观测者不再订阅 `before_agent_start`,由本扩展调 `capture(...)`。
 // 【不做的事】不 registerCommand、不读 process.env、不碰库;目录里只有名字 / 描述 / 档次,没有正文
 // (正文由 skill_load 按需送进上下文,几千字的 SKILL.md 不该每轮都占 token)。
-import type { ExtensionAPI, InlineExtension } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { safeErrorText } from "../shared/redact";
-import type { CaptureFn } from "./guard";
+import type { CaptureFn, NamedExtension } from "./guard";
 import type { AgentSkill, AvailableSkills } from "./skills-catalog";
 import { SKILL_LOAD_TOOL, SKILL_RUN_TOOL } from "./tool-names";
 
@@ -51,7 +51,7 @@ export function renderAvailableSkills(skills: readonly AgentSkill[], opts: { can
   return lines.join("\n");
 }
 
-export function makeSkillInjector(ctx: SkillInjectorContext, capture: CaptureFn): InlineExtension {
+export function makeSkillInjector(ctx: SkillInjectorContext, capture: CaptureFn): NamedExtension {
   const block = renderAvailableSkills(ctx.skills.skills, { canLoad: ctx.canLoad, canRun: ctx.canRun });
   const names = ctx.skills.skills.map((s) => s.name);
   return {

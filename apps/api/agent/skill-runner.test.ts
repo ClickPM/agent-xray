@@ -27,7 +27,9 @@ type Route = (req: IncomingMessage, body: string, res: ServerResponse) => void |
 class FakeRunner {
   server!: Server;
   port = 0;
-  route: Route = (_req, _body, res) => res.end("{}");
+  route: Route = (_req, _body, res) => {
+    res.end("{}");
+  };
   requests: Array<{ method: string; url: string; body: unknown; headers: IncomingMessage["headers"] }> = [];
 
   async start() {
@@ -197,7 +199,9 @@ describe("协议(runSkillScript × 假执行容器)", () => {
   });
 
   it("响应不是 JSON / 形状不对 → bad_response", async () => {
-    fake.route = (_req, _body, res) => res.end("not json");
+    fake.route = (_req, _body, res) => {
+      res.end("not json");
+    };
     expect((await runSkillScript(baseReq(), fake.target()).catch((e) => e)).kind).toBe("bad_response");
     fake.route = fake.json(200, { exitCode: "zero" });
     expect((await runSkillScript(baseReq(), fake.target()).catch((e) => e)).kind).toBe("bad_response");

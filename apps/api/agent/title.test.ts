@@ -16,6 +16,7 @@ import {
   SESSION_TOOL_REGISTRY,
   type EnabledTools,
 } from "./tools";
+import { emptySkills } from "./skills-catalog";
 
 // 每个用例一张干净的 sessions 表。与 store.test.ts 同一口径 —— vitest 配了
 // `fileParallelism: false`,文件之间不会互相清表(apps/api/vitest.config.ts)。
@@ -48,6 +49,7 @@ const RENAME_ONLY: EnabledTools = {
   definitions: [],
   sessionScoped: [SESSION_RENAME_TOOL],
   imageGen: null,
+  skills: emptySkills(),
   fingerprint: SESSION_RENAME_TOOL,
 };
 

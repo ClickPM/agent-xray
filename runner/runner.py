@@ -229,8 +229,8 @@ def kill_group(proc: subprocess.Popen) -> None:
     """start_new_session=True 让子进程自成进程组(pgid == pid);整组 SIGKILL,不留孙进程。
 
     组长已退出时 killpg 仍作用于组里剩下的成员(孙进程);组里一个都不剩才是 ProcessLookupError。
-    孙进程的父进程在组长退出后被 init(容器里的 PID 1 就是本进程)收养 —— 本进程不是 init 实现,
-    它们会短暂成为僵尸,由内核在本进程退出时清掉;compose 的 pids_limit 与 NPROC 都按存活进程计,僵尸不占。
+    被杀的孙进程由容器的 PID 1(compose `init: true` 的 tini)收养并 reap —— 本进程只 wait 自己的直接子进程,
+    不碰别人的(见 main 里的说明)。
     """
     try:
         os.killpg(proc.pid, signal.SIGKILL)
@@ -242,20 +242,6 @@ def kill_group(proc: subprocess.Popen) -> None:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
         log("process did not exit after SIGKILL")
-
-
-def reap_orphans() -> int:
-    """收养来的孙进程(被 killpg 之后)在本进程(PID 1)名下变成僵尸;非阻塞 waitpid 把它们清掉。"""
-    n = 0
-    while True:
-        try:
-            pid, _ = os.waitpid(-1, os.WNOHANG)
-        except ChildProcessError:
-            break
-        if pid == 0:
-            break
-        n += 1
-    return n
 
 
 def parse_run_request(body: bytes) -> tuple[str, str, str, dict, int]:
@@ -348,7 +334,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         finally:
             SEMAPHORE.release()
-            reap_orphans()
         self._send_json(200, result)
 
 
@@ -425,10 +410,12 @@ def main() -> int:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    # 本进程是容器里的 PID 1:被 killpg 掉的孙进程会被它收养,不 reap 就一直是僵尸(占一个 pid 号)。
-    # SIG_IGN 让内核自动回收(POSIX:SIGCHLD 置 SIG_IGN 时子进程退出不产生僵尸)。subprocess.Popen.wait
-    # 在这个设置下对**直接子进程**仍能拿到退出码(Python 的 waitpid 会在 ECHILD 时回 0 —— 只影响返回码为 0
-    # 的边角);为了退出码可靠,这里不用 SIG_IGN,改为在每次运行收尾时顺手 reap 一遍(见 reap_orphans)。
+    # 【孤儿谁来收】脚本 fork 出来的孙进程被 killpg 之后,会被容器里的 PID 1 收养、变成僵尸。本进程**刻意不当 PID 1**:
+    # compose 的 `init: true`(docker 自带的 tini)是 PID 1,由它 reap 孤儿。不能在本进程里 `waitpid(-1)` 兜底 ——
+    # 两次运行并发时,一个请求的 waitpid(-1) 会把另一个请求**还没 wait 的直接子进程**先收走,那边的 Popen.wait
+    # 撞到 ECHILD 会把退出码记成 0,非零退出的脚本就被报成成功(codex 首轮 P1)。所以这里只检查、只告警。
+    if os.getpid() == 1:
+        log("WARNING: running as PID 1 without an init; orphans left by killed scripts will not be reaped (use init: true / --init)")
     try:
         server.serve_forever(poll_interval=0.5)
     finally:

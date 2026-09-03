@@ -186,6 +186,10 @@ services:
     # api 经上面那个命名卷里的 unix socket 单向找它,反向无通道。R-WEBFETCH 的 egress 实例是**另一个** service,
     # 这一行对它不适用;本实例的 network_mode: none 一字不改。
     network_mode: none
+    # 【必须】docker 自带的 tini 当 PID 1:脚本 fork 出来的孙进程被 killpg 之后由它收养并 reap。
+    # runner.py 刻意**不**自己 waitpid(-1) —— 并发两次运行时那会把另一次还没 wait 的子进程先收走、退出码丢成 0
+    # (codex 首轮 P1)。少了这一行的表现是 runner 日志一行 WARNING + 僵尸逐渐占满 pids_limit。
+    init: true
     # 比 api 再收紧三处(docs/security.md §1 第 3 层「执行容器」):只读根 FS + noexec 的 tmpfs 工作目录 + cpus 限 1。
     read_only: true
     tmpfs:

@@ -13,6 +13,11 @@ runner/
   skills/<name>/    可被 agent 使用的 skill 源:SKILL.md(必有)+ xray.json(可运行型才有)+ scripts/*.py
 ```
 
+**首批 skill 源与出处**(2026-09-03):`text-tools` 自研(可运行型,纯标准库);`encore-api` / `encore-database` / `encore-testing`
+是 [encoredev/skills](https://github.com/encoredev/skills)(Apache-2.0,Copyright 2024 Encore)`encore/<name>/SKILL.md` 的**逐字节原版**
+(与上游 `main` 比对 sha256 相等),每个目录随包放上游 `LICENSE` —— 镜像与 api 都带着这份副本,再经 skill_load 送进上下文,属再分发,
+Apache-2.0 要求附许可证。所有者经 MCP 上传展示副本时也要带同一个 `LICENSE`(一致性判据按文件集合比,少了它就是 drift)。
+
 **可用集合在代码里**(所有者裁定 6):改这里的任何一个字节 = 发版。`tools/skills-manifest/generate.mjs`
 读 `skills/` 生成两份同源清单 —— 本目录的 `manifest.json`(执行容器核对用)与
 `apps/api/shared/skills.generated.ts`(api 注入 / 校验 / 一致性判据用);`apps/api/agent/skills-manifest.test.ts`
@@ -39,6 +44,13 @@ runner/
   (string / integer / boolean,`required`,长度与数值上下界,`additionalProperties: false`)。
 - 脚本准入清单:`rounds/round-skills/research.md` §2.2 —— stdin 读一个 JSON 对象 → stdout,只用标准库或
   `requirements.txt` 里钉住的依赖,无 subprocess / socket / ctypes / eval,不写 cwd 之外,确定性,单次远小于超时。
+
+## 进程模型:谁当 PID 1
+
+runner.py **不当 PID 1**:compose 写了 `init: true`(docker 自带的 tini 当 PID 1),`dev.ps1 runner` 与自检脚本用 `--init`。
+脚本 fork 出来的孙进程被 killpg 之后由 tini 收养并 reap;runner 只 wait 自己的直接子进程。**不能**在 runner 里 `waitpid(-1)` 兜底 ——
+两次运行并发时会把另一次还没 wait 的子进程先收走、退出码丢成 0,非零退出被报成成功(codex 首轮 P1)。缺 init 时 runner 启动记一行 WARNING,
+表现是僵尸逐渐占满 `pids_limit`。
 
 ## 协议(api ↔ runner,只走 unix socket)
 

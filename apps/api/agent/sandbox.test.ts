@@ -345,12 +345,12 @@ describe("第 1 层 · 沙箱执行组 skill_load / skill_run 的注册闸(R-SKI
   const UNLOCK_ENV = "XRAY_UNLOCK_DANGEROUS_TOOLS";
   const saved: Record<string, string | undefined> = {};
 
-  /** 把 text-tools 的代码副本种进库并打开(与所有者经 MCP 上传 + skills_agent_set 的效果相同) */
-  async function seedTextTools(enabled = true) {
+  /** 把某个代码副本(runner/skills/<name>/ 的全部文件)种进库并按需打开(与所有者经 MCP 上传 + skills_agent_set 的效果相同) */
+  async function seedCodeSkill(name: string, enabled = true) {
     const { readFileSync, readdirSync, statSync } = await import("node:fs");
     const { join, relative, resolve, dirname } = await import("node:path");
     const { fileURLToPath } = await import("node:url");
-    const dir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "runner", "skills", "text-tools");
+    const dir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "runner", "skills", name);
     const walk = (d: string, base = d): string[] =>
       readdirSync(d).flatMap((n) => {
         const f = join(d, n);
@@ -358,20 +358,23 @@ describe("第 1 层 · 沙箱执行组 skill_load / skill_run 的注册闸(R-SKI
       });
     await db.rawExec(
       `INSERT INTO skills (name, category_slug, summary, source_type, repo, sort_order, zip, zip_size, content_hash, agent_enabled)
-       VALUES ('text-tools', 'framework', '', 'own', 'ClickPM/agent-skills', 0, decode('', 'hex'), 0, 'h', $1)`,
+       VALUES ($1, 'framework', '', 'own', 'ClickPM/agent-skills', 0, decode('', 'hex'), 0, 'h', $2)`,
+      name,
       enabled,
     );
     for (const p of walk(dir)) {
       const content = readFileSync(join(dir, p), "utf8");
       await db.rawExec(
         `INSERT INTO skill_files (skill_name, path, kind, content, size_bytes, line_count, sort_order)
-         VALUES ('text-tools', $1, 'text', $2, $3, 1, 0)`,
+         VALUES ($1, $2, 'text', $3, $4, 1, 0)`,
+        name,
         p,
         content,
         Buffer.byteLength(content, "utf8"),
       );
     }
   }
+  const seedTextTools = (enabled = true) => seedCodeSkill("text-tools", enabled);
 
   async function enable(names: string[], dangerousRun = true) {
     await db.exec`DELETE FROM tool_config`;
@@ -439,21 +442,8 @@ describe("第 1 层 · 沙箱执行组 skill_load / skill_run 的注册闸(R-SKI
   it("skill_run:可用集合里没有可运行型(只有注入型)→ 不注册", async () => {
     await enable(["skill_run"]);
     process.env[UNLOCK_ENV] = "1";
-    // 只种 encore-api(注入型,无脚本)
-    const { readFileSync } = await import("node:fs");
-    const { resolve, dirname } = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
-    const md = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "runner", "skills", "encore-api", "SKILL.md"), "utf8");
-    await db.rawExec(
-      `INSERT INTO skills (name, category_slug, summary, source_type, repo, sort_order, zip, zip_size, content_hash, agent_enabled)
-       VALUES ('encore-api', 'framework', '', 'own', 'ClickPM/agent-skills', 0, decode('', 'hex'), 0, 'h', TRUE)`,
-    );
-    await db.rawExec(
-      `INSERT INTO skill_files (skill_name, path, kind, content, size_bytes, line_count, sort_order)
-       VALUES ('encore-api', 'SKILL.md', 'markdown', $1, $2, 1, 0)`,
-      md,
-      Buffer.byteLength(md, "utf8"),
-    );
+    // 只种 encore-api(注入型,无脚本;整包 = SKILL.md + 上游 LICENSE)
+    await seedCodeSkill("encore-api", true);
     const enabled = await loadEnabledTools();
     expect(enabled.skills.skills.map((s) => s.name)).toEqual(["encore-api"]);
     expect(enabled.names).toEqual([]);

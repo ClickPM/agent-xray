@@ -318,7 +318,7 @@ switch ($Cmd) {
         & docker build -t xray-runner:dev "$repoRoot\runner"
         if ($LASTEXITCODE -ne 0) { throw "runner 镜像构建失败" }
         Write-Host "==> docker run(Ctrl+C 停;RUNNER_LISTEN=tcp://0.0.0.0:8000 → 127.0.0.1:8000)"
-        & docker run --rm --name xray-runner-dev -p 127.0.0.1:8000:8000 `
+        & docker run --rm --init --name xray-runner-dev -p 127.0.0.1:8000:8000 `
             -e RUNNER_LISTEN=tcp://0.0.0.0:8000 -e RUNNER_NETWORK=none `
             --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
             --tmpfs /run/runner:rw,size=1m,uid=10001,gid=10001 `
