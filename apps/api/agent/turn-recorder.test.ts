@@ -183,8 +183,9 @@ describe("脱敏、截断与帧内容(验收 #6 / #8)", () => {
     expect(start.data.inputPreview.endsWith("…(已截断)")).toBe(true);
     expect(end.data.resultPreview).toBe("x".repeat(MAX_STRING) + "…(已截断)");
     expect(end.data.resultPreview).not.toMatch(/\[\+\d+ chars\]/);
-    // 未截断的不带标记
+    // 未截断的不带标记;没有值就是空串
     expect(preview("short")).toBe("short");
+    expect(preview(undefined)).toBe("");
   });
 
   it("工具结果的文本块被拼起来做摘要,不带 {content:[…]} 的壳;没有文本块时整个值原样交给 previewText", () => {

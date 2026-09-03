@@ -53,6 +53,7 @@ const msg = (seq: number, role: MessageRow["role"], content: string): MessageRow
   seq,
   role,
   content,
+  payload: null, // 纯文本行(R-TOOLCARDS 起助手行有工具调用时才带偏移表;历史注入不读它)
   createdAt: Date.now(),
 });
 

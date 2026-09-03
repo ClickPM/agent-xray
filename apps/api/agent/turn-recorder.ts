@@ -80,6 +80,8 @@ export interface TurnRecorder {
 const TRUNCATED_MARK = /…\[\+\d+ chars\]$/;
 
 export function preview(value: unknown): string {
+  // 没有入参 / 没有结果就是空串,不把 `undefined` 四个字母画到卡片上
+  if (value === undefined) return "";
   return previewText(value).replace(TRUNCATED_MARK, "…(已截断)");
 }
 

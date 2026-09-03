@@ -593,16 +593,19 @@ export function Workbench() {
     // 收尾(done / error / 网络断开三处都走这里,只生效一次):先把在途帧落地,再把助手项标成 done ——
     // 折叠只在这一刻发生一次(画板 2l 规则 2)。没等到 tool_end 的卡按服务端同一条兜底规则标成错误态、
     // 耗时留空(turn-recorder.ts 的 finish),实时与回放看到的因此是同一份(验收 #3)。
+    //
+    // 没有收尾帧(连接中途断开、done / error 都没到)就**不折叠**:折叠行要的两个数拿不到,编一行
+    // 「0 次模型往返 · 0ms」是撒谎。保持内联态、只把在途的落地 —— 与改动前的行为相同;重新打开会话时
+    // 按库里那份(服务端 finish 落的)回放。
     const finalize = (summary?: TurnSummary) => {
       if (finalized) return;
       finalized = true;
       flushNow();
       if (!started) return;
       if (turn) {
-        if (summary) {
-          turn.modelRoundTrips = summary.modelRoundTrips;
-          turn.turnMs = summary.turnMs;
-        }
+        if (!summary) return;
+        turn.modelRoundTrips = summary.modelRoundTrips;
+        turn.turnMs = summary.turnMs;
         for (const c of turn.toolCalls) {
           if (c.durationMs === undefined) { c.isError = true; c.resultPreview = ""; }
         }
