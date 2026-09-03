@@ -25,12 +25,14 @@ const SERVER_NAME = "agent-xray-admin";
 const SERVER_VERSION = "1.0.0";
 
 const INSTRUCTIONS =
-  "Agent X-Ray 站点的管理面。用这些工具维护 Notes 内容(分类/系列/文章/配图)、About 页内容、" +
-  "LLM / 联网搜索 / 生图三组 provider 配置与 agent 业务工具的启停。\n" +
+  "Agent X-Ray 站点的管理面。用这些工具维护 Notes 内容(分类/系列/文章/配图)、Skills 技能库(分类/skill 整包)、" +
+  "About 页内容、LLM / 联网搜索 / 生图三组 provider 配置与 agent 业务工具的启停。\n" +
   "约定:文章正文是标准 markdown(GFM),服务端只校验不改写;配图先 notes_asset_put 上传," +
-  "正文里用 /notes/<seriesSlug>/<文件名> 引用。三组 provider 的 key 任何读回都是掩码;" +
+  "正文里用 /notes/<seriesSlug>/<文件名> 引用。skill 经 skills_upsert **整包**发布(每次带全部文件、只收文本、" +
+  "根目录必须有 SKILL.md 且 frontmatter name 等于 skill 名),zip 由服务端打好供 /skills/<name>.zip 下载。" +
+  "三组 provider 的 key 任何读回都是掩码;" +
   "搜索与生图 provider 的 baseUrl 各有一份目标域白名单(在代码里),配好 provider 后还要 tool_config_set 打开对应工具。\n" +
-  "site_tab_set 控制顶部三个 tab 各自露不露 —— 那只是**呈现**开关(导航条不渲染 + 该 tab 的页面在站点上不可达)," +
+  "site_tab_set 控制顶部四个 tab 各自露不露 —— 那只是**呈现**开关(导航条不渲染 + 该 tab 的页面在站点上不可达)," +
   "被隐藏 tab 的后端端点仍在服务;要真的停掉 agent 用 tool_config_set。";
 
 /** 反代在前,socket 地址永远是反代;审计线索取 XFF 首段(见 audit.ts 的同名逻辑)。 */

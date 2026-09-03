@@ -2,9 +2,10 @@
 
 <!-- 保存为 rounds/round-skills/round-skills.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**未开始(文档就绪、四条裁定已落,2026-09-03;所有者要求另开 session 开工)**
+> 状态:**进行中 —— 实现完成、本机验收 ①–⑪ / ⑬ / ⑭ 通过(2026-09-03);待 codex 审查、待镜像验收 ⑫ 与生产发版**
 >
 > 开工前置动作已完成:任务卡与 ROUNDS.md 拆解已过目,「所有者裁定」四条已定(见下),文档已合并 `main`。
+> 开工分支 `claude/round-skill-phase-one-abc0e6`(worktree),实测与偏离见文末「本轮实测」。
 >
 > **2.0 迭代已裁定并落卡**(2026-09-03):agent 使用 skills(注入 + 沙箱运行 Python 脚本)见 [`round-skills-2.md`](round-skills-2.md)
 > 与 [`research.md`](research.md)。**本卡(1.0)是它的前置,范围不变**:本轮 agent 仍不读 skills、新表仍不授权任何 agent 角色;
@@ -169,6 +170,50 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
 ## 本轮实测
 
 <!-- 完成后回填:实际数字、踩的坑、与设计/计划的偏离及原因 -->
+
+### 实现留证(2026-09-03,本机)
+
+**数字**:`dev.ps1 check` 通过;`dev.ps1 test` **18 文件 / 413 用例全绿**(本轮前 16 / 388;新增 `skills/skills.test.ts` 9 条、`mcp/skills.test.ts` 16 条,
+`site/tabs.test.ts` / `mcp.test.ts` / `sandbox.test.ts` 各改一处断言);管理面工具 34 → **42**;前端 `tsc --noEmit` 通过;新增生产依赖 **`fflate@0.8.3`**(exact)。
+
+**验收逐项**(本机 encore run :4000 + next dev;发布走真实 MCP 协议路径,脚本在会话 scratchpad,token 取自用户环境变量、不进命令行):
+
+| # | 结果 |
+|---|---|
+| 1 | check 通过;test 18/413 全绿 |
+| 2 | `tabs.test.ts` 种子 ↔ 登记表一致(四格);`site_tab_set` 的 enum 下发 `runtime / notes / skills / about`(`tools/list` 实看) |
+| 3 | `mcp/skills.test.ts`:缺 SKILL.md / 放错目录 / frontmatter name 不符 / 无 frontmatter / `..` / 绝对路径 / 非法字符 / 5 段 / 单文件 256 KB+1 / 整包 600 KB / 65 文件 / NUL / svg / 孤立代理对 / 大小写重名 / 空包 / 坏 name **17 种**逐条拒;`repoUrl: javascript:` 在 schema 层拒(真实 MCP 路径也实测拒);curated 不带 `repoUrl`、不带 `LICENSE` 能发布 |
+| 4 | 同内容重发(含文件顺序打乱)→ `unchanged`、`updated_at` 与 zip 字节都不动;改一个文件 / 改 summary → `updated`、zip 重打。真实 MCP 路径:四个 skill 各重发一次全部 `unchanged` |
+| 5 | `skills_delete` 后 `skill_files` 无残留;`skills_category_delete` 对仍有 skill 的分类 → `ConflictError`,清空后可删 |
+| 6 | `GET /skills` 分类 / 卡片按 `sort_order`、空分类不出现、`total` / `latest` 正确;`GET /skills/<name>` 文件顺序 SKILL.md 首位;未知 → 404、大写 / 非 ASCII / 65 字符 → 400(前端统一成 404) |
+| 7 | zip:200 + `application/zip` + `attachment; filename="<name>.zip"` + `nosniff` + 强 ETag(内容哈希)+ 一天缓存无 `immutable`;`If-None-Match` → 304;HEAD 无正文;解压后 4 个 skill 逐文件与源目录 **IDENTICAL**;**经 next dev 代理与直连 api 两条路径都通**(Caddy 那条按同款 regex 写入,待 130 / 生产冒烟) |
+| 8 | 画板 2f:四格导航条、分类色点 + slug、卡片(等宽名 + 自研蓝 / 精选灰徽标 + 一句话 + `出处 · N 个文件 · 更新于 N 天前`)、页脚两行、hover 态 —— 截图对照通过 |
+| 9 | 画板 2g:面包屑 / 等宽 22px 标题 + 徽标 / `GitHub ↗` + `下载 zip · 3 KB` / INSTALL 面板 / 目录树(SKILL.md 首位、目录 ▾、大小列、选中行 `--bg-selected` + 600)/ frontmatter 键值块(`when_to_use` 折叠块并成一段)/ 正文 / 「本页目录」四项且锚点 id 与标题一致;画板 2h:点 `.py` → 行号列、三 token 高亮、「本页目录」消失、地址栏同步 `?file=scripts%2Freview.py`;`?file=` 深链直达;两处 copy 点击后显示绿色 `✓ copied`、1.5 s 后回落;`repoUrl` 为空的自研 skill 不渲染 `GitHub ↗` 与出处链接、版式不变(与 encore-api 那页对比) |
+| 10 | `site_tab_set{skills,false}` → `/notes` 上导航条三格、`/skills` 与 `/skills/<name>` 404、`/skills/<name>.zip` 与 `api /skills` 仍 200(边界只到呈现层);恢复 → 四格 |
+| 11 | 含 `<script>` / `<img onerror>` 的 SKILL.md 与 `.py`、含 `<script>` 的 summary 在页面上只是文本(DOM 里 0 个 `img`,无内容来源的 script);`repoUrl: javascript:` 写面拒、前端 `safeExternal` 二次拦;zip 响应 `nosniff`;`sandbox.test.ts`:`agent_ro` 读 skills 三表 `permission denied` |
+| 12 | `dev.ps1` 的 `$hostedServices` 已含 `skills`;镜像构建与「镜像里 `GET /skills` 非 404」留待发版前在 130 / 生产冒烟(清单第 1 / 3 条已改) |
+| 13 | 真实 MCP 路径(2026-07-28 契约):`server/discover` 回 `["2026-07-28"]`,`tools/list` **42**;`skills_upsert` 发布仓库自带的 `encore-api` / `encore-database` / `encore-testing`(精选,`encoredev/skills`)+ 一个带 `scripts/*.py` 与 `references/*.md` 的自研示例 → 页面出现 → zip 解压与源目录逐文件一致 |
+| 14 | `dev.ps1 gen` 后 `api-client.ts` 含 `skills` 命名空间(`listSkills` / `getSkill`)、不含 `mcp`;生成物里被翻掉的三行 app slug 按 BACKLOG 先例还原 |
+
+**与任务卡的偏离(实现时的判断,列出来供审查 / 所有者过目)**:
+
+1. **第五个 skill 工具 = `skills_file_get`**。任务卡写「skill 五个」但只点名了四个;`skills_get` 若回整包内容,一个 512 KB 的包会灌满管理端上下文,
+   所以 `skills_get` 只回元信息 + 文件清单(路径 / 种类 / 大小 / 行数),原文由 `skills_file_get{name, path}` 单取 —— 与 `notes_chapter_get`「改之前先读回来」同一用途。总数仍是 42。
+2. **`skills` 表多一列 `content_hash`**(任务卡的列清单没列):幂等判据(与 `notes_chapters.content_hash` 同一约定),同时充当 zip 的强 ETag —— 不必另存一份 zip 哈希。
+3. **测试文件**:写面用例放在新文件 `apps/api/mcp/skills.test.ts`(25 条),没有塞进已 1000+ 行的 `mcp.test.ts`;后者只改了工具总数闸与四格相关的三处断言。
+4. **kind 派生不回落成 `text`**:扩展名不在表里一律拒(闭集的本意);无扩展名的常见文本文件(`LICENSE` / `README` / `Makefile` / `.gitignore` 等)按白名单收成 `text`。
+   `.svg` / `.html` 因此进不来 —— 与 `docs/security.md` 的措辞「SVG 不是文本 kind」一致。路径「深度 ≤ 4」按**段数 ≤ 4**(至多三层目录)实现;另加**不区分大小写去重**(Windows / macOS 解压会互相覆盖)。
+5. **markdown 文件在服务端预渲染**:`Markdown.tsx` 本轮零改动,而它的标题 id 是按出现次序计数的;放进 Client Component 后开发态 StrictMode 双调用会把 id 变成 `何时用-1`、与 SSR 输出不符(实测水合告警)。
+   于是 `[name]/page.tsx` 把每个 markdown 文件预渲染成 ReactNode(`mdViews`)与目录(`tocs`)传给 `SkillDetail`,客户端只决定显示哪一个;代码文件仍在客户端由纯函数 `CodeView` 渲染。副作用:react-markdown / KaTeX 不进这页的客户端包。
+6. **`SkillFileKind` 写成显式字面量联合**:`(typeof SKILL_FILE_KINDS)[number]` 会让 `encore check` 报 `unsupported indexed access type operation`(它进了 API 响应形状)。
+7. **代码视图的横向滚动在整块上**而不是画板上每行各自 `overflow-x:auto`(静态画板定不出这层差别;逐行滚动条是视觉 bug)。
+8. `lib/time.ts` 新增 `relTimeZh`(画板 2f 写的是「更新于 12 天前」,Notes 的 `relTime` 是 `3d ago`,各照各的画板);`lib/external.ts` 抽出 About 页同名的 `safeExternal`(About 页本身零改动)。
+9. `?file=` 指向不存在的文件时回落到 SKILL.md 而不是 404(它只是「打开哪个文件」的提示,不该让整个 skill 变成 404)。
+10. 「本页目录」与 Notes 文章页同一实现:全部项非激活态(画板 2g 画的是第一项激活;Notes 的 2c 同样没做滚动联动,沿用先例不另起机制)。
+11. 目录树顺序:每层先文件后目录、各按名字排,根目录 SKILL.md 钉首位(画板示例里 `scripts/` 在 `references/` 前只是示例数据的顺序)。
+
+**踩的坑**:Write 工具会把 `\u0000` / `\u001f` 这类转义解码成字面控制字符写进 `.ts`(用户级 CLAUDE.md 记过),`shared/skill-pack.ts` 用 python 脚本按 `chr(92)` 拼回转义形式;
+worktree 开工三件事(npm ci ×2、复制 `.secrets.local.cue`、PowerShell cwd)按项目记忆处理,`dev.ps1 gen` 把 app slug 翻成 `mkaxu`、按先例还原。
 
 ### 文档轮留证(2026-09-03)
 

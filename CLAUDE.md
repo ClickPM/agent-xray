@@ -9,7 +9,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 ## 项目定位
 
-**Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。四个 Tab:Runtime 工作台 / Notes 研习库 / **Skills 技能库(R-SKILLS,2026-09-03 裁定、待实现)** / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。**站点已于 2026-09-02 投产**(https://www.kzgai.cloud/,R11),此后进入运维迭代:**较大迭代依旧延续轮次机制**(命名轮,所有者裁定 2026-09-03),小修补可直接 `main`;**每次生产发版必须记入 [`docs/releases.md`](docs/releases.md)**。
+**Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。四个 Tab:Runtime 工作台 / Notes 研习库 / **Skills 技能库(R-SKILLS,2026-09-03 裁定并落地)** / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。**站点已于 2026-09-02 投产**(https://www.kzgai.cloud/,R11),此后进入运维迭代:**较大迭代依旧延续轮次机制**(命名轮,所有者裁定 2026-09-03),小修补可直接 `main`;**每次生产发版必须记入 [`docs/releases.md`](docs/releases.md)**。
 
 - **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) 画板 1a–1g + 2a–2h(共 15 块)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h 于 2026-09-03 新增,3a–3e 已废弃并于 2026-09-02 从画布删除)。管理面范围以 ROUNDS.md R6 裁定清单为准。
 - 架构与既定决策:[`docs/architecture.md`](docs/architecture.md)(pi SDK in-process、Encore 类型化 RPC、SSE ×2、Postgres、单机 compose)。
@@ -20,11 +20,12 @@ This file provides guidance to Claude Code when working in this repository.
 ## 仓库结构
 
 ```
-apps/web      Next.js 15 前端(App Router)。三 Tab 已按画板实现、第四个 Skills tab(画板 2f–2h)由 R-SKILLS 实现,接后端只换数据源
+apps/web      Next.js 15 前端(App Router)。四 Tab 已按画板实现(Skills 的 2f–2h 于 R-SKILLS 落地),接后端只换数据源
               (样式零改动,规则 7);/admin 六页已于 R6 整目录删除
 apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。服务清单与各自边界以
               `apps/api/<服务>/README.md` 为准(about / agent / mcp / metrics / notes / system / trace,
-              R-TABS 新增 site/ = 顶部 tab 呈现开关的只读面;R-SKILLS 将新增 skills/ = 技能库只读面);本文不再逐服务记状态
+              R-TABS 新增 site/ = 顶部 tab 呈现开关的只读面;R-SKILLS 新增 skills/ = 技能库只读面,
+              一包文件的判据在 shared/skill-pack.ts);本文不再逐服务记状态
 design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token 速查)——实现时逐画板对照
 deploy/       docker compose + Caddyfile + migrate.sh(预发/生产共用的部署资产,R9/R11 定稿)
 docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署 / **生产发布记录(releases.md)**

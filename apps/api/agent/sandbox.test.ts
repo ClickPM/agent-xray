@@ -398,6 +398,11 @@ describe("第 2 层 · agent_ro 只读(ROUNDS.md R7 验收:写库必须失败)",
       "mcp_audit",
       "daily_quota",
       "visits",
+      // R-SKILLS(所有者裁定 2026-09-03):本轮 agent 不读 skills,三张表不授权任何 agent 角色
+      // (docs/security.md §1 第 2 层 R-SKILLS 补记;迁移 012 不写 GRANT 就是全部答案)
+      "skills_categories",
+      "skills",
+      "skill_files",
     ];
     for (const table of denied) {
       const tx = await db.begin();

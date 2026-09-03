@@ -7,9 +7,9 @@
    │ HTTPS
    ▼
 Caddy :443(自动 TLS,单机反代)
-   ├── /            → apps/web  Next.js(Runtime 工作台 / Notes / Skills(R-SKILLS 待实现)/ About;/admin 已于 R6 整目录删除)
+   ├── /            → apps/web  Next.js(Runtime 工作台 / Notes / Skills / About;/admin 已于 R6 整目录删除)
    ├── /notes/**.webp → 按扩展名分流到 api 的 /assets/notes/…(正文配图存 Postgres,R6)
-   ├── /skills/*.zip  → 按扩展名分流到 api 的 /assets/skills/…(skill 目录打包下载,R-SKILLS 待实现)
+   ├── /skills/*.zip  → 按扩展名分流到 api 的 /assets/skills/…(skill 目录打包下载,R-SKILLS)
    └── /api/*       → apps/api  Encore.ts :4000
                         │
                         ├── agent 服务:createAgentSession(pi SDK in-process)
@@ -24,7 +24,7 @@ Caddy :443(自动 TLS,单机反代)
                         ├── about 服务:GET /about(about_content 只读)
                         ├── mcp 服务:无状态 MCP 管理面 /api/mcp(内容发布 / 附件 / About / LLM·搜索·生图 provider / 工具启停 / 统计查询;静态 token)
                         ├── site 服务:GET /site/tabs(顶部 tab 呈现开关的只读面,R-TABS)
-                        ├── skills 服务:GET /skills · GET /skills/:name · GET /assets/skills/:name.zip(技能库只读面;写面在 mcp;R-SKILLS 待实现)
+                        ├── skills 服务:GET /skills · GET /skills/:name · GET /assets/skills/:name.zip(技能库只读面;写面在 mcp 的 skills_* 八个工具;R-SKILLS)
                         ├── metrics 服务:POST /t 访问打点(不存原始 IP)
                         ├── system 服务:GET /health
                         ├── skill-runner 容器(R-SKILLS-2 待实现):agent 的 `skill_run` 经命名卷里的 unix socket 调它;
@@ -47,7 +47,7 @@ Caddy :443(自动 TLS,单机反代)
 | MCP SDK 选型 | `@modelcontextprotocol/server` + `@modelcontextprotocol/node` **2.0.0**(不是 `@modelcontextprotocol/sdk`) | R6 实测:旧包最新版(1.30.0)的 `LATEST_PROTOCOL_VERSION` 仍是 `2025-11-25`、没有 `server/discover`;2026-07-28 由 SDK v2 以新包名提供。`createMcpHandler` 默认 `legacy:'stateless'`,同一份工具定义同时服务两个时代 |
 | LLM 凭据与模型 | 全部来自 `llm_config` 表(多 provider,key 经 AES-256-GCM 加密入库),**无引导 secret** | 2026-08-31 裁定。`agent/runtime.ts` 在冷启动与**每一轮热路径**上都读一次配置并比对指纹:**配置变了,会话在下一轮被重建到新配置上**(走空闲回收同一条重建路径,库内历史照常注入)。这条统一规则是四轮 codex review 收敛出来的——只让新会话跟上配置,会留下「已在内存的会话拿着新 key 打旧端点」这类撤销漏洞 |
 | notes 附件 | 存 Postgres,运行期由 api 供图;**镜像内不烧任何 notes 内容** | 2026-08-31 裁定。对外 URL 保持 `/notes/<系列>/<哈希>.webp` 不变(免改写存量正文);API 侧走 `/assets/notes/…`,因为 Encore 路由里 `/notes/:series/:file` 会与 `/notes/series/:slug` 撞车 |
-| Skills 内容 | 与 notes 同形:所有者经 MCP **整包**发布(`SKILL.md` + `scripts/` + `references/` 的文本文件入库 `skill_files`),读面只读、文件一律当文本渲染、zip 写入时打好存库由读面吐;**agent 侧本轮不可读**(新表不授权任何 agent 角色) | 2026-09-03 裁定(R-SKILLS,待实现);约束见 security.md §1 第 2 层 / §4 的 R-SKILLS 补记;对外 zip URL `/skills/<name>.zip`,API 侧 `/assets/skills/…`(与 notes 配图同一前缀策略) |
+| Skills 内容 | 与 notes 同形:所有者经 MCP **整包**发布(`SKILL.md` + `scripts/` + `references/` 的文本文件入库 `skill_files`),读面只读、文件一律当文本渲染、zip 写入时打好存库由读面吐;**agent 侧本轮不可读**(新表不授权任何 agent 角色) | 2026-09-03 裁定,R-SKILLS 落地(迁移 `012`,`apps/api/skills/` + mcp 八个 `skills_*` 工具,判据在 `shared/skill-pack.ts`,zip 用 `fflate`);约束见 security.md §1 第 2 层 / §4 的 R-SKILLS 补记;对外 zip URL `/skills/<name>.zip`,API 侧 `/assets/skills/…`(与 notes 配图同一前缀策略) |
 | agent 使用 skills(R-SKILLS-2) | **执行不进 api 进程**:第五个容器 `skill-runner`(Python venv,`network_mode: none`),api 经 unix socket 调它,每次运行一次性进程 + tmpfs 目录;**可执行集合在代码里**(`runner/skills/` → 构建期生成 api 与容器两份同源清单),库里 `skills.agent_enabled` 只开关、且展示副本须与代码副本 sha256 一致才注入;pi 侧 `xray-guard`(`tool_call` 否决)/ `xray-skills`(`before_agent_start` 注入)两个扩展把裁决写进既有 34 事件(派生字段 `handlers`),不新增事件类型 | 2026-09-03 所有者七条裁定(待实现);规则 9「一次性沙箱容器」措辞同日改为「独立容器可常驻 + 一次性进程」,理由与残余风险在 security.md §1 第 1 层;研究全文 `rounds/round-skills/research.md` |
 
 ## 事件模式与观测

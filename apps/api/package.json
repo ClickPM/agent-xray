@@ -15,6 +15,7 @@
     "@modelcontextprotocol/node": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
     "encore.dev": "1.57.13",
+    "fflate": "0.8.3",
     "hono": "^4.13.5",
     "zod": "^4.5.4"
   },

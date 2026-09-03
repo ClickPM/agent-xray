@@ -11,6 +11,16 @@ import { safeErrorText } from "../shared/redact";
 import { siteDay, siteDayAgo } from "../shared/site-time";
 // tab 的闭集与读面(apps/api/site/)共用同一份登记表;两个面不互相 import,故落在 shared/
 import { SITE_TAB_KEYS, SITE_TABS, isSiteTabKey } from "../shared/site-tabs";
+// skill 一包文件的判据与打包(R-SKILLS);读面(apps/api/skills/)只用它的 kind 闭集
+import {
+  buildSkillZip,
+  SkillPackError,
+  skillPackHash,
+  validateSkillPack,
+  type SkillFileInput,
+  type SkillFileKind,
+  type SkillPack,
+} from "../shared/skill-pack";
 import { chapterHash, countWords, sha256Hex } from "./content";
 import { db } from "./db";
 
@@ -1421,4 +1431,259 @@ export async function setSiteTab(input: {
     }
     return { created: row?.action === "created", visibleKeys: [...visibleKeys] };
   });
+}
+
+// ───────────────────── Skills 技能库(R-SKILLS)─────────────────────
+//
+// 与 notes 三张表同一分工:这里是写面(全权角色),读面在 apps/api/skills/。
+// **整包发布**:`upsertSkill` 收全部文件,校验(shared/skill-pack.ts)→ 打 zip → 一个事务里
+// 替换整个文件集合。任何一个文件不合规,整包都不入库。
+
+export interface SkillCategoryRow {
+  slug: string;
+  name: string;
+  dot: string;
+  sortOrder: number;
+  skillCount: number;
+}
+
+export async function listSkillCategories(): Promise<SkillCategoryRow[]> {
+  return db.rawQueryAll<SkillCategoryRow>(
+    `SELECT c.slug, c.name, c.dot, c.sort_order AS "sortOrder",
+            COUNT(s.name)::int AS "skillCount"
+       FROM skills_categories c
+       LEFT JOIN skills s ON s.category_slug = c.slug
+      GROUP BY c.slug, c.name, c.dot, c.sort_order
+      ORDER BY c.sort_order, c.slug`,
+  );
+}
+
+export async function upsertSkillCategory(input: {
+  slug: string;
+  name: string;
+  dot: string;
+  sortOrder: number;
+}): Promise<void> {
+  await db.rawExec(
+    `INSERT INTO skills_categories (slug, name, dot, sort_order, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (slug) DO UPDATE
+        SET name = EXCLUDED.name, dot = EXCLUDED.dot, sort_order = EXCLUDED.sort_order,
+            updated_at = now()`,
+    input.slug,
+    input.name,
+    input.dot,
+    input.sortOrder,
+  );
+}
+
+/** 删分类。**不级联**(与 deleteCategory 同款):底下还有 skill 时给出能行动的错误。 */
+export async function deleteSkillCategory(slug: string): Promise<void> {
+  const row = await db.rawQueryRow<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM skills WHERE category_slug = $1`,
+    slug,
+  );
+  if ((row?.n ?? 0) > 0) {
+    throw new ConflictError(`分类 ${slug} 下还有 ${row!.n} 个 skill,先移走或删除它们`);
+  }
+  const done = await db.rawQueryRow<{ slug: string }>(
+    `DELETE FROM skills_categories WHERE slug = $1 RETURNING slug`,
+    slug,
+  );
+  if (!done) throw new NotFoundError(`分类 ${slug} 不存在`);
+}
+
+export interface SkillMetaRow {
+  name: string;
+  categorySlug: string;
+  summary: string;
+  sourceType: "own" | "curated";
+  repo: string;
+  repoUrl: string | null;
+  version: string | null;
+  sortOrder: number;
+  fileCount: number;
+  zipSize: number;
+  /** epoch ms */
+  updatedAt: number;
+}
+
+export async function listSkills(categorySlug?: string): Promise<SkillMetaRow[]> {
+  return db.rawQueryAll<SkillMetaRow>(
+    `SELECT s.name, s.category_slug AS "categorySlug", s.summary, s.source_type AS "sourceType",
+            s.repo, s.repo_url AS "repoUrl", s.version, s.sort_order AS "sortOrder",
+            (SELECT COUNT(*)::int FROM skill_files f WHERE f.skill_name = s.name) AS "fileCount",
+            s.zip_size AS "zipSize", ${ms("s.updated_at", "updatedAt")}
+       FROM skills s
+      WHERE $1::text IS NULL OR s.category_slug = $1
+      ORDER BY s.sort_order, s.name`,
+    categorySlug ?? null,
+  );
+}
+
+export interface SkillFileMetaRow {
+  path: string;
+  kind: SkillFileKind;
+  sizeBytes: number;
+  lineCount: number;
+}
+
+/** 元信息 + 文件清单(**不含内容**:一包最多 512 KB,整包回给管理端会灌满模型上下文) */
+export async function getSkill(
+  name: string,
+): Promise<(SkillMetaRow & { files: SkillFileMetaRow[] }) | null> {
+  const meta = await db.rawQueryRow<SkillMetaRow>(
+    `SELECT s.name, s.category_slug AS "categorySlug", s.summary, s.source_type AS "sourceType",
+            s.repo, s.repo_url AS "repoUrl", s.version, s.sort_order AS "sortOrder",
+            (SELECT COUNT(*)::int FROM skill_files f WHERE f.skill_name = s.name) AS "fileCount",
+            s.zip_size AS "zipSize", ${ms("s.updated_at", "updatedAt")}
+       FROM skills s WHERE s.name = $1`,
+    name,
+  );
+  if (!meta) return null;
+  const files = await db.rawQueryAll<SkillFileMetaRow>(
+    `SELECT path, kind, size_bytes AS "sizeBytes", line_count AS "lineCount"
+       FROM skill_files WHERE skill_name = $1
+      ORDER BY sort_order, path`,
+    name,
+  );
+  return { ...meta, files };
+}
+
+/** 单个文件的原文(改文件前先读回来,免得整包覆盖丢内容) */
+export async function getSkillFile(
+  name: string,
+  path: string,
+): Promise<(SkillFileMetaRow & { content: string }) | null> {
+  return db.rawQueryRow<SkillFileMetaRow & { content: string }>(
+    `SELECT path, kind, content, size_bytes AS "sizeBytes", line_count AS "lineCount"
+       FROM skill_files WHERE skill_name = $1 AND path = $2`,
+    name,
+    path,
+  );
+}
+
+export interface UpsertSkillInput {
+  name: string;
+  categorySlug: string;
+  summary: string;
+  sourceType: "own" | "curated";
+  repo: string;
+  /** null = 没给(前端不渲染外链) */
+  repoUrl: string | null;
+  version: string | null;
+  sortOrder: number;
+  files: SkillFileInput[];
+}
+
+export interface UpsertSkillResult {
+  created: boolean;
+  /** 元信息与全部文件都与库内一致 → 整行不动(updated_at 不刷新,zip 不重打) */
+  unchanged: boolean;
+  fileCount: number;
+  totalBytes: number;
+  zipSize: number;
+}
+
+/**
+ * skill 整包 upsert。
+ *
+ * 顺序:分类存在 → 校验整包(shared/skill-pack.ts,任一文件不合规就抛,库无残留)→ 算哈希
+ * → 事务:锁住这一行(`FOR UPDATE`,让同一个 skill 的两次并发发布串行)→ 哈希相同则整行不动
+ * → 否则 upsert 元信息 + zip、删旧文件、插新文件。
+ *
+ * 【为什么不像 notes 那样把哈希判断写进 ON CONFLICT 的 WHERE】文件集合在另一张表,
+ * 「不动」必须同时覆盖两张表;先 SELECT … FOR UPDATE 再决定,比两条语句各自判简单且没有窗口。
+ * 表空时 FOR UPDATE 锁不住东西 —— 两个「首次发布同一个 skill」的并发调用会有一个撞主键,
+ * 报成 internal error;所有者一个人用管理面,这条不值一把 advisory lock。
+ */
+export async function upsertSkill(input: UpsertSkillInput): Promise<UpsertSkillResult> {
+  const cat = await db.rawQueryRow<{ slug: string }>(
+    `SELECT slug FROM skills_categories WHERE slug = $1`,
+    input.categorySlug,
+  );
+  if (!cat) throw new NotFoundError(`分类 ${input.categorySlug} 不存在,先建分类`);
+
+  let pack: SkillPack;
+  try {
+    pack = validateSkillPack(input.name, input.files);
+  } catch (err) {
+    // 校验失败是所有者改一下输入就能解决的事,按业务冲突回可读的一句话
+    if (err instanceof SkillPackError) throw new ConflictError(err.message);
+    throw err;
+  }
+  const hash = skillPackHash(input, pack.files);
+
+  return inTransaction(async (tx) => {
+    const existing = await tx.rawQueryRow<{ hash: string; zipSize: number }>(
+      `SELECT content_hash AS hash, zip_size AS "zipSize" FROM skills WHERE name = $1 FOR UPDATE`,
+      input.name,
+    );
+    if (existing && existing.hash === hash) {
+      return {
+        created: false,
+        unchanged: true,
+        fileCount: pack.files.length,
+        totalBytes: pack.totalBytes,
+        zipSize: existing.zipSize,
+      };
+    }
+
+    const zip = Buffer.from(buildSkillZip(input.name, pack.files));
+    await tx.rawExec(
+      `INSERT INTO skills
+         (name, category_slug, summary, source_type, repo, repo_url, version, sort_order,
+          zip, zip_size, content_hash, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now(), now())
+       ON CONFLICT (name) DO UPDATE
+          SET category_slug = EXCLUDED.category_slug, summary = EXCLUDED.summary,
+              source_type = EXCLUDED.source_type, repo = EXCLUDED.repo,
+              repo_url = EXCLUDED.repo_url, version = EXCLUDED.version,
+              sort_order = EXCLUDED.sort_order, zip = EXCLUDED.zip, zip_size = EXCLUDED.zip_size,
+              content_hash = EXCLUDED.content_hash, updated_at = now()`,
+      input.name,
+      input.categorySlug,
+      input.summary,
+      input.sourceType,
+      input.repo,
+      input.repoUrl,
+      input.version,
+      input.sortOrder,
+      zip,
+      zip.length,
+      hash,
+    );
+
+    // 整包替换:旧文件集合整个换掉,不做逐文件 diff —— 「删掉一个文件」也是一次发布
+    await tx.rawExec(`DELETE FROM skill_files WHERE skill_name = $1`, input.name);
+    for (const f of pack.files) {
+      await tx.rawExec(
+        `INSERT INTO skill_files (skill_name, path, kind, content, size_bytes, line_count, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        input.name,
+        f.path,
+        f.kind,
+        f.content,
+        f.sizeBytes,
+        f.lineCount,
+        f.sortOrder,
+      );
+    }
+    return {
+      created: !existing,
+      unchanged: false,
+      fileCount: pack.files.length,
+      totalBytes: pack.totalBytes,
+      zipSize: zip.length,
+    };
+  });
+}
+
+/** 删 skill。文件是 ON DELETE CASCADE,一起消失;不可恢复,tool 的 description 里说清。 */
+export async function deleteSkill(name: string): Promise<void> {
+  const done = await db.rawQueryRow<{ name: string }>(
+    `DELETE FROM skills WHERE name = $1 RETURNING name`,
+    name,
+  );
+  if (!done) throw new NotFoundError(`skill ${name} 不存在`);
 }

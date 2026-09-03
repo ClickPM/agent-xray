@@ -24,7 +24,7 @@
 | `endpoint.ts` | `api.raw` 入口。**先认证再交给 SDK**:未认证的请求不该有机会让服务端构造 server 实例、解析 JSON-RPC |
 | `auth.ts` | bearer 校验。服务端只存 sha256,比较走定长摘要的常数时间比较;失败一律同一句 `unauthorized` |
 | `server.ts` | `createMcpHandler` 装配(每请求一个 `McpServer` 实例)+ `toNodeHandler` 适配 |
-| `tools.ts` | 32 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
+| `tools.ts` | 42 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
 | `store.ts` | 全部 SQL。**明文 LLM key 不出本文件** |
 | `content.ts` | 入库前的派生:字数、章节内容哈希 |
 | `audit.ts` | `mcp_audit` 写入;永不 reject(审计是旁路,不能让已完成的写操作变成 500) |
@@ -33,11 +33,20 @@
 加解密原语在 `apps/api/shared/crypto.ts`——mcp(写)与 agent(读)两个服务都要用,
 按规则 5 由各自的 service 取好 secret 值再传进去,共享库里不出现 `secret()`。
 
-## 工具(32)
+## 工具(42)
 
 - notes 三张表 CRUD:分类 / 系列 / 章节。**入参即标准 markdown,server 只校验不改写**
 - 附件:`notes_asset_put` / `notes_asset_delete` / `notes_assets_list`。存 Postgres,
   由 notes 服务的 `/assets/notes/:series/:file` 供图;对外 URL 保持 `/notes/<系列>/<哈希>.webp`
+- **Skills 技能库(R-SKILLS,八个)**:分类三个(`skills_categories_list` / `skills_category_upsert` / `skills_category_delete`)
+  + skill 五个(`skills_list` / `skills_get` / `skills_file_get` / `skills_upsert` / `skills_delete`)。
+  `skills_upsert` 收 `files[{path, content}]` **整包替换**(少报一个文件就是删掉它,改之前用 `skills_file_get` 读回);
+  `skills_get` 只回文件清单不回内容(整包 512 KB 会灌满管理端上下文)。
+  判据在 `shared/skill-pack.ts`:只收文本(UTF-8、无 NUL),kind 由扩展名派生且是闭集(二进制 / svg / html 拒),
+  path 相对、无 `..`、段字符集 `[A-Za-z0-9._-]`、≤ 4 段,≤ 64 文件 / 单文件 256 KB / 整包 512 KB,根目录必须有 `SKILL.md`
+  且 frontmatter `name` = skill 名;任一不合规整包不入库。zip 在这里打好存 `skills.zip`(fflate,mtime 钉死),
+  读面 `apps/api/skills/` 只吐字节。同内容重发 `status: unchanged`、`updated_at` 不动。
+  `repo`(`owner/repo`)必填、`repoUrl` 与 `LICENSE` 非必填(所有者裁定 2026-09-03)
 - About 内容(`about_get` / `about_set`)。R8 起前端 `/about` 直接读这张表
   (`apps/api/about/`),并新增「公开仓库 / 语言构成」两块。
   **`about_set` 是部分更新**(R8 改口径):省略的字段保留原值,清空是显式动作

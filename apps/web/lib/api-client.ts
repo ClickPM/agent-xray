@@ -37,6 +37,7 @@ export default class Client {
     public readonly metrics: metrics.ServiceClient
     public readonly notes: notes.ServiceClient
     public readonly site: site.ServiceClient
+    public readonly skills: skills.ServiceClient
     public readonly system: system.ServiceClient
     public readonly trace: trace.ServiceClient
     private readonly options: ClientOptions
@@ -58,6 +59,7 @@ export default class Client {
         this.metrics = new metrics.ServiceClient(base)
         this.notes = new notes.ServiceClient(base)
         this.site = new site.ServiceClient(base)
+        this.skills = new skills.ServiceClient(base)
         this.system = new system.ServiceClient(base)
         this.trace = new trace.ServiceClient(base)
     }
@@ -623,6 +625,154 @@ export namespace site {
     }
 }
 
+export namespace skills {
+    export interface GetSkillResponse {
+        name: string
+        categorySlug: string
+        categoryName: string
+        summary: string
+        sourceType: SkillSourceType
+        repo: string
+        repoUrl: string | null
+        /**
+         * 版本展示文本(`1.2` → 画板上的 `v1.2`);null = 不显示
+         */
+        version: string | null
+
+        fileCount: number
+        /**
+         * 全部文件的 UTF-8 字节数之和
+         */
+        totalBytes: number
+
+        /**
+         * `/skills/<name>.zip` 的字节数(画板 2g 的「下载 zip · N KB」)
+         */
+        zipSize: number
+
+        updatedAt: string
+        /**
+         * SKILL.md 首位,其余按路径;整包 <= 512 KB,一次取完、文件切换不打后端
+         */
+        files: SkillFile[]
+    }
+
+    export interface LatestSkill {
+        name: string
+        updatedAt: string
+    }
+
+    export interface ListSkillsResponse {
+        /**
+         * 只含有 skill 的分类;顺序按分类 sort_order、组内按 skill sort_order
+         */
+        categories: SkillCategoryGroup[]
+
+        /**
+         * 全站 skill 总数(页脚「共 N 个 skill」)
+         */
+        total: number
+
+        /**
+         * 页脚「最近更新」;没有 skill 时为 null
+         */
+        latest: LatestSkill | null
+    }
+
+    export interface SkillCard {
+        /**
+         * 目录名 = URL 段 /skills/<name>
+         */
+        name: string
+
+        /**
+         * 一句话中文描述
+         */
+        summary: string
+
+        /**
+         * own = 自研(徽标蓝、出处 @owner);curated = 精选第三方(徽标灰、出处 owner/repo)
+         */
+        sourceType: SkillSourceType
+
+        /**
+         * `owner/repo`;安装命令 `npx skills add <repo> --skill <name>` 由前端据此派生
+         */
+        repo: string
+
+        /**
+         * GitHub 目录外链;null = 所有者没给(前端不渲染外链)
+         */
+        repoUrl: string | null
+
+        fileCount: number
+        /**
+         * ISO 8601
+         */
+        updatedAt: string
+    }
+
+    export interface SkillCategoryGroup {
+        slug: string
+        name: string
+        /**
+         * 分类圆点色,与 design token 一致
+         */
+        dot: string
+
+        skills: SkillCard[]
+    }
+
+    export interface SkillFile {
+        /**
+         * 目录内相对路径,如 `SKILL.md` / `scripts/review.py`
+         */
+        path: string
+
+        /**
+         * 由扩展名派生的闭集;前端据此选渲染方式(markdown 渲染 / 代码带行号)
+         */
+        kind: shared.SkillFileKind
+
+        /**
+         * 原文。前端当纯文本处理,永不执行
+         */
+        content: string
+
+        sizeBytes: number
+        lineCount: number
+    }
+
+    export type SkillSourceType = "own" | "curated"
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.getSkill = this.getSkill.bind(this)
+            this.listSkills = this.listSkills.bind(this)
+            this.zip = this.zip.bind(this)
+        }
+
+        public async getSkill(name: string): Promise<GetSkillResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/skills/${encodeURIComponent(name)}`)
+            return await resp.json() as GetSkillResponse
+        }
+
+        public async listSkills(): Promise<ListSkillsResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/skills`)
+            return await resp.json() as ListSkillsResponse
+        }
+
+        public async zip(method: "GET" | "HEAD", file: string, body?: RequestInit["body"], options?: CallParameters): Promise<globalThis.Response> {
+            return this.baseClient.callAPI(method, `/assets/skills/${encodeURIComponent(file)}`, body, options)
+        }
+    }
+}
+
 export namespace system {
 
     export class ServiceClient {
@@ -663,6 +813,17 @@ export namespace trace {
             return this.baseClient.callAPI(method, `/trace/stream`, body, options)
         }
     }
+}
+
+export namespace shared {
+    /**
+     * 文件种类的闭集。前端据此选渲染方式:markdown 走 Markdown 组件,其余走带行号的代码视图。
+     * 
+     * 写成显式的字面量联合而不是 `(typeof SKILL_FILE_KINDS)[number]`:这个类型会进
+     * skills 服务的 API 响应形状,而 Encore 的静态解析器不认索引访问类型
+     * (`encore check` 报 unsupported indexed access type operation,2026-09-03 实测)。
+     */
+    export type SkillFileKind = "markdown" | "python" | "shell" | "typescript" | "javascript" | "json" | "yaml" | "toml" | "text"
 }
 
 

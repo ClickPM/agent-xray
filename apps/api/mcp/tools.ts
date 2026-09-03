@@ -29,6 +29,15 @@ import { magicMatches } from "../shared/image-magic";
 import { allowedHosts, checkBaseUrl } from "../shared/websearch-hosts";
 // tab 的闭集与读面(apps/api/site/)共用同一份登记表;两个面不互相 import,故落在 shared/
 import { SITE_TAB_KEYS } from "../shared/site-tabs";
+// skill 一包文件的形状上限(R-SKILLS);深层规则(路径 / kind / NUL / frontmatter)在 store 调 validateSkillPack
+import {
+  MAX_SKILL_FILE_BYTES,
+  MAX_SKILL_FILES,
+  MAX_SKILL_PATH_LENGTH,
+  SKILL_FILE_KINDS,
+  SKILL_NAME_RE,
+  SKILL_REPO_RE,
+} from "../shared/skill-pack";
 
 /**
  * slug 口径必须与 `apps/api/notes/series.ts` 的 SLUG_RE 一字不差。
@@ -950,7 +959,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "列出顶部导航各 tab 的呈现状态",
       description:
-        "站点顶部三格(Runtime / Notes / About)现在分别露不露。" +
+        "站点顶部四格(Runtime / Notes / Skills / About)现在分别露不露。" +
         "updatedAt 为 null = 这个 tab 从没被配置过(此时按可见处理)。" +
         "**这只是呈现开关**:隐藏的 tab 只是导航条上没有、页面在站点上打不开," +
         "后端 API(/agent/*、/trace/*、/notes/*、/rss.xml)一律照常服务。",
@@ -978,7 +987,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         // store 层另有一道同样的判断:绕过 tool 直接调 store 也进不了未知的 key。
         key: z
           .enum(SITE_TAB_KEYS)
-          .describe("runtime = 首页的 Runtime 工作台 / notes = 研习库 / about = About 页"),
+          .describe("runtime = 首页的 Runtime 工作台 / notes = 研习库 / skills = 技能库 / about = About 页"),
         visible: z.boolean().describe("false = 导航条上不出现,且该 tab 的页面在站点上不可达"),
       },
     },
@@ -991,6 +1000,192 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           status: r.created ? "created" : "updated",
           visibleTabs: r.visibleKeys,
         };
+      }),
+  );
+
+  // ───────────────────── Skills 技能库(R-SKILLS)─────────────────────
+  //
+  // 与 notes 那组同构:分类三个 + skill 五个。**整包发布**:`skills_upsert` 收全部文件,
+  // 校验(shared/skill-pack.ts)不过则一个文件都不入库;zip 在这里打好存库,读面只吐字节。
+  // 文件一律当文本收、当文本存(只收 UTF-8、无 NUL,kind 由扩展名派生且是闭集,
+  // 二进制 / svg / html 进不来)—— docs/security.md §4 R-SKILLS 补记。
+
+  const skillName = z.string().regex(SKILL_NAME_RE, "name 需匹配 ^[a-z0-9][a-z0-9-]{0,63}$");
+
+  server.registerTool(
+    "skills_categories_list",
+    {
+      title: "列出 Skills 分类",
+      description: "Skills 按用途分类(开发框架 / 工作流 / 审查与质量 / 写作与内容)及各自的 skill 数。",
+      inputSchema: {},
+    },
+    async () => read("skills_categories_list", () => store.listSkillCategories()),
+  );
+
+  server.registerTool(
+    "skills_category_upsert",
+    {
+      title: "新建/更新 Skills 分类",
+      description: "按 slug 建或改一个分类。dot 是分类圆点色(design token 的 #RRGGBB)。",
+      inputSchema: {
+        slug,
+        name: z.string().min(1).max(64),
+        dot: hexColor,
+        sortOrder: z.number().int().min(0).max(9999).default(0),
+      },
+    },
+    async (args) =>
+      write(ctx, "skills_category_upsert", `skills 分类 ${args.slug}`, async () => {
+        await store.upsertSkillCategory(args);
+        return { slug: args.slug, status: "saved" };
+      }),
+  );
+
+  server.registerTool(
+    "skills_category_delete",
+    {
+      title: "删除 Skills 分类",
+      description: "分类下还有 skill 时拒绝删除。",
+      inputSchema: { slug },
+    },
+    async (args) =>
+      write(ctx, "skills_category_delete", `删 skills 分类 ${args.slug}`, async () => {
+        await store.deleteSkillCategory(args.slug);
+        return { slug: args.slug, status: "deleted" };
+      }),
+  );
+
+  server.registerTool(
+    "skills_list",
+    {
+      title: "列出 skill",
+      description: "skill 元信息(不含文件),可按分类过滤。",
+      inputSchema: { categorySlug: slug.optional() },
+    },
+    async (args) =>
+      read("skills_list", async () =>
+        (await store.listSkills(args.categorySlug)).map((s) => ({
+          ...s,
+          url: `/skills/${s.name}`,
+          updatedAt: toIso(s.updatedAt),
+        })),
+      ),
+  );
+
+  server.registerTool(
+    "skills_get",
+    {
+      title: "读取一个 skill",
+      description:
+        "元信息 + 文件清单(路径 / 种类 / 大小 / 行数,**不含内容**——整包最多 512 KB,回全文会灌满上下文)。" +
+        "要看某个文件的原文用 skills_file_get。",
+      inputSchema: { name: skillName },
+    },
+    async (args) =>
+      read("skills_get", async () => {
+        const row = await store.getSkill(args.name);
+        if (!row) throw new NotFoundError(`skill ${args.name} 不存在`);
+        return { ...row, url: `/skills/${row.name}`, zipUrl: `/skills/${row.name}.zip`, updatedAt: toIso(row.updatedAt) };
+      }),
+  );
+
+  server.registerTool(
+    "skills_file_get",
+    {
+      title: "读取 skill 里的一个文件",
+      description: "返回该文件的原文。改文件前先读回来:skills_upsert 是整包替换,少报一个文件就是删掉它。",
+      inputSchema: { name: skillName, path: z.string().min(1).max(MAX_SKILL_PATH_LENGTH) },
+    },
+    async (args) =>
+      read("skills_file_get", async () => {
+        const row = await store.getSkillFile(args.name, args.path);
+        if (!row) throw new NotFoundError(`skill ${args.name} 里没有 ${args.path}`);
+        return row;
+      }),
+  );
+
+  server.registerTool(
+    "skills_upsert",
+    {
+      title: "发布/更新一个 skill(整包)",
+      description:
+        "把一个 skill 目录整包发布到技能库(/skills/<name>)。**files 是整包替换**:每次都要带全部文件," +
+        "库内多出来的文件会被删掉;改一个文件前先用 skills_file_get 读回其余文件。\n" +
+        `只收文本文件(UTF-8、无 NUL),种类由扩展名派生且是闭集:${SKILL_FILE_KINDS.join(" / ")}` +
+        "(.md .py .sh .ts .js .json .yaml .toml .txt 及 LICENSE / README 这类无扩展名的常见文本文件);" +
+        "二进制、svg、html 一律拒绝。path 相对、无 ..、不以 / 开头、每段只用 [A-Za-z0-9._-]、至多 4 段。" +
+        `上限 ${MAX_SKILL_FILES} 个文件、单文件 ${MAX_SKILL_FILE_BYTES} 字节、整包 512 KB。\n` +
+        "根目录必须有 SKILL.md,且其 frontmatter 的 name 等于 skill 名。" +
+        "repo 是 owner/repo(必填,安装命令 `npx skills add <repo> --skill <name>` 由它派生);" +
+        "repoUrl 是 GitHub 目录外链(可省略:省略时页面不渲染 GitHub 按钮与出处链接);LICENSE 文件不强制。" +
+        "内容与库内完全一致时整行不动(status: unchanged,updatedAt 不刷新);任何一个文件不合规则整包不入库。",
+      inputSchema: {
+        name: skillName,
+        categorySlug: slug,
+        summary: z.string().max(512).default("").describe("卡片上的一句话中文描述"),
+        sourceType: z.enum(["own", "curated"]).describe("own = 自研;curated = 精选第三方"),
+        repo: z
+          .string()
+          .regex(SKILL_REPO_RE, "repo 需为 owner/repo(GitHub 用户名 / 仓库名字符集)")
+          .describe("如 ClickPM/agent-skills;安装命令由它派生"),
+        // 【必须限定 scheme】这个值直接进 <a href>;与 about_set 的 originUrl 同一口径
+        repoUrl: z
+          .string()
+          .max(512)
+          .refine((v) => v !== "" && isHttpUrl(v), "需为带主机名的 http(s) 绝对地址")
+          .optional()
+          .describe("GitHub 目录外链;省略 = 不渲染外链"),
+        version: z.string().max(32).optional().describe("版本展示文本,如 1.2(页面显示 v1.2);省略 = 不显示"),
+        sortOrder: z.number().int().min(0).max(9999).default(0),
+        files: z
+          .array(
+            z.object({
+              path: z.string().min(1).max(MAX_SKILL_PATH_LENGTH).describe("目录内相对路径,如 scripts/review.py"),
+              // 字符数上限只是粗闸(1 字符可占 4 字节);字节数在 validateSkillPack 里精确判
+              content: z.string().max(MAX_SKILL_FILE_BYTES).describe("原文,UTF-8 文本"),
+            }),
+          )
+          .min(1)
+          .max(MAX_SKILL_FILES)
+          .describe("整包文件;必须含根目录的 SKILL.md"),
+      },
+    },
+    async (args) =>
+      write(ctx, "skills_upsert", `skill ${args.name}(${args.files.length} 个文件)`, async () => {
+        const r = await store.upsertSkill({
+          name: args.name,
+          categorySlug: args.categorySlug,
+          summary: args.summary,
+          sourceType: args.sourceType,
+          repo: args.repo,
+          repoUrl: args.repoUrl ?? null,
+          version: args.version ?? null,
+          sortOrder: args.sortOrder,
+          files: args.files,
+        });
+        return {
+          name: args.name,
+          status: r.unchanged ? "unchanged" : r.created ? "created" : "updated",
+          fileCount: r.fileCount,
+          totalBytes: r.totalBytes,
+          zipSize: r.zipSize,
+          url: `/skills/${args.name}`,
+          zipUrl: `/skills/${args.name}.zip`,
+        };
+      }),
+  );
+
+  server.registerTool(
+    "skills_delete",
+    {
+      title: "删除一个 skill",
+      description: "连同全部文件一起删除,不可恢复。只是临时下架整个 tab 的话用 site_tab_set。",
+      inputSchema: { name: skillName },
+    },
+    async (args) =>
+      write(ctx, "skills_delete", `删 skill ${args.name}`, async () => {
+        await store.deleteSkill(args.name);
+        return { name: args.name, status: "deleted" };
       }),
   );
 }

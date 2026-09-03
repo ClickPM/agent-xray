@@ -32,7 +32,7 @@
    .\dev.ps1 build
    ```
 
-   该命令做三件事:拒绝在脏工作区构建 → `encore build docker --config deploy/infra-config.json --base oven/bun:1.4.0-slim --services agent,trace,notes,mcp,metrics,about,system` 出 api 镜像 → `docker build apps/web` 出 web 镜像。两个 tag 都是 git 短 SHA。服务白名单以 `dev.ps1` 的 `$hostedServices` 为准,**新增服务必须补进去**,漏补的表现是镜像与健康检查都正常、该服务端点静默 404(冒烟清单第 1 条就是为它设的)。
+   该命令做三件事:拒绝在脏工作区构建 → `encore build docker --config deploy/infra-config.json --base oven/bun:1.4.0-slim --services agent,trace,notes,mcp,metrics,about,system,site,skills` 出 api 镜像 → `docker build apps/web` 出 web 镜像。两个 tag 都是 git 短 SHA。服务白名单以 `dev.ps1` 的 `$hostedServices` 为准,**新增服务必须补进去**,漏补的表现是镜像与健康检查都正常、该服务端点静默 404(冒烟清单第 1 条就是为它设的)。
 
    > ⚠️ `--base` 不能省。Encore 开启 `bun-runtime` 后会把镜像 ENTRYPOINT 改成 `bun run …`,却仍按默认基座 `node:slim` 打包,产出的镜像里没有 bun,`docker run` 直接报 `exec: "bun": executable file not found in $PATH`。`encore.app` 里的 `build.docker.base_image` 对本地构建**无效**(只对 Encore 自家 CI/CD 生效)。已固化进 `dev.ps1 build`,不要手敲 `encore build docker`。
    >
@@ -172,9 +172,9 @@
 
    | # | 检查 | 期望 |
    |---|---|---|
-   | 1 | **服务白名单逐项可达** | `agent` / `trace` / `notes` / `mcp` / `metrics` / `about` / `system` 各取一个**正式端点**,全部非 404 |
+   | 1 | **服务白名单逐项可达** | `agent` / `trace` / `notes` / `mcp` / `metrics` / `about` / `system` / `site` / `skills` 各取一个**正式端点**(`site` 是 `GET /api/site/tabs`,`skills` 是 `GET /api/skills`),全部非 404 |
    | 2 | 已删服务 | `/api/spike/*` 与 `/admin` 全部 404 |
-   | 3 | 三 Tab | `/`、`/notes`、`/about` 均 200 且渲染真实数据 |
+   | 3 | 四 Tab | `/`、`/notes`、`/skills`、`/about` 均 200 且渲染真实数据;`/skills/<name>.zip` 经 Caddy 回 `application/zip`(R-SKILLS 的扩展名分流) |
    | 4 | MCP 管理面 | 无 token / 错 token / 格式不对的 token / **未认证的** GET 一律 401,且**审计表有 denied 记录**;带 token 且带齐 2026-07-28 逐请求契约的 `server/discover` 回 `supportedVersions: ["2026-07-28"]`,`tools/list` 回全部工具(以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准,R-WEBSEARCH 后是 28、R-IMAGEGEN 后是 32;**不带 `params._meta` 会落到 legacy 路径,`server/discover` 回 `-32601`,别误判成端点坏了**)(R10 修准:带**正确** token 的 GET 是 **405** —— 认证闸在方法校验之前,别按 401 去核) |
    | 5 | 正文配图路由 | `/notes/<系列>/<哈希>.webp` → 200 + `ETag`;带 `If-None-Match` 复请求 → 304;同形的文章页地址不被图片路由劫走 |
    | 6 | RSS | `/rss.xml` 与 `/rss/<分类>.xml` 200,条目里的绝对链接用的是 `SITE_ORIGIN`;未知分类 404 |
@@ -196,7 +196,7 @@
    > 访问层预检,HTTP/3 是通的;正式 `docker compose up` 之后却不通 —— compose 里根本没写 udp 映射,
    > udp 是预检时手敲在命令行上的。「预检用的启动方式和生产不是同一条」这类差异只能靠跑真实部署路径消除。
    >
-   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,metrics,about,system`)白名单决定。新增服务时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
+   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,metrics,about,system,site,skills`)白名单决定。新增服务时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
    >
    > 因此冒烟不能只看 `/health`,要**逐个确认当前已落地的正式 service 端点都可达**(表里第 1 条)。本项目不引入自动服务发现,这条靠清单与冒烟兜住。
 

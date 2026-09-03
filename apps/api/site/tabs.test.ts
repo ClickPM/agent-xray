@@ -9,7 +9,7 @@ import { SITE_TABS, SITE_TAB_KEYS, isSiteTabKey } from "../shared/site-tabs";
 import { db } from "./db";
 import * as store from "./store";
 
-/** 复原成迁移种子的样子:三行、全可见、没有多余的 key。 */
+/** 复原成迁移种子的样子:登记表里的每个 key 一行(011 三行 + 012 的 skills)、全可见、没有多余的 key。 */
 async function reseed(): Promise<void> {
   await db.exec`DELETE FROM site_tab_config`;
   for (const key of SITE_TAB_KEYS) {
@@ -38,8 +38,8 @@ describe("tab 呈现开关的读面(site/store,R-TABS)", () => {
     await db.rawExec(`UPDATE site_tab_config SET visible = FALSE WHERE key = 'runtime'`);
     const tabs = await store.listTabs();
     expect(tabs.find((t) => t.key === "runtime")?.visible).toBe(false);
-    // 只影响被改的那一个
-    expect(tabs.filter((t) => t.visible).map((t) => t.key)).toEqual(["notes", "about"]);
+    // 只影响被改的那一个(R-SKILLS 起登记表是四格)
+    expect(tabs.filter((t) => t.visible).map((t) => t.key)).toEqual(["notes", "skills", "about"]);
   });
 
   it("登记表里有、库里缺行 → 按可见兜底(漏写的迁移不该让一整块内容消失)", async () => {
