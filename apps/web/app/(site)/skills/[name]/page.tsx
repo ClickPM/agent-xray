@@ -44,7 +44,9 @@ export default async function SkillPage({
   }
 
   return (
+    // key 按 skill 名:客户端在两个详情页之间导航时,选中文件 / copied 这类状态不跨 skill 残留
     <SkillDetail
+      key={data.name}
       skill={{
         name: data.name,
         categoryName: data.categoryName,

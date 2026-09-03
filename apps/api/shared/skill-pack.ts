@@ -14,7 +14,7 @@
 //     `npx skills add … --skill <name>` 装进去之后,Claude Code / Codex 按 frontmatter 认名字。
 //
 // 【本文件不碰文件系统、不执行任何内容】输入是字符串,输出是字符串与 Uint8Array。
-import { createHash } from "node:crypto";
+import { createHash, type Hash } from "node:crypto";
 import { strToU8, zipSync, type Zippable } from "fflate";
 
 /** skill 名 = 目录名 = URL 段;与 notes 的 slug 同一口径(会进 URL 与命令行)。 */
@@ -276,13 +276,24 @@ export function validateSkillPack(skillName: string, files: SkillFileInput[]): S
   return { files: entries, totalBytes };
 }
 
-/** 字段分隔符:路径与正文里都不可能出现的字节 */
-const SEP = "\u001f";
-const REC = "\u001e";
+/**
+ * 把一个字段喂进哈希:**长度前缀 + 字节**,而不是用分隔符拼接。
+ *
+ * 【为什么不能用分隔符】(codex 首轮 P2)文件内容只拒 NUL 与孤立代理对,U+001E / U+001F 这类
+ * 控制字符是合法内容;用它们做分隔符时,一个「正文里恰好含分隔符 + 另一个路径」的单文件包
+ * 会与「两个文件」的包哈希相同,`upsertSkill` 于是回 `unchanged`、继续供旧 zip。
+ * 长度前缀让每个字段的边界由数字给出,流是无歧义的。
+ */
+function frame(h: Hash, value: string): void {
+  const bytes = Buffer.from(value, "utf8");
+  h.update(`${bytes.length}:`);
+  h.update(bytes);
+}
 
 /**
  * 整包内容哈希 —— 「这次 upsert 有没有真的改东西」的判据(与 notes 的 chapterHash 同一用途)。
  * 参与的是所有会影响页面呈现的字段:改一句 summary、换一个分类、动一个文件,都是真的更新。
+ * 文件按 validateSkillPack 排好的顺序进入,所以发布时的文件顺序不影响哈希。
  */
 export function skillPackHash(meta: {
   categorySlug: string;
@@ -294,19 +305,22 @@ export function skillPackHash(meta: {
   sortOrder: number;
 }, files: readonly SkillFileEntry[]): string {
   const h = createHash("sha256");
-  h.update(
-    [
-      meta.categorySlug,
-      meta.summary,
-      meta.sourceType,
-      meta.repo,
-      meta.repoUrl ?? "",
-      meta.version ?? "",
-      String(meta.sortOrder),
-    ].join(SEP),
-    "utf8",
-  );
-  for (const f of files) h.update(`${REC}${f.path}${SEP}${f.content}`, "utf8");
+  for (const v of [
+    meta.categorySlug,
+    meta.summary,
+    meta.sourceType,
+    meta.repo,
+    meta.repoUrl ?? "",
+    meta.version ?? "",
+    String(meta.sortOrder),
+  ]) {
+    frame(h, v);
+  }
+  frame(h, String(files.length));
+  for (const f of files) {
+    frame(h, f.path);
+    frame(h, f.content);
+  }
   return h.digest("hex");
 }
 

@@ -159,9 +159,18 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
 
 <!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:<codex /codex:review --background(改动跨前后端十余文件)>
-- findings 处理:<逐条:采纳整改 / 不采纳及理由>
-- 结论:<PASS | 整改后 PASS>
+- 审查方式:codex `/codex:review --background --scope branch`(改动跨前后端 41 个文件;前两轮按 CLAUDE.md 用全量 `branch diff against main`)
+- **第 1 轮**(2026-09-03,审 `ebe7083`):3 条 P2,无 high 级。逐条:
+  1. [P2] `shared/skill-pack.ts` `skillPackHash` 用 U+001E / U+001F 拼接字段,而内容只拒 NUL 与孤立代理对 —— 正文里恰好含分隔符 + 另一个路径的单文件包,与两个文件的包哈希相同,`upsertSkill` 回 `unchanged`、继续供旧 zip。
+     **采纳整改**:改成每个字段「长度前缀 + 字节」框定(含文件数),流无歧义;`mcp/skills.test.ts` 加一条构造碰撞的用例(旧写法下逐字节相同的两包现在哈希不同;同内容乱序仍相同)。
+  2. [P2] `skills/skills.ts` 详情端点两条查询(元信息、文件)各看各的快照,发布并发时会把旧版 `fileCount` / `zipSize` 配上新版文件。
+     **采纳整改**:`skills/store.ts` 加 `readSnapshot`(`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY` 的只读事务),详情与首页(卡片 + 最近更新)都改成单快照读;写面 `upsertSkill` 本就是一个事务,于是读到的永远是某个完整版本。
+  3. [P2] `skills/zip.ts` 对 `/assets/skills/%ZZ.zip` 这类坏编码,`decodeURIComponent` 抛 URIError → raw 端点回 500 而不是 404。
+     **采纳整改**:捕获后走同一个 404;`skills/skills.test.ts` 加 `%ZZ.zip` / 截断的多字节编码两例。`notes/assets.ts` 与 `notes/rss.ts` 是同一写法但属既有代码、不在本轮 diff,按「跨轮次问题不顺手改」记 `rounds/BACKLOG.md`。
+  - 审查推理里提到但未列为 finding 的两处,顺手做了一字改动(非机制):clipboard `writeText` 的异步 reject 补 `.catch`;`[name]/page.tsx` 给 `SkillDetail` 按 skill 名加 `key`,客户端在两个详情页之间导航时选中文件 / copied 态不跨 skill 残留。
+  - 整改后:`check` 通过、`dev.ps1 test` **18 文件 / 414 用例全绿**、`tsc` 通过、本机实探(详情 / 首页 / `%ZZ.zip` → 404)正常。
+- **第 2 轮**:<待整改提交后发起(全量范围)>
+- 结论:<待第 2 轮>
 
 ## 失败处理
 
@@ -191,7 +200,7 @@ R6(MCP 管理面)、R-TABS(tab 登记表 + 呈现开关:新 tab 走同一套三�
 | 9 | 画板 2g:面包屑 / 等宽 22px 标题 + 徽标 / `GitHub ↗` + `下载 zip · 3 KB` / INSTALL 面板 / 目录树(SKILL.md 首位、目录 ▾、大小列、选中行 `--bg-selected` + 600)/ frontmatter 键值块(`when_to_use` 折叠块并成一段)/ 正文 / 「本页目录」四项且锚点 id 与标题一致;画板 2h:点 `.py` → 行号列、三 token 高亮、「本页目录」消失、地址栏同步 `?file=scripts%2Freview.py`;`?file=` 深链直达;两处 copy 点击后显示绿色 `✓ copied`、1.5 s 后回落;`repoUrl` 为空的自研 skill 不渲染 `GitHub ↗` 与出处链接、版式不变(与 encore-api 那页对比) |
 | 10 | `site_tab_set{skills,false}` → `/notes` 上导航条三格、`/skills` 与 `/skills/<name>` 404、`/skills/<name>.zip` 与 `api /skills` 仍 200(边界只到呈现层);恢复 → 四格 |
 | 11 | 含 `<script>` / `<img onerror>` 的 SKILL.md 与 `.py`、含 `<script>` 的 summary 在页面上只是文本(DOM 里 0 个 `img`,无内容来源的 script);`repoUrl: javascript:` 写面拒、前端 `safeExternal` 二次拦;zip 响应 `nosniff`;`sandbox.test.ts`:`agent_ro` 读 skills 三表 `permission denied` |
-| 12 | `dev.ps1` 的 `$hostedServices` 已含 `skills`;镜像构建与「镜像里 `GET /skills` 非 404」留待发版前在 130 / 生产冒烟(清单第 1 / 3 条已改) |
+| 12 | `dev.ps1` 的 `$hostedServices` 已含 `skills`(构建命令行实看:`--services agent,…,site,skills`);**镜像构建与「镜像里 `GET /skills` 非 404」按顺序留到审查收口、合并 `main` 之后的发版步骤**(`docs/deploy-environments.md` 部署流 + 冒烟第 1 / 3 条)。本轮曾在审查未收口时误发起一次 `dev.ps1 build`,所有者指出后中止 —— 审查一旦要整改镜像就得重打,构建不该早于审查收口 |
 | 13 | 真实 MCP 路径(2026-07-28 契约):`server/discover` 回 `["2026-07-28"]`,`tools/list` **42**;`skills_upsert` 发布仓库自带的 `encore-api` / `encore-database` / `encore-testing`(精选,`encoredev/skills`)+ 一个带 `scripts/*.py` 与 `references/*.md` 的自研示例 → 页面出现 → zip 解压与源目录逐文件一致 |
 | 14 | `dev.ps1 gen` 后 `api-client.ts` 含 `skills` 命名空间(`listSkills` / `getSkill`)、不含 `mcp`;生成物里被翻掉的三行 app slug 按 BACKLOG 先例还原 |
 

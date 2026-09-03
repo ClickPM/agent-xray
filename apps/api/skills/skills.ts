@@ -68,7 +68,8 @@ export const listSkills = api(
   },
 
   async (): Promise<ListSkillsResponse> => {
-    const rows = await store.listSkillCards();
+    // 卡片与「最近更新」取自同一快照(store.readSnapshot),发布并发时页脚不会指向一张不在列表里的卡
+    const { cards: rows, latest } = await store.indexSnapshot();
     const groups: SkillCategoryGroup[] = [];
     for (const r of rows) {
       let g = groups.find((x) => x.slug === r.categorySlug);
@@ -83,7 +84,6 @@ export const listSkills = api(
         updatedAt: toIso(r.updatedAt),
       });
     }
-    const latest = await store.latestSkill();
     return {
       categories: groups,
       total: rows.length,
@@ -135,9 +135,10 @@ export const getSkill = api(
 
   async ({ name }: { name: string }): Promise<GetSkillResponse> => {
     assertName(name);
-    const skill = await store.getSkill(name);
-    if (!skill) throw APIError.notFound(`skill ${name} 不存在`);
-    const files = await store.listSkillFiles(name);
+    // 元信息与文件来自同一快照:发布并发时不会把旧版的 fileCount / zipSize 配上新版的文件(codex 首轮 P2)
+    const snap = await store.skillSnapshot(name);
+    if (!snap) throw APIError.notFound(`skill ${name} 不存在`);
+    const { skill, files } = snap;
     return {
       name: skill.name,
       categorySlug: skill.categorySlug,

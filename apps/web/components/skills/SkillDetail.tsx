@@ -205,8 +205,9 @@ export function SkillDetail({
   const installCmd = `npx skills add ${skill.repo} --skill ${skill.name}`;
 
   const stamp = useCallback((key: "install" | "file", text: string) => {
+    // 非安全上下文 / 权限被拒时 writeText 会同步抛或异步 reject,两条路都吞掉:按钮态照常回落
     try {
-      void navigator.clipboard?.writeText(text);
+      navigator.clipboard?.writeText(text).catch(() => {});
     } catch {}
     setCopied(key);
     if (timer.current) clearTimeout(timer.current);

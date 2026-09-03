@@ -37,7 +37,15 @@ export async function handleZip(req: ZipRequest, resp: ServerResponse): Promise<
   // 路径参数从 URL 自己剥:文件名带 `.zip` 后缀,Encore 的路径参数本身能拿到整段,
   // 但这里同时要做形状校验,统一在一处处理(notes/assets.ts 是同一个模式)。
   const url = new URL(req.url ?? "/", "http://localhost");
-  const file = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+  // `%ZZ` 这类坏编码会让 decodeURIComponent 抛 URIError:这是访客可控的公开地址,
+  // 按「没有这个资源」处理,而不是让 raw 端点回 500(codex 首轮 P2)
+  let file: string;
+  try {
+    file = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+  } catch {
+    notFound(resp);
+    return;
+  }
   if (!file.endsWith(".zip")) {
     notFound(resp);
     return;

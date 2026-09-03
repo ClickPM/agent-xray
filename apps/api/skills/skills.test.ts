@@ -228,8 +228,9 @@ describe("zip 下载 GET /assets/skills/<name>.zip", () => {
     expect(again.body().length).toBe(0);
   });
 
-  it("未知 skill / 不是 .zip / 名字形状不对 → 404", async () => {
-    for (const url of ["/assets/skills/nope.zip", "/assets/skills/x.tar", "/assets/skills/Bad.zip", "/assets/skills/..zip"]) {
+  it("未知 skill / 不是 .zip / 名字形状不对 / 坏的百分号编码 → 404(不是 500)", async () => {
+    // `%ZZ` 会让 decodeURIComponent 抛 URIError;它是访客可控的公开地址,必须落 404(codex 首轮 P2)
+    for (const url of ["/assets/skills/nope.zip", "/assets/skills/x.tar", "/assets/skills/Bad.zip", "/assets/skills/..zip", "/assets/skills/%ZZ.zip", "/assets/skills/%E0%A4%A.zip"]) {
       const { resp, state } = fakeResp();
       await handleZip({ url, method: "GET", headers: {} }, resp);
       expect(state.status, url).toBe(404);

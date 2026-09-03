@@ -16,6 +16,7 @@ import {
   frontmatterName,
   kindForPath,
   SkillPackError,
+  skillPackHash,
   validateSkillPack,
   type SkillFileInput,
 } from "../shared/skill-pack";
@@ -111,6 +112,24 @@ describe("一包文件的判据(shared/skill-pack)", () => {
     // 中文按 UTF-8 字节计
     const cn = validateSkillPack("y", [{ path: "SKILL.md", content: skillMd("y", "你好\n") }]);
     expect(cn.files[0].sizeBytes).toBe(Buffer.byteLength(cn.files[0].content, "utf8"));
+  });
+
+  it("哈希无歧义:正文里含控制字符 + 另一个路径的单文件包,与真的两个文件的包哈希不同(codex 首轮 P2)", () => {
+    const REC = String.fromCharCode(30);
+    const SEP = String.fromCharCode(31);
+    const meta = { categorySlug: "review", summary: "", sourceType: "own", repo: "a/b", repoUrl: null, version: null, sortOrder: 0 };
+    const md = skillMd("x");
+    // 旧的分隔符拼接下这两包的哈希输入逐字节相同:REC a.txt SEP 1 REC b.txt SEP 2
+    const one = validateSkillPack("x", [{ path: "SKILL.md", content: md }, { path: "a.txt", content: `1${REC}b.txt${SEP}2` }]);
+    const two = validateSkillPack("x", [{ path: "SKILL.md", content: md }, { path: "a.txt", content: "1" }, { path: "b.txt", content: "2" }]);
+    expect(skillPackHash(meta, one.files)).not.toBe(skillPackHash(meta, two.files));
+    // 元信息字段之间同理:summary 尾部带分隔符 + repo 前段,不等于分开的两个字段
+    const h1 = skillPackHash({ ...meta, summary: `s${SEP}a/b`, repo: "c/d" }, two.files);
+    const h2 = skillPackHash({ ...meta, summary: "s", repo: "a/b" }, two.files);
+    expect(h1).not.toBe(h2);
+    // 同一份内容、发布顺序不同 → 相同(排序在校验里做)
+    const rev = validateSkillPack("x", [{ path: "b.txt", content: "2" }, { path: "a.txt", content: "1" }, { path: "SKILL.md", content: md }]);
+    expect(skillPackHash(meta, rev.files)).toBe(skillPackHash(meta, two.files));
   });
 
   it("十二种非法输入逐条被拒,理由可读", () => {
