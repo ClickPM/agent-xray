@@ -593,6 +593,22 @@ class OutputSanitizing(unittest.TestCase):
         self.assertEqual(F.sanitize_markdown("[a](https://ok.example/p \"t\") [b](mailto:c) [c][ref]\n\n[ref]: mailto:d"), "[a](https://ok.example/p \"t\") b [c][ref]\n\n")
         self.assertEqual(F.sanitize_markdown("[ ![i](https://e.example/i.gif) ](https://ok.example/)"), "[ i ](https://ok.example/)")
 
+    def test_removal_cannot_create_a_new_link_by_adjacency(self):
+        # codex 第 5 轮 P2:删掉不安全链接 / 折掉图片之后,残留的 `]` 不能与后面紧跟的 `(` / `[` 拼成新链接
+        cases = {
+            "[[click]](data:x)(mailto:evil@example.com)": "[click]\\(mailto:evil@example.com)",
+            "[x]![](https://e.example/e.gif)(mailto:z)": "[x]\\(mailto:z)",
+            "![a [b]](https://e.example/a.gif)(mailto:x)": "a [b]\\(mailto:x)",
+            "[[c]](javascript:x)[ref]\n\n[ref]: mailto:y": "[c]\\[ref]\n\n",
+            "[a](https://ok.example/)(mailto:x)": "[a](https://ok.example/)(mailto:x)",  # 没有删除就不动
+            "[[click]](data:x) (mailto:evil@example.com)": "[click] (mailto:evil@example.com)",  # 中间有空格,本来就不是链接
+        }
+        for src, expected in cases.items():
+            with self.subTest(src=src):
+                got = F.sanitize_markdown(src)
+                self.assertEqual(got, expected)
+                self.assertNotRegex(got, r"(?<!\\)\]\((?:mailto|javascript|data):", "不能拼出新的非法链接")
+
     def test_hostile_markdown_is_sanitized_in_linear_time(self):
         # codex 第 3 轮 P2:大量未闭合 / 半闭合的图片开启符不得让消毒变成二次方(256 KiB 正文 → 占满 egress 唯一并发名额)
         import time

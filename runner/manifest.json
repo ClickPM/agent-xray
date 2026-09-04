@@ -42,11 +42,11 @@
       "network": "egress",
       "files": {
         "SKILL.md": "9776f60d1161c615e9354510d0f4539a051904517a3f3ed6b97f7d89b3243689",
-        "scripts/fetch.py": "64c9244bf69585bf6fd12ecb919ec6d7d40cafde3e53d7782e69e89076f97bfe",
+        "scripts/fetch.py": "031181d528ddeca6513af8bb46601bbc72799f876b150727194ee3deb2e932a4",
         "xray.json": "e07b84358e9bdbc9dc7777c5d6e23308cd5f95cff4f95a8003a29eb1322a9344"
       },
       "scripts": {
-        "fetch.py": "64c9244bf69585bf6fd12ecb919ec6d7d40cafde3e53d7782e69e89076f97bfe"
+        "fetch.py": "031181d528ddeca6513af8bb46601bbc72799f876b150727194ee3deb2e932a4"
       }
     }
   }

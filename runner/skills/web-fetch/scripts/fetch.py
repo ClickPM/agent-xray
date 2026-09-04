@@ -521,6 +521,18 @@ def _link_target(dest: str) -> str:
     return inner.split(None, 1)[0] if inner else ""
 
 
+def _guard_join(out: list[str], text: str, pos: int) -> None:
+    """删掉一段(图片 → alt、非法链接 → 标签)之后,前面剩下的 `]` 可能与紧跟其后的 `(` / `[` 拼成一个**新**链接
+    (codex 第 5 轮 P2:`[[click]](data:x)(mailto:…)` → `[click](mailto:…)`)。把那个括号转义掉 —— CommonMark 里 `\\(` / `\\[`
+    是字面字符,链接语法就断了;没有邻接时什么都不做。"""
+    if pos < len(text) and text[pos] in "([":
+        for piece in reversed(out):
+            if piece:
+                if piece[-1] == "]":
+                    out.append("\\")
+                return
+
+
 def strip_images(text: str) -> str:
     """去掉 markdown 图片(只留 alt)、剥掉非 http(s) / 非相对地址的链接(只留标签)—— **单趟、栈式**
     (codex 第 2 轮 P1 / 第 3 轮 P1 + P2 / 第 4 轮 P2 的合一修法):
@@ -562,15 +574,17 @@ def strip_images(text: str) -> str:
                     del out[idx:]
                     out.append(alt)
                     pos = dest.end()
+                    _guard_join(out, text, pos)
                     continue
             elif dest and dest.group(0).startswith("("):
                 target = _link_target(dest.group(0))
+                pos = dest.end()
                 if target.lower().startswith(_LINK_OK_PREFIXES) or ":" not in target:
                     out.append("]")
-                    out.append(text[pos : dest.end()])  # 合法链接原样保留(含 title)
+                    out.append(text[dest.start() : dest.end()])  # 合法链接原样保留(含 title)
                 else:
                     out[idx] = ""  # 非法 scheme:去掉 `[`、不写 `]`、跳过目的地,只剩标签文字
-                pos = dest.end()
+                    _guard_join(out, text, pos)
                 continue
             out.append("]")
     if pos < len(text):
