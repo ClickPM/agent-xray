@@ -1,6 +1,6 @@
 # Round USAGE — 顶栏统计条的 tokens 与 ctx 接真实数据
 
-> 状态:进行中(codex 第 1 轮 4 条已整改,待复审)
+> 状态:已完成(codex 2 轮 / 6 条 / 零 high,整改后 PASS;待合并 main)
 
 ## 目标
 
@@ -131,7 +131,18 @@ contextUsage?: { tokens, contextWindow, percent }   // percent 即 ctx%
 - **P1 暴露的验收漏洞(值得记住)**:本轮 #1 写的是「编译与测试全绿」,而我只跑了 `dev.ps1 check`(**只覆盖 api**)
   与 `bun test lib`(纯函数,不做类型检查);`next dev` 不阻塞类型错误,所以 10 项浏览器验收全过、生产构建却会炸。
   **凡改动服务端响应形状,web 侧必须另跑 `npx tsc --noEmit`**。已写进 `agent-api.ts` 的函数注释。
-- **结论**:整改后待复审(有采纳整改 → 按 CLAUDE.md 缺陷门禁必须再发一轮;第 2 轮仍是全量范围)。
+- **第 2 轮复审(全量范围,第 1 轮的 4 条无复发)**:2 条 P2,零 high,**全部采纳整改**:
+
+  | # | 级别 | 问题 | 处置 |
+  |---|---|---|---|
+  | 5 | P2 | `totalTokens` 设为必填后,`runtime.test.ts` 的 `fakeRec()` 夹具缺这个字段 → TS2322 | 采纳,夹具补 `totalTokens: 0` |
+  | 6 | P2 | `typeof === "number"` 拦不住 `Infinity`:自定义兼容端点报越界 JSON 数(`1e400`)会被解析成 Infinity,流进 `rec.totalTokens` 后是**永久污染** —— BIGINT 更新失败、SSE 里序列化成 `null`、之后每轮都还是 Infinity,直到会话回收 | 采纳。三处都改 `Number.isFinite`:摄入 usage 的源头(`ask.ts`,token 与 cost 都改)、累加进长寿对象 `rec` 之前、公共函数 `addSessionTokens` 自己的边界。补一条回归测试 |
+
+- **跨轮次发现、按流程不当场改**:`npx tsc --noEmit` 还报 3 个**本轮之外**的错
+  (`catalog.test.ts` 的 `socketPath`、`skill-runner.test.ts` 的两处 `string | Error`),都是 R-WEBFETCH 的测试文件。
+  说明 api 侧测试文件从来没过严格类型检查(vitest 用 esbuild,transpile-only)。已记 `rounds/BACKLOG.md`。
+- **结论**:**整改后 PASS**(2 轮 / 6 条 / 零 high)。第 2 轮的两条整改都是「补一个字段」与「换一个判断」,
+  未新增机制、未改动接口面,按 CLAUDE.md 的缺陷门禁不再触发第 3 轮。
 
 ## 失败处理
 
@@ -187,3 +198,10 @@ contextUsage?: { tokens, contextWindow, percent }   // percent 即 ctx%
 - **圆点(P2 #4)**:重启后端清空注册表 → 打开会话 = `7.9k tokens · - · ctx - · 58 events`,
   圆点 `rgb(22, 163, 74)` = 画板的 `#16a34a`。
 - **重建路径仍成立**:重启后端后 `7.9k` 未回退(库内续接),与整改前一致。
+
+### 第 2 轮整改后复验
+
+- `npx tsc --noEmit`:**本轮涉及的文件零错**(`runtime.test.ts` 的 TS2322 已消);剩余 3 个错全部在
+  R-WEBFETCH 的测试文件里,已记 BACKLOG。
+- `dev.ps1 check` 绿;`dev.ps1 test` = api **528**(新增 1 条 Infinity 回归)+ web 21 全过。
+- Infinity / NaN 回归用例:连着写 500 → Infinity → NaN,库内仍是 500。

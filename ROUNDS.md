@@ -650,7 +650,7 @@
 - **前置(已满足)**:画板 `2l` / `2m` 已并入 `design/`(18 → 20 块);R-PERF 已合并 `main`。**止损**:无迁移,回退 = revert;
   已写入的 `payload` 只是被忽略的 JSONB
 
-### R-USAGE — 顶栏统计条的 tokens 与 ctx 接真实数据(命名轮;所有者裁定 2026-09-04;第 1 轮审查已整改、待复审)
+### R-USAGE — 顶栏统计条的 tokens 与 ctx 接真实数据(命名轮;所有者裁定 2026-09-04;审查整改后 PASS、待合并)
 
 > 任务卡 [`rounds/round-usage/round-usage.md`](rounds/round-usage/round-usage.md)。
 > 所有者看着生产页面问「右上角这个数据是不是金额是写死的」触发 —— 是:`tokens` / `cost` / `ctx` 三项从首版起
@@ -686,6 +686,9 @@
   `next build` TS2339(`dev.ps1 check` 只覆盖 api,查不到;**改服务端响应形状后要另跑 `npx tsc --noEmit`**);
   ②落库改为**先于收尾帧**,消除「看到数字更新就 F5 会读到旧值」的竞态;③切会话时清 usage;
   ④ctx 圆点无值压灰违反规则 7,**已整个撤回**、恒为画板的 `#16a34a`,诉求记 BACKLOG
+- **第 2 轮 2 条 P2 亦全部采纳**:⑤`runtime.test.ts` 的夹具缺新必填字段;⑥`typeof === "number"` 拦不住
+  `Infinity`(自定义端点报 `1e400`),流进长寿的 `rec.totalTokens` 后是永久污染 —— 三处改 `Number.isFinite`
+  并补回归测试。**结论:2 轮 / 6 条 / 零 high,整改后 PASS**
 
 ## 轮次外事项
 

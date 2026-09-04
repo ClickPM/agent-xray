@@ -83,6 +83,11 @@
       重新 `dev.ps1 gen` 都产生噪音 diff。给 `encore.app` 定一个固定 `id` 能消掉,但那会影响 daemon 的
       本地 app 登记(与规则 1 的同机共用 daemon 有关),不顺手改 (2026-08-31)
 
+- [ ] R-WEBFETCH **api 侧测试文件过不了 `npx tsc --noEmit`**(3 处):`agent/catalog.test.ts:214` 用
+      `RunnerTarget.socketPath`(联合类型的 tcp 分支上没有这个属性)、`agent/skill-runner.test.ts:368/369`
+      对 `string | Error` 取 `.message`。**不影响任何构建**:`encore test` 走 vitest + esbuild(transpile-only),
+      api 也没有把 tsc 放进构建链。是 R-USAGE 为查一条 P1 顺手跑 tsc 时发现的,跨轮次不当场改 (2026-09-04)
+
 - [ ] R-USAGE **顶栏 ctx 圆点在「拿不到值」时是否该压灰**(`Workbench.tsx` 统计条,现为恒绿 `#16a34a`)。
       本轮曾把无值态改成 `var(--text-dim)`,理由是 `ctx -` 配一个绿点等于在「不知道」的时候声称「正常」;
       codex 第 1 轮 P2 判定违反规则 7(画板 1a 只画过有值的常绿态),已整个撤回。
