@@ -508,15 +508,28 @@ _TOKEN_RE = re.compile(r"\\.|!\[|\[|\]", re.S)
 # 紧跟在 `]` 后面的目的地:`(dest)`(无空白、允许一层成对括号、可选 "title")或 reference `[id]` / `[]`;有界匹配
 _DEST_RE = re.compile(r"\((?:[^()\s\\]|\\.|\([^()\s]*\))*(?:\s+\"[^\"]*\")?\)|\[[^\[\]\s]{0,999}\]")
 MAX_DEST_CHARS = 2200  # URL 上限 2048 + 括号 / title 余量;超过这个长度的「目的地」不认
+# 链接目的地允许保留的形状:http(s) 与站内相对地址;别的 scheme(javascript: / data: / mailto: / vbscript: …)只留标签。
+# 这是纵深防御不是边界(react-markdown 自带的 urlTransform 本来就丢弃 javascript: 等,但放行 mailto:);图片才是边界
+_LINK_OK_PREFIXES = ("https://", "http://", "/", "#", "./", "../", "?")
+
+
+def _link_target(dest: str) -> str:
+    """`(dest "title")` → dest;reference 形式回空串(定义行会被 _REF_DEF_RE 删掉,那种链接自然退化成文字)。"""
+    if not dest.startswith("("):
+        return ""
+    inner = dest[1:-1].strip()
+    return inner.split(None, 1)[0] if inner else ""
 
 
 def strip_images(text: str) -> str:
-    """去掉 markdown 图片、只留 alt 文字 —— **单趟、栈式**(codex 第 2 轮 P1 / 第 3 轮 P1 + P2 的合一修法):
+    """去掉 markdown 图片(只留 alt)、剥掉非 http(s) / 非相对地址的链接(只留标签)—— **单趟、栈式**
+    (codex 第 2 轮 P1 / 第 3 轮 P1 + P2 / 第 4 轮 P2 的合一修法):
     `![` / `[` 进栈,`]` 出栈;弹出的是图片开启符且后面紧跟合法目的地时,把该开启符之后已输出的内容(= alt,里面嵌套的图片
-    此时**已经**被折成它们自己的 alt,栈是后进先出)收回来当作纯文字放回去。alt 里嵌套 / 转义的方括号、reference 形式、
-    `![outer ![inner](…)][id]` 这类嵌套都由栈天然处理,不递归、不回扫;目的地匹配用有界正则(C 速度),
+    此时**已经**被折成它们自己的 alt,栈是后进先出)收回来当作纯文字放回去;弹出的是普通开启符且后面紧跟 `(dest)` 时,按 dest 的
+    scheme 决定原样保留还是只留标签(标签长度不设上限 —— 第 4 轮 P2:正则的标签上限成了旁路)。alt / 标签里嵌套、转义的方括号、
+    reference 形式、`![outer ![inner](…)][id]` 这类嵌套都由栈天然处理,不递归、不回扫;目的地匹配用有界正则(C 速度),
     未闭合的开启符留在栈里到结尾 —— 每个字符最多进出一次,恶意的 256 KiB 全 `![` 也是线性。
-    **兜底**:图片开启符进栏时就写成 `!\\[`(CommonMark 里 `\\[` 不能开启图片),只有确认整段图片语法成立时才被 alt 替换掉,
+    **兜底**:图片开启符进栈时就写成 `!\\[`(CommonMark 里 `\\[` 不能开启图片),只有确认整段图片语法成立时才被 alt 替换掉,
     所以不论解析对不对,输出里都不可能剩下能渲染成 <img> 的 `![`。"""
     out: list[str] = []
     stack: list[tuple[bool, int]] = []  # (是图片开启符?, 它在 out 里的下标)
@@ -542,44 +555,38 @@ def strip_images(text: str) -> str:
                 out.append("]")
                 continue
             is_image, idx = stack.pop()
+            dest = _DEST_RE.match(text, pos, min(len(text), pos + MAX_DEST_CHARS))
             if is_image:
-                dest = _DEST_RE.match(text, pos, min(len(text), pos + MAX_DEST_CHARS))
                 if dest:
                     alt = "".join(out[idx + 1 :])
                     del out[idx:]
                     out.append(alt)
                     pos = dest.end()
                     continue
+            elif dest and dest.group(0).startswith("("):
+                target = _link_target(dest.group(0))
+                if target.lower().startswith(_LINK_OK_PREFIXES) or ":" not in target:
+                    out.append("]")
+                    out.append(text[pos : dest.end()])  # 合法链接原样保留(含 title)
+                else:
+                    out[idx] = ""  # 非法 scheme:去掉 `[`、不写 `]`、跳过目的地,只剩标签文字
+                pos = dest.end()
+                continue
             out.append("]")
     if pos < len(text):
         out.append(text[pos:])
     return "".join(out)
 
 
-
-# 链接目标允许一层成对括号(`javascript:alert(1)` / 维基百科的 `Foo_(bar)` 都是这种形状),否则前者会剩半截漏出去。
-# 量词**有界**:链接文字 ≤ 499 字符且不跨行、目的地 ≤ 2200 —— 无界的 `[^\]]*` 在一段没有 `]` 的 `[` 海里会从每个 `[` 扫到文末再回溯,
-# 256 KiB 就是 5e10 步(第 3 轮 P2 的同类形状,写线性时间用例时抓到的)。链接消毒是纵深防御,不是边界:react-markdown 自带的
-# urlTransform 本来就丢弃 javascript: 等协议;图片才是边界,那边走 strip_images 的单趟扫描
-_LINK_RE = re.compile(r"\[([^\]\n]{0,499})\]\(((?:[^()\s]|\([^()\s]*\)){0,2200})(?:\s+\"[^\"]*\")?\)")
 _CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-_LINK_OK_PREFIXES = ("https://", "http://", "/", "#", "./", "../", "?")
 
 
 def sanitize_markdown(text: str) -> str:
-    """去图片语法(抽取时已关,再兜一次;内联与 reference-style 两种);javascript: / data: / mailto: 之类的链接只留文字;去控制字符。
+    """去图片语法(抽取时已关,再兜一次;内联与 reference-style 两种);javascript: / data: / mailto: 之类的链接只留标签;去控制字符。
     页面里**任何**要进输出的文本都过这里 —— 正文与 title / sitename / date 元数据一样(codex 首轮 P1:元数据没过滤时,标题里的
-    `![](第三方)` 会原样到模型跟前)。"""
+    `![](第三方)` 会原样到模型跟前)。图片与链接都在 strip_images 的同一趟栈式扫描里处理。"""
     text = strip_images(text)
     text = _REF_DEF_RE.sub("", text)
-
-    def keep_link(m: "re.Match[str]") -> str:
-        target = m.group(2)
-        if target.lower().startswith(_LINK_OK_PREFIXES) or ":" not in target:
-            return m.group(0)
-        return m.group(1)
-
-    text = _LINK_RE.sub(keep_link, text)
     return _CTRL_RE.sub("", text)
 
 

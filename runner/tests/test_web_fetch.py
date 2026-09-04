@@ -581,6 +581,18 @@ class OutputSanitizing(unittest.TestCase):
                 self.assertEqual(got, expected)
                 self.assertNotRegex(got, r"(?<!\\)!\[", "不能剩下能开启图片的 ![")
 
+    def test_link_scheme_filter_has_no_label_length_bypass(self):
+        # codex 第 4 轮 P2:标签超过正则上限的链接曾原样漏过;现在链接与图片在同一趟栈式扫描里处理,标签长度不设上限
+        long = "x" * 600
+        self.assertEqual(F.sanitize_markdown(f"[{long}](mailto:a@b)"), long)
+        self.assertEqual(F.sanitize_markdown(f"[{long}](javascript:alert(1))"), long)
+        self.assertEqual(F.sanitize_markdown(f"[{long}](https://ok.example/)"), f"[{long}](https://ok.example/)")
+        multi = "line one\nline two"
+        self.assertEqual(F.sanitize_markdown(f"[{multi}](data:text/html,x)"), multi)
+        self.assertEqual(F.sanitize_markdown("[a [nested] label](vbscript:x)"), "a [nested] label")
+        self.assertEqual(F.sanitize_markdown("[a](https://ok.example/p \"t\") [b](mailto:c) [c][ref]\n\n[ref]: mailto:d"), "[a](https://ok.example/p \"t\") b [c][ref]\n\n")
+        self.assertEqual(F.sanitize_markdown("[ ![i](https://e.example/i.gif) ](https://ok.example/)"), "[ i ](https://ok.example/)")
+
     def test_hostile_markdown_is_sanitized_in_linear_time(self):
         # codex 第 3 轮 P2:大量未闭合 / 半闭合的图片开启符不得让消毒变成二次方(256 KiB 正文 → 占满 egress 唯一并发名额)
         import time
