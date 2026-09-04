@@ -9,6 +9,7 @@ import gzip
 import importlib.util
 import io
 import os
+import re
 import sys
 import unittest
 from typing import Callable
@@ -505,11 +506,10 @@ class Extraction(unittest.TestCase):
     def test_no_content_and_javascript_links_and_truncation_note(self):
         s = Script({("example.com", "/empty"): http_response(200, {"Content-Type": "text/html"}, b"<html><body><script>x()</script></body></html>")})
         self.assertEqual(code_of(lambda: run("https://example.com/empty", s)), F.E_NO_CONTENT)
+        # 链接原样保留(所有者裁定 §4-8;非法 scheme 由 react-markdown 的 urlTransform 处理),图片开启符转义
         md = F.sanitize_markdown("a [x](javascript:alert(1)) b [y](https://ok.example/) c ![img](https://i.example/p.png) d [z](mailto:a@b) e [rel](page.html)")
-        self.assertEqual(md, "a x b [y](https://ok.example/) c img d z e [rel](page.html)")
-        # 目标里一层成对括号是合法链接(维基百科式 `Foo_(bar)`),保留
+        self.assertEqual(md, "a [x](javascript:alert(1)) b [y](https://ok.example/) c !\\[img](https://i.example/p.png) d [z](mailto:a@b) e [rel](page.html)")
         self.assertEqual(F.sanitize_markdown("[w](https://en.wikipedia.org/wiki/Foo_(bar))"), "[w](https://en.wikipedia.org/wiki/Foo_(bar))")
-        self.assertEqual(F.sanitize_markdown("[d](data:text/html;base64,PHNjcmlwdD4=)"), "d")
         big = html_page("word " * 1000)  # 12 段 × 5000 字符 > 48000
         s = Script({("example.com", "/big"): http_response(200, {"Content-Type": "text/html"}, big)})
         out = run("https://example.com/big", s)
@@ -529,85 +529,55 @@ class Extraction(unittest.TestCase):
 
 
 class OutputSanitizing(unittest.TestCase):
+    """消毒器的契约(所有者裁定 2026-09-04):输出里不存在任何能开启图片的 `![`(全部写成 `!\\[`),控制字符去掉;其余原样。
+    图片语法留成字面文字是接受的代价;链接不过滤。"""
+
+    IMG_OPENER = re.compile(r"(?<!\\)!\[")
+
     def test_metadata_fields_are_sanitized_like_the_body(self):
-        # codex 首轮 P1:title / sitename / date 是页面给的,标题里塞图片语法不能绕过「去图片」
+        # codex 首轮 P1:title / sitename / date 是页面给的,标题里塞图片语法不能绕过
         out = F.render(
             "![pixel](https://tracker.example/p.gif) Real Title",
-            "![s](https://tracker.example/s.gif) Site [x](javascript:alert(1))",
-            "2026-09-03 ![d][ref]\n\n[ref]: https://tracker.example/d.gif",
+            "![s](https://tracker.example/s.gif) Site",
+            "2026-09-03 ![d][ref]",
             "body ![b](https://tracker.example/b.gif) text",
             False,
         )
-        self.assertNotIn("![", out)
-        self.assertNotIn("tracker.example", out)
-        self.assertNotIn("javascript:", out)
-        self.assertTrue(out.startswith("# pixel Real Title\n"), out)
-        self.assertIn("s Site x · 2026-09-03 d", out)
+        self.assertNotRegex(out, self.IMG_OPENER)
+        self.assertEqual(out.count("!\\["), 4)
+        self.assertTrue(out.startswith("# !\\[pixel](https://tracker.example/p.gif) Real Title\n"), out)
 
-    def test_reference_style_images_and_definitions_are_removed(self):
-        md = F.sanitize_markdown("see ![alt][img1] here\n\n[img1]: https://tracker.example/x.png \"t\"\nkeep [link](https://ok.example/) and text")
-        self.assertNotIn("![", md)
-        self.assertNotIn("tracker.example", md)
-        self.assertIn("see alt here", md)
-        self.assertIn("[link](https://ok.example/)", md)
+    def test_every_image_form_is_neutralised_and_nothing_else_changes(self):
+        # 内联 / reference / shortcut / 嵌套 / 转义方括号 / 邻接 / 空 alt:一律只是 `![` → `!\[`,别的一个字不动
+        cases = [
+            "![a](https://evil.example/p.gif)",
+            "![a [b]](https://evil.example/p.gif)",
+            "![a [b [c]]](https://evil.example/p.gif) tail",
+            "![a\\]](https://evil.example/p.gif)",
+            "![a][ref]\n\n[ref]: https://evil.example/r.gif",
+            "![a]\n\n[a]: https://evil.example/s.gif",
+            "![outer ![inner](https://evil.example/i.gif)][outer]",
+            "![unterminated (https://evil.example/p.gif)",
+            "text ![](https://evil.example/e.gif) end",
+            "[[click]](data:x)(mailto:evil@example.com)",
+            "[x]![](https://e.example/e.gif)(mailto:z)",
+            "see ![alt][img1] here\n\n[img1]: https://tracker.example/x.png \"t\"\nkeep [link](https://ok.example/) and text",
+            "\\![escaped](https://ok.example/) stays a link",
+            "[a](https://ok.example/) [b](mailto:c) [d](javascript:x)",
+        ]
+        for src in cases:
+            with self.subTest(src=src):
+                got = F.sanitize_markdown(src)
+                self.assertEqual(got, src.replace("![", "!\\["))
+                self.assertNotRegex(got, self.IMG_OPENER)
+
+    def test_control_characters_are_removed_before_anything_else(self):
+        self.assertEqual(F.sanitize_markdown("a\x00b\x1f\x7fc\td\ne"), "abc\td\ne")
+        self.assertEqual(F.sanitize_markdown("!\x00[a](https://e.example/p.gif)"), "!\\[a](https://e.example/p.gif)")
 
     def test_title_leading_hashes_and_newlines_are_collapsed(self):
         out = F.render("## Multi\nline\ttitle", "", "", "body", False)
         self.assertTrue(out.startswith("# Multi line title\n"))
-
-    def test_nested_and_escaped_brackets_in_alt_cannot_smuggle_an_image(self):
-        # codex 第 2 轮 P1:正则挡不住的形状。判据是「输出里不存在任何能渲染成 <img> 的 `![`」—— 要么去掉,要么转义成 `!\[`
-        cases = {
-            "![a [b]](https://evil.example/p.gif)": "a [b]",
-            "![a [b [c]]](https://evil.example/p.gif) tail": "a [b [c]] tail",
-            "![a\\]](https://evil.example/p.gif)": "a\\]",
-            "![a](https://evil.example/p(1).gif)": "a",
-            "![a][ref] x": "a x",
-            "![a [b]][ref]": "a [b]",
-            "![unterminated (https://evil.example/p.gif)": "!\\[unterminated (https://evil.example/p.gif)",
-            "![a]": "!\\[a]",
-            "text ![](https://evil.example/e.gif) end": "text  end",
-            "\\![escaped](https://ok.example/) stays a link": "\\![escaped](https://ok.example/) stays a link",
-            # codex 第 3 轮 P1:reference-style 图片的 alt 里再嵌内联图片 —— 内层先折成 alt,外层再折
-            "![outer ![inner](https://evil.example/i.gif)][outer]\n\n[outer]: https://evil.example/o.gif": "outer inner\n\n",
-            "![a ![b ![c](https://e.example/c.gif)](https://e.example/b.gif)](https://e.example/a.gif)": "a b c",
-            "![a](https://e.example/a.gif \"title with ![x](https://e.example/x.gif)\")": "a",
-            "[ ![a](https://e.example/a.gif)": "[ a",
-            "![a] [b](https://ok.example/)": "!\\[a] [b](https://ok.example/)",
-        }
-        for src, expected in cases.items():
-            with self.subTest(src=src):
-                got = F.sanitize_markdown(src)
-                self.assertEqual(got, expected)
-                self.assertNotRegex(got, r"(?<!\\)!\[", "不能剩下能开启图片的 ![")
-
-    def test_link_scheme_filter_has_no_label_length_bypass(self):
-        # codex 第 4 轮 P2:标签超过正则上限的链接曾原样漏过;现在链接与图片在同一趟栈式扫描里处理,标签长度不设上限
-        long = "x" * 600
-        self.assertEqual(F.sanitize_markdown(f"[{long}](mailto:a@b)"), long)
-        self.assertEqual(F.sanitize_markdown(f"[{long}](javascript:alert(1))"), long)
-        self.assertEqual(F.sanitize_markdown(f"[{long}](https://ok.example/)"), f"[{long}](https://ok.example/)")
-        multi = "line one\nline two"
-        self.assertEqual(F.sanitize_markdown(f"[{multi}](data:text/html,x)"), multi)
-        self.assertEqual(F.sanitize_markdown("[a [nested] label](vbscript:x)"), "a [nested] label")
-        self.assertEqual(F.sanitize_markdown("[a](https://ok.example/p \"t\") [b](mailto:c) [c][ref]\n\n[ref]: mailto:d"), "[a](https://ok.example/p \"t\") b [c][ref]\n\n")
-        self.assertEqual(F.sanitize_markdown("[ ![i](https://e.example/i.gif) ](https://ok.example/)"), "[ i ](https://ok.example/)")
-
-    def test_removal_cannot_create_a_new_link_by_adjacency(self):
-        # codex 第 5 轮 P2:删掉不安全链接 / 折掉图片之后,残留的 `]` 不能与后面紧跟的 `(` / `[` 拼成新链接
-        cases = {
-            "[[click]](data:x)(mailto:evil@example.com)": "[click]\\(mailto:evil@example.com)",
-            "[x]![](https://e.example/e.gif)(mailto:z)": "[x]\\(mailto:z)",
-            "![a [b]](https://e.example/a.gif)(mailto:x)": "a [b]\\(mailto:x)",
-            "[[c]](javascript:x)[ref]\n\n[ref]: mailto:y": "[c]\\[ref]\n\n",
-            "[a](https://ok.example/)(mailto:x)": "[a](https://ok.example/)(mailto:x)",  # 没有删除就不动
-            "[[click]](data:x) (mailto:evil@example.com)": "[click] (mailto:evil@example.com)",  # 中间有空格,本来就不是链接
-        }
-        for src, expected in cases.items():
-            with self.subTest(src=src):
-                got = F.sanitize_markdown(src)
-                self.assertEqual(got, expected)
-                self.assertNotRegex(got, r"(?<!\\)\]\((?:mailto|javascript|data):", "不能拼出新的非法链接")
 
     def test_hostile_markdown_is_sanitized_in_linear_time(self):
         # codex 第 3 轮 P2:大量未闭合 / 半闭合的图片开启符不得让消毒变成二次方(256 KiB 正文 → 占满 egress 唯一并发名额)
@@ -620,6 +590,9 @@ class OutputSanitizing(unittest.TestCase):
             ("deep-nesting", "![" * (cap // 10) + "x" + "](u)" * (cap // 10)),
             ("brackets-sea", "[" * (cap // 2)),
             ("many-images", "![a](https://e.example/p.gif) " * (cap // 30)),
+            ("empty-unsafe-links", "[](data:x)" * (cap // 10)),  # codex 第 6 轮 P2:每次删除留空片段会让守卫倒扫二次方
+            ("empty-images", "![](u)" * (cap // 6)),
+            ("adjacent-guard-storm", "[[a]](data:x)(" * (cap // 14)),
         ):
             with self.subTest(name=name):
                 t0 = time.perf_counter()

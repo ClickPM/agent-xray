@@ -499,109 +499,22 @@ def extract_markdown(html: str, href: str) -> tuple[str, str, str, str]:
     return str(d.get("title") or ""), str(d.get("sitename") or ""), str(d.get("date") or ""), body
 
 
-# reference 定义行 `[id]: url` 一并去掉(reference-style 图片 `![alt][id]` 靠它才有地址)
-_REF_DEF_RE = re.compile(r"^[ \t]{0,3}\[[^\]]+\]:[ \t]+\S.*$", re.M)
-
-
-# 单趟扫描只在这四种 token 上停(C 速度跳过其余文本):`\x` 转义、`![` 图片开启、`[` 普通开启、`]` 关闭
-_TOKEN_RE = re.compile(r"\\.|!\[|\[|\]", re.S)
-# 紧跟在 `]` 后面的目的地:`(dest)`(无空白、允许一层成对括号、可选 "title")或 reference `[id]` / `[]`;有界匹配
-_DEST_RE = re.compile(r"\((?:[^()\s\\]|\\.|\([^()\s]*\))*(?:\s+\"[^\"]*\")?\)|\[[^\[\]\s]{0,999}\]")
-MAX_DEST_CHARS = 2200  # URL 上限 2048 + 括号 / title 余量;超过这个长度的「目的地」不认
-# 链接目的地允许保留的形状:http(s) 与站内相对地址;别的 scheme(javascript: / data: / mailto: / vbscript: …)只留标签。
-# 这是纵深防御不是边界(react-markdown 自带的 urlTransform 本来就丢弃 javascript: 等,但放行 mailto:);图片才是边界
-_LINK_OK_PREFIXES = ("https://", "http://", "/", "#", "./", "../", "?")
-
-
-def _link_target(dest: str) -> str:
-    """`(dest "title")` → dest;reference 形式回空串(定义行会被 _REF_DEF_RE 删掉,那种链接自然退化成文字)。"""
-    if not dest.startswith("("):
-        return ""
-    inner = dest[1:-1].strip()
-    return inner.split(None, 1)[0] if inner else ""
-
-
-def _guard_join(out: list[str], text: str, pos: int) -> None:
-    """删掉一段(图片 → alt、非法链接 → 标签)之后,前面剩下的 `]` 可能与紧跟其后的 `(` / `[` 拼成一个**新**链接
-    (codex 第 5 轮 P2:`[[click]](data:x)(mailto:…)` → `[click](mailto:…)`)。把那个括号转义掉 —— CommonMark 里 `\\(` / `\\[`
-    是字面字符,链接语法就断了;没有邻接时什么都不做。"""
-    if pos < len(text) and text[pos] in "([":
-        for piece in reversed(out):
-            if piece:
-                if piece[-1] == "]":
-                    out.append("\\")
-                return
-
-
-def strip_images(text: str) -> str:
-    """去掉 markdown 图片(只留 alt)、剥掉非 http(s) / 非相对地址的链接(只留标签)—— **单趟、栈式**
-    (codex 第 2 轮 P1 / 第 3 轮 P1 + P2 / 第 4 轮 P2 的合一修法):
-    `![` / `[` 进栈,`]` 出栈;弹出的是图片开启符且后面紧跟合法目的地时,把该开启符之后已输出的内容(= alt,里面嵌套的图片
-    此时**已经**被折成它们自己的 alt,栈是后进先出)收回来当作纯文字放回去;弹出的是普通开启符且后面紧跟 `(dest)` 时,按 dest 的
-    scheme 决定原样保留还是只留标签(标签长度不设上限 —— 第 4 轮 P2:正则的标签上限成了旁路)。alt / 标签里嵌套、转义的方括号、
-    reference 形式、`![outer ![inner](…)][id]` 这类嵌套都由栈天然处理,不递归、不回扫;目的地匹配用有界正则(C 速度),
-    未闭合的开启符留在栈里到结尾 —— 每个字符最多进出一次,恶意的 256 KiB 全 `![` 也是线性。
-    **兜底**:图片开启符进栈时就写成 `!\\[`(CommonMark 里 `\\[` 不能开启图片),只有确认整段图片语法成立时才被 alt 替换掉,
-    所以不论解析对不对,输出里都不可能剩下能渲染成 <img> 的 `![`。"""
-    out: list[str] = []
-    stack: list[tuple[bool, int]] = []  # (是图片开启符?, 它在 out 里的下标)
-    pos = 0
-    for m in _TOKEN_RE.finditer(text):
-        start = m.start()
-        if start < pos:
-            continue  # 落在已消费的目的地 / title 之内的 token(`[id]` 的括号、title 里的 `![x](…)`):iterator 是预先算好的,得手工跳过
-        if start > pos:
-            out.append(text[pos:start])
-        tok = m.group(0)
-        pos = m.end()
-        if tok[0] == "\\":
-            out.append(tok)
-        elif tok == "![":
-            stack.append((True, len(out)))
-            out.append("!\\[")
-        elif tok == "[":
-            stack.append((False, len(out)))
-            out.append("[")
-        else:  # "]"
-            if not stack:
-                out.append("]")
-                continue
-            is_image, idx = stack.pop()
-            dest = _DEST_RE.match(text, pos, min(len(text), pos + MAX_DEST_CHARS))
-            if is_image:
-                if dest:
-                    alt = "".join(out[idx + 1 :])
-                    del out[idx:]
-                    out.append(alt)
-                    pos = dest.end()
-                    _guard_join(out, text, pos)
-                    continue
-            elif dest and dest.group(0).startswith("("):
-                target = _link_target(dest.group(0))
-                pos = dest.end()
-                if target.lower().startswith(_LINK_OK_PREFIXES) or ":" not in target:
-                    out.append("]")
-                    out.append(text[dest.start() : dest.end()])  # 合法链接原样保留(含 title)
-                else:
-                    out[idx] = ""  # 非法 scheme:去掉 `[`、不写 `]`、跳过目的地,只剩标签文字
-                    _guard_join(out, text, pos)
-                continue
-            out.append("]")
-    if pos < len(text):
-        out.append(text[pos:])
-    return "".join(out)
-
-
 _CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def sanitize_markdown(text: str) -> str:
-    """去图片语法(抽取时已关,再兜一次;内联与 reference-style 两种);javascript: / data: / mailto: 之类的链接只留标签;去控制字符。
-    页面里**任何**要进输出的文本都过这里 —— 正文与 title / sitename / date 元数据一样(codex 首轮 P1:元数据没过滤时,标题里的
-    `![](第三方)` 会原样到模型跟前)。图片与链接都在 strip_images 的同一趟栈式扫描里处理。"""
-    text = strip_images(text)
-    text = _REF_DEF_RE.sub("", text)
-    return _CTRL_RE.sub("", text)
+    """输出消毒,只做两件事:去控制字符;把每一个 `![` 写成 `!\\[`。
+
+    **为什么只有一行转义,而不是解析 markdown**(所有者裁定 2026-09-04,回退 codex 第 2–6 轮里长出来的栈式扫描器与链接过滤):
+    边界只有一个 —— 输出里不能有能渲染成 <img> 的东西(docs/security.md §0 威胁 9:第三方图 = 访客 IP 泄给第三方 + 跟踪像素)。
+    CommonMark 里 `\\[` 永远不能开启图片(内联 `![alt](src)`、reference `![alt][id]`、shortcut `![alt]` 三种形式都以 `![` 开头),
+    所以「每个 `![` 无条件转义」是可证明完备的、线性的、不需要解析器 —— 而任何试图「识别图片语法再删掉」的解析器都在每一轮审查里
+    被嵌套 / 转义 / 邻接 / 二次方的下一个角落击穿(第 2–6 轮各一条)。代价:text/plain 的 markdown 页与元数据里的图片会以字面
+    `![alt](url)` 出现;trafilatura 抽的正文本来就 include_images=False,影响面只有这一类。
+    **链接不过滤**:所有者裁定保留正文链接(任务卡 §4 第 8 项);`javascript:` / `data:` 由 react-markdown 既有的 urlTransform 丢弃,
+    `mailto:` 它放行、remark-gfm 还会把裸邮箱自动变成 mailto 链接 —— 脚本侧的 scheme 过滤既不在威胁模型里,也拦不住后者。
+    页面里**任何**要进输出的文本都过这里:正文与 title / sitename / date 元数据一样(codex 首轮 P1)。"""
+    return _CTRL_RE.sub("", text).replace("![", "!\\[")
 
 
 def render(title: str, sitename: str, date: str, body: str, body_truncated: bool) -> str:
