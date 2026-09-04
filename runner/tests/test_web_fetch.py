@@ -376,6 +376,17 @@ class BodyLimits(unittest.TestCase):
         self.assertEqual(body, page)
         self.assertFalse(truncated)
 
+    def test_incomplete_gzip_stream_is_marked_truncated(self):
+        # 对方提前掐断:gzip 尾没到,flush() 仍吐出已解的部分 —— 必须标「不完整」,不能当完整页面(codex 首轮 P2)
+        page = html_page("hello")
+        cut = gzip.compress(page)[:-24]
+        body, truncated, _ = self.fetch_body(http_response(200, {"Content-Type": "text/html", "Content-Encoding": "gzip"}, cut))
+        self.assertTrue(truncated)
+        self.assertGreater(len(body), 0)
+        self.assertLess(len(body), len(page))
+        out = F.render("T", "", "", body.decode("utf-8", "replace"), truncated)
+        self.assertIn("正文可能不完整", out)
+
     def test_unsupported_encoding_and_declared_size(self):
         s = Script({("example.com", "/"): http_response(200, {"Content-Type": "text/html", "Content-Encoding": "br"}, b"x")})
         self.assertEqual(code_of(lambda: run("https://example.com/", s)), F.E_UNFETCHABLE)
@@ -412,7 +423,9 @@ class ContentTypes(unittest.TestCase):
         self.assertEqual(F.pick_charset("", b'<?xml version="1.0" encoding="ISO-8859-1"?><html>', True), "cp1252")
         self.assertEqual(F.pick_charset("", b"\xef\xbb\xbf<html>", True), "utf-8-sig")
         self.assertEqual(F.pick_charset("no-such-charset-zz", b"", True), "utf-8")
-        self.assertEqual(F.pick_charset("rot13", b"", True), "rot13" if False else F.pick_charset("rot13", b"", True))
+        # rot13 / base64 是 bytes↔bytes(或 str↔str)编解码器,不是文本编码:lookup 得到但不能用来 decode,必须回落 utf-8
+        self.assertEqual(F.pick_charset("rot13", b"", True), "utf-8")
+        self.assertEqual(F.pick_charset("base64", b"", True), "utf-8")
         self.assertEqual(F.pick_charset("", b"<meta charset=gbk>", False), "utf-8", "text/plain 不嗅探 meta")
 
     def test_gbk_plain_text_decodes(self):
@@ -467,6 +480,37 @@ class Extraction(unittest.TestCase):
         self.assertIn("redirected content", out)
         self.assertNotIn("redirected.example", out)
         self.assertNotIn("1.1.1.1", out)
+
+
+# ───────────────────────── 输出消毒(不需要 trafilatura:render / sanitize_markdown 是纯函数)─────────────────────────
+
+
+class OutputSanitizing(unittest.TestCase):
+    def test_metadata_fields_are_sanitized_like_the_body(self):
+        # codex 首轮 P1:title / sitename / date 是页面给的,标题里塞图片语法不能绕过「去图片」
+        out = F.render(
+            "![pixel](https://tracker.example/p.gif) Real Title",
+            "![s](https://tracker.example/s.gif) Site [x](javascript:alert(1))",
+            "2026-09-03 ![d][ref]\n\n[ref]: https://tracker.example/d.gif",
+            "body ![b](https://tracker.example/b.gif) text",
+            False,
+        )
+        self.assertNotIn("![", out)
+        self.assertNotIn("tracker.example", out)
+        self.assertNotIn("javascript:", out)
+        self.assertTrue(out.startswith("# pixel Real Title\n"), out)
+        self.assertIn("s Site x · 2026-09-03 d", out)
+
+    def test_reference_style_images_and_definitions_are_removed(self):
+        md = F.sanitize_markdown("see ![alt][img1] here\n\n[img1]: https://tracker.example/x.png \"t\"\nkeep [link](https://ok.example/) and text")
+        self.assertNotIn("![", md)
+        self.assertNotIn("tracker.example", md)
+        self.assertIn("see alt here", md)
+        self.assertIn("[link](https://ok.example/)", md)
+
+    def test_title_leading_hashes_and_newlines_are_collapsed(self):
+        out = F.render("## Multi\nline\ttitle", "", "", "body", False)
+        self.assertTrue(out.startswith("# Multi line title\n"))
 
 
 # ───────────────────────── 验收 8:失败路径的 stdout 只有短码 ─────────────────────────

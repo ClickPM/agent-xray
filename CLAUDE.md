@@ -159,7 +159,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 gen        # encore gen client → apps/web/lib/api-client.ts(排除 mcp 服务)
 .\dev.ps1 db <名>    # encore db shell <数据库名>
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
-.\dev.ps1 ship <host> [sha]   # 镜像 + 四件部署资产送到服务器(不传 .env);发版后记 docs/releases.md
+.\dev.ps1 ship <host> [sha]   # 镜像 + 五件部署资产送到服务器(不传 .env;R-WEBFETCH 起含 egress-filter.sh);发版后记 docs/releases.md
 .\dev.ps1 skills     # 把 .claude\skills 镜像到 .agents\skills(codex 审查者只认后者)
 .\dev.ps1 skills-gen # 读 runner\skills 生成两份同源清单(runner\manifest.json + apps\api\shared\skills.generated.ts;R-SKILLS-2)
 .\dev.ps1 runner     # 本机起 skill-runner 执行容器(TCP 开发模式 127.0.0.1:8000;api 侧设 $env:XRAY_SKILL_RUNNER_URL="http://127.0.0.1:8000")

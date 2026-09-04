@@ -48,7 +48,7 @@
    ssh <host> docker load -i xray-<sha>.tar
    ```
 
-   > 上面三步(外加建 `~/deploy`、传四件部署资产、给 `migrate.sh` 补执行位、load 完删远端 tar)
+   > 上面三步(外加建 `~/deploy`、传五件部署资产(R-WEBFETCH 起含 `egress-filter.sh`)、给 `migrate.sh` / `egress-filter.sh` 补执行位、load 完删远端 tar)
    > 已固化成一条命令,**平时用它**:
    >
    > ```powershell

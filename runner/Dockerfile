@@ -26,7 +26,9 @@ ARG PIP_INDEX_URL=https://pypi.org/simple
 COPY requirements.txt /opt/requirements.txt
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/python -m pip install --require-hashes --no-deps --index-url "$PIP_INDEX_URL" -r /opt/requirements.txt \
-    && /opt/venv/bin/python -m pip uninstall -y pip setuptools wheel 2>/dev/null || true \
+    # 【|| true 只包住 uninstall】shell 的 && / || 同级左结合:不加括号,`install && uninstall || true` 会把 install 的失败也吞掉,
+    # 产出一个没装依赖却构建成功的镜像(codex 首轮 P1;requirements 为空的年代无害,现在不是)。uninstall 失败本身无害(venv 里可能没有 wheel)
+    && ( /opt/venv/bin/python -m pip uninstall -y pip setuptools wheel 2>/dev/null || true ) \
     && rm -rf /opt/venv/bin/pip* /opt/venv/bin/easy_install* \
     && find /opt/venv -name "__pycache__" -type d -prune -exec rm -rf {} +
 

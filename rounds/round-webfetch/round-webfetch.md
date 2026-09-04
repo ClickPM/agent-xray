@@ -358,9 +358,26 @@ runner/skills/web-fetch/
 
 <!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:<codex /codex:review --background(改动跨 runner / api / deploy / docs)>;**审查要求带上**:`fetch.py` 按 §2.3 十步逐条判 SSRF 判据(C5),`egress-filter.sh` 与 compose 的网络隔离按 §2.5 判
-- findings 处理:<逐条:采纳整改 / 不采纳及理由>
-- 结论:<PASS | 整改后 PASS>
+- 审查方式:codex `/codex:review --background --scope branch`(分支全量 diff against main,37 文件 / 259 KB;改动跨 runner / api / deploy / docs)。
+  前两轮全量,第 3 轮起只审整改 diff(CLAUDE.md「审查范围」)。`/codex:review` 不接受自定义关注点,「按第九条约束逐条判 SSRF 判据」这条要求由
+  审查者自行覆盖 —— 从推理摘要看它做了(「Assessing SSRF attack vectors」「Analyzing URL resolution on redirects」「Validating environment variable injection」…)。
+- **审查基础设施的一处坑(2026-09-04)**:第一次发起的 job `review-mtmb0xm8-cxf5q4` 在读完 diff 后 38 分钟零日志 —— 它的 pid 就是 Claude 后台 Bash
+  里那个 launcher(`--background` 对 review 是内联跑的,靴子由 Claude 的后台任务穿),node 在 01:58Z 退出码 0、companion 没写完成状态,
+  推断是 `codex app-server` 子进程异常退出后 stdio 关闭、事件循环空转退出。手工把 job 标成 cancelled,改用 PowerShell `Start-Process` 脱离工具
+  生命周期重发(`--wait`),9 分钟跑完。监视器里 `tasklist /FI` 会被 MSYS 当路径改写而误报「进程已死」,要 `MSYS_NO_PATHCONV=1`。
+- **第 1 轮(2026-09-04,`67b9fb1`)findings 4 条:3 × P1 + 1 × P2,全部采纳整改**:
+  1. [P1] `dev.ps1 ship` 只传四件旧资产,`egress-filter.sh` 到不了服务器,文档里的 `--install-unit` 步骤在按 `ship` 部署的机器上必失败,SSRF 第三道防线缺失 ——
+     **采纳**:scp 列表加它 + `chmod +x`,`ship` 结尾打印的步骤加一行 `sudo ./egress-filter.sh --install-unit && --status`;「四件」改「五件」(dev.ps1 / CLAUDE.md / deploy-environments)。
+  2. [P1] `runner/Dockerfile` 的 `pip install … && pip uninstall … 2>/dev/null || true && rm …`:`&&` / `||` 同级左结合,`|| true` 把 install 的失败也吞掉,
+     产出没装 trafilatura 却构建成功的镜像 —— **采纳**:`( pip uninstall … || true )` 括起来。R-SKILLS-2 就有这行,requirements 为空时无害。
+  3. [P1] `title` / `sitename` / `date` 没过 `sanitize_markdown`,标题里的 `![](第三方)` 原样进输出、模型抄进回复就是跟踪像素 ——
+     **采纳**:`render()` 对四个字段一律消毒,标题去首部 `#` 并压成单行;顺带补上 reference-style 图片 `![alt][id]` 与 `[id]: url` 定义行的去除
+     (react-markdown 会渲染那种形式;`Markdown.tsx` 没挂 rehype-raw,裸 `<img>` 不是向量)。加 3 个纯函数用例(不需要 trafilatura)。
+  4. [P2] gzip 流被对方提前掐断时 `decompressobj.flush()` 吐出部分字节且不报错,`truncated` 仍为 False,残缺正文被当完整页面 ——
+     **采纳**:EOF 时核 `inflater.eof`,不完整即标注;截断说明改为「只读取了页面的一部分(超过 256 KiB 上界,或对方提前断开)」。加用例(gzip 去尾 24 字节 → truncated)。
+  另:推理摘要里点到测试里一处同义反复断言(`pick_charset("rot13")` 与自己比),修为断言回落 `utf-8`。
+- 第 2 轮(全量复审,整改后):<待回填>
+- 结论:<待回填>
 
 ## 失败处理
 

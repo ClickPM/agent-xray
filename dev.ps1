@@ -18,7 +18,7 @@
 #       .\dev.ps1 db <名>   encore db shell <数据库名>
 #       .\dev.ps1 build     构建 api + web 生产镜像(tag = git 短 SHA)
 #       .\dev.ps1 ship <host> [sha]
-#                           把镜像与四件部署资产传到服务器(save -o / scp / load -i)
+#                           把镜像与五件部署资产传到服务器(save -o / scp / load -i)
 #       .\dev.ps1 skills    把 .claude\skills 镜像到 .agents\skills(给 codex 审查者用)
 #       .\dev.ps1 skills-gen
 #                           读 runner\skills 生成两份同源清单(runner\manifest.json + apps\api\shared\skills.generated.ts;R-SKILLS-2)
@@ -244,7 +244,7 @@ switch ($Cmd) {
         Write-Host "  或直接: .\dev.ps1 ship <host>"
     }
     "ship" {
-        # 把镜像 + 四件部署资产送到服务器(R9)。文档里那段手工流程漏一步就会出事:
+        # 把镜像 + 五件部署资产送到服务器(R9)。文档里那段手工流程漏一步就会出事:
         # 漏 migrate.sh → 服务器上无法迁移;走 PowerShell 管道 → 二进制 tar 被文本
         # 重编码破坏;漏 mkdir → 多文件 scp 直接失败。固化成一条命令。
         #
@@ -278,10 +278,12 @@ switch ($Cmd) {
         # 重编码,tar 会被破坏,远端 load 报 unexpected EOF)
         & scp $tar "${shipHost}:~/"
         if ($LASTEXITCODE -ne 0) { throw "scp 镜像失败" }
+        # 五件部署资产:compose / Caddyfile / migrate.sh / .env.example / egress-filter.sh(R-WEBFETCH 的宿主出网过滤;
+        # codex 首轮 P1:漏了它,文档里的 --install-unit 步骤在按本命令部署的机器上必失败,SSRF 第三道防线就不存在)
         & scp "$repoRoot\deploy\docker-compose.yml" "$repoRoot\deploy\Caddyfile" `
-              "$repoRoot\deploy\migrate.sh" "$repoRoot\deploy\.env.example" "${shipHost}:~/deploy/"
+              "$repoRoot\deploy\migrate.sh" "$repoRoot\deploy\.env.example" "$repoRoot\deploy\egress-filter.sh" "${shipHost}:~/deploy/"
         if ($LASTEXITCODE -ne 0) { throw "scp 部署资产失败" }
-        & ssh $shipHost "chmod +x ~/deploy/migrate.sh"
+        & ssh $shipHost "chmod +x ~/deploy/migrate.sh ~/deploy/egress-filter.sh"
 
         Write-Host "==> docker load(远端)"
         & ssh $shipHost "docker load -i ~/xray-$sha.tar && rm -f ~/xray-$sha.tar"
@@ -296,6 +298,7 @@ switch ($Cmd) {
         Write-Host "  docker compose up -d --wait postgres"
         Write-Host "  ./migrate.sh"
         Write-Host "  docker compose up -d"
+        Write-Host "  sudo ./egress-filter.sh --install-unit && sudo ./egress-filter.sh --status   # R-WEBFETCH:egress 出网过滤(幂等;需 sudo 用户)"
         Write-Host ""
         Write-Host "发版后:docs/releases.md 加一行(日期 / SHA / 迁移版本 / 内容 / .env 变更)。生产发版必记(CLAUDE.md 项目定位)。"
     }

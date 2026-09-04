@@ -146,7 +146,7 @@ export const AGENT_SKILLS: readonly GeneratedSkill[] = [
       },
       {
         "path": "scripts/fetch.py",
-        "sha256": "3b22b6a4a76655e2347ac5aec627498b42874b11d27099b85877aa112317f236"
+        "sha256": "756d50f7f803f3de10bf2a4c58fd208823d58f045c2b6bf4cfac001efe76b07f"
       },
       {
         "path": "xray.json",
@@ -156,7 +156,7 @@ export const AGENT_SKILLS: readonly GeneratedSkill[] = [
     "scripts": [
       {
         "file": "fetch.py",
-        "sha256": "3b22b6a4a76655e2347ac5aec627498b42874b11d27099b85877aa112317f236",
+        "sha256": "756d50f7f803f3de10bf2a4c58fd208823d58f045c2b6bf4cfac001efe76b07f",
         "description": "抓取一个公网 https 网页并抽取正文为 markdown(标题 / 站点 / 日期 / 正文与链接;去图片);失败回固定短码",
         "input": {
           "type": "object",

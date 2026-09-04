@@ -349,6 +349,10 @@ def read_body(resp, gz: bool, remaining: Callable[[], float]) -> tuple[bytes, bo
                 tail = inflater.flush()[:room]
                 chunks.append(tail)
                 total += len(tail)
+                # 对方提前掐断的 gzip 流:flush() 照样把已解出的部分吐出来、不报错,但 gzip 尾没读到(eof 为 False)——
+                # 那是残缺正文,必须按「不完整」标注,不能当完整页面交给模型去总结(codex 首轮 P2)
+                if not inflater.eof:
+                    truncated = True
             break
         if inflater is None:
             piece = raw[:room]
@@ -493,6 +497,9 @@ def extract_markdown(html: str, href: str) -> tuple[str, str, str, str]:
 
 
 _IMG_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+# reference-style 图片 `![alt][id]`(react-markdown 同样会渲染)与其 `[id]: url` 定义行一并去掉
+_IMG_REF_RE = re.compile(r"!\[([^\]]*)\]\[[^\]]*\]")
+_REF_DEF_RE = re.compile(r"^[ \t]{0,3}\[[^\]]+\]:[ \t]+\S.*$", re.M)
 # 链接目标允许一层成对括号(`javascript:alert(1)` / 维基百科的 `Foo_(bar)` 都是这种形状),否则前者会剩半截漏出去
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(((?:[^()\s]|\([^()\s]*\))*)(?:\s+\"[^\"]*\")?\)")
 _CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -500,8 +507,12 @@ _LINK_OK_PREFIXES = ("https://", "http://", "/", "#", "./", "../", "?")
 
 
 def sanitize_markdown(text: str) -> str:
-    """去图片语法(抽取时已关,再兜一次);javascript: / data: / mailto: 之类的链接只留文字;去控制字符。"""
+    """去图片语法(抽取时已关,再兜一次;内联与 reference-style 两种);javascript: / data: / mailto: 之类的链接只留文字;去控制字符。
+    页面里**任何**要进输出的文本都过这里 —— 正文与 title / sitename / date 元数据一样(codex 首轮 P1:元数据没过滤时,标题里的
+    `![](第三方)` 会原样到模型跟前)。"""
     text = _IMG_RE.sub(r"\1", text)
+    text = _IMG_REF_RE.sub(r"\1", text)
+    text = _REF_DEF_RE.sub("", text)
 
     def keep_link(m: "re.Match[str]") -> str:
         target = m.group(2)
@@ -514,19 +525,23 @@ def sanitize_markdown(text: str) -> str:
 
 
 def render(title: str, sitename: str, date: str, body: str, body_truncated: bool) -> str:
+    """拼最终输出。四个字段都是页面给的、都不可信,**全部**过 sanitize_markdown;标题与元数据再压成单行。"""
     parts: list[str] = []
-    title = " ".join(title.split())
+    body = sanitize_markdown(body)
+    title = " ".join(sanitize_markdown(title).split()).lstrip("#").strip()
+    sitename = " ".join(sanitize_markdown(sitename).split())
+    date = " ".join(sanitize_markdown(date).split())
     if title:
         # 正文常以 <h1> 开头,trafilatura 已把它写成 `# 标题`;把正文里那一行去掉,标题只出现一次、且在最前
         head, _, rest = body.lstrip().partition("\n")
         if " ".join(head.split()).lower() == f"# {title}".lower():
             body = rest.lstrip("\n")
         parts.append(f"# {title}")
-    meta = " · ".join(x for x in (" ".join(sitename.split()), " ".join(date.split())) if x)
+    meta = " · ".join(x for x in (sitename, date) if x)
     if meta:
         parts.append(meta)
     if body_truncated:
-        parts.append("[说明:页面超过 256 KiB,只读取了前 256 KiB,正文可能不完整]")
+        parts.append("[说明:只读取了页面的一部分(超过 256 KiB 上界,或对方提前断开),正文可能不完整]")
     if len(body) > MAX_OUTPUT_CHARS:
         body = body[:MAX_OUTPUT_CHARS].rstrip() + "\n\n[说明:正文超过 48000 字符,已在此截断]"
     parts.append(body)
@@ -553,7 +568,7 @@ def run(
         title, sitename, date, md = "", "", "", text.strip()
         if not md:
             raise Fail(E_NO_CONTENT)
-    return render(title, sitename, date, sanitize_markdown(md), truncated)
+    return render(title, sitename, date, md, truncated)
 
 
 def main() -> int:
