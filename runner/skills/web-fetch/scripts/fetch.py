@@ -503,54 +503,65 @@ def extract_markdown(html: str, href: str) -> tuple[str, str, str, str]:
 _REF_DEF_RE = re.compile(r"^[ \t]{0,3}\[[^\]]+\]:[ \t]+\S.*$", re.M)
 
 
-def _scan_bracketed(text: str, start: int, open_ch: str, close_ch: str) -> int:
-    """text[start] 是 open_ch;按深度找到配对的 close_ch,返回其下标;`\\` 转义的字符不计。找不到回 -1。"""
-    depth = 0
-    i = start
-    n = len(text)
-    while i < n:
-        c = text[i]
-        if c == "\\":
-            i += 2
-            continue
-        if c == open_ch:
-            depth += 1
-        elif c == close_ch:
-            depth -= 1
-            if depth == 0:
-                return i
-        i += 1
-    return -1
+# 单趟扫描只在这四种 token 上停(C 速度跳过其余文本):`\x` 转义、`![` 图片开启、`[` 普通开启、`]` 关闭
+_TOKEN_RE = re.compile(r"\\.|!\[|\[|\]", re.S)
+# 紧跟在 `]` 后面的目的地:`(dest)`(无空白、允许一层成对括号、可选 "title")或 reference `[id]` / `[]`;有界匹配
+_DEST_RE = re.compile(r"\((?:[^()\s\\]|\\.|\([^()\s]*\))*(?:\s+\"[^\"]*\")?\)|\[[^\[\]\s]{0,999}\]")
+MAX_DEST_CHARS = 2200  # URL 上限 2048 + 括号 / title 余量;超过这个长度的「目的地」不认
 
 
 def strip_images(text: str) -> str:
-    """去掉 markdown 图片,只留 alt 文字:内联 `![alt](dest)` 与 reference-style `![alt][id]`,alt 里嵌套 / 转义的方括号
-    按深度配对(codex 第 2 轮 P1:`![a [b]](url)` 这种正则挡不住)。**兜底**:扫完之后任何还剩下的 `![` 一律转义成 `!\\[`——
-    CommonMark 里 `\\[` 不能开启图片,所以不论上面的解析对不对,输出里都不可能再有能渲染成 <img> 的东西。"""
+    """去掉 markdown 图片、只留 alt 文字 —— **单趟、栈式**(codex 第 2 轮 P1 / 第 3 轮 P1 + P2 的合一修法):
+    `![` / `[` 进栈,`]` 出栈;弹出的是图片开启符且后面紧跟合法目的地时,把该开启符之后已输出的内容(= alt,里面嵌套的图片
+    此时**已经**被折成它们自己的 alt,栈是后进先出)收回来当作纯文字放回去。alt 里嵌套 / 转义的方括号、reference 形式、
+    `![outer ![inner](…)][id]` 这类嵌套都由栈天然处理,不递归、不回扫;目的地匹配用有界正则(C 速度),
+    未闭合的开启符留在栈里到结尾 —— 每个字符最多进出一次,恶意的 256 KiB 全 `![` 也是线性。
+    **兜底**:图片开启符进栏时就写成 `!\\[`(CommonMark 里 `\\[` 不能开启图片),只有确认整段图片语法成立时才被 alt 替换掉,
+    所以不论解析对不对,输出里都不可能剩下能渲染成 <img> 的 `![`。"""
     out: list[str] = []
-    i = 0
-    n = len(text)
-    while i < n:
-        if text[i] == "\\" and i + 1 < n:
-            out.append(text[i : i + 2])
-            i += 2
-            continue
-        if text.startswith("![", i):
-            close = _scan_bracketed(text, i + 1, "[", "]")
-            if close != -1 and close + 1 < n and text[close + 1] in "([":
-                end = _scan_bracketed(text, close + 1, "(", ")") if text[close + 1] == "(" else _scan_bracketed(text, close + 1, "[", "]")
-                if end != -1:
-                    out.append(text[i + 2 : close])  # 只留 alt
-                    i = end + 1
+    stack: list[tuple[bool, int]] = []  # (是图片开启符?, 它在 out 里的下标)
+    pos = 0
+    for m in _TOKEN_RE.finditer(text):
+        start = m.start()
+        if start < pos:
+            continue  # 落在已消费的目的地 / title 之内的 token(`[id]` 的括号、title 里的 `![x](…)`):iterator 是预先算好的,得手工跳过
+        if start > pos:
+            out.append(text[pos:start])
+        tok = m.group(0)
+        pos = m.end()
+        if tok[0] == "\\":
+            out.append(tok)
+        elif tok == "![":
+            stack.append((True, len(out)))
+            out.append("!\\[")
+        elif tok == "[":
+            stack.append((False, len(out)))
+            out.append("[")
+        else:  # "]"
+            if not stack:
+                out.append("]")
+                continue
+            is_image, idx = stack.pop()
+            if is_image:
+                dest = _DEST_RE.match(text, pos, min(len(text), pos + MAX_DEST_CHARS))
+                if dest:
+                    alt = "".join(out[idx + 1 :])
+                    del out[idx:]
+                    out.append(alt)
+                    pos = dest.end()
                     continue
-            out.append("!\\[")  # 解析不出完整的图片语法:把开启符打掉,剩下的按普通文字渲染
-            i += 2
-            continue
-        out.append(text[i])
-        i += 1
+            out.append("]")
+    if pos < len(text):
+        out.append(text[pos:])
     return "".join(out)
-# 链接目标允许一层成对括号(`javascript:alert(1)` / 维基百科的 `Foo_(bar)` 都是这种形状),否则前者会剩半截漏出去
-_LINK_RE = re.compile(r"\[([^\]]*)\]\(((?:[^()\s]|\([^()\s]*\))*)(?:\s+\"[^\"]*\")?\)")
+
+
+
+# 链接目标允许一层成对括号(`javascript:alert(1)` / 维基百科的 `Foo_(bar)` 都是这种形状),否则前者会剩半截漏出去。
+# 量词**有界**:链接文字 ≤ 499 字符且不跨行、目的地 ≤ 2200 —— 无界的 `[^\]]*` 在一段没有 `]` 的 `[` 海里会从每个 `[` 扫到文末再回溯,
+# 256 KiB 就是 5e10 步(第 3 轮 P2 的同类形状,写线性时间用例时抓到的)。链接消毒是纵深防御,不是边界:react-markdown 自带的
+# urlTransform 本来就丢弃 javascript: 等协议;图片才是边界,那边走 strip_images 的单趟扫描
+_LINK_RE = re.compile(r"\[([^\]\n]{0,499})\]\(((?:[^()\s]|\([^()\s]*\)){0,2200})(?:\s+\"[^\"]*\")?\)")
 _CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _LINK_OK_PREFIXES = ("https://", "http://", "/", "#", "./", "../", "?")
 

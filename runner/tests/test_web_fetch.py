@@ -568,12 +568,37 @@ class OutputSanitizing(unittest.TestCase):
             "![a]": "!\\[a]",
             "text ![](https://evil.example/e.gif) end": "text  end",
             "\\![escaped](https://ok.example/) stays a link": "\\![escaped](https://ok.example/) stays a link",
+            # codex 第 3 轮 P1:reference-style 图片的 alt 里再嵌内联图片 —— 内层先折成 alt,外层再折
+            "![outer ![inner](https://evil.example/i.gif)][outer]\n\n[outer]: https://evil.example/o.gif": "outer inner\n\n",
+            "![a ![b ![c](https://e.example/c.gif)](https://e.example/b.gif)](https://e.example/a.gif)": "a b c",
+            "![a](https://e.example/a.gif \"title with ![x](https://e.example/x.gif)\")": "a",
+            "[ ![a](https://e.example/a.gif)": "[ a",
+            "![a] [b](https://ok.example/)": "!\\[a] [b](https://ok.example/)",
         }
         for src, expected in cases.items():
             with self.subTest(src=src):
                 got = F.sanitize_markdown(src)
                 self.assertEqual(got, expected)
                 self.assertNotRegex(got, r"(?<!\\)!\[", "不能剩下能开启图片的 ![")
+
+    def test_hostile_markdown_is_sanitized_in_linear_time(self):
+        # codex 第 3 轮 P2:大量未闭合 / 半闭合的图片开启符不得让消毒变成二次方(256 KiB 正文 → 占满 egress 唯一并发名额)
+        import time
+
+        cap = F.MAX_BODY_BYTES
+        for name, src in (
+            ("all-openers", "![" * (cap // 2)),
+            ("half-closed", "![a](" * (cap // 5)),
+            ("deep-nesting", "![" * (cap // 10) + "x" + "](u)" * (cap // 10)),
+            ("brackets-sea", "[" * (cap // 2)),
+            ("many-images", "![a](https://e.example/p.gif) " * (cap // 30)),
+        ):
+            with self.subTest(name=name):
+                t0 = time.perf_counter()
+                got = F.sanitize_markdown(src)
+                secs = time.perf_counter() - t0
+                self.assertLess(secs, 2.0, f"{name}: {secs:.2f}s")
+                self.assertNotRegex(got, r"(?<!\\)!\[")
 
 
 # ───────────────────────── 验收 8:失败路径的 stdout 只有短码 ─────────────────────────
