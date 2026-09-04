@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { statsBar, suggestions } from "@/lib/demo-data";
+import { suggestions } from "@/lib/demo-data";
+import { formatCtx, formatTokens, STAT_PLACEHOLDER } from "@/lib/stats-bar";
 import {
   askStream,
   deleteSession,
@@ -10,6 +11,7 @@ import {
   relativeTime,
   AskError,
   type SessionSummary,
+  type SessionUsage,
   type TurnSummary,
 } from "@/lib/agent-api";
 import { openTraceStream } from "@/lib/trace-api";
@@ -412,6 +414,12 @@ export function Workbench() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [panel, setPanel] = useState<Panel>("timeline");
   const [events, setEvents] = useState<TraceEvent[]>([]);
+  /**
+   * 顶栏统计条的会话累计(R-USAGE)。两条通路都写它:打开会话时由
+   * `GET /agent/sessions/:id` 给初值,每轮结束由 `/agent/ask` 的收尾帧更新。
+   * `null` = 还没有值(新会话 / 旧服务端),统计条显示占位。
+   */
+  const [usage, setUsage] = useState<SessionUsage | null>(null);
 
   // 会话切换的请求序号:连点两个会话时,先发后到的历史加载必须被丢弃,
   // 否则 UI 会被旧会话的消息覆盖(codex review P2)
@@ -463,10 +471,19 @@ export function Workbench() {
       // 目标会话立刻生效:即便加载还没回来,状态也已经指向**这个**会话
       setSessionId(id);
       setItems([]);
+      // 统计条与 items / events 同时作废(codex 第 1 轮 P2):加载期间留着上一个会话的
+      // 数字会张冠李戴,加载失败时那个错的数字还会永久留在顶栏
+      setUsage(null);
       setLoadingHistory(true);
       getSession(id)
-        .then(({ messages }) => {
+        .then(({ session, messages, ctxPercent }) => {
           if (loadSeq.current !== seq) return; // 已被更晚的选择/新建取代
+          // 统计条初值(R-USAGE):tokens 来自库内累计,一定有;ctxPercent 只有该会话
+          // 恰好还活在运行时注册表里才有 —— 没有就是没有,显示 `-`,不拿别的数顶替
+          setUsage({
+            totalTokens: session.totalTokens,
+            ...(typeof ctxPercent === "number" ? { ctxPercent } : {}),
+          });
           // 回放:`turn` 只在有工具调用的助手行上存在(服务端从 payload 白名单派生),
           // 旧行 / 无工具的一轮没有它,渲染成纯正文 —— 与实时收尾后的形状是同一份(验收 #3 / #5)
           setItems(
@@ -493,6 +510,7 @@ export function Workbench() {
     setItems([]);
     setDraft("");
     setPanel("timeline");
+    setUsage(null); // 新会话没有累计,统计条回到占位(R-USAGE)
   }, [streaming]);
 
   /**
@@ -621,6 +639,8 @@ export function Workbench() {
         onToolStart,
         onToolEnd,
         onDone: finalize,
+        // R-USAGE:一轮结束时顶栏当场更新(done 与 error 两种收尾都会给)
+        onUsage: setUsage,
         // 先收尾再追加错误行:否则后到的 flush 会以「就地替换末项」的语义把这条错误消息顶掉。
         onError: (message, summary) => {
           finalize(summary);
@@ -658,10 +678,10 @@ export function Workbench() {
           </div>
           {active && (
             <div style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", display: "flex", alignItems: "center", gap: 6 }}>
-              <span>{statsBar.tokens}</span><span>·</span><span>{statsBar.cost}</span><span>·</span>
+              <span>{formatTokens(usage?.totalTokens)}</span><span>·</span><span>{STAT_PLACEHOLDER}</span><span>·</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
-                {statsBar.ctx}
+                {formatCtx(usage?.ctxPercent)}
               </span>
               <span>·</span><span>{events.length} events</span>
             </div>

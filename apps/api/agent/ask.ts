@@ -37,6 +37,7 @@ import { previewText, safeErrorText } from "./events";
 import { checkQuota, recordUsage, usdToMicros } from "./quota";
 import { sse, sseComment, SSE_HEADERS } from "../shared/sse";
 import {
+  addSessionTokens,
   appendMessage,
   createSession as createDbSession,
   sessionOwnedBy,
@@ -158,6 +159,35 @@ async function persistAssistant(
     }
   }
   return false;
+}
+
+/**
+ * 收尾帧上的用量两件套(R-USAGE;顶栏统计条的数据源之一)。
+ *
+ * **只有聚合值**:会话累计 token 与 ctx 百分比。费用、model / provider / baseUrl、
+ * `contextWindow` 绝对值、分轮次明细一律不带 —— 边界的正本是 docs/security.md §2 R-USAGE 补记。
+ *
+ * 【顺序要求:调用它之前必须已经累加过 `rec.totalTokens` 并试过落库】(codex 第 1 轮 P2)
+ * 本轮最初把落库放在 `finally` 里、帧先发,结果是成功路径上也有一个竞态窗口:访客看到
+ * 顶栏更新后立刻 F5,`GET /agent/sessions/:id` 可能读到**上一轮**的库值,数字当着面回退 ——
+ * 而「F5 后不回退」正是本轮的验收项。现在落库在发帧之前,库与帧一致;落库失败时帧仍照发
+ * (计数是「尽力而为」的资源闸,不是账单),此时帧比库多一轮,下次打开会话回到库内值。
+ *
+ * 【为什么 ctxPercent 反过来取 pi 的实时值】它问的是「当前上下文占了多少」,那本来就是
+ * 运行时实例的属性;会话被回收重建后上下文确实变小(历史压成一条),显示变小才是诚实的。
+ * 拿不到时(pi 刚压缩过 → `percent: null`)**不带这个字段**,前端显示 `-`,不编一个数。
+ */
+function usageFrame(rec: RuntimeSession): { totalTokens: number; ctxPercent?: number } {
+  const totalTokens = rec.totalTokens;
+  let ctxPercent: number | undefined;
+  try {
+    const percent = rec.session.getContextUsage()?.percent;
+    if (typeof percent === "number" && Number.isFinite(percent)) ctxPercent = percent;
+  } catch (err) {
+    // 统计条少一个数,不该让一轮已经完成的对话报错
+    console.error(`getContextUsage failed for session ${rec.id}: ${safeErrorText(err)}`);
+  }
+  return { totalTokens, ...(ctxPercent !== undefined ? { ctxPercent } : {}) };
 }
 
 export const ask = api.raw(
@@ -346,9 +376,14 @@ export const ask = api.raw(
         // provider 不报价(自定义中转端点常见)时 cost 缺失 —— token 照记、费用记 0。
         // 费用限额在那种配置下不起作用,这是配置的性质,不是这里的缺陷。
         if (m?.role === "assistant" && m.usage) {
-          if (typeof m.usage.totalTokens === "number") turnTokens += m.usage.totalTokens;
-          if (typeof m.usage.cost?.total === "number") {
-            turnCostMicros += usdToMicros(m.usage.cost.total);
+          // 【必须 isFinite 而不是 typeof === "number"】(codex 第 2 轮 P2)自定义兼容端点
+          // 报一个越界的 JSON 数(如 `1e400`)会被解析成 `Infinity`,`typeof` 照样是 number。
+          // 它流到 `rec.totalTokens` 之后是**永久污染**:BIGINT 更新失败、SSE 里
+          // `JSON.stringify(Infinity)` 序列化成 null、之后每一轮都还是 Infinity,
+          // 直到会话被回收才恢复。NaN 同理。provider 报什么记什么的前提是它报的是个数。
+          if (Number.isFinite(m.usage.totalTokens)) turnTokens += m.usage.totalTokens as number;
+          if (Number.isFinite(m.usage.cost?.total)) {
+            turnCostMicros += usdToMicros(m.usage.cost!.total as number);
           }
         }
       }
@@ -383,13 +418,23 @@ export const ask = api.raw(
         persistFailed = !(await persistAssistant(id, userSeq + 1, recorder.text, payload));
       }
 
+      // R-USAGE:**先落库、再发帧**(codex 第 1 轮 P2)。反过来的话,访客看到顶栏更新后
+      // 立刻 F5,`GET /agent/sessions/:id` 会读到上一轮的库值、数字当着面回退。
+      // 内存先加,让同一个 rec 的下一轮基数正确;落库与 `recordUsage` 同为「尽力而为」,
+      // 失败只记日志、帧照发(那一轮对话已经完成了,不能因为记账失败报成失败)。
+      // 源头已 isFinite 过一道,这里是对长寿对象 `rec` 的兜底(污染它要等会话回收才恢复)
+      rec.totalTokens += Number.isFinite(turnTokens) ? Math.max(0, Math.round(turnTokens)) : 0;
+      await addSessionTokens(id, turnTokens).catch((err) =>
+        console.error(`record session tokens failed for session ${id}: ${safeErrorText(err)}`),
+      );
+      const usage = usageFrame(rec);
       if (promptFailed || persistFailed) {
         const parts: string[] = [];
         if (promptFailed) parts.push(ERR_PROVIDER);
         if (persistFailed) parts.push(ERR_NOT_PERSISTED);
-        sse(resp, "error", { message: parts.join(" "), ...summary });
+        sse(resp, "error", { message: parts.join(" "), ...summary, ...usage });
       } else {
-        sse(resp, "done", { sessionId: id, ...summary });
+        sse(resp, "done", { sessionId: id, ...summary, ...usage });
       }
     } finally {
       // 用量计数是**尽力而为**的资源闸,不是账单:失败只记日志,绝不把已经完成的

@@ -28,6 +28,11 @@ export interface SessionSummary {
   createdAt: string;
   /** ISO 8601 */
   lastActiveAt: string;
+  /**
+   * 会话历史累计 token(R-USAGE),顶栏统计条的数据源。**聚合值**:不分轮次、
+   * 不拆 input/output/cache,也不带费用(边界见 docs/security.md §2 R-USAGE 补记)。
+   */
+  totalTokens: number;
 }
 
 export interface ChatMessage {
@@ -74,7 +79,30 @@ function toSummary(row: store.SessionRow): SessionSummary {
     title: row.title,
     createdAt: toIso(row.createdAt),
     lastActiveAt: toIso(row.lastActiveAt),
+    totalTokens: row.totalTokens,
   };
+}
+
+/**
+ * 会话当前的 ctx 占用百分比(R-USAGE),**取不到就整个字段缺席**。
+ *
+ * 取不到是常态而非异常,三种都正常:会话还没提问过(没有 pi 实例)、已被空闲回收、
+ * pi 刚压缩过上下文(`percent: null`)。前端一律显示 `-` —— 顶栏宁可少一个数,
+ * 也不拿库里的历史值冒充「当前上下文」(那是两个不同的量)。
+ *
+ * 归属**在调用方已经验过**(`store.getSession(id, visitor.id)` 先于本函数),
+ * 所以这里直接按 id 问注册表:注册表本身没有归属信息,重复校验也无从做起。
+ */
+function ctxPercentOf(sessionId: string): { ctxPercent?: number } {
+  const rec = getRuntimeSession(sessionId);
+  if (!rec) return {};
+  try {
+    const percent = rec.session.getContextUsage()?.percent;
+    return typeof percent === "number" && Number.isFinite(percent) ? { ctxPercent: percent } : {};
+  } catch {
+    // 统计条少一个数,不该让一次会话回放报错
+    return {};
+  }
 }
 
 interface CreateSessionResponse {
@@ -147,6 +175,12 @@ interface GetSessionResponse {
   session: SessionSummary;
   /** 会话内历史消息,按 seq 有序(刷新后恢复对话) */
   messages: ChatMessage[];
+  /**
+   * 当前上下文占 contextWindow 的百分比(R-USAGE)。**只在该会话恰好还活在运行时
+   * 注册表里时才有** —— 没提问过、或已被空闲回收的会话没有 pi 实例可问,字段缺席,
+   * 前端显示 `-`,不编一个数。`contextWindow` 绝对值任何时候都不出(§2 R-USAGE 补记)。
+   */
+  ctxPercent?: number;
   visitorCookie: Header<string, "Set-Cookie">;
 }
 
@@ -170,6 +204,7 @@ export const getSession = api(
     const messages = await store.listMessages(req.id);
     return {
       session: toSummary(row),
+      ...ctxPercentOf(req.id),
       messages: messages.map((m) => {
         const turn = turnFromPayload(m.payload);
         return {

@@ -41,6 +41,7 @@ import {
   listMessages,
   maxTraceSeq,
   sessionNeedsTitle,
+  sessionTotalTokens,
   type MessageRow,
 } from "./store";
 import {
@@ -378,6 +379,16 @@ export interface RuntimeSession {
   disposed: boolean;
   /** 下一个待分配的轨迹事件 seq(重建会话时从库内最大值 +1 续接) */
   seq: number;
+  /**
+   * 会话历史累计 token(R-USAGE),与 `seq` 同一个套路:重建会话时从库内续接,
+   * 每轮结束由 `ask.ts` 加上本轮的 `turnTokens`。
+   *
+   * 【为什么不用 pi 的 `getSessionStats().tokens.total`】那是**当前实例**的累计:
+   * 会话空闲回收后重建时历史被压成一条 custom 消息注入(`injectHistory`),
+   * 那条消息不带 usage,于是统计从 0 重新开始 —— 访客看到顶栏数字突然变小。
+   * 库里那一列才是会话尺度的事实。ctx% 则相反,取 pi 的实时值才对(见 ask.ts)。
+   */
+  totalTokens: number;
   /** 待落库事件队列,与 pi 会话生命周期解耦 */
   pendingFlush: CapturedEvent[];
   /** flush 串行化链:同会话任意时刻只有一个批量写在跑 */
@@ -722,6 +733,8 @@ async function createRuntimeSession(sessionId: string): Promise<RuntimeSession> 
     disposed: false,
     // 重建会话时轨迹 seq 必须从库内最大值续接,否则新事件撞既有行被静默丢弃
     seq: (await maxTraceSeq(sessionId)) + 1,
+    // 累计 token 与 seq 同理:实例可以重建,会话尺度的计数必须从库里续接(R-USAGE)
+    totalTokens: await sessionTotalTokens(sessionId),
     pendingFlush: [],
     flushChain: Promise.resolve(),
     flushQueued: false,

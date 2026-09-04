@@ -304,8 +304,33 @@ R-TOOLCARDS 补记(2026-09-03,所有者裁定;规则 9「先改文档」—— �
 - 落库的 `messages.payload`(一轮有工具调用时才写)存的也是**同一份摘要**(`{v, modelRoundTrips, turnMs, toolCalls[]}`),不存原始入参 / 出参;
   历史回放端点 `GET /agent/sessions/:id` 从 payload **按字段白名单**派生 `turn`(`turnFromPayload`),不透传整个 JSONB。
 - `done` / `error` 收尾帧只追加 `modelRoundTrips` 与 `turnMs` 两个数;**不带 model / provider / baseUrl / token 数 / 费用**(与 R-TOOLS「不公开配置面」同一口径;
-  token 与费用只走 `quota.ts` 的服务端计数)。
+  token 与费用只走 `quota.ts` 的服务端计数)。**R-USAGE(2026-09-04)修订了这一条的 token 部分**:收尾帧改为再带两个**聚合**数
+  (会话累计 token 与上下文占用百分比),费用与其余各项照旧不出 —— 边界见下方 R-USAGE 补记。
 - 对话流与轨迹流是两条独立 SSE,文本 delta 与工具事件跨连接没有顺序保证,所以会话区**不从轨迹流派生**;一份数据(recorder)、两个消费者(实时帧 / 落库)。
+
+R-USAGE 补记(2026-09-04,所有者裁定;规则 9「先改文档」—— 落点:`apps/api/agent/ask.ts` / `sessions.ts` / `store.ts` / `runtime.ts`):
+**顶栏统计条的 tokens 与 ctx 接真实数据**(在此之前是 `demo-data.ts` 里的三个硬编码字符串,记在 BACKLOG 已久)。
+放开的是上一条里「token 数」那一项,**而且只放开两个聚合值**:
+
+- **`totalTokens`** —— 该会话历史累计的 `Usage.totalTokens`(含 input / output / cache,provider 报什么记什么),
+  与 `daily_quota` 记的是同一个来源,只是多累加进 `sessions.total_tokens` 一列。它是**会话级聚合**,不分轮次、不分 input/output、不拆 cache。
+- **`ctxPercent`** —— pi 的 `getContextUsage().percent`,即当前上下文占 contextWindow 的百分比。**只出百分比**,
+  `contextWindow` 与 `contextUsage.tokens` 两个绝对值都不出。取不到时(会话不在内存里、或 pi 刚压缩过上下文回 `null`)
+  **不带这个字段**,前端显示 `-`,不编一个数。
+
+**仍然不出服务端**(与 R-TOOLS「不公开配置面」同一口径,一个字没松):费用(`cost` / `turnCostMicros`,
+所有者裁定顶栏这一项固定展示 `-`,服务端连会话级累计列都不建)、model / provider / baseUrl 名、
+`contextWindow` 绝对值、分轮次的 token 明细、限额值与当日用量(§4 的「拒绝体只出 code 不出数字」不受影响)。
+
+**已认风险**:第一轮结束时 `totalTokens ÷ ctxPercent` 能粗略反推 contextWindow 的量级(200k / 128k / 1M),
+据此可猜到模型家族 —— 而 R-TOOLS 明确不显示 model 名。所有者已认(2026-09-04):个人站量级下 contextWindow
+量级不构成配置泄露;且两个数语义不同(累计消耗 vs 当前占用),多轮之后 `totalTokens` 远大于上下文长度,不再可反推。
+
+**计数口径是「尽力而为」,不是账单**(与 §4 `recordUsage` 同一条理由):落库失败只记日志、
+绝不把已完成的一轮报成失败。**但顺序是「先落库、再发收尾帧」**(codex 第 1 轮 P2 整改):
+反过来的话成功路径上也有竞态窗口 —— 访客看到顶栏更新后立刻刷新,`GET /agent/sessions/:id`
+会读到上一轮的库值、数字当着面回退。落库失败时帧仍照发,此时帧比库多一轮,
+下次打开会话回到库内值;**不为这个偏差新增补偿机制**。
 
 ## 3. 凭据管理
 

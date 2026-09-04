@@ -13,8 +13,10 @@ import {
   listMessages,
   listSessions,
   listTraceEvents,
+  addSessionTokens,
   maxTraceSeq,
   sessionOwnedBy,
+  sessionTotalTokens,
   upsertMessage,
   type NewTraceEvent,
 } from "./store";
@@ -61,6 +63,60 @@ describe("sessions", () => {
     const id = "11111111-2222-4333-8444-555555555555";
     const row = await createSession(visitor.id, id);
     expect(row.id).toBe(id);
+  });
+});
+
+// R-USAGE:顶栏统计条的 tokens 走这一列。会话被空闲回收重建后计数必须从这里续接,
+// 所以「累加」与「读回」两件事都要按会话隔离、按类型正确(BIGINT 不能回字符串)。
+describe("会话累计 token(R-USAGE)", () => {
+  it("新会话是 0,累加后按会话各记各的", async () => {
+    const a = await createSession(visitor.id);
+    const b = await createSession(visitor.id);
+    expect(a.totalTokens).toBe(0);
+    expect(await sessionTotalTokens(a.id)).toBe(0);
+
+    await addSessionTokens(a.id, 1200);
+    await addSessionTokens(a.id, 340);
+    await addSessionTokens(b.id, 7);
+
+    expect(await sessionTotalTokens(a.id)).toBe(1540);
+    expect(await sessionTotalTokens(b.id)).toBe(7);
+    // 读路径(getSession / listSessions)也要带上,前端两条通路里的一条靠它取初值
+    expect((await getSession(a.id, visitor.id))?.totalTokens).toBe(1540);
+    expect((await listSessions(visitor.id)).find((s) => s.id === a.id)?.totalTokens).toBe(1540);
+  });
+
+  it("回的是 number 不是字符串:BIGINT 列必须 ::double precision 读回", async () => {
+    const s = await createSession(visitor.id);
+    await addSessionTokens(s.id, 1000);
+    const total = await sessionTotalTokens(s.id);
+    // 回字符串时 `+ 1` 会得到 "10001",这一条就是那个坑的回归
+    expect(typeof total).toBe("number");
+    expect(total + 1).toBe(1001);
+  });
+
+  it("负数与小数不让累计倒退 / 长出小数(与 recordUsage 同口径)", async () => {
+    const s = await createSession(visitor.id);
+    await addSessionTokens(s.id, 100.4);
+    await addSessionTokens(s.id, -50);
+    await addSessionTokens(s.id, 0);
+    expect(await sessionTotalTokens(s.id)).toBe(100);
+  });
+
+  it("Infinity / NaN 不进库、不污染累计(provider 报越界 JSON 数)", async () => {
+    const s = await createSession(visitor.id);
+    await addSessionTokens(s.id, 500);
+    // 自定义兼容端点报 `1e400` 会被 JSON.parse 成 Infinity,typeof 仍是 "number"
+    // (codex 第 2 轮 P2)。挡不住的话这条 UPDATE 直接失败,累计从此不可恢复。
+    await addSessionTokens(s.id, Number.POSITIVE_INFINITY);
+    await addSessionTokens(s.id, Number.NaN);
+    expect(await sessionTotalTokens(s.id)).toBe(500);
+  });
+
+  it("会话不存在时读回 0,不抛(新会话建行之前就会走到这里)", async () => {
+    expect(await sessionTotalTokens("00000000-0000-0000-0000-000000000000")).toBe(0);
+    // 累加到不存在的会话是一次空更新,同样不抛(落库是「尽力而为」的)
+    await addSessionTokens("00000000-0000-0000-0000-000000000000", 10);
   });
 });
 

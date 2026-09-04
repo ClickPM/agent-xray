@@ -12,6 +12,12 @@ export interface SessionRow {
   createdAt: number;
   /** epoch ms */
   lastActiveAt: number;
+  /**
+   * 会话历史累计 token(R-USAGE)。来源是 provider 报的 `Usage.totalTokens`(含 input /
+   * output / cache),与 `daily_quota` 同源、聚合维度不同。**刻意不用 pi 的
+   * `getSessionStats()`**:那是当前运行时实例的累计,会话被空闲回收重建后归零。
+   */
+  totalTokens: number;
 }
 
 export interface MessageRow {
@@ -45,9 +51,13 @@ export interface TraceEventRow {
   data: unknown;
 }
 
+// `total_tokens` 是 BIGINT,与 quota.ts 同一套写法用 `::double precision` 读回:
+// 驱动对 int8 的回传形态在不同运行时下不一致(字符串 / BigInt),而这个计数远在
+// 2^53 以内。回字符串时 `totalTokens: number` 会是谎言,前端一做加法就出 "0100"。
 const SESSION_COLS = `id, title,
   (extract(epoch FROM created_at) * 1000)::double precision AS "createdAt",
-  (extract(epoch FROM last_active_at) * 1000)::double precision AS "lastActiveAt"`;
+  (extract(epoch FROM last_active_at) * 1000)::double precision AS "lastActiveAt",
+  total_tokens::double precision AS "totalTokens"`;
 
 /**
  * 建会话。传 id 时用调用方的(spike/R3 复用运行时会话 id),否则库内生成。
@@ -275,4 +285,39 @@ export async function maxTraceSeq(sessionId: string): Promise<number> {
     sessionId,
   );
   return row?.maxSeq ?? -1;
+}
+
+/**
+ * 会话历史累计 token(R-USAGE)。运行时会话重建时读回初值 —— 与 `maxTraceSeq` 同一个
+ * 理由:pi 实例内的计数随实例生灭,库里这一列才是会话尺度的事实。
+ *
+ * 归属**不在这里过滤**:调用方是运行时(`createRuntimeSession`),那条路径上会话归属
+ * 已经在 `/agent/ask` 入口验过;这里再要一次 visitorId 只会把参数往运行时层里穿。
+ * 会话不存在时回 0(新会话建行之前就会走到这里)。
+ */
+export async function sessionTotalTokens(sessionId: string): Promise<number> {
+  const row = await db.rawQueryRow<{ totalTokens: number }>(
+    `SELECT total_tokens::double precision AS "totalTokens" FROM sessions WHERE id = $1::uuid`,
+    sessionId,
+  );
+  return row?.totalTokens ?? 0;
+}
+
+/**
+ * 本轮 token 累加进会话(R-USAGE)。与 `recordUsage` 并列在 `/agent/ask` 的 `finally` 里,
+ * 同一套「尽力而为的资源闸,不是账单」口径:失败只记日志,不把已完成的一轮报成失败。
+ *
+ * 负数、非整数与**非有限数**在这里挡掉(与 `recordUsage` 一致):provider 报什么记什么,
+ * 但报回一个负数不该让累计倒退,而 `Infinity` / `NaN`(自定义兼容端点报越界 JSON 数时会出现,
+ * codex 第 2 轮 P2)会让这条 UPDATE 直接失败。调用方已经拦过一道,这里是公共函数自己的边界。
+ */
+export async function addSessionTokens(sessionId: string, delta: number): Promise<void> {
+  if (!Number.isFinite(delta)) return;
+  const n = Math.max(0, Math.round(delta));
+  if (n === 0) return;
+  await db.rawExec(
+    `UPDATE sessions SET total_tokens = total_tokens + $2 WHERE id = $1::uuid`,
+    sessionId,
+    n,
+  );
 }

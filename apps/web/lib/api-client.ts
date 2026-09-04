@@ -202,6 +202,13 @@ export namespace agent {
          */
         messages: ChatMessage[]
 
+        /**
+         * 当前上下文占 contextWindow 的百分比(R-USAGE)。**只在该会话恰好还活在运行时
+         * 注册表里时才有** —— 没提问过、或已被空闲回收的会话没有 pi 实例可问,字段缺席,
+         * 前端显示 `-`,不编一个数。`contextWindow` 绝对值任何时候都不出(§2 R-USAGE 补记)。
+         */
+        ctxPercent?: number
+
         visitorCookie: string
     }
 
@@ -229,6 +236,12 @@ export namespace agent {
          * ISO 8601
          */
         lastActiveAt: string
+
+        /**
+         * 会话历史累计 token(R-USAGE),顶栏统计条的数据源。**聚合值**:不分轮次、
+         * 不拆 input/output/cache,也不带费用(边界见 docs/security.md §2 R-USAGE 补记)。
+         */
+        totalTokens: number
     }
 
     /**
