@@ -376,7 +376,17 @@ runner/skills/web-fetch/
   4. [P2] gzip 流被对方提前掐断时 `decompressobj.flush()` 吐出部分字节且不报错,`truncated` 仍为 False,残缺正文被当完整页面 ——
      **采纳**:EOF 时核 `inflater.eof`,不完整即标注;截断说明改为「只读取了页面的一部分(超过 256 KiB 上界,或对方提前断开)」。加用例(gzip 去尾 24 字节 → truncated)。
   另:推理摘要里点到测试里一处同义反复断言(`pick_charset("rot13")` 与自己比),修为断言回落 `utf-8`。
-- 第 2 轮(全量复审,整改后):<待回填>
+- **第 2 轮(2026-09-04,`240d6f8`,全量)findings 2 条:1 × P1 + 1 × P2,全部采纳整改**(9.5 分钟):
+  1. [P1] 去图片的正则挡不住 alt 里嵌套 / 转义方括号的 `![a [b]](https://evil/p.gif)`(CommonMark 允许,react-markdown 照渲 `<img>`),`text/plain` 页面
+     原样返回时尤其直接 —— **采纳**:`strip_images()` 改为按括号深度扫描(`\` 转义不计),内联与 reference-style 都只留 alt;**兜底**:扫完之后
+     任何还剩的 `![` 一律转义成 `!\[`(CommonMark 里 `\[` 不能开启图片),于是输出里不可能再有能渲成 `<img>` 的东西,不依赖解析器写对。
+     不引第三方 markdown 解析器(机制类,且 P1 的最小改动就够)。加 10 组形状的用例,判据是「输出里不存在未转义的 `![`」。
+  2. [P2] `resp.read(16 KiB)` 在一次调用里攒够 16 KiB 才返回,每次底层 recv 都重置空闲超时,滴流服务器可让 20 s 总时长核不到、独占 egress 唯一并发名额
+     直到 sandbox 外层超时(最高 120 s)—— **采纳**:改 `read1()`(一次底层 recv 即返回),循环顶上的 `remaining()` 于是每个 recv 后都核一次,
+     总时长粒度 = 一个空闲超时(≤ 8 s)。加用例:假 socket 每次 raw read 只吐 4 字节、注入时钟每问一次 +3 s → `E_TIMEOUT`;时钟不走时同一份体读完。
+     **残余**:响应头阶段(`getresponse()`)仍只受空闲超时约束,滴流的头最坏由 sandbox 总时长(默认 30 s)兜底 —— 那时 runner killpg 整个进程组,
+     名额随之释放;要再收紧得加线程看门狗,属机制,记 BACKLOG。
+- 第 3 轮(只审整改 diff,`--base 240d6f8`):<待回填>
 - 结论:<待回填>
 
 ## 失败处理

@@ -317,6 +317,10 @@
       生产是 2 vCPU 轻量机、`cpus: 1.0`;发版后在生产跑一次同一夹具(bind mount `runner/tests` 进 `skill-runner-egress` 镜像的临时容器,
       `--network none`),把耗时与 VmHWM 记进 `docs/releases.md` 对应发版行。若某形状逼近 `sandbox_config.total_timeout_ms`(30 s)或 256m,
       先加 `fetch.py` 里的元素 / 深度计数(任务卡「失败处理」段),不放宽 `mem_limit` (2026-09-04)
+- [ ] R-WEBFETCH **`fetch.py` 响应头阶段的总时长**:读体阶段已按 `read1` 每个 recv 核一次总时长(codex 第 2 轮 P2),但 `getresponse()` 读头
+      仍只受 8 s 空闲超时约束,一个逐行滴头的服务器最坏能拖到 sandbox 总时长(默认 30 s、上限 120 s)才被 runner killpg,期间占着 egress 唯一并发名额。
+      收紧的做法是一个 `threading.Timer` 在总时长到点时 `sock.close()`(阻塞中的 recv 立刻抛 OSError → `E_TIMEOUT`),对连接 / TLS / 头 / 体四段
+      一并生效;属机制,先记着,egress 实例真被这样占过再做 (2026-09-04)
 - [ ] R-WEBFETCH **`web-fetch` 的展示副本要所有者经 MCP 上传**(裁定 6 的必然):`runner/skills/web-fetch/` 三个文件(SKILL.md / xray.json /
       scripts/fetch.py,LF)整包 `skills_upsert`,`sourceType: own`、`repo: ClickPM/skills-hub`(自研 skill 的既定出处,先推 skills-hub 再挂;
       `LICENSE` 核对见 [[skills-publish-license-check]] 那条口径:自研、无出处,不附)。上传前 `skills_agent_status` 报 `missing`,上传后 `ok` 才能

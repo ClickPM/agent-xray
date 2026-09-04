@@ -339,7 +339,10 @@ def read_body(resp, gz: bool, remaining: Callable[[], float]) -> tuple[bytes, bo
         room = MAX_BODY_BYTES - total
         remaining()
         try:
-            raw = resp.read(READ_CHUNK)
+            # read1 而不是 read:read(n) 会在**一次调用里**攒够 n 字节才返回,每次底层 recv 都重置空闲超时,
+            # 一个每几秒滴一点的服务器能让总时长永远核不到(codex 第 2 轮 P2);read1 一次底层 recv 就返回,
+            # 循环顶上的 remaining() 于是每个 recv 后都会核一次,总时长的粒度 = 一个空闲超时
+            raw = resp.read1(READ_CHUNK)
         except TimeoutError:
             raise Fail(E_TIMEOUT) from None
         except (OSError, http.client.HTTPException, ValueError):
@@ -496,10 +499,56 @@ def extract_markdown(html: str, href: str) -> tuple[str, str, str, str]:
     return str(d.get("title") or ""), str(d.get("sitename") or ""), str(d.get("date") or ""), body
 
 
-_IMG_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
-# reference-style 图片 `![alt][id]`(react-markdown 同样会渲染)与其 `[id]: url` 定义行一并去掉
-_IMG_REF_RE = re.compile(r"!\[([^\]]*)\]\[[^\]]*\]")
+# reference 定义行 `[id]: url` 一并去掉(reference-style 图片 `![alt][id]` 靠它才有地址)
 _REF_DEF_RE = re.compile(r"^[ \t]{0,3}\[[^\]]+\]:[ \t]+\S.*$", re.M)
+
+
+def _scan_bracketed(text: str, start: int, open_ch: str, close_ch: str) -> int:
+    """text[start] 是 open_ch;按深度找到配对的 close_ch,返回其下标;`\\` 转义的字符不计。找不到回 -1。"""
+    depth = 0
+    i = start
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == open_ch:
+            depth += 1
+        elif c == close_ch:
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def strip_images(text: str) -> str:
+    """去掉 markdown 图片,只留 alt 文字:内联 `![alt](dest)` 与 reference-style `![alt][id]`,alt 里嵌套 / 转义的方括号
+    按深度配对(codex 第 2 轮 P1:`![a [b]](url)` 这种正则挡不住)。**兜底**:扫完之后任何还剩下的 `![` 一律转义成 `!\\[`——
+    CommonMark 里 `\\[` 不能开启图片,所以不论上面的解析对不对,输出里都不可能再有能渲染成 <img> 的东西。"""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] == "\\" and i + 1 < n:
+            out.append(text[i : i + 2])
+            i += 2
+            continue
+        if text.startswith("![", i):
+            close = _scan_bracketed(text, i + 1, "[", "]")
+            if close != -1 and close + 1 < n and text[close + 1] in "([":
+                end = _scan_bracketed(text, close + 1, "(", ")") if text[close + 1] == "(" else _scan_bracketed(text, close + 1, "[", "]")
+                if end != -1:
+                    out.append(text[i + 2 : close])  # 只留 alt
+                    i = end + 1
+                    continue
+            out.append("!\\[")  # 解析不出完整的图片语法:把开启符打掉,剩下的按普通文字渲染
+            i += 2
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
 # 链接目标允许一层成对括号(`javascript:alert(1)` / 维基百科的 `Foo_(bar)` 都是这种形状),否则前者会剩半截漏出去
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(((?:[^()\s]|\([^()\s]*\))*)(?:\s+\"[^\"]*\")?\)")
 _CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -510,8 +559,7 @@ def sanitize_markdown(text: str) -> str:
     """去图片语法(抽取时已关,再兜一次;内联与 reference-style 两种);javascript: / data: / mailto: 之类的链接只留文字;去控制字符。
     页面里**任何**要进输出的文本都过这里 —— 正文与 title / sitename / date 元数据一样(codex 首轮 P1:元数据没过滤时,标题里的
     `![](第三方)` 会原样到模型跟前)。"""
-    text = _IMG_RE.sub(r"\1", text)
-    text = _IMG_REF_RE.sub(r"\1", text)
+    text = strip_images(text)
     text = _REF_DEF_RE.sub("", text)
 
     def keep_link(m: "re.Match[str]") -> str:

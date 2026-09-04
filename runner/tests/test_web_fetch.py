@@ -405,6 +405,49 @@ class BodyLimits(unittest.TestCase):
         s = Script({("example.com", "/"): TEXT_OK})
         self.assertEqual(code_of(lambda: run("https://example.com/", s, clock=lambda: next(ticks))), F.E_TIMEOUT)
 
+    def test_trickling_body_hits_total_deadline_between_receives(self):
+        # codex 第 2 轮 P2:每次底层 recv 只给几个字节、且每次都在空闲超时之内 —— 总时长必须仍在 recv 之间被核到。
+        # 假 socket 每次 raw read 只吐 4 字节;注入时钟每被问一次前进 3 s(解析 / 连接阶段各问几次,读体阶段每个 recv 问一次)
+        body = b"x" * 4096
+        resp = http_response(200, {"Content-Type": "text/plain", "Content-Length": str(len(body))}, body)
+
+        class Trickle(io.RawIOBase):
+            def __init__(self, data):
+                self.data, self.pos = data, 0
+
+            def readable(self):
+                return True
+
+            def readinto(self, b):
+                piece = self.data[self.pos : self.pos + 4]
+                n = len(piece)
+                b[:n] = piece
+                self.pos += n
+                return n
+
+        class TrickleSock(FakeSock):
+            def makefile(self, mode="rb", buffering=None, **_kw):
+                return io.BufferedReader(Trickle(self.response))
+
+        t = [0.0]
+
+        def clock():
+            t[0] += 3.0
+            return t[0]
+
+        connects = []
+
+        def connect(ip, host, timeout):
+            connects.append(ip)
+            return TrickleSock(resp, ip)
+
+        code = code_of(lambda: F.run({"url": "https://example.com/"}, resolve=resolver({"example.com": [PUBLIC_V4]}), connect=connect, clock=clock))
+        self.assertEqual(code, F.E_TIMEOUT)
+        self.assertEqual(connects, [PUBLIC_V4])
+        # 对照:时钟不走时同一份滴流体能完整读完(read1 不改变正常路径)
+        out = F.run({"url": "https://example.com/"}, resolve=resolver({"example.com": [PUBLIC_V4]}), connect=lambda ip, host, to: TrickleSock(resp, ip), clock=lambda: 0.0)
+        self.assertEqual(out.strip(), "x" * 4096)
+
 
 # ───────────────────────── 验收 6:内容类型与编码 ─────────────────────────
 
@@ -511,6 +554,26 @@ class OutputSanitizing(unittest.TestCase):
     def test_title_leading_hashes_and_newlines_are_collapsed(self):
         out = F.render("## Multi\nline\ttitle", "", "", "body", False)
         self.assertTrue(out.startswith("# Multi line title\n"))
+
+    def test_nested_and_escaped_brackets_in_alt_cannot_smuggle_an_image(self):
+        # codex 第 2 轮 P1:正则挡不住的形状。判据是「输出里不存在任何能渲染成 <img> 的 `![`」—— 要么去掉,要么转义成 `!\[`
+        cases = {
+            "![a [b]](https://evil.example/p.gif)": "a [b]",
+            "![a [b [c]]](https://evil.example/p.gif) tail": "a [b [c]] tail",
+            "![a\\]](https://evil.example/p.gif)": "a\\]",
+            "![a](https://evil.example/p(1).gif)": "a",
+            "![a][ref] x": "a x",
+            "![a [b]][ref]": "a [b]",
+            "![unterminated (https://evil.example/p.gif)": "!\\[unterminated (https://evil.example/p.gif)",
+            "![a]": "!\\[a]",
+            "text ![](https://evil.example/e.gif) end": "text  end",
+            "\\![escaped](https://ok.example/) stays a link": "\\![escaped](https://ok.example/) stays a link",
+        }
+        for src, expected in cases.items():
+            with self.subTest(src=src):
+                got = F.sanitize_markdown(src)
+                self.assertEqual(got, expected)
+                self.assertNotRegex(got, r"(?<!\\)!\[", "不能剩下能开启图片的 ![")
 
 
 # ───────────────────────── 验收 8:失败路径的 stdout 只有短码 ─────────────────────────
