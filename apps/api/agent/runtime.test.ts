@@ -34,6 +34,7 @@ function fakeRec(id: string, over: Partial<RuntimeSession> = {}): RuntimeSession
     busy: false,
     disposed: false,
     seq: 0,
+    totalTokens: 0,
     pendingFlush: [],
     flushChain: Promise.resolve(),
     flushQueued: false,

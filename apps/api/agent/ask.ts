@@ -376,9 +376,14 @@ export const ask = api.raw(
         // provider 不报价(自定义中转端点常见)时 cost 缺失 —— token 照记、费用记 0。
         // 费用限额在那种配置下不起作用,这是配置的性质,不是这里的缺陷。
         if (m?.role === "assistant" && m.usage) {
-          if (typeof m.usage.totalTokens === "number") turnTokens += m.usage.totalTokens;
-          if (typeof m.usage.cost?.total === "number") {
-            turnCostMicros += usdToMicros(m.usage.cost.total);
+          // 【必须 isFinite 而不是 typeof === "number"】(codex 第 2 轮 P2)自定义兼容端点
+          // 报一个越界的 JSON 数(如 `1e400`)会被解析成 `Infinity`,`typeof` 照样是 number。
+          // 它流到 `rec.totalTokens` 之后是**永久污染**:BIGINT 更新失败、SSE 里
+          // `JSON.stringify(Infinity)` 序列化成 null、之后每一轮都还是 Infinity,
+          // 直到会话被回收才恢复。NaN 同理。provider 报什么记什么的前提是它报的是个数。
+          if (Number.isFinite(m.usage.totalTokens)) turnTokens += m.usage.totalTokens as number;
+          if (Number.isFinite(m.usage.cost?.total)) {
+            turnCostMicros += usdToMicros(m.usage.cost!.total as number);
           }
         }
       }
@@ -417,7 +422,8 @@ export const ask = api.raw(
       // 立刻 F5,`GET /agent/sessions/:id` 会读到上一轮的库值、数字当着面回退。
       // 内存先加,让同一个 rec 的下一轮基数正确;落库与 `recordUsage` 同为「尽力而为」,
       // 失败只记日志、帧照发(那一轮对话已经完成了,不能因为记账失败报成失败)。
-      rec.totalTokens += Math.max(0, Math.round(turnTokens));
+      // 源头已 isFinite 过一道,这里是对长寿对象 `rec` 的兜底(污染它要等会话回收才恢复)
+      rec.totalTokens += Number.isFinite(turnTokens) ? Math.max(0, Math.round(turnTokens)) : 0;
       await addSessionTokens(id, turnTokens).catch((err) =>
         console.error(`record session tokens failed for session ${id}: ${safeErrorText(err)}`),
       );

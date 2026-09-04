@@ -103,6 +103,16 @@ describe("会话累计 token(R-USAGE)", () => {
     expect(await sessionTotalTokens(s.id)).toBe(100);
   });
 
+  it("Infinity / NaN 不进库、不污染累计(provider 报越界 JSON 数)", async () => {
+    const s = await createSession(visitor.id);
+    await addSessionTokens(s.id, 500);
+    // 自定义兼容端点报 `1e400` 会被 JSON.parse 成 Infinity,typeof 仍是 "number"
+    // (codex 第 2 轮 P2)。挡不住的话这条 UPDATE 直接失败,累计从此不可恢复。
+    await addSessionTokens(s.id, Number.POSITIVE_INFINITY);
+    await addSessionTokens(s.id, Number.NaN);
+    expect(await sessionTotalTokens(s.id)).toBe(500);
+  });
+
   it("会话不存在时读回 0,不抛(新会话建行之前就会走到这里)", async () => {
     expect(await sessionTotalTokens("00000000-0000-0000-0000-000000000000")).toBe(0);
     // 累加到不存在的会话是一次空更新,同样不抛(落库是「尽力而为」的)

@@ -307,10 +307,12 @@ export async function sessionTotalTokens(sessionId: string): Promise<number> {
  * 本轮 token 累加进会话(R-USAGE)。与 `recordUsage` 并列在 `/agent/ask` 的 `finally` 里,
  * 同一套「尽力而为的资源闸,不是账单」口径:失败只记日志,不把已完成的一轮报成失败。
  *
- * 负数与非整数在这里挡掉(`Math.max(0, Math.round())`,与 `recordUsage` 一致):
- * provider 报什么记什么,但报回一个负数不该让累计倒退。
+ * 负数、非整数与**非有限数**在这里挡掉(与 `recordUsage` 一致):provider 报什么记什么,
+ * 但报回一个负数不该让累计倒退,而 `Infinity` / `NaN`(自定义兼容端点报越界 JSON 数时会出现,
+ * codex 第 2 轮 P2)会让这条 UPDATE 直接失败。调用方已经拦过一道,这里是公共函数自己的边界。
  */
 export async function addSessionTokens(sessionId: string, delta: number): Promise<void> {
+  if (!Number.isFinite(delta)) return;
   const n = Math.max(0, Math.round(delta));
   if (n === 0) return;
   await db.rawExec(
