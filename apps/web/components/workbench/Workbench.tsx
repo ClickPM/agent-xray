@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { suggestions } from "@/lib/demo-data";
-import { ctxDotColor, formatCtx, formatTokens, STAT_PLACEHOLDER } from "@/lib/stats-bar";
+import { formatCtx, formatTokens, STAT_PLACEHOLDER } from "@/lib/stats-bar";
 import {
   askStream,
   deleteSession,
@@ -471,6 +471,9 @@ export function Workbench() {
       // 目标会话立刻生效:即便加载还没回来,状态也已经指向**这个**会话
       setSessionId(id);
       setItems([]);
+      // 统计条与 items / events 同时作废(codex 第 1 轮 P2):加载期间留着上一个会话的
+      // 数字会张冠李戴,加载失败时那个错的数字还会永久留在顶栏
+      setUsage(null);
       setLoadingHistory(true);
       getSession(id)
         .then(({ session, messages, ctxPercent }) => {
@@ -677,7 +680,7 @@ export function Workbench() {
             <div style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", display: "flex", alignItems: "center", gap: 6 }}>
               <span>{formatTokens(usage?.totalTokens)}</span><span>·</span><span>{STAT_PLACEHOLDER}</span><span>·</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: ctxDotColor(usage?.ctxPercent), display: "inline-block" }} />
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
                 {formatCtx(usage?.ctxPercent)}
               </span>
               <span>·</span><span>{events.length} events</span>

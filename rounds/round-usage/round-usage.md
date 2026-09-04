@@ -1,6 +1,6 @@
 # Round USAGE — 顶栏统计条的 tokens 与 ctx 接真实数据
 
-> 状态:进行中
+> 状态:进行中(codex 第 1 轮 4 条已整改,待复审)
 
 ## 目标
 
@@ -116,11 +116,22 @@ contextUsage?: { tokens, contextWindow, percent }   // percent 即 ctx%
 
 ## 代码审查
 
-<!-- 完成后回填 -->
+- **审查方式**:codex `/codex:review`(全量 `branch diff against main` —— 按 CLAUDE.md「只有前两轮用固定的全量范围」)。
+  启动走 PowerShell `Start-Process` 脱离 + `Monitor` 盯 stdout 文件(记忆 `codex-review-detached-launch`:
+  经 Claude 后台 Bash 起会随 launcher 假死)。耗时约 9 分钟,与基线一致。
+- **findings 处理(4 条,全部采纳整改)**:
 
-- 审查方式:
-- findings 处理:
-- 结论:
+  | # | 级别 | 问题 | 处置 |
+  |---|---|---|---|
+  | 1 | **P1** | `lib/agent-api.ts` 的 `getSession` 返回类型是**手写**的,没跟着加 `ctxPercent`,`Workbench` 解构它 → TS2339,**生产 `next build` 直接失败** | 采纳。返回类型加上该字段,并在函数上写明「改服务端响应形状后要跑 `npx tsc --noEmit`」 |
+  | 2 | P2 | 累加落库在 `finally` 里、**收尾帧先发**:成功路径上也有竞态窗口,访客看到顶栏更新后立刻 F5 会读到上一轮的库值、数字当着面回退 —— 正好打在本轮验收 #4 上 | 采纳。改为**先落库、再发帧**(移动既有语句,不新增机制);`usageFrame` 不再自己加本轮,只读已定妥的 `rec.totalTokens`;`docs/security.md` §2 R-USAGE 补记同步改口径 |
+  | 3 | P2 | `openSession` 只在 `getSession` **成功后**才换 usage:切会话的加载期间顶栏留着上一个会话的数字,请求失败则永久留着 | 采纳。与 `setItems([])` 并列加 `setUsage(null)`,一行 |
+  | 4 | P2 | ctx 圆点无值时压灰违反规则 7(画板没画过这个态) | 采纳,整个撤回(见上方「与设计稿的偏离」);诉求记 BACKLOG |
+
+- **P1 暴露的验收漏洞(值得记住)**:本轮 #1 写的是「编译与测试全绿」,而我只跑了 `dev.ps1 check`(**只覆盖 api**)
+  与 `bun test lib`(纯函数,不做类型检查);`next dev` 不阻塞类型错误,所以 10 项浏览器验收全过、生产构建却会炸。
+  **凡改动服务端响应形状,web 侧必须另跑 `npx tsc --noEmit`**。已写进 `agent-api.ts` 的函数注释。
+- **结论**:整改后待复审(有采纳整改 → 按 CLAUDE.md 缺陷门禁必须再发一轮;第 2 轮仍是全量范围)。
 
 ## 失败处理
 
@@ -134,7 +145,7 @@ contextUsage?: { tokens, contextWindow, percent }   // percent 即 ctx%
 
 | # | 结果 | 实测 |
 |---|---|---|
-| 1 | ✅ | `check` 绿;`test` = api 523 passed(含本轮新增 4 条 store 用例)+ web 22 passed(含新增 7 条 stats-bar) |
+| 1 | ✅ | `check` 绿;`test` = api **527** passed(含本轮新增 4 条 store 用例)+ web **21** passed(含新增 6 条 stats-bar)。**另跑 `npx tsc --noEmit`** —— 见下方审查段,`dev.ps1 test/check` 查不到 web 侧类型错 |
 | 2 | ✅ | `api-client.ts` 的 diff 只有 `SessionSummary.totalTokens` 与 `GetSessionResponse.ctxPercent` |
 | 3 | ✅ | 两轮:`1.5k tokens` → `4.1k tokens`(1500 → 1500+2600);库内 `total_tokens = 4100` |
 | 4 | ✅ | F5 + 重开会话:`4.1k tokens · - · ctx 8% · 38 events`,与刷新前逐字符相同 |
@@ -149,15 +160,15 @@ contextUsage?: { tokens, contextWindow, percent }   // percent 即 ctx%
 `4.1k tokens · - · ctx -` → 再问一轮 → **`7.9k tokens · - · ctx 12%`**(4100 + 3800)。
 若 `createRuntimeSession` 没有从库读初值,这里会显示 `3.8k` —— 这正是所有者裁定「取会话历史累计」要防的回退。
 
-### 与设计稿的一处偏离(请所有者确认)
+### 与设计稿的偏离:曾有一处,已按审查撤回
 
-画板 1a 的 ctx 圆点是常绿的 `#16a34a`(画板上 ctx 总是有值)。**无值时画板没画过**,
-本轮把它压成 `var(--text-dim)`(既有 token,统计条文字本身就是这个色):`ctx -` 配一个绿点会在
-「不知道」的时候声称「正常」。有值时仍是画板原色,像素级相同。
+本轮一度让 ctx 圆点在**无值**时压成 `var(--text-dim)`(理由:`ctx -` 配绿点等于在「不知道」时声称「正常」),
+并在任务卡里标为「待所有者确认」。**codex 第 1 轮 P2 判定它违反规则 7** —— 画板 1a 只画过有值的常绿态,
+那是个画板没有的态,而规则 7 明确禁止在接数据时改样式 / token。**已采纳整改**:圆点恒为 `#16a34a`,
+`ctxDotColor` 整个函数连同它的测试一并删掉(留一个不被调用的导出只会诱使下次再用),
+`lib/stats-bar.ts` 末尾留注释说明这段历史。诉求本身记进 `rounds/BACKLOG.md` 等所有者裁定。
 
-依据是 R-PERF 的先例(骨架「压灰面降一档」不算新造视觉语言);但这毕竟是画板没有的态,
-**所有者一句话就可以否掉** —— 否掉的改法是 `ctxDotColor` 恒回 `#16a34a`,一行。
-**不按百分比分档变色**(黄 / 红)是明确不做的:那才是新视觉语言。
+**现在的状态**:统计条在任何数据状态下都与画板 1a 逐像素一致,只有文字内容随数据变。
 
 ### 两处已知边界(不整改,记录口径)
 
@@ -165,3 +176,14 @@ contextUsage?: { tokens, contextWindow, percent }   // percent 即 ctx%
    库里就是 0,显示 0 是诚实的;`-` 的语义留给「拿不到值」。与 `quota.ts` 「provider 不报价时 token 照记」同口径。
 2. **落库失败时帧内数字比库内多一轮**,下次打开会话回到库内值。这是「尽力而为的计数」本来的性质
    (§2 R-USAGE 补记已写明),不为它加补偿机制(审查边界:非阻塞不新增机制)。
+
+### 整改后复验(2026-09-04)
+
+- `npx tsc --noEmit` 退出 0(P1 的判据);`dev.ps1 check` 绿;`dev.ps1 test` = api 527 + web 21 全过。
+- **竞态(P2 #2)**:一条真实 SSE 收尾帧到手的**同一时刻**查 `GET /agent/sessions/:id` —— 
+  `frameTotal = dbTotal = 1500`,`agree: true`。整改前这里会读到上一轮的值。
+- **切会话(P2 #3)**:点另一个会话后 0ms 读顶栏 = `- tokens · - · ctx - · 58 events`(不再是上一个会话的 `7.9k`),
+  加载完成后是新会话的 `4.2k`。
+- **圆点(P2 #4)**:重启后端清空注册表 → 打开会话 = `7.9k tokens · - · ctx - · 58 events`,
+  圆点 `rgb(22, 163, 74)` = 画板的 `#16a34a`。
+- **重建路径仍成立**:重启后端后 `7.9k` 未回退(库内续接),与整改前一致。

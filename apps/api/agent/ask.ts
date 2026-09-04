@@ -167,20 +167,18 @@ async function persistAssistant(
  * **只有聚合值**:会话累计 token 与 ctx 百分比。费用、model / provider / baseUrl、
  * `contextWindow` 绝对值、分轮次明细一律不带 —— 边界的正本是 docs/security.md §2 R-USAGE 补记。
  *
- * 【为什么 totalTokens 由内存算而不是读库】它与 `addSessionTokens` 的落库是同一个数,
- * 但落库在 `finally` 里、且是「尽力而为」的(失败只记日志,不把已完成的一轮报成失败)。
- * 帧要在那之前发出去,所以这里用 `rec.totalTokens + turnTokens`;落库失败时帧内数字会比
- * 库内多一轮,下次打开会话回到库内值。这个偏差已在补记里写明,**不为它加补偿机制**。
+ * 【顺序要求:调用它之前必须已经累加过 `rec.totalTokens` 并试过落库】(codex 第 1 轮 P2)
+ * 本轮最初把落库放在 `finally` 里、帧先发,结果是成功路径上也有一个竞态窗口:访客看到
+ * 顶栏更新后立刻 F5,`GET /agent/sessions/:id` 可能读到**上一轮**的库值,数字当着面回退 ——
+ * 而「F5 后不回退」正是本轮的验收项。现在落库在发帧之前,库与帧一致;落库失败时帧仍照发
+ * (计数是「尽力而为」的资源闸,不是账单),此时帧比库多一轮,下次打开会话回到库内值。
  *
  * 【为什么 ctxPercent 反过来取 pi 的实时值】它问的是「当前上下文占了多少」,那本来就是
  * 运行时实例的属性;会话被回收重建后上下文确实变小(历史压成一条),显示变小才是诚实的。
  * 拿不到时(pi 刚压缩过 → `percent: null`)**不带这个字段**,前端显示 `-`,不编一个数。
  */
-function usageFrame(
-  rec: RuntimeSession,
-  turnTokens: number,
-): { totalTokens: number; ctxPercent?: number } {
-  const totalTokens = rec.totalTokens + Math.max(0, Math.round(turnTokens));
+function usageFrame(rec: RuntimeSession): { totalTokens: number; ctxPercent?: number } {
+  const totalTokens = rec.totalTokens;
   let ctxPercent: number | undefined;
   try {
     const percent = rec.session.getContextUsage()?.percent;
@@ -415,9 +413,15 @@ export const ask = api.raw(
         persistFailed = !(await persistAssistant(id, userSeq + 1, recorder.text, payload));
       }
 
-      // R-USAGE:两个数随收尾帧回去,前端顶栏当场更新(两条通路的另一条是
-      // `GET /agent/sessions/:id`,供打开会话时取初值)
-      const usage = usageFrame(rec, turnTokens);
+      // R-USAGE:**先落库、再发帧**(codex 第 1 轮 P2)。反过来的话,访客看到顶栏更新后
+      // 立刻 F5,`GET /agent/sessions/:id` 会读到上一轮的库值、数字当着面回退。
+      // 内存先加,让同一个 rec 的下一轮基数正确;落库与 `recordUsage` 同为「尽力而为」,
+      // 失败只记日志、帧照发(那一轮对话已经完成了,不能因为记账失败报成失败)。
+      rec.totalTokens += Math.max(0, Math.round(turnTokens));
+      await addSessionTokens(id, turnTokens).catch((err) =>
+        console.error(`record session tokens failed for session ${id}: ${safeErrorText(err)}`),
+      );
+      const usage = usageFrame(rec);
       if (promptFailed || persistFailed) {
         const parts: string[] = [];
         if (promptFailed) parts.push(ERR_PROVIDER);
@@ -431,12 +435,6 @@ export const ask = api.raw(
       // 一轮报成失败(docs/security.md §1 第 4 层;理由写在 quota.ts 的 recordUsage)。
       await recordUsage(turnTokens, turnCostMicros).catch((err) =>
         console.error(`record usage failed for session ${id}: ${safeErrorText(err)}`),
-      );
-      // R-USAGE:同一个数再累加进会话一列(daily_quota 没有会话维度)。内存先加,
-      // 让同一个 rec 的下一轮基数正确;落库与上面同为「尽力而为」,失败不影响本轮。
-      rec.totalTokens += Math.max(0, Math.round(turnTokens));
-      await addSessionTokens(id, turnTokens).catch((err) =>
-        console.error(`record session tokens failed for session ${id}: ${safeErrorText(err)}`),
       );
       await flushTraceEvents(rec).catch((err) =>
         console.error(`flushTraceEvents failed for session ${id}: ${safeErrorText(err)}`),

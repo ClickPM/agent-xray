@@ -2,7 +2,7 @@
 // 经 `dev.ps1 test` → `bun test lib` 运行(node:test 写法,零新增依赖)。
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ctxDotColor, formatCtx, formatTokens, STAT_PLACEHOLDER } from "./stats-bar";
+import { formatCtx, formatTokens, STAT_PLACEHOLDER } from "./stats-bar";
 
 describe("formatTokens", () => {
   it("千位以下原样,千位以上一位小数,百万以上换 M", () => {
@@ -42,14 +42,5 @@ describe("formatCtx", () => {
     for (const bad of [undefined, null, NaN, -3]) {
       assert.equal(formatCtx(bad as number), `ctx ${STAT_PLACEHOLDER}`);
     }
-  });
-});
-
-describe("ctxDotColor", () => {
-  it("有值是画板的绿点,没值压成灰,且不按百分比分档变色", () => {
-    assert.equal(ctxDotColor(6), "#16a34a");
-    assert.equal(ctxDotColor(96), "#16a34a"); // 高占用也不变黄/红:画板没画过
-    assert.equal(ctxDotColor(undefined), "var(--text-dim)");
-    assert.equal(ctxDotColor(null), "var(--text-dim)");
   });
 });

@@ -46,12 +46,7 @@ export function formatCtx(percent: number | null | undefined): string {
   return `ctx ${Math.round(percent)}%`;
 }
 
-/**
- * ctx 圆点的颜色:有值时是画板 1a 的绿点,没值时压成边框灰。
- *
- * 颜色值取自画板(`#16a34a`),灰取 `--text-dim` —— 都不是本轮新造的语汇。
- * **不按百分比分档变色**(黄/红):画板没画过那个,属新增视觉语言(规则 7/8)。
- */
-export function ctxDotColor(percent: number | null | undefined): string {
-  return typeof percent === "number" && Number.isFinite(percent) ? "#16a34a" : "var(--text-dim)";
-}
+// 【这里刻意没有 ctxDotColor】ctx 圆点恒为画板 1a 的 `#16a34a`。
+// 本轮曾让它在无值时压成 `--text-dim`(理由:`ctx -` 配绿点等于在「不知道」时声称「正常」),
+// 被 codex 第 1 轮 P2 判为违反规则 7 —— 画板只画过有值的常绿态,那是个没画过的态。
+// 已撤回并记 BACKLOG 等所有者裁定;**按百分比分档变色(黄/红)更不做**,那是新视觉语言。

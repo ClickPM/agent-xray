@@ -33,9 +33,15 @@ export async function listSessions(limit = 50): Promise<SessionSummary[]> {
   return (await client.agent.listSessions({ limit })).sessions;
 }
 
+/**
+ * 单会话 + 历史回放。返回类型**手写**而不是 `Awaited<ReturnType<...>>`,所以服务端新增
+ * 字段时必须在这里显式加一行 —— R-USAGE 的 `ctxPercent` 漏了这一行,`next dev` 照跑、
+ * 生产 `next build` 直接 TS2339(codex 第 1 轮 P1)。**这里是 web 侧类型检查的必经之路,
+ * 改服务端响应形状后要跑 `npx tsc --noEmit`**:`dev.ps1 check` 只覆盖 api,查不到这类错。
+ */
 export async function getSession(
   id: string,
-): Promise<{ session: SessionSummary; messages: ChatMessage[] }> {
+): Promise<{ session: SessionSummary; messages: ChatMessage[]; ctxPercent?: number }> {
   return client.agent.getSession(id);
 }
 
