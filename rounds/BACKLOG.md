@@ -321,10 +321,21 @@
       仍只受 8 s 空闲超时约束,一个逐行滴头的服务器最坏能拖到 sandbox 总时长(默认 30 s、上限 120 s)才被 runner killpg,期间占着 egress 唯一并发名额。
       收紧的做法是一个 `threading.Timer` 在总时长到点时 `sock.close()`(阻塞中的 recv 立刻抛 OSError → `E_TIMEOUT`),对连接 / TLS / 头 / 体四段
       一并生效;属机制,先记着,egress 实例真被这样占过再做 (2026-09-04)
-- [ ] R-WEBFETCH **`web-fetch` 的展示副本要所有者经 MCP 上传**(裁定 6 的必然):`runner/skills/web-fetch/` 三个文件(SKILL.md / xray.json /
+- [x] R-WEBFETCH **`web-fetch` 的展示副本要所有者经 MCP 上传**(裁定 6 的必然):`runner/skills/web-fetch/` 三个文件(SKILL.md / xray.json /
       scripts/fetch.py,LF)整包 `skills_upsert`,`sourceType: own`、`repo: ClickPM/skills-hub`(自研 skill 的既定出处,先推 skills-hub 再挂;
       `LICENSE` 核对见 [[skills-publish-license-check]] 那条口径:自研、无出处,不附)。上传前 `skills_agent_status` 报 `missing`,上传后 `ok` 才能
       `skills_agent_set web-fetch true`。分类建议「自研 · 工具」(任务卡 C9) (2026-09-04)
+      → **2026-09-04 完成**(`2c503d3` 发版当日):所有者授权后先把目录推到 `ClickPM/skills-hub`(`b85ec5e`,README 目录表同步),再 `skills_upsert` 整包上传(created,3 文件 31601 字节);分类落 **`workflow`** —— 闭集里没有「自研 · 工具」,同为沙箱可执行的 `text-tools` 也在 workflow。`consistency: ok` 后 `skills_agent_set web-fetch true`,端到端四个用例实跑通过(留证 `docs/releases.md`)。**顺带记一条**:`skills_upsert` 的 `repo` 是**必填**,「先不填 repo、之后再补」这条退路在 schema 上不存在
+- [ ] R-WEBFETCH **宿主出网过滤覆盖不到「容器 → 宿主自身地址」**(2026-09-04 生产冒烟实测,所有者当日裁定「照原计划打开 web-fetch,缺口记这里」):
+      `deploy/egress-filter.sh` 的六条 DROP 写在 `DOCKER-USER`,而那是 **FORWARD** 链的第一跳;容器发往宿主自身地址
+      (`10.0.0.5` 是 eth0,`172.30.0.1` / `172.17.0.1` 是网桥网关)的包在本机交付、走 **INPUT**,那六条看不见。
+      实测 `skill-runner-egress` 可连 `10.0.0.5:22`(sshd),而 `-> 10.0.0.0/8` 那条计数为 **0**;
+      转发出去的流量确实被挡(`-> 169.254.0.0/16` 计数增长),所以规则没写错,是**覆盖面少了「宿主本机」这一类目的地**。
+      生产宿主 `0.0.0.0` 上的监听只有 22(sshd)与 80/443(docker-proxy → caddy),所以能够到的是 sshd 与站点自身。
+      **另两层防线完好**:`fetch.py` 在名字/地址层拒 `10.0.0.0/8` / `172.16.0.0/12` / `169.254.0.0/16` 并钉 IP 连、只走 https/443;
+      容器不在 `front` / `back`。要踩到这个洞得先有一个 `fetch.py` 地址校验的绕过 —— 今天的可利用性低,但这一层**没有做到它文档里声称的覆盖**。
+      修法要谨慎、要实测,别想当然:给 INPUT 加同源同段的 DROP 时必须先确认不误伤 docker 内嵌 DNS(容器侧 `127.0.0.11` 由 dockerd 代理到宿主
+      `127.0.0.53`,本次实测公网域名解析是通的,加规则后要重验)与 caddy 的 80/443。属**新增机制**,不在任何整改循环里顺手改,等所有者裁定进轮次 (2026-09-04)
 - [ ] R-SKILLS **agent 能否读 skills**(给 pi 配 `skills_list` / `skills_get` 这类只读工具,与 `notes_*` 同形态,让 Runtime 对话里能引用技能库)。
       R-SKILLS 裁定本轮 agent 侧不可读、新表不授权任何 agent 角色;要做需在那次迁移里显式 `GRANT SELECT` 给 `agent_ro`、
       走 `READ ONLY` 事务,并且 Tools 面板会自动多出这组工具(1f/1g 示例数据要跟)。属新功能,等所有者裁定 (2026-09-03)

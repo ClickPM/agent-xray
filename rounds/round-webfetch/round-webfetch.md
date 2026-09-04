@@ -5,7 +5,7 @@
 
 > 状态:**2026-09-04 代码落地并经 codex 七轮审查收口(整改后 PASS),已合并 `main`,待发版**;所有者十条裁定已落(2026-09-03,全部按建议;§3 每条有「裁定」行),
 > 落地期间所有者另裁一条:输出消毒器收缩为一行转义(见「代码审查」段「设计层面的停下」)。实测数字、与本卡的偏离、验收表状态见文末「本轮实测」;
-> 发版后还剩:生产冒烟第 21 条(验收 ⑮)、所有者经 MCP 上传 `web-fetch` 展示副本并 `skills_agent_set`(验收 ⑯)。
+> **2026-09-04 已发版并全部收口**:生产 `2c503d3`,冒烟第 21 条 ①②③ 与端到端 ④ 全过(验收 ⑮⑯),`web-fetch` 已对 agent 打开。留证 [`docs/releases.md`](../../docs/releases.md)。
 > 规则 9「先改文档」已完成:`docs/security.md`(§0 威胁 7–9 / §1 外呼组约束 1 例外指针 + 沙箱执行组 egress 行 + R-WEBFETCH 补记 / 第 3、4 层 / §5 / §7)、
 > `CLAUDE.md`(规则 8 修订、规则 9、仓库结构)、`docs/architecture.md`、`ROUNDS.md`(第八次修订 + 进度表 + 拆解)、`research.md` §2.2、`round-skills-2.md`(C6 提前)、`BACKLOG.md`。
 > 所有者另明确一句(2026-09-03):**访客给的 URL 不设域名限制、不维护任何域名黑白名单**(太多,无法维护);**内网地址段要拒**(固定 RFC 段,零维护)。
@@ -559,4 +559,4 @@ htmldate / justext / lxml 6.1.3 / lxml-html-clean / python-dateutil / pytz / reg
 `validateSkillInput`)⑩ ✅(清单 `egress`;两个假运行器各走各的;egress 缺失 → 固定文案不占额;真容器两边 403)⑪ ✅(`skills-gen --check` 零漂移;`skills-manifest.test.ts`
 逐文件核;库内副本上传后的 `skills_agent_status` 要等所有者上传 —— BACKLOG)⑫ ✅(`runtime.test.ts` 三句纪律;输出无 `![`;截断有标注)⑬ ✅(`check` / `tsc` / `test` 26 文件 523 用例 +
 web 15 / `runner-test` 29 用例 + 夹具全绿)⑭ ✅(三镜像不变、egress 复用;`compose config` 通过,egress 实例只在 `deploy_egress`、只挂 socket 卷与 tmpfs;`egress-filter.sh`
-跑两遍 6 条)⑮ ⏳ 生产冒烟(发版后,`deploy-environments.md` 第 21 条)⑯ ⏳ 生产端到端(所有者上传 `web-fetch` 展示副本并 `skills_agent_set` 之后)。
+跑两遍 6 条)⑮ ✅ **生产冒烟**(2026-09-04,`2c503d3`;`deploy-environments.md` 第 21 条 ①②③):egress 容器 healthy / 只在 `deploy_egress` / `Memory=268435456` / 除 socket 卷与 noexec tmpfs 无其它挂载;`getaddrinfo('postgres')`/`('api')` 均 `gaierror`,公网可达(`223.5.5.5:443` / `8.8.8.8:53` / `106.54.238.52:443`;**`1.1.1.1` 境内不可达,不能当存活探针**),`169.254.169.254:80` 失败;两档 socket 交叉发都回 `403 network_mismatch`,`https://169.254.169.254/` 与 `http://example.com/` 均 `exitCode:2 stdout:"E_BAD_URL\n"`(**IP 字面量在 `TLD_RE` 就被拒,不是 `E_UNFETCHABLE`**;已订正冒烟清单),`https://www.kzgai.cloud/about` `exitCode:0` + `#` 开头 markdown。宿主 `egress-filter.sh --install-unit` 六条 `ok`、`xray-egress-filter` `enabled`+`active` ⑯ ✅ **生产端到端**(同日;先推 `ClickPM/skills-hub` `b85ec5e` → `skills_upsert` created → `consistency: ok` → `skills_agent_set web-fetch true`):正路 `skill_load` → `skill_run` → `tool_execution_update ×3` → `tool_result` `exit=0 · 2087ms`,三句来自正文;`http://example.com` 模型直接改 https 调用成功(未触 `E_BAD_URL`);`169.254.169.254` 模型在调用前自拒;**任务卡原用例 en.wikipedia.org 在境内服务器 `E_UNFETCHABLE`**(维基不可达,非缺陷),模型按 SKILL.md 降级并声明;止损实测:停 egress 后只有 web-fetch 以「执行容器当前不可用」失败(3ms)、`text-tools` 照常,恢复后 `exit=0 · 1818ms`。留证 [`docs/releases.md`](../../docs/releases.md)。**冒烟顺带发现宿主出网过滤覆盖不到「容器 → 宿主自身地址」(DOCKER-USER 在 FORWARD 链上),所有者裁定照原计划打开、缺口记 BACKLOG**。
