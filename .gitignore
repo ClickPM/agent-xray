@@ -38,3 +38,7 @@ Thumbs.db
 *.log
 .sessions/--G-agent-xray--/00d0a76e-f8a0-4d4f-a33a-686707f7bd94/
 .sessions/--G-agent-xray--/
+
+# python 字节码缓存(runner/ 下本机跑 python / unittest 会生成;生成器与测试都跳过它,但别让它进库)
+__pycache__/
+*.pyc

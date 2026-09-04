@@ -18,12 +18,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# venv + 钉哈希的依赖(requirements.txt 可以为空;--require-hashes 让任何没带 hash 的行都装不进去)。
+# venv + 钉哈希的依赖(--require-hashes 让任何没带 hash 的行都装不进去;R-WEBFETCH 起 requirements.txt 不再为空)。
 # 装完把 pip / setuptools 从 venv 里拿掉:运行期没有网络也没有写权限,留着它们只是多一块攻击面。
+# PIP_INDEX_URL 只是**下载来源**(本机直连 PyPI 慢时指向镜像站,dev.ps1 由 $env:PIP_INDEX_URL 透传):
+# 每个包仍按 requirements.txt 里的 sha256 核对,来源给错包只会让构建失败(docs/security.md §7)。
+ARG PIP_INDEX_URL=https://pypi.org/simple
 COPY requirements.txt /opt/requirements.txt
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/python -m pip install --require-hashes --no-deps -r /opt/requirements.txt \
-    && /opt/venv/bin/python -m pip uninstall -y pip setuptools wheel 2>/dev/null || true \
+    && /opt/venv/bin/python -m pip install --require-hashes --no-deps --index-url "$PIP_INDEX_URL" -r /opt/requirements.txt \
+    # 【|| true 只包住 uninstall】shell 的 && / || 同级左结合:不加括号,`install && uninstall || true` 会把 install 的失败也吞掉,
+    # 产出一个没装依赖却构建成功的镜像(codex 首轮 P1;requirements 为空的年代无害,现在不是)。uninstall 失败本身无害(venv 里可能没有 wheel)
+    && ( /opt/venv/bin/python -m pip uninstall -y pip setuptools wheel 2>/dev/null || true ) \
     && rm -rf /opt/venv/bin/pip* /opt/venv/bin/easy_install* \
     && find /opt/venv -name "__pycache__" -type d -prune -exec rm -rf {} +
 

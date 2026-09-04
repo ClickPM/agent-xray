@@ -45,7 +45,8 @@ mem_limit  = API_RSS_p95 × 1.3(突发余量)
 | web(`mem_limit 384m`,常态 ~100–150MB) | 384 MB 上限 |
 | caddy(`mem_limit 128m`) | ~30–50 MB |
 | skill-runner(`mem_limit 384m`,R-SKILLS-2;常态 ~20 MB,跑脚本时每个子进程 rlimit AS 256 MB、并发 2) | 384 MB 上限 |
-| filesystem cache 与余量 | 剩余 ~300–700 MB(加 runner 之后;OS 那一行按下限算才剩 ~900 MB) |
+| skill-runner-egress(`mem_limit 256m`,R-WEBFETCH 所有者裁定 C7;同一镜像,并发 **1**;常态 ~20 MB,抓一页时 trafilatura 进程按 `dev.ps1 runner-test` 的病态夹具实测) | 256 MB 上限 |
+| filesystem cache 与余量 | 剩余 ~50–450 MB(加 egress 之后;OS 那一行按下限算才剩 ~650 MB)。**这是六个容器全顶到上限的最坏值**,常态远宽松;egress 容器 RSS p95 进 R-SKILLS-2 同一套观察口径,超 60% 再议 |
 
 > **关于 api 的 1g**:这是**初始生产上限**,依据是「Bun 口径实测基座 162.5MB + 事件缓冲的结构性上限 + 3.6GiB 主机的总预算」三者取平衡。**它不代表「已证明 1GB 足够所有真实负载」**——`S_active_p95` 目前是空值,任何容量结论都还缺这一项。
 >
@@ -79,6 +80,11 @@ apt install -y fail2ban unattended-upgrades
 # 4) Docker(境内用镜像加速)
 curl -fsSL https://get.docker.com | sh
 # /etc/docker/daemon.json 配置 registry-mirrors(阿里云个人加速地址)
+
+# 5) egress 执行容器的宿主出网过滤(R-WEBFETCH;compose 首次 up 起 skill-runner-egress 之后、开 web-fetch 之前)
+#    幂等;--install-unit 把脚本复制到 /usr/local/sbin 并装 After=docker.service 的 systemd oneshot,重启后自动重放。
+#    只对 egress 网络的固定网段(172.30.0.0/24)DROP 到私网 / link-local / CGNAT / 回环;docs/security.md §5
+sudo ~/deploy/egress-filter.sh --install-unit && sudo ~/deploy/egress-filter.sh --status
 ```
 
 ## 3. 应用部署(不可变镜像)
@@ -150,3 +156,4 @@ docker compose up -d                   # 3) 再起 api / web / caddy
 - [ ] SSE 优雅关闭:`docker compose stop api` 时客户端**在停机同刻(+0s)拿到确定的终止**而非挂到超时。**别钉死 curl 退出码**(R9 见 `18`、R10 见 `0`,取决于断开落在响应分块的哪个位置)
 - [ ] 限额:小额度演练超限路径(拒新会话 + 前端提示)
 - [ ] 备案号已挂 footer
+- [ ] **egress 出网过滤**(R-WEBFETCH):`sudo ~/deploy/egress-filter.sh --install-unit` 跑过,`sudo ~/deploy/egress-filter.sh --status` 六条全 `ok`(退出码 0),`systemctl is-enabled xray-egress-filter` 回 `enabled`;容器内 `create_connection(('169.254.169.254',80),3)` 失败而 `('1.1.1.1',443)` 成功(`deploy-environments.md` 冒烟第 21 条 ②)。compose 改了 `egress` 网段时脚本的 `EGRESS_SUBNET` 与单元文件里的值要一起改

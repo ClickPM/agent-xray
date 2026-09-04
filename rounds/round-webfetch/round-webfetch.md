@@ -3,7 +3,9 @@
 <!-- 保存为 rounds/round-webfetch/round-webfetch.md。2026-09-03 重写:取代同目录 study.md 的「api 进程内 web_fetch 工具 + Worker」方案;
      study.md 降为实测附录(它的 §3.1 请求链路与 §4 数字仍被本文引用)。拆解进 ROUNDS.md 要等 §3 确认之后。 -->
 
-> 状态:**所有者十条裁定已落(2026-09-03,全部按建议;§3 每条有「裁定」行),文档就绪、未开工、代码零改动。**
+> 状态:**2026-09-04 代码落地并经 codex 七轮审查收口(整改后 PASS),已合并 `main`,待发版**;所有者十条裁定已落(2026-09-03,全部按建议;§3 每条有「裁定」行),
+> 落地期间所有者另裁一条:输出消毒器收缩为一行转义(见「代码审查」段「设计层面的停下」)。实测数字、与本卡的偏离、验收表状态见文末「本轮实测」;
+> 发版后还剩:生产冒烟第 21 条(验收 ⑮)、所有者经 MCP 上传 `web-fetch` 展示副本并 `skills_agent_set`(验收 ⑯)。
 > 规则 9「先改文档」已完成:`docs/security.md`(§0 威胁 7–9 / §1 外呼组约束 1 例外指针 + 沙箱执行组 egress 行 + R-WEBFETCH 补记 / 第 3、4 层 / §5 / §7)、
 > `CLAUDE.md`(规则 8 修订、规则 9、仓库结构)、`docs/architecture.md`、`ROUNDS.md`(第八次修订 + 进度表 + 拆解)、`research.md` §2.2、`round-skills-2.md`(C6 提前)、`BACKLOG.md`。
 > 所有者另明确一句(2026-09-03):**访客给的 URL 不设域名限制、不维护任何域名黑白名单**(太多,无法维护);**内网地址段要拒**(固定 RFC 段,零维护)。
@@ -357,9 +359,75 @@ runner/skills/web-fetch/
 
 <!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:<codex /codex:review --background(改动跨 runner / api / deploy / docs)>;**审查要求带上**:`fetch.py` 按 §2.3 十步逐条判 SSRF 判据(C5),`egress-filter.sh` 与 compose 的网络隔离按 §2.5 判
-- findings 处理:<逐条:采纳整改 / 不采纳及理由>
-- 结论:<PASS | 整改后 PASS>
+- 审查方式:codex `/codex:review --background --scope branch`(分支全量 diff against main,37 文件 / 259 KB;改动跨 runner / api / deploy / docs)。
+  前两轮全量,第 3 轮起只审整改 diff(CLAUDE.md「审查范围」)。`/codex:review` 不接受自定义关注点,「按第九条约束逐条判 SSRF 判据」这条要求由
+  审查者自行覆盖 —— 从推理摘要看它做了(「Assessing SSRF attack vectors」「Analyzing URL resolution on redirects」「Validating environment variable injection」…)。
+- **审查基础设施的一处坑(2026-09-04)**:第一次发起的 job `review-mtmb0xm8-cxf5q4` 在读完 diff 后 38 分钟零日志 —— 它的 pid 就是 Claude 后台 Bash
+  里那个 launcher(`--background` 对 review 是内联跑的,靴子由 Claude 的后台任务穿),node 在 01:58Z 退出码 0、companion 没写完成状态,
+  推断是 `codex app-server` 子进程异常退出后 stdio 关闭、事件循环空转退出。手工把 job 标成 cancelled,改用 PowerShell `Start-Process` 脱离工具
+  生命周期重发(`--wait`),9 分钟跑完。监视器里 `tasklist /FI` 会被 MSYS 当路径改写而误报「进程已死」,要 `MSYS_NO_PATHCONV=1`。
+- **第 1 轮(2026-09-04,`67b9fb1`)findings 4 条:3 × P1 + 1 × P2,全部采纳整改**:
+  1. [P1] `dev.ps1 ship` 只传四件旧资产,`egress-filter.sh` 到不了服务器,文档里的 `--install-unit` 步骤在按 `ship` 部署的机器上必失败,SSRF 第三道防线缺失 ——
+     **采纳**:scp 列表加它 + `chmod +x`,`ship` 结尾打印的步骤加一行 `sudo ./egress-filter.sh --install-unit && --status`;「四件」改「五件」(dev.ps1 / CLAUDE.md / deploy-environments)。
+  2. [P1] `runner/Dockerfile` 的 `pip install … && pip uninstall … 2>/dev/null || true && rm …`:`&&` / `||` 同级左结合,`|| true` 把 install 的失败也吞掉,
+     产出没装 trafilatura 却构建成功的镜像 —— **采纳**:`( pip uninstall … || true )` 括起来。R-SKILLS-2 就有这行,requirements 为空时无害。
+  3. [P1] `title` / `sitename` / `date` 没过 `sanitize_markdown`,标题里的 `![](第三方)` 原样进输出、模型抄进回复就是跟踪像素 ——
+     **采纳**:`render()` 对四个字段一律消毒,标题去首部 `#` 并压成单行;顺带补上 reference-style 图片 `![alt][id]` 与 `[id]: url` 定义行的去除
+     (react-markdown 会渲染那种形式;`Markdown.tsx` 没挂 rehype-raw,裸 `<img>` 不是向量)。加 3 个纯函数用例(不需要 trafilatura)。
+  4. [P2] gzip 流被对方提前掐断时 `decompressobj.flush()` 吐出部分字节且不报错,`truncated` 仍为 False,残缺正文被当完整页面 ——
+     **采纳**:EOF 时核 `inflater.eof`,不完整即标注;截断说明改为「只读取了页面的一部分(超过 256 KiB 上界,或对方提前断开)」。加用例(gzip 去尾 24 字节 → truncated)。
+  另:推理摘要里点到测试里一处同义反复断言(`pick_charset("rot13")` 与自己比),修为断言回落 `utf-8`。
+- **第 2 轮(2026-09-04,`240d6f8`,全量)findings 2 条:1 × P1 + 1 × P2,全部采纳整改**(9.5 分钟):
+  1. [P1] 去图片的正则挡不住 alt 里嵌套 / 转义方括号的 `![a [b]](https://evil/p.gif)`(CommonMark 允许,react-markdown 照渲 `<img>`),`text/plain` 页面
+     原样返回时尤其直接 —— **采纳**:`strip_images()` 改为按括号深度扫描(`\` 转义不计),内联与 reference-style 都只留 alt;**兜底**:扫完之后
+     任何还剩的 `![` 一律转义成 `!\[`(CommonMark 里 `\[` 不能开启图片),于是输出里不可能再有能渲成 `<img>` 的东西,不依赖解析器写对。
+     不引第三方 markdown 解析器(机制类,且 P1 的最小改动就够)。加 10 组形状的用例,判据是「输出里不存在未转义的 `![`」。
+  2. [P2] `resp.read(16 KiB)` 在一次调用里攒够 16 KiB 才返回,每次底层 recv 都重置空闲超时,滴流服务器可让 20 s 总时长核不到、独占 egress 唯一并发名额
+     直到 sandbox 外层超时(最高 120 s)—— **采纳**:改 `read1()`(一次底层 recv 即返回),循环顶上的 `remaining()` 于是每个 recv 后都核一次,
+     总时长粒度 = 一个空闲超时(≤ 8 s)。加用例:假 socket 每次 raw read 只吐 4 字节、注入时钟每问一次 +3 s → `E_TIMEOUT`;时钟不走时同一份体读完。
+     **残余**:响应头阶段(`getresponse()`)仍只受空闲超时约束,滴流的头最坏由 sandbox 总时长(默认 30 s)兜底 —— 那时 runner killpg 整个进程组,
+     名额随之释放;要再收紧得加线程看门狗,属机制,记 BACKLOG。
+- **第 3 轮(2026-09-04,`39775de`,只审整改 diff `--base 240d6f8`)findings 2 条:1 × P1 + 1 × P2,全部采纳整改**(6 分钟):
+  1. [P1] 第 2 轮的括号深度扫描器对 reference-style 图片的 alt **原样保留**,`![outer ![inner](https://evil/i.gif)][outer]` 的内层图片就此漏出 ——
+     **采纳**;2. [P2] 同一扫描器对每个未闭合的 `![` 都从它扫到文末,256 KiB 全是 `![` 的 `text/plain` 正文让消毒二次方、占满 egress 唯一并发名额 ——
+     **采纳**。两条合一修法:`strip_images()` 改为**单趟栈式**扫描 —— `re.finditer` 只在 `\x` / `![` / `[` / `]` 四种 token 上停,`![` 进栈时就写成
+     `!\[`,`]` 弹栈;弹出的是图片开启符且后面紧跟合法目的地(有界正则,C 速度,≤ 2200 字符)时,把开启符之后已输出的内容当 alt 收回放回
+     (嵌套的内层图片按后进先出**已经**折成了自己的 alt,所以外层 alt 天然干净,不递归);未闭合的开启符留在栈里到结尾、不回扫 —— 每个字符最多进出一次。
+     加 5 组嵌套形状 + 5 种 256 KiB 恶意正文的线性时间用例(< 2 s)。**写线性时间用例时抓到同类第三处**:链接消毒的 `_LINK_RE` 用无界 `[^\]]*`,
+     一段没有 `]` 的 `[` 海让它从每个 `[` 扫到文末再回溯(256 KiB ≈ 5e10 步,首跑 180 s 没跑完)—— 量词改有界(链接文字 ≤ 499 不跨行、目的地 ≤ 2200)。
+     修后五种恶意正文 `sanitize_markdown` 全程 ≤ 0.64 s。
+- **第 4 轮(2026-09-04,`eb3dfa2`,只审整改 diff `--base 39775de`)findings 1 条:1 × P2、零 high**(8 分钟):
+  [P2] 第 3 轮给 `_LINK_RE` 加的「标签 ≤ 499 字符」上限成了旁路 —— 标签更长的合法链接不再被匹配,`[xxx…](mailto:a@b)` 原样留下,而 react-markdown 放行 `mailto:` ——
+  **采纳**(按收口标准 P2 可记 BACKLOG 放行,但正确修法就在手边、不引新机制):链接处理并进 `strip_images` 的同一趟栈式扫描 —— 弹出普通 `[` 开启符且后面紧跟
+  `(dest)` 时按 scheme 决定原样保留或只留标签,标签长度不设上限、仍线性;`_LINK_RE` 整个删掉。加 7 组用例(600 字符标签 × mailto / javascript / https、跨行标签、
+  嵌套标签、带 title、链接标签里嵌图片)。
+- **第 5 轮(2026-09-04,`bb16361`,只审整改 diff `--base eb3dfa2`)findings 1 条:1 × P2、零 high**(8.5 分钟):
+  [P2] 删除会制造新邻接 —— `[[click]](data:x)(mailto:…)` 去掉外层非法链接后,内层 `[click]` 与后面的 `(mailto:…)` 拼成新链接;图片折成 alt 同理 ——
+  **采纳**(P2 可放行,但修法通用且两行):`_guard_join()`,每次删除(图片 → alt / 非法链接 → 标签)后,若前面剩下的最后一个字符是 `]` 且紧跟 `(` / `[`,
+  把那个括号转义(CommonMark 里 `\(` 是字面括号)。加 6 组用例,判据「输出里没有未转义的 `](mailto:|javascript:|data:`」。
+  注:`remark-gfm` 的 autolink 本来就会把页面正文里的裸邮箱渲成 `mailto:` 链接,这一条守的是消毒器自己的契约,不是新增的安全边界。
+- **第 6 轮(2026-09-04,`6fabe0f`,只审整改 diff `--base bb16361`)findings 2 条:2 × P2、零 high**(6.5 分钟):
+  1. [P2] `_guard_join` 倒着扫 `out` 找最后一个非空片段,而每删一个 `[](data:x)` 都留一个空串 → 二次方 —— **采纳**:`out` 里不再留空片段
+     (删 `[` 用 `del`,空 alt 不追加),守卫只看 `out[-1]`,O(1);线性时间用例加三种形状(连片空标签非法链接 / 连片空 alt 图片 / 守卫风暴)。
+  2. [P2] 守卫判邻接看的是原文,控制字符事后才删,`[[click]\x00](data:x)(mailto:…)` 绕过 —— **采纳**:`_CTRL_RE` 挪到扫描**之前**,扫描与输出看同一份文本;
+     加 3 组用例(NUL / 多个控制字符 / 空标签连删不留空片段也不误加转义)。
+- **设计层面的停下(2026-09-04,第 6 轮整改测试全绿、未提交时)**:所有者提醒「严禁以审查代替设计」。回看第 2–6 轮,findings 全部落在
+  `fetch.py` 里**任务卡没有的**一块 —— 我自己写的 markdown 消毒器(正则 → 深度扫描 → 栈式扫描 → 把链接并进去 → 邻接守卫 → 守卫线性化 + 控制字符顺序),
+  每轮补一块、下一轮在补的地方再找到一块;其中**链接 scheme 过滤**不在威胁模型里(`security.md` 威胁 9 只讲第三方图片),却贡献了 4 轮里的大部分 findings。
+  向所有者列了三个选项(收缩为一行转义 / 保留栈式扫描器再审一轮 / 边界挪到前端渲染层),**所有者裁定「收缩为一行转义」**:
+  - 图片(唯一的边界):`sanitize_markdown` = 去控制字符 + 每个 `![` 无条件写成 `!\[`。CommonMark 里 `\[` 永远开不了图片(内联 / reference / shortcut
+    三种形式都以 `![` 开头),可证明完备、线性、不需要解析器;代价是 text/plain 的 markdown 页与元数据里的图片以字面 `![alt](url)` 出现
+    (trafilatura 抽的正文本来就 `include_images=False`)。
+  - 链接:不过滤,按 §4 第 8 项原样保留;`javascript:` / `data:` 由 react-markdown 既有 `urlTransform` 丢弃,`mailto:` 它本就放行、remark-gfm 还会把裸邮箱
+    自动变成 mailto 链接 —— 脚本侧过滤既不在威胁模型里也拦不住后者。
+  - 删掉 `_TOKEN_RE` / `_DEST_RE` / `_REF_DEF_RE` / `_link_target` / `_guard_join` / `strip_images` 与三段对应用例(~90 行代码 + ~80 行测试),
+    第 2–6 轮的整改中**保留**的只有:元数据与正文同过消毒(首轮 P1)、`read1`(第 2 轮 P2)、残缺 gzip 标注(首轮 P2)、Dockerfile / ship(首轮 P1)。
+  - 教训写进 `docs/security.md` R-WEBFETCH 补记第 ③ 条:第九条约束里「输出不含图片」的实现口径 = 转义开启符,不是解析。
+- **第 7 轮(2026-09-04,`68db5d7`,只审收缩后的 diff `--base 6fabe0f`):零 findings**(17 分钟)——「简化与所有者裁定一致:去控制字符、每个图片开启符转义、链接不动;
+  清单哈希同步;runner 测试通过」。
+- **结论:整改后 PASS。** 7 轮合计 findings 12 条(4 + 2 + 2 + 1 + 1 + 2 + 0):首轮 3 P1 + 1 P2 全部采纳并保留;第 2–6 轮的 8 条全部落在消毒器这一块,
+  最终由所有者裁定回退为一行转义(其中保留下来的实质整改只有 `read1`);high 级为零。**过程教训**:第 2 轮之后就该停 —— findings 连续落在同一块
+  任务卡没有的自建解析器上,是「审查在替设计」的信号,不该再进「整改 → 复审」循环。
 
 ## 失败处理
 
@@ -378,3 +446,117 @@ runner/skills/web-fetch/
   `CLAUDE.md`(规则 8 R-WEBFETCH 修订、规则 9 括号、仓库结构 `runner/`)、`docs/architecture.md`(树 + 决策表一行)、`ROUNDS.md`(第八次修订 + 进度表 + 拆解)、
   `rounds/round-skills/research.md` §2.2(egress 档例外)、`rounds/round-skills/round-skills-2.md`(C6 提前:`xray.json` / 清单生成器 / `runner.py` / `skill-runner.ts` / 验收 3 / 禁止段)、`rounds/BACKLOG.md`(两条)。
   开工时再改的:`docs/deploy-cn-lightweight.md` §0 预算 + §6 检查单、`docs/deploy-environments.md` 冒烟 +3、`deploy/.env.example`、`apps/api/agent/README.md`、`docs/releases.md`。
+
+### 开工留证(2026-09-04,分支 `round-webfetch`,基于 `main` `4eafcfc`)
+
+前置核对:R-SKILLS-2 已随 `c1ee245` 合并并发版(双闸当日打开,四个 skill 可用);`network` 字段、`RUNNER_NETWORK` 拒绝路径、`runSkillScript` 的档次核对
+都已在 `main` 上(C6 提前);`loadAgentSkills` 里那句「egress 档本轮无对应运行器」就是本轮要换掉的接缝。所有者尚未上传 `web-fetch` 展示副本(它还不存在),
+记 BACKLOG 一条(上传口径 / 出处 / 分类)。MCP 工具总数 **46 不变**(规则 13 核对:本轮未动 `apps/api/mcp/`)。
+
+### 抽取库选型实测(容器内,`python:3.12-slim@sha256:78387bc3…`,RLIMIT_AS 256 MiB)
+
+`trafilatura` 最新 **2.2.0**(不是预研时的 2.0.0);`pip-compile --generate-hashes` 解出 **17 个包**(babel / certifi / charset-normalizer / courlan / dateparser /
+htmldate / justext / lxml 6.1.3 / lxml-html-clean / python-dateutil / pytz / regex / six / tld / trafilatura / tzlocal / urllib3),venv 里 **77 MB**。
+担心的是 rlimit AS 256 MB 装不下(lxml + dateparser + babel 的映射),量出来宽松:
+
+| 步骤 | 耗时 | VmPeak | VmRSS |
+|---|---|---|---|
+| 解释器基线 | — | 13 MB | 8 MB |
+| `import trafilatura` | 0.50 s | 58 MB | 45 MB |
+| 正常页 `bare_extraction`(400 段) | 0.07 s | 61 MB | 48 MB |
+| 嵌套 `<div>` ×4 000(44 KB) | 0.18 s | 89 MB | 77 MB |
+| 未闭合 `<b>` ×24 000(72 KB) | 0.01 s | 89 MB | 77 MB |
+| 链接 `<a>` ×12 000(256 KiB 截) | 0.29 s | 122 MB | 109 MB |
+| 表格 8 000 行(255 KB) | 0.64 s | 125 MB | 112 MB |
+| 散文 `<p>` ×2 700(256 KiB 截) | 0.04 s | 125 MB | 111 MB |
+
+预研里让 defuddle 卡 5.7 s / 26 s 的嵌套页在 lxml 这边是**毫秒级**(libxml2 自带深度上限,超深直接扁平化),387 KB 链接页吃 600 MB 的曲线也不存在
+(截到 256 KiB 后 +60 MB)。**结论:预研 §3.1 第 7 步的元素 / 深度计数不加**(验收 7 的判据是「在容器 rlimit 下每种形状都在预算内结束」,
+全部满足;`runner/tests/pathological.py` 把这组形状固化下来,`dev.ps1 runner-test` 每次都量)。备选的 stdlib 纯文本模式不需要。
+系统 CA 在镜像里:`ssl.get_default_verify_paths()` 指向 `/usr/lib/ssl/certs`,`create_default_context()` 载入 150 张根证书。
+
+**本机直连 PyPI 的速度**:第一次 `pip-compile` 16 分钟只拉到 2 MB 后杀掉;换清华镜像 5 分钟拉完 1.2 GB(`--generate-hashes` 会把每个包**所有平台**的分发文件
+都下一遍算 hash)。所以 Dockerfile 加了 `ARG PIP_INDEX_URL`(缺省 pypi.org)、`dev.ps1` 由 `$env:PIP_INDEX_URL` 透传 —— 它只决定**下载来源**,
+每个包仍按 `requirements.txt` 的 sha256 核对,镜像站给错包只会让构建失败(`docs/security.md` §7 已写)。`requirements.txt` 里**不**写 `--index-url`。
+
+### 与任务卡的偏离(理由)
+
+1. **失败短码怎么到模型跟前**(§2.3 第 10 步预留的接缝):R-SKILLS-2 定稿后非零退出只有「脚本运行失败」一句,短码对模型没有意义。选了卡里写的第一种 ——
+   「附在固定文案后面」:`tools.ts` 的 `failureShortCode()` 要求 stdout 去掉首尾空白后**恰好是一个** `^E_[A-Z][A-Z0-9_]{1,30}$`,才拼成
+   「脚本运行失败(…)。(E_BAD_URL)」;traceback / 半截 JSON / 任何别的 stdout 一个字都进不来。这是 api 侧 `skill_run` 唯一的通用行为改动,对既有 skill
+   零变化(它们的失败 stdout 不是这个形状)。`SKILL_RUN_META.outputNote` 多了半句说明(面板文案是数据,规则 7 不涉及)。
+2. **嵌套 v4 的 v6 形态整段拒**(§2.3 第 2 步写的是「嵌的 v4 再判一遍」):v4-mapped `::ffff:0:0/96` / 6to4 `2002::/16` / Teredo `2001::/32` / NAT64 `64:ff9b::/96`
+   直接在黑名单里,不再解出嵌的 v4 去判。更严、少一处可能判错的代码;公网网站不会只以这些形态可达。`ipaddress` 的 `is_global` 本来也把前三种判为非全局。
+3. **`RUNNER_CONCURRENCY` env**(卡里写「信号量 1」但没说怎么给):`runner.py` 读 daemon env,缺省 2、只认 1–8;egress 实例 compose 里设 1。
+   默认实例不设 → 行为一字不变(「无网络的 skill-runner 一字不改」指的是它的网络 / rlimit / 并发,这里守住了)。
+4. **`fetch.py` 的失败路径不 import trafilatura**(延迟 import):坏 URL / 连不上 / 非 HTML 都不付那 0.5 s 与 45 MB;顺带让 `runner/tests/test_web_fetch.py`
+   的 26 个非抽取用例能在没装 trafilatura 的宿主上跑(3 个抽取用例 `skipUnless`,在镜像里跑)。
+5. **`E_TOO_LARGE` 的语义**:卡里六个短码都列了但没定义它与「256 KiB 截断」的分工。定为「`Content-Length` 声明 > 2 MiB(8 × 上界)直接拒」;
+   小于它的照读、到 256 KiB 截断并在输出里标注 —— 截断是正常路径,不是失败。
+6. **`web-fetch.md` 里的 `http://` 处置**:SKILL.md 教模型「访客给 http:// 先改成 https:// 试一次」,脚本本身对 `http://` 仍是 `E_BAD_URL`(§4 第 1 项「不允许」不变)。
+7. **egress-filter.sh 多了 `--install-unit`**(卡里只写「幂等脚本 + 进检查单」):iptables 规则重启即丢,不装 systemd 单元这道防线只活到下次重启。
+   单元指向 `/usr/local/sbin` 的 root 副本(不能让 root 开机执行 deploy 用户可写的文件)。`--status` 的退出码就是检查单判据。
+8. **测试目录 `runner/tests/` 不进镜像**(卡里已写);`dev.ps1 runner-test` bind mount 进镜像跑;顺手把 `__pycache__/` 加进 `.gitignore`、
+   `skills-catalog.test.ts` 的 walk 也跳过它 —— 本机在 `runner/skills/` 下跑过一次 `py_compile`,留下的 `.pyc` 让两个 api 测试红了(NUL 进 Postgres、清单漂移)。
+
+### 本机实测
+
+- `deploy/egress-filter.sh`(alpine + `--cap-add NET_ADMIN`,自建 `DOCKER-USER` 链):跑两遍规则仍是 **6 条**(第二遍「新增 0 条」);`--status` 六条齐全退出 0,
+  手删一条后 `--status` 报 `missing` 退出 1、再跑一遍补回;`--stats` 拒(退出 1);`EGRESS_SUBNET=10.0.0.0`(缺掩码)拒;换网段各自成组。验收 14 的幂等项过。
+- `docker compose config`(五个必填变量给假值)通过;`skill-runner-egress` 只在 `deploy_egress`,`egress` 网络 `172.30.0.0/24`;api 多挂 `runner_egress_sock:/run/runner-egress`。
+- `dev.ps1 check` 通过;`npx tsc --noEmit -p apps/api` 通过(encore check 不扫测试文件)。
+- `runner/tests/test_web_fetch.py` 宿主 python 3.14:**29 个用例,26 过 3 跳过**(抽取用例要 trafilatura)。覆盖验收 1(28 种坏 URL 逐条 `E_BAD_URL`,
+  含 v4 点分 / 整数 / 八进制 / 十六进制 / v6 方括号 / 无点 / 尾点 / 凭据 / 端口 / 控制字符 / 超长;IDN → xn--;`foo.local` 等**不在名字层拒**)、
+  2(44 个地址全拒 / 6 个公网放行;「两个地址其一私网 → 拒」;空 → 拒;解析失败 → 拒;地址不过就不连)、3(connect 收到的就是校验过的地址;固定头齐全、
+  无 Cookie / Authorization;`getpeername` 不等 → 拒且一个字节都没发)、4(绝对 / 相对 / scheme-relative Location 各跳重新解析、重新钉;第 4 跳拒;
+  跳到内网 / http / 端口 / IP / 凭据 / javascript: 一律 `E_UNFETCHABLE` 且不连)、5(64 MiB → 64 KiB 的 gzip 炸弹在 256 KiB 处停;`br` 拒;
+  声明 2 MiB+ → `E_TOO_LARGE`;chunked 解对;注入时钟 → `E_TIMEOUT`)、6(json / pdf / image / css / xml → `E_NOT_HTML`;gbk / gb2312 / big5 / BOM /
+  `<?xml encoding>` 选对;`charset=base64` 这类 bytes↔bytes 编解码器回落 utf-8)、8(失败路径 stdout 只有短码;短码闭集)。
+  两个用例先红后改:`codecs.lookup("base64")` 找得到但 `.decode` 报 LookupError → 只认 `_is_text_encoding` 的编解码器;204 空体走到抽取 → 空体先判 `E_NO_CONTENT`。
+- **镜像里跑(`dev.ps1 runner-test`,`--network none`)**:抽取三个用例先红两处再改 —— ① trafilatura 把相对链接按 `url=` 补成绝对(`https://example.com/next/0`),
+  测试原以为保留相对形式;行为是对的(补的是**输入** URL 的主机,不是跳转后的),改测试;② `[x](javascript:alert(1))` 里嵌套的 `)` 让链接正则截半、
+  `alert(1)` 剩半截漏出去 → 正则允许一层成对括号(维基百科的 `Foo_(bar)` 也是这个形状),`data:` 与 `mailto:` 同样只留文字。顺手去掉了输出里重复的标题
+  (正文以 `<h1>` 开头时 trafilatura 已写成 `# 标题`)。
+- **病态输入夹具在容器里**(验收 7;经 `launch.py` 的 rlimit、`--memory 256m --pids-limit 64 --cpus 1.0`,与 egress 实例同):
+
+  | 形状 | 字节 | 结果 | 秒 | VmPeak | VmHWM |
+  |---|---|---|---|---|---|
+  | 嵌套 `<div>` ×1 000 | 11 KB | `E_NO_CONTENT` | 1.26(含 import) | 92 MB | 80 MB |
+  | 嵌套 `<div>` ×2 000 / ×4 000 | 22 / 44 KB | `E_NO_CONTENT` | 0.05 / 0.04 | 92 MB | 80 MB |
+  | 未闭合 `<b><i>` ×12 000 | 72 KB | `E_NO_CONTENT` | 0.02 | 92 MB | 80 MB |
+  | 链接 `<a>` ×12 000(截到 256 KiB) | 256 KiB | ok,48 099 字符(截断标注) | 0.69 | 116 MB | 104 MB |
+  | 表格 90k 行(截到 256 KiB) | 256 KiB | ok,48 098 字符 | 0.80 | 118 MB | 105 MB |
+  | 散文 `<p>` ×2 700(截到 256 KiB) | 256 KiB | ok,48 086 字符 | 0.24 | 119 MB | 107 MB |
+  | 64 KB 单属性 / `<svg>` 海 / 注释海 / 全 NUL | 65 KB / 256 KiB ×3 | ok(23 字符)/ `E_NO_CONTENT` ×3 | ≤ 0.14 | 119 MB | 107 MB |
+
+  全部在 1.3 s 内结束、峰值 119 MB(rlimit AS 256 MB、容器 256m 都远未触及),没有 MemoryError / RecursionError。预研让 defuddle 卡 26 s 的 2 000 层嵌套页在这里 50 ms。
+  **裁定:不加元素 / 深度计数**(任务卡「失败处理」段的加码条件没触发)。
+- **真网端到端(本机 egress 开发实例:同一镜像,`RUNNER_NETWORK=egress`、并发 1、`--memory 256m`,挂 docker 默认 bridge;经 `/run` 直打,sha256 取清单)**:
+
+  | 输入 | 结果 |
+  |---|---|
+  | `https://example.com/` | exit 0,1.97 s,145 B markdown(`# Example Domain` + 站点 + 正文) |
+  | `https://en.wikipedia.org/wiki/Server-side_request_forgery` | exit 0,6.8 s,8 754 B markdown:标题 / `Wikimedia Foundation, Inc. · 2018-07-23` / 正文,脚注链接保留为绝对地址 |
+  | `https://www.kzgai.cloud/about` | exit 0,1.5 s,746 B(本站 About 正文,`kzgai.cloud · 2026-09-02`) |
+  | `https://kzgai.cloud/about`(裸域 → 301 → www) | exit 0,2.2 s,同上 —— 重定向跟随、每跳重解析重钉 |
+  | `https://169.254.169.254/latest/meta-data/` · `http://example.com/` · `https://localhost/` | exit 2,`E_BAD_URL`(IP 字面量 / 明文 / 无点在名字层就拒,0.2–0.3 s) |
+  | `https://foo.local/` | exit 2,`E_UNFETCHABLE`(解析失败,4.3 s = 容器 DNS 超时) |
+  | `https://www.kzgai.cloud/api/site/tabs`(JSON) | exit 2,`E_NOT_HTML` |
+  | `text-tools/wordfreq.py` 送 egress 实例 | **403 `network_mismatch`**;`web-fetch` 送 `--network none` 实例 → 同样 403(两边各拒对方的档次,验收 10) |
+  | 错 sha256 | 409 `hash_mismatch` |
+  | 成功输出 grep IPv4 字面量 | 0 次;stderr 全部为空(验收 8) |
+
+  首次真网测试**全部 `E_UNFETCHABLE`**,单步复现定位到 `read_body`:响应带 `Connection: close` 时 `http.client` 在 `getresponse()` 里就把 socket 对象 close 掉
+  (读端靠 `makefile` 的引用活着),第二块之前的 `sock.settimeout()` 抛 EBADF、被兜成 `E_UNFETCHABLE`。假 socket 测试测不出它(FakeSock 的 settimeout 是空操作)。
+  改成空闲超时只在 `getresponse()` 前设一次,总时长仍由每次循环的 `remaining()` 兜住(最坏多等一个 8 s 空闲超时,20 + 8 < 30 s 的 sandbox 总时长)。
+  egress 容器里 `getaddrinfo("postgres")` / `getaddrinfo("api")` 均 `gaierror`、`1.1.1.1:443` 可达(本机 bridge 上没有那两个名字;生产的隔离是专用网络 + DOCKER-USER,冒烟第 21 条验)。
+
+### 验收表当前状态
+
+① ✅(28 种坏 URL)② ✅(44 拒 / 6 放;不挑)③ ✅(钉住 + getpeername)④ ✅(≤ 3 跳、每跳重来、跳到不合规 → `E_UNFETCHABLE`)⑤ ✅(gzip 炸弹 / br / 声明超大 / chunked)
+⑥ ✅(五种非 HTML;gbk / big5 / BOM / xml 声明;bytes 编解码器回落)⑦ ✅(11 种形状 ≤ 1.3 s、≤ 119 MB;不加计数)⑧ ✅(六种失败 stdout 只有短码;成功输出无地址;
+`catalog.test.ts` 加了 IPv4 / IPv6 字面量与 `egress` / `skill-runner` 字样的 grep)⑨ ✅(`skill-runner.test.ts`:缺 url / 2 049 字符 / 未声明字段 → 不发请求;守卫与工具体同一
+`validateSkillInput`)⑩ ✅(清单 `egress`;两个假运行器各走各的;egress 缺失 → 固定文案不占额;真容器两边 403)⑪ ✅(`skills-gen --check` 零漂移;`skills-manifest.test.ts`
+逐文件核;库内副本上传后的 `skills_agent_status` 要等所有者上传 —— BACKLOG)⑫ ✅(`runtime.test.ts` 三句纪律;输出无 `![`;截断有标注)⑬ ✅(`check` / `tsc` / `test` 26 文件 523 用例 +
+web 15 / `runner-test` 29 用例 + 夹具全绿)⑭ ✅(三镜像不变、egress 复用;`compose config` 通过,egress 实例只在 `deploy_egress`、只挂 socket 卷与 tmpfs;`egress-filter.sh`
+跑两遍 6 条)⑮ ⏳ 生产冒烟(发版后,`deploy-environments.md` 第 21 条)⑯ ⏳ 生产端到端(所有者上传 `web-fetch` 展示副本并 `skills_agent_set` 之后)。

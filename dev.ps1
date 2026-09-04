@@ -18,11 +18,15 @@
 #       .\dev.ps1 db <名>   encore db shell <数据库名>
 #       .\dev.ps1 build     构建 api + web 生产镜像(tag = git 短 SHA)
 #       .\dev.ps1 ship <host> [sha]
-#                           把镜像与四件部署资产传到服务器(save -o / scp / load -i)
+#                           把镜像与五件部署资产传到服务器(save -o / scp / load -i)
 #       .\dev.ps1 skills    把 .claude\skills 镜像到 .agents\skills(给 codex 审查者用)
 #       .\dev.ps1 skills-gen
 #                           读 runner\skills 生成两份同源清单(runner\manifest.json + apps\api\shared\skills.generated.ts;R-SKILLS-2)
-#       .\dev.ps1 runner    本机起 skill-runner 执行容器(docker build runner\ + docker run,TCP 开发模式 127.0.0.1:8000)
+#       .\dev.ps1 runner [egress]
+#                           本机起 skill-runner 执行容器(docker build runner\ + docker run,TCP 开发模式 127.0.0.1:8000);
+#                           带 egress = 起 egress 档实例(127.0.0.1:8001,有公网;R-WEBFETCH)
+#       .\dev.ps1 runner-test
+#                           在 runner 镜像里跑 runner\tests(web-fetch 单元测试 + 病态输入夹具,--network none;R-WEBFETCH)
 #       .\dev.ps1 wt-clean [名字|all] [--force]
 #                           清理 .claude\worktrees 残留(不带参数 = 只列不动;坑的说明见函数注释)
 
@@ -62,6 +66,21 @@ function Warn-BunDrift {
 #    site 漏补的后果比 404 更重:web 的 layout 每次渲染都调 /site/tabs 且取数失败不兜底
 #    (apps/web/lib/tabs-server.ts「原样抛」),整站每一页 500 —— 构建与健康检查全绿。
 $hostedServices = "agent,trace,notes,mcp,metrics,about,system,site,skills"
+
+# —— runner 镜像的本机构建(runner / runner-test 共用)——
+# 先核对 skills 清单生成物与 runner\skills 一致(漂移 = api 与容器两份清单不同源,skill_run 一律 hash_mismatch)。
+# R-WEBFETCH 起 runner\requirements.txt 不再为空(trafilatura 及其传递依赖,全部带 --hash):构建要从 PyPI 下包,
+# 本机直连 PyPI 太慢时可设 $env:PIP_INDEX_URL 指向镜像站 —— 每个包仍按 requirements.txt 里的 sha256 核对,
+# 镜像站给错包只会让构建失败,不会让错包进镜像(docs/security.md §7)。生产镜像由 build 子命令走同一条路径。
+function Build-RunnerImage {
+    & node "$repoRoot\tools\skills-manifest\generate.mjs" --check
+    if ($LASTEXITCODE -ne 0) { throw "skills 清单已漂移,先跑 .\dev.ps1 skills-gen" }
+    Write-Host "==> docker build runner\ → xray-runner:dev"
+    $buildArgs = @()
+    if ($env:PIP_INDEX_URL) { $buildArgs += @("--build-arg", "PIP_INDEX_URL=$($env:PIP_INDEX_URL)") }
+    & docker build -t xray-runner:dev @buildArgs "$repoRoot\runner"
+    if ($LASTEXITCODE -ne 0) { throw "runner 镜像构建失败" }
+}
 
 # —— worktree 残留清理 ——
 #
@@ -209,7 +228,9 @@ switch ($Cmd) {
         # 第三个镜像(R-SKILLS-2):skill-runner 执行容器。Python 基座按 digest 钉在 runner\Dockerfile 里,
         # 不是 JS 运行时(规则 11 不涉及);与 $hostedServices 同类「漏补」热点 —— ship 与 compose 都要三个 tag。
         Write-Host "==> runner  $runnerTag"
-        & docker build -t $runnerTag "$repoRoot\runner"
+        $runnerBuildArgs = @()
+        if ($env:PIP_INDEX_URL) { $runnerBuildArgs += @("--build-arg", "PIP_INDEX_URL=$($env:PIP_INDEX_URL)") }
+        & docker build -t $runnerTag @runnerBuildArgs "$repoRoot\runner"
         if ($LASTEXITCODE -ne 0) { throw "runner 镜像构建失败" }
 
         Write-Host ""
@@ -223,7 +244,7 @@ switch ($Cmd) {
         Write-Host "  或直接: .\dev.ps1 ship <host>"
     }
     "ship" {
-        # 把镜像 + 四件部署资产送到服务器(R9)。文档里那段手工流程漏一步就会出事:
+        # 把镜像 + 五件部署资产送到服务器(R9)。文档里那段手工流程漏一步就会出事:
         # 漏 migrate.sh → 服务器上无法迁移;走 PowerShell 管道 → 二进制 tar 被文本
         # 重编码破坏;漏 mkdir → 多文件 scp 直接失败。固化成一条命令。
         #
@@ -257,10 +278,12 @@ switch ($Cmd) {
         # 重编码,tar 会被破坏,远端 load 报 unexpected EOF)
         & scp $tar "${shipHost}:~/"
         if ($LASTEXITCODE -ne 0) { throw "scp 镜像失败" }
+        # 五件部署资产:compose / Caddyfile / migrate.sh / .env.example / egress-filter.sh(R-WEBFETCH 的宿主出网过滤;
+        # codex 首轮 P1:漏了它,文档里的 --install-unit 步骤在按本命令部署的机器上必失败,SSRF 第三道防线就不存在)
         & scp "$repoRoot\deploy\docker-compose.yml" "$repoRoot\deploy\Caddyfile" `
-              "$repoRoot\deploy\migrate.sh" "$repoRoot\deploy\.env.example" "${shipHost}:~/deploy/"
+              "$repoRoot\deploy\migrate.sh" "$repoRoot\deploy\.env.example" "$repoRoot\deploy\egress-filter.sh" "${shipHost}:~/deploy/"
         if ($LASTEXITCODE -ne 0) { throw "scp 部署资产失败" }
-        & ssh $shipHost "chmod +x ~/deploy/migrate.sh"
+        & ssh $shipHost "chmod +x ~/deploy/migrate.sh ~/deploy/egress-filter.sh"
 
         Write-Host "==> docker load(远端)"
         & ssh $shipHost "docker load -i ~/xray-$sha.tar && rm -f ~/xray-$sha.tar"
@@ -275,6 +298,7 @@ switch ($Cmd) {
         Write-Host "  docker compose up -d --wait postgres"
         Write-Host "  ./migrate.sh"
         Write-Host "  docker compose up -d"
+        Write-Host "  sudo ./egress-filter.sh --install-unit && sudo ./egress-filter.sh --status   # R-WEBFETCH:egress 出网过滤(幂等;需 sudo 用户)"
         Write-Host ""
         Write-Host "发版后:docs/releases.md 加一行(日期 / SHA / 迁移版本 / 内容 / .env 变更)。生产发版必记(CLAUDE.md 项目定位)。"
     }
@@ -309,21 +333,50 @@ switch ($Cmd) {
     "runner" {
         # R-SKILLS-2:本机起 skill-runner 执行容器,TCP 开发模式(生产是 unix socket + network_mode: none)。
         # api 在 Windows 宿主上拿不到容器里的 unix socket,所以本机用 TCP;api 侧要设
-        #   $env:XRAY_SKILL_RUNNER_URL = "http://127.0.0.1:8000"   (代码级闭集,只认这一种形状)
+        #   $env:XRAY_SKILL_RUNNER_URL = "http://127.0.0.1:8000"          (none 档;代码级闭集,只认这一种形状)
+        #   $env:XRAY_SKILL_RUNNER_EGRESS_URL = "http://127.0.0.1:8001"   (egress 档;R-WEBFETCH,本命令带 egress 时)
         # 再起 .\dev.ps1。容器的其它约束(只读根 FS / noexec tmpfs / 非 root / cap_drop / pids / 内存)与 compose 一致,
         # 只有网络不同 —— 别把这条命令当成隔离形态的验收,那在生产冒烟(任务卡验收 ⑮)。
-        & node "$repoRoot\tools\skills-manifest\generate.mjs" --check
-        if ($LASTEXITCODE -ne 0) { throw "skills 清单已漂移,先跑 .\dev.ps1 skills-gen" }
-        Write-Host "==> docker build runner\ → xray-runner:dev"
-        & docker build -t xray-runner:dev "$repoRoot\runner"
-        if ($LASTEXITCODE -ne 0) { throw "runner 镜像构建失败" }
-        Write-Host "==> docker run(Ctrl+C 停;RUNNER_LISTEN=tcp://0.0.0.0:8000 → 127.0.0.1:8000)"
-        & docker run --rm --init --name xray-runner-dev -p 127.0.0.1:8000:8000 `
-            -e RUNNER_LISTEN=tcp://0.0.0.0:8000 -e RUNNER_NETWORK=none `
-            --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
-            --tmpfs /run/runner:rw,size=1m,uid=10001,gid=10001 `
-            --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 384m --cpus 1.0 `
-            xray-runner:dev
+        # egress 实例(R-WEBFETCH):同一镜像,RUNNER_NETWORK=egress、并发 1、内存 256m,挂在 docker 默认 bridge 上
+        # (有公网;生产是专用 egress 网络 + 宿主 DOCKER-USER 过滤,本机不复现那两道)。
+        $egress = ($args -contains "egress") -or ($args -contains "-Egress")
+        Build-RunnerImage
+        if ($egress) {
+            Write-Host "==> docker run egress(Ctrl+C 停;RUNNER_LISTEN=tcp://0.0.0.0:8000 → 127.0.0.1:8001)"
+            & docker run --rm --init --name xray-runner-egress-dev -p 127.0.0.1:8001:8000 `
+                -e RUNNER_LISTEN=tcp://0.0.0.0:8000 -e RUNNER_NETWORK=egress -e RUNNER_CONCURRENCY=1 `
+                --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
+                --tmpfs /run/runner:rw,size=1m,uid=10001,gid=10001 `
+                --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 256m --cpus 1.0 `
+                xray-runner:dev
+        } else {
+            Write-Host "==> docker run(Ctrl+C 停;RUNNER_LISTEN=tcp://0.0.0.0:8000 → 127.0.0.1:8000)"
+            & docker run --rm --init --name xray-runner-dev -p 127.0.0.1:8000:8000 `
+                -e RUNNER_LISTEN=tcp://0.0.0.0:8000 -e RUNNER_NETWORK=none `
+                --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
+                --tmpfs /run/runner:rw,size=1m,uid=10001,gid=10001 `
+                --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 384m --cpus 1.0 `
+                xray-runner:dev
+        }
+    }
+    "runner-test" {
+        # R-WEBFETCH:在 runner 镜像里跑 runner\tests —— ① web-fetch 的单元测试(注入 resolve / connect,不打网;
+        # 镜像里有 trafilatura,抽取用例才会真跑);② 病态输入夹具(预研 §4.3 的形状),经 /opt/launch.py 起、
+        # 与真实运行同一套 rlimit,打印每种形状的耗时与 VmPeak / VmHWM(任务卡验收 ⑦ 的数据来源)。
+        # 两段都 --network none:测试不该有任何出网。tests\ 目录只 bind mount,不进镜像、不进清单、不进库。
+        Build-RunnerImage
+        $tests = "$repoRoot\runner\tests"
+        Write-Host "==> unittest(--network none)"
+        & docker run --rm --init --network none --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
+            -v "${tests}:/tests:ro" --entrypoint /opt/venv/bin/python xray-runner:dev `
+            -I -B -m unittest discover -s /tests -p "test_*.py" -v
+        if ($LASTEXITCODE -ne 0) { throw "runner 单元测试失败" }
+        Write-Host "==> pathological(经 launch.py,rlimit 与真实运行相同;--memory 256m 与 egress 实例相同)"
+        & docker run --rm --init --network none --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
+            --memory 256m --pids-limit 64 --cpus 1.0 `
+            -v "${tests}:/tests:ro" --entrypoint /opt/venv/bin/python xray-runner:dev `
+            -I -B /opt/launch.py 30 /tests/pathological.py
+        if ($LASTEXITCODE -ne 0) { throw "病态输入夹具运行失败(非零退出)" }
     }
     "wt-clean" {
         $wtRoot = "$repoRoot\.claude\worktrees"

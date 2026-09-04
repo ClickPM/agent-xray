@@ -19,6 +19,7 @@ import {
   type GeneratedSkill,
   type GeneratedSkillScript,
   type SkillInputSchema,
+  type SkillNetwork,
 } from "../shared/skill-manifest";
 import { db } from "./db";
 
@@ -54,8 +55,12 @@ interface FileHashRow {
 /**
  * 算本次可用集合。只查代码清单里那几个名字,哈希在 SQL 侧算(`sha256(convert_to(content,'UTF8'))`,
  * PG ≥ 11),不把整包正文拉回进程 —— 它在每一轮的 refreshRuntimeConfig 路径上被调。
+ *
+ * `runnable`(R-WEBFETCH):本会话有合法运行器的出网档次集合(tools.ts 按两档的 env 算,`runnableNetworks`)。
+ * 给了就把档次不在其中的 skill 丢出集合 —— 一个列在 `<available_skills>` 里却永远跑不起来的 skill
+ * 只会让模型反复重试;不给(`undefined`,skill_run 没开、只有 skill_load)则不按档次过滤,SKILL.md 照常可读。
  */
-export async function loadAgentSkills(): Promise<AvailableSkills> {
+export async function loadAgentSkills(runnable?: ReadonlySet<SkillNetwork>): Promise<AvailableSkills> {
   if (AGENT_SKILLS.length === 0) return emptySkills();
   const names = AGENT_SKILLS.map((s) => s.name);
   const placeholders = names.map((_, i) => `$${i + 1}`).join(", ");
@@ -106,9 +111,8 @@ export async function loadAgentSkills(): Promise<AvailableSkills> {
       );
       continue;
     }
-    if (s.network !== "none") {
-      // 本轮只有 none 档的运行器;egress 档由 R-WEBFETCH 接第二个客户端
-      dropped.push(`${s.name}(network=${s.network},本轮无对应运行器)`);
+    if (runnable && !runnable.has(s.network)) {
+      dropped.push(`${s.name}(network=${s.network},本会话没有这一档的运行器)`);
       continue;
     }
     skills.push(s);

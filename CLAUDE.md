@@ -36,7 +36,9 @@ tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 
 runner/       **R-SKILLS-2 已落地**:agent 可运行 skills 的执行容器(`Dockerfile` Python 基座按 digest 钉 + venv + `runner.py` /
               `launch.py`)与可被 agent 使用的 skill 源(`runner/skills/<name>/`:SKILL.md + 可选 xray.json + scripts/*.py)。
               刻意在 Encore app root 之外;它不是 JS 运行时,规则 11 不涉及。布局与协议见 `runner/README.md`。
-              R-WEBFETCH(待实现):同一镜像起第二个只出公网的实例,`runner/skills/web-fetch` 是首个 egress 档 skill
+              R-WEBFETCH(2026-09-04 落地):同一镜像起第二个只出公网的实例 `skill-runner-egress`(compose 专用 `egress` 网络 +
+              宿主 `deploy/egress-filter.sh`),`runner/skills/web-fetch` 是首个 egress 档 skill;`runner/tests/` 是它的单元测试与
+              病态输入夹具(`dev.ps1 runner-test` 在镜像里跑,目录不进镜像、不进清单、不进库)
 .claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
               + MCP 启动脚本。`.mcp.json` 另注册了三个站点管理面(本机 / 130 / 生产),
               token 各走各的环境变量、都不入库,分工见下方「本地开发」的表;
@@ -108,11 +110,13 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       Skills 页**不**显示「agent 可用」徽标(画板没有,记 BACKLOG)。七条裁定与依据见 `rounds/round-skills/research.md`,交付清单见 `round-skills-2.md`。
       **落地时的一处未闭合**:画板 1f/1g 的第四组在开工时云端与本地画布都还没画(所有者画布未改),前端 `ToolsPanel.tsx` 的第四组按任务卡建议值
       (`#8b5cf6`、组名「沙箱执行组」)先接上,待所有者在画布上定稿后按画板核对(记在任务卡「本轮实测」与 BACKLOG)。
-    - **2026-09-03 修订(R-WEBFETCH,建在 R-SKILLS-2 之上,待实现)**:所有者裁定让 agent 读**访客指定的公网网页** —— 不是新工具,是沙箱执行组里
+    - **2026-09-03 修订(R-WEBFETCH,建在 R-SKILLS-2 之上;2026-09-04 代码落地,分支 `round-webfetch`)**:所有者裁定让 agent 读**访客指定的公网网页** —— 不是新工具,是沙箱执行组里
       一个声明了出网档次(`xray.json` 的 `network: egress`)的 skill `web-fetch`,由同一镜像的第二个执行容器实例 `skill-runner-egress`(只出公网,
-      不在 `front` / `back`)跑;api 进程不碰 URL、不碰 HTML。不新增工具、画板、迁移、MCP 工具,前端零改动。**访客给的 URL 不设域名限制、
+      不在 `front` / `back`)跑;api 进程不碰 URL、不碰 HTML。不新增工具、画板、迁移、MCP 工具(仍是 46),前端零改动。**访客给的 URL 不设域名限制、
       不维护任何域名黑白名单**(所有者裁定:太多,无法维护);拒的是固定的内网地址段(SSRF 防线,见规则 9)。残余风险「经 URL 外泄本访客会话内容」
       所有者已认。方案与十条裁定见 `rounds/round-webfetch/round-webfetch.md`;预研的 in-process 形态(`study.md`)退役。
+      落地时唯一碰到 api 侧 `skill_run` 通用行为的一处:非零退出时 stdout **恰好只有一个** `E_` 短码才附在固定失败文案后(`failureShortCode`),
+      这是任务卡 §2.3 第 10 步预留的两种接缝之一,不是新机制。
     - **2026-09-03 修订(R-PERF)**:站点投产后所有者报障「点卡片经常没反应」与 `/skills/ppt-master` 白屏。定位结论是站点**没有任何加载态与错误边界**——
       软导航在服务端 RSC 返回前 UI 一动不动(点 `diagram` 实测 4.0 秒静止),渲染失败掉到 Next 默认英文白屏。与 R-TOOLS / R-SKILLS 同一顺序、**不是**规则 8 的例外:
       设计稿先扩到 **18 块**(`2i` Skill 详情页加载态 / `2j` Notes 章节页加载态 / `2k` 错误态 A 出错 B 找不到,2026-09-03 并入 `design/`),**再**进轮次。
@@ -155,16 +159,20 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 gen        # encore gen client → apps/web/lib/api-client.ts(排除 mcp 服务)
 .\dev.ps1 db <名>    # encore db shell <数据库名>
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
-.\dev.ps1 ship <host> [sha]   # 镜像 + 四件部署资产送到服务器(不传 .env);发版后记 docs/releases.md
+.\dev.ps1 ship <host> [sha]   # 镜像 + 五件部署资产送到服务器(不传 .env;R-WEBFETCH 起含 egress-filter.sh);发版后记 docs/releases.md
 .\dev.ps1 skills     # 把 .claude\skills 镜像到 .agents\skills(codex 审查者只认后者)
 .\dev.ps1 skills-gen # 读 runner\skills 生成两份同源清单(runner\manifest.json + apps\api\shared\skills.generated.ts;R-SKILLS-2)
 .\dev.ps1 runner     # 本机起 skill-runner 执行容器(TCP 开发模式 127.0.0.1:8000;api 侧设 $env:XRAY_SKILL_RUNNER_URL="http://127.0.0.1:8000")
+.\dev.ps1 runner egress   # 起 egress 档实例(127.0.0.1:8001,有公网;api 侧设 $env:XRAY_SKILL_RUNNER_EGRESS_URL="http://127.0.0.1:8001";R-WEBFETCH)
+.\dev.ps1 runner-test     # 在 runner 镜像里跑 runner\tests(web-fetch 单元测试 + 病态输入夹具,--network none;R-WEBFETCH)
 .\dev.ps1 wt-clean   # 列出 .claude\worktrees 残留;带 <名字|all> 清理,--force 跳过安全闸
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```
 
 - **`dev.ps1 test` 跑两处**(R-SKILLS-2 起):`encore test`(api)之后再在 `apps/web` 跑 `bun test lib`(前端纯函数投影测试,`node:test` 写法、零新增依赖);
   带文件参数时只筛 api 侧。`dev.ps1 build` 出**三个**镜像(api / web / runner),构建前先 `--check` 清单是否与 `runner/skills` 一致。
+  **第三处是 `dev.ps1 runner-test`**(R-WEBFETCH 起):python `unittest` 与病态输入夹具要在 runner 镜像里跑(要 docker),不并进 `dev.ps1 test`;
+  改了 `runner/` 下任何东西都要跑它。runner 镜像构建从 PyPI 下包(`requirements.txt` 全部带 hash),本机直连太慢时设 `$env:PIP_INDEX_URL` 指向镜像站即可。
 
 - Encore 本地控制台 http://localhost:9400(看 trace)。
 - Encore MCP 已在 `.mcp.json` 注册(stdio,经 `.claude/mcp-encore.ps1` 带正确 env 启动),新会话生效。

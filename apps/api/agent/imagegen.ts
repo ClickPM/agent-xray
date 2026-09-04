@@ -115,7 +115,7 @@ export function buildImageRequestBody(prompt: string, cfg: ActiveImageGenConfig)
 export type ImagePayload =
   /** 内联的 base64(可能带 data: 前缀) */
   | { kind: "inline"; data: string }
-  /** 上游只给了链接。我们**不抓**,报失败 */
+  /** 上游只给了链接。我们**不抓**,报失败(外呼组约束 1:api 进程内的工具不碰任何 URL;唯一例外是沙箱执行组 egress 档的 web-fetch skill,在独立容器里 —— docs/security.md R-WEBFETCH 补记) */
   | { kind: "url" };
 
 /**

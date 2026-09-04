@@ -306,12 +306,25 @@
         内网地址段)、外呼组「不接受 URL 参数」的唯一例外认下、残余风险「经 URL 外泄本访客会话」认下、`network` 字段提前进 R-SKILLS-2 等。
         已落为 **R-WEBFETCH**(文档就绪、未开工),规则 9「先改文档」已写入 `docs/security.md` / `CLAUDE.md` / `docs/architecture.md` / `ROUNDS.md`;
         代码零改动。预研 in-process 形态退役,`study.md` 降为实测附录
-- [ ] 预研 R-WEBFETCH 的**中间路径待验证**:把网址写进 `web_search` 的 query,由网关侧开页 —— 我们的进程不抓,零 SSRF 面。
+- [x] 预研 R-WEBFETCH 的**中间路径待验证**:把网址写进 `web_search` 的 query,由网关侧开页 —— 我们的进程不抓,零 SSRF 面。
       生产搜索 provider 是 OpenAI 系模型的 `web_search` 工具(有 search / open_page / find 三个动作),原则上可行。
       验证:在站上问「打开 <某网址> 并总结」,看 Timeline 里的来源是否就是那一个网址。成立则只改三处:
       `WEB_SEARCH_META` 描述与 `systemPromptFor` 里「不要放网址」两句、query 的 `maxLength`(现 300,放一个长网址就超)。
       属小修补,可直接 `main` (2026-09-03)
       → 2026-09-03 同日 R-WEBFETCH 裁定「做」之后,本条降为 R-WEBFETCH 落地前的**过渡验证**(零成本、与 skill 形态不互斥);R-WEBFETCH 落地后关闭
+      → **2026-09-04 关闭**:R-WEBFETCH 代码落地(`round-webfetch`),过渡验证没做也不再需要;`web_search` 那两句「不要放网址」保持原样 —— 读网址走 `web-fetch` skill
+- [ ] R-WEBFETCH **egress 容器的病态输入基线**:`dev.ps1 runner-test` 的夹具(`runner/tests/pathological.py`)量的是本机 docker 的数字,
+      生产是 2 vCPU 轻量机、`cpus: 1.0`;发版后在生产跑一次同一夹具(bind mount `runner/tests` 进 `skill-runner-egress` 镜像的临时容器,
+      `--network none`),把耗时与 VmHWM 记进 `docs/releases.md` 对应发版行。若某形状逼近 `sandbox_config.total_timeout_ms`(30 s)或 256m,
+      先加 `fetch.py` 里的元素 / 深度计数(任务卡「失败处理」段),不放宽 `mem_limit` (2026-09-04)
+- [ ] R-WEBFETCH **`fetch.py` 响应头阶段的总时长**:读体阶段已按 `read1` 每个 recv 核一次总时长(codex 第 2 轮 P2),但 `getresponse()` 读头
+      仍只受 8 s 空闲超时约束,一个逐行滴头的服务器最坏能拖到 sandbox 总时长(默认 30 s、上限 120 s)才被 runner killpg,期间占着 egress 唯一并发名额。
+      收紧的做法是一个 `threading.Timer` 在总时长到点时 `sock.close()`(阻塞中的 recv 立刻抛 OSError → `E_TIMEOUT`),对连接 / TLS / 头 / 体四段
+      一并生效;属机制,先记着,egress 实例真被这样占过再做 (2026-09-04)
+- [ ] R-WEBFETCH **`web-fetch` 的展示副本要所有者经 MCP 上传**(裁定 6 的必然):`runner/skills/web-fetch/` 三个文件(SKILL.md / xray.json /
+      scripts/fetch.py,LF)整包 `skills_upsert`,`sourceType: own`、`repo: ClickPM/skills-hub`(自研 skill 的既定出处,先推 skills-hub 再挂;
+      `LICENSE` 核对见 [[skills-publish-license-check]] 那条口径:自研、无出处,不附)。上传前 `skills_agent_status` 报 `missing`,上传后 `ok` 才能
+      `skills_agent_set web-fetch true`。分类建议「自研 · 工具」(任务卡 C9) (2026-09-04)
 - [ ] R-SKILLS **agent 能否读 skills**(给 pi 配 `skills_list` / `skills_get` 这类只读工具,与 `notes_*` 同形态,让 Runtime 对话里能引用技能库)。
       R-SKILLS 裁定本轮 agent 侧不可读、新表不授权任何 agent 角色;要做需在那次迁移里显式 `GRANT SELECT` 给 `agent_ro`、
       走 `READ ONLY` 事务,并且 Tools 面板会自动多出这组工具(1f/1g 示例数据要跟)。属新功能,等所有者裁定 (2026-09-03)
