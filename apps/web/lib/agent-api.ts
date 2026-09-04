@@ -86,6 +86,19 @@ export interface TurnSummary {
   turnMs: number;
 }
 
+/**
+ * 顶栏统计条的两个数(R-USAGE),随收尾帧回来。
+ *
+ * 与 `TurnSummary` **刻意分开**:那是「这一轮的处理过程」(往返数 / 耗时,会被写进折叠行的
+ * turn 记录),这里是会话级聚合。混成一个类型会让会话尺度的数跟着 turn 记录到处流。
+ *
+ * `ctxPercent` 可缺席 —— 服务端拿不到当前上下文占用时不带这个字段(见 lib/stats-bar.ts)。
+ */
+export interface SessionUsage {
+  totalTokens: number;
+  ctxPercent?: number;
+}
+
 export interface AskHandlers {
   /** 首帧:服务端确定的会话 id(新会话由此得到 id) */
   onSession?: (sessionId: string) => void;
@@ -99,6 +112,8 @@ export interface AskHandlers {
   onError?: (message: string, summary?: TurnSummary) => void;
   /** 本轮正常收尾;summary 在旧服务端上缺省 */
   onDone?: (summary?: TurnSummary) => void;
+  /** 顶栏统计条的会话累计(R-USAGE);`done` 与 `error` 两种收尾都会给,旧服务端上不触发 */
+  onUsage?: (usage: SessionUsage) => void;
 }
 
 /** 收尾帧里的两个数:缺一个就当没有(帧契约是加法改动,旧服务端不带它们)。 */
@@ -106,6 +121,18 @@ function summaryOf(d: Record<string, unknown>): TurnSummary | undefined {
   return typeof d.modelRoundTrips === "number" && typeof d.turnMs === "number"
     ? { modelRoundTrips: d.modelRoundTrips, turnMs: d.turnMs }
     : undefined;
+}
+
+/**
+ * 收尾帧里的用量(R-USAGE)。与 `summaryOf` 同一套加法契约:`totalTokens` 不是数字就当整帧
+ * 没带用量;`ctxPercent` 单独缺席是**正常情形**(服务端拿不到当前上下文占用),不因此丢掉 tokens。
+ */
+function usageOf(d: Record<string, unknown>): SessionUsage | undefined {
+  if (typeof d.totalTokens !== "number") return undefined;
+  return {
+    totalTokens: d.totalTokens,
+    ...(typeof d.ctxPercent === "number" ? { ctxPercent: d.ctxPercent } : {}),
+  };
 }
 
 interface SseFrame {
@@ -193,11 +220,16 @@ export async function askStream(
           break;
         case "error": {
           const d = JSON.parse(frame.data) as { message: string } & Record<string, unknown>;
+          const usage = usageOf(d);
+          if (usage) handlers.onUsage?.(usage);
           handlers.onError?.(d.message, summaryOf(d));
           break;
         }
         case "done": {
-          handlers.onDone?.(summaryOf(JSON.parse(frame.data) as Record<string, unknown>));
+          const d = JSON.parse(frame.data) as Record<string, unknown>;
+          const usage = usageOf(d);
+          if (usage) handlers.onUsage?.(usage);
+          handlers.onDone?.(summaryOf(d));
           return;
         }
       }

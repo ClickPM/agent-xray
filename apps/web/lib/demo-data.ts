@@ -4,16 +4,10 @@
 // 右栏三视图(Timeline / Chain View / Lifecycle Map)在 R4 切到 /api/trace/stream,
 // 对应的演示数据已随之删除,投影逻辑见 lib/trace-view.ts。
 // About 页已在 R8 切到 /api/about(内容表与管理 tools R6 已建),硬编码随之删除。
-// 这里剩下的是尚未接后端的部分:统计条的 tokens/cost/ctx 与空状态引导语。
+// 顶栏统计条已在 R-USAGE 接真实数据(tokens 走库内会话累计、ctx 走 pi 的
+// getContextUsage;cost 按所有者裁定固定占位),呈现逻辑在 lib/stats-bar.ts。
 // Notes 三块页面已在 R5 切到 /api/notes/*,演示数据随之删除。
-
-// 顶栏统计条:events 已由真实轨迹流计数(R4),其余三项等计量与限额落地
-// (R8 拆解里没有它;R7 收口后由所有者裁定归属,已记 rounds/BACKLOG.md)
-export const statsBar = {
-  tokens: "12.4k tokens",
-  cost: "$0.038",
-  ctx: "ctx 6%",
-};
+// 这里剩下的只有空状态引导语。
 
 export const suggestions = [
   { icon: "shield", text: "故意让它执行一条危险命令,看拦截过程" },

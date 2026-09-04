@@ -1,0 +1,14 @@
+-- R-USAGE:顶栏统计条的 tokens 接真实数据。
+--
+-- 为什么单独一列而不是从 daily_quota 派生:daily_quota 是**全站按天**的资源闸
+-- (R7,超限拒绝新会话),没有会话维度;顶栏要的是「这个会话累计花了多少」。
+-- 两者来源同一个 Usage.totalTokens,聚合维度不同,合表会让「daily_token_limit
+-- 到底在限什么」再次失去解释(docs/security.md §4 已为搜索计数写过同一条理由)。
+--
+-- 为什么不能用 pi 的 getSessionStats():那是**当前运行时实例**的累计,会话被空闲
+-- 回收后重建(历史压成一条注入)就归零,访客会看到顶栏数字突然变小。
+--
+-- BIGINT:一个会话的累计含每轮重算的 input 与 cache,长会话涨得比直觉快;
+-- INT 的 21 亿在极端情况下不是绝对够用,而这一列没有任何理由省 4 字节。
+-- 默认 0 让存量会话读回 0(它们的历史用量没有按会话记过,不追溯)。
+ALTER TABLE sessions ADD COLUMN total_tokens BIGINT NOT NULL DEFAULT 0;

@@ -83,10 +83,12 @@
       重新 `dev.ps1 gen` 都产生噪音 diff。给 `encore.app` 定一个固定 `id` 能消掉,但那会影响 daemon 的
       本地 app 登记(与规则 1 的同机共用 daemon 有关),不顺手改 (2026-08-31)
 
-- [ ] R8 **顶栏统计条的 tokens / cost / ctx 仍是 demo 值**(`apps/web/lib/demo-data.ts` 的 `statsBar`)。
-      原注释写「R7/R8 计量」,但 R8 的拆解里没有它,R7 的拆解里也只有 `daily_quota` 的**拒绝**行为、
-      没有「把本会话用量推给前端」这一条。需要所有者裁定归属:计量数据在 R7 的配额计数里已经有了,
-      缺的是一条把它带到前端的通路(SSE 帧 or 会话查询字段),属新增接口面,不顺手做 (2026-09-01)
+- [x] ~~R8 **顶栏统计条的 tokens / cost / ctx 仍是 demo 值**(`apps/web/lib/demo-data.ts` 的 `statsBar`)。~~
+      ~~需要所有者裁定归属:计量数据在 R7 的配额计数里已经有了,缺的是一条把它带到前端的通路~~ (2026-09-01)
+      → **R-USAGE 已做**(2026-09-04):所有者当场裁定「不展示 cost、tokens 与 ctx 要实时」。
+      tokens 走新增的 `sessions.total_tokens`(会话历史累计,回收重建后不回退),ctx 走 pi 的
+      `getContextUsage().percent`,两条通路 = 收尾帧 + `GET /agent/sessions/:id`;cost 固定占位 `-`,
+      不接数据也不删这一项。见 `rounds/round-usage/round-usage.md` 与 `docs/security.md` §2 R-USAGE 补记
 - [ ] R8 `visits` 表没有保留期与清理。计数行结构让它长得很慢(天数 × 站内路径数 × 当日访客数),
       个人站量级下多年都不成问题,所以本轮不引入定时清理(那是新机制)。将来若要加保留期,
       一条 `DELETE FROM visits WHERE day < …` 的定时任务即可,注意它会改变历史趋势的可查范围 (2026-09-01)

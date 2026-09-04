@@ -650,6 +650,40 @@
 - **前置(已满足)**:画板 `2l` / `2m` 已并入 `design/`(18 → 20 块);R-PERF 已合并 `main`。**止损**:无迁移,回退 = revert;
   已写入的 `payload` 只是被忽略的 JSONB
 
+### R-USAGE — 顶栏统计条的 tokens 与 ctx 接真实数据(命名轮;所有者裁定 2026-09-04;代码已落地、待审查)
+
+> 任务卡 [`rounds/round-usage/round-usage.md`](rounds/round-usage/round-usage.md)。
+> 所有者看着生产页面问「右上角这个数据是不是金额是写死的」触发 —— 是:`tokens` / `cost` / `ctx` 三项从首版起
+> 就是 `demo-data.ts` 里的三个常量(`12.4k tokens` / `$0.038` / `ctx 6%`),四项里只有 `events` 是真的(R4 起)。
+> 这条已在 [`BACKLOG`](rounds/BACKLOG.md) 挂了很久(R8 遗留,「需要所有者裁定归属」),本轮由所有者当场裁定。
+
+**三条裁定(所有者 2026-09-04)**:
+- **不展示 cost**:第二项固定占位 `-`,**不接数据也不从统计条里删**;以后想加回来时再做动态的
+  —— 那时是「换数据源」不是改结构。服务端连会话级的费用累计列都不建。
+- **设计稿不改**:四项结构与画板 `1a` 完全一致,`-` 是值不是结构,规则 7 的「不得偏离对应画板」仍然满足。
+  **本轮不碰 `design/`** —— 与 R-TOOLS / R-SKILLS / R-PERF 的「先改画板再开工」不同,因为这里根本没有结构变更。
+- **tokens 取会话历史累计**,不是 pi 实例的累计:与并排的 `events` 同语义(都是从库里回放的会话尺度的数),
+  且会话被空闲回收重建后实例内计数会归零、访客会看到数字突然变小。代价是加一列 + 一条迁移。
+
+**与既有安全条文的冲突已按规则 9 处置**:`docs/security.md` §2 R-TOOLCARDS 补记原文写着收尾帧
+「不带 model / provider / baseUrl / **token 数** / 费用」。本轮**先改文档**(§2 追加 R-USAGE 补记)再动代码:
+放开的只有两个**聚合**值(会话累计 token、ctx 百分比),费用 / model / provider / baseUrl / `contextWindow` 绝对值 /
+分轮次明细一律照旧不出。已认风险写在补记里:第一轮时 `totalTokens ÷ ctxPercent` 能粗略反推 contextWindow 量级。
+
+**交付(六件)**:迁移 `014_session_tokens`(`sessions.total_tokens BIGINT`)· `store.ts` 的
+`sessionTotalTokens` / `addSessionTokens`(BIGINT 一律 `::double precision` 读回)· `runtime.ts` 的
+`RuntimeSession.totalTokens`(重建时从库续接,与 `maxTraceSeq` 同一处)· `ask.ts` 的 `usageFrame` 与
+`finally` 里的累加落库 · `sessions.ts` 的 `SessionSummary.totalTokens` / `GetSessionResponse.ctxPercent` ·
+前端 `lib/stats-bar.ts`(纯函数格式化 + 测试)与 `Workbench` 的统计条改用 state。
+**不交付**:cost 的任何数据通路、设计稿改动、新端点 / 新 MCP 工具、按百分比给 ctx 点分档变色(新视觉语言)。
+
+- 验收(10 项,细则与实测在任务卡):①`check` / `test` 全绿;②生成物 diff 只有两个新字段;③连问两轮单调增;
+  ④F5 不回退;⑤ctx 随轮次增长、拿不到时显示 `-`;⑥cost 恒为 `-`;⑦帧里没有配置面;⑧样式零改动;
+  ⑨迁移到 14、存量会话读回 0;⑩新会话无 NaN。**关键实测**:重启后端清空注册表 → 打开会话仍是 `4.1k` +
+  `ctx -` → 再问一轮变 `7.9k`(4100 + 3800),证明重建时从库读了初值
+- **止损**:迁移是纯加列带默认值,回退 = revert 代码(列留着不读即可)。**一处待所有者确认**:
+  ctx 圆点在无值时压成 `--text-dim`(画板只画过有值的常绿态),否掉的改法是一行
+
 ## 轮次外事项
 
 跨轮次发现的问题进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md),不当场顺手改(CLAUDE.md 开发约定)。
