@@ -45,7 +45,22 @@ WORK_ROOT = "/run/work"
 LISTEN = os.environ.get("RUNNER_LISTEN", "unix:///run/runner/runner.sock")
 NETWORK = os.environ.get("RUNNER_NETWORK", "none")
 
-MAX_CONCURRENCY = 2
+DEFAULT_CONCURRENCY = 2
+CONCURRENCY_CAP = 8
+
+
+def _concurrency() -> int:
+    """并发名额(信号量大小)。缺省 2 = R-SKILLS-2 默认实例的既定值,一字不改;
+    egress 实例(R-WEBFETCH,所有者裁定 C7)在 compose 里设 RUNNER_CONCURRENCY=1。只认 1–8 的整数,别的启动即失败。"""
+    raw = os.environ.get("RUNNER_CONCURRENCY", "").strip()
+    if not raw:
+        return DEFAULT_CONCURRENCY
+    if not raw.isdigit() or not 1 <= int(raw) <= CONCURRENCY_CAP:
+        raise RuntimeError(f"RUNNER_CONCURRENCY must be an integer in 1..{CONCURRENCY_CAP}, got {raw!r}")
+    return int(raw)
+
+
+MAX_CONCURRENCY = _concurrency()
 MAX_BODY_BYTES = 64 * 1024
 MAX_CAPTURE_BYTES = 256 * 1024
 MAX_INPUT_BYTES = 32 * 1024  # api 侧 input 文本 ≤ 4096 字符;这里是再序列化之后的宽松上界

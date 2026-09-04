@@ -1,0 +1,21 @@
+{
+  "network": "egress",
+  "scripts": {
+    "fetch.py": {
+      "description": "抓取一个公网 https 网页并抽取正文为 markdown(标题 / 站点 / 日期 / 正文与链接;去图片);失败回固定短码",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "要读取的网页地址:只接受 https://、不带端口与凭据、主机名是域名(不是 IP),不超过 2048 字符",
+            "minLength": 12,
+            "maxLength": 2048
+          }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

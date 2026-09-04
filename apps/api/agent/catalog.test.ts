@@ -25,7 +25,7 @@ import {
 } from "./tools";
 import type { ActiveImageGenConfig } from "./imagegen-config";
 import type { SandboxConfig } from "./sandbox-config";
-import type { RunnerTarget } from "./skill-runner";
+import type { RunnerTarget, RunnerTargets } from "./skill-runner";
 import type { AvailableSkills } from "./skills-catalog";
 import type { ActiveWebSearchConfig } from "./websearch-config";
 
@@ -53,6 +53,11 @@ const FAKE_SKILLS: AvailableSkills = {
 };
 const FAKE_SANDBOX: SandboxConfig = { dailyRunLimit: 7_777, totalTimeoutMs: 66_666, fingerprint: "fp-fake-sandbox-1d4b" };
 const FAKE_RUNNER: RunnerTarget = { kind: "unix", socketPath: "/run/fake-runner-zzq/runner.sock", network: "none" };
+/** R-WEBFETCH:两档运行器,egress 那条 socket 路径同样独一无二 */
+const FAKE_RUNNERS: RunnerTargets = {
+  none: FAKE_RUNNER,
+  egress: { kind: "unix", socketPath: "/run/fake-egress-runner-vbn/runner.sock", network: "egress" },
+};
 
 /**
  * 一份**每个值都独一无二**的假配置:任何一个值出现在响应里,都能被下面的 grep 抓到。
@@ -102,7 +107,7 @@ function definitionFor(entry: ToolCatalogEntry) {
       }
       return undefined;
     case "sandbox":
-      if (entry.name === SKILL_RUN_TOOL) return makeSkillRunTool(FAKE_SKILLS, FAKE_SANDBOX, FAKE_RUNNER);
+      if (entry.name === SKILL_RUN_TOOL) return makeSkillRunTool(FAKE_SKILLS, FAKE_SANDBOX, FAKE_RUNNERS);
       return undefined;
   }
 }
@@ -200,9 +205,23 @@ describe("响应不泄配置面(验收 #3)", () => {
     expect(text).not.toContain(SESSION_ID);
     // R-SKILLS-2(任务卡验收 ⑤):可用集合 / 沙箱配置 / socket 路径都进不了目录;
     // 入参里没有 code / path / argv / interpreter 任何形式的字段;超时 / 限额数字不出现
-    for (const value of ["fake-skill-qwe", "fake_script_uio", "FAKE SKILL BODY", FAKE_SKILLS.fingerprint, FAKE_RUNNER.socketPath, "/run/runner", "unix:"]) {
+    for (const value of [
+      "fake-skill-qwe",
+      "fake_script_uio",
+      "FAKE SKILL BODY",
+      FAKE_SKILLS.fingerprint,
+      FAKE_RUNNER.socketPath,
+      FAKE_RUNNERS.egress!.socketPath,
+      "/run/runner",
+      "unix:",
+      // R-WEBFETCH(任务卡验收 ⑧):档次名、egress 实例名、任何 IPv4 / IPv6 字面量都不该出现在目录里
+      "egress",
+      "skill-runner",
+    ]) {
       expect(text).not.toContain(value);
     }
+    expect(text).not.toMatch(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
+    expect(text).not.toMatch(/\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{1,4}\b/i);
     // 「256 KiB 截断」是代码常量、与 8000 一样印在面板上,不在这个清单里;这里挡的是配置值与库级上下界
     for (const n of [FAKE_SANDBOX.dailyRunLimit, FAKE_SANDBOX.totalTimeoutMs, 30000, 5000, 120000]) {
       expect(text).not.toMatch(new RegExp(`\\b${n}\\b`));
@@ -291,7 +310,7 @@ describe("八个工具齐、分四组、每条有输出形态(验收 #6;R-IMAGEG
     expect(load.group).toBe("pure");
     expect(run.group).toBe("sandbox");
     expect(modelVisible(load)).toEqual(modelVisible(makeSkillLoadTool(FAKE_SKILLS)));
-    expect(modelVisible(run)).toEqual(modelVisible(makeSkillRunTool(FAKE_SKILLS, FAKE_SANDBOX, FAKE_RUNNER)));
+    expect(modelVisible(run)).toEqual(modelVisible(makeSkillRunTool(FAKE_SKILLS, FAKE_SANDBOX, FAKE_RUNNERS)));
     expect(Object.keys(load.parameters.properties)).toEqual(["name"]);
     expect(Object.keys(run.parameters.properties)).toEqual(["skill", "script", "input"]);
     for (const key of ["available", "configured", "enabled", "disabled", "status", "skills"]) {

@@ -20,7 +20,7 @@
    **兜底仍在能力**:脚本在独立容器里跑,那个容器**默认没有任何网络**(声明了出网档次的 skill 跑在另一个只出公网的实例里,见第 7 条)、根文件系统只读、每次运行是一次性的进程与工作目录、
    受 rlimit 与超时约束;脚本的**内容**只能来自代码(镜像层 + sha256 核对),模型给的只有一个受 schema 约束的 JSON 输入。
    「让 agent 写一段代码去跑」这句话在工具的词汇表里不存在
-7. **SSRF,经沙箱出网**(R-WEBFETCH 补,2026-09-03;所有者裁定,待实现)——访客(经模型)给一个 URL,让 egress 执行容器里的 `web-fetch` skill 去抓。
+7. **SSRF,经沙箱出网**(R-WEBFETCH 补,2026-09-03 所有者裁定,2026-09-04 落地)——访客(经模型)给一个 URL,让 egress 执行容器里的 `web-fetch` skill 去抓。
    目标可以是 `127.0.0.1` / `10.x` / `172.16–31.x` / `192.168.x` / `169.254.169.254`(云元数据;腾讯云是 `169.254.0.23`)/ `100.64.0.0/10` /
    IPv6 的 `::1` `fc00::/7` `fe80::/10` `::ffff:a.b.c.d`;变体:域名解析到内网、DNS rebinding(校验时回公网、连接时回内网)、重定向到内网、
    `http://` 降级、非 443 端口扫描、`user:pass@host` 形态。**兜底在三层而不在字符串**:脚本自己解析、逐地址校验、钉住地址去连(每跳重来);
@@ -158,7 +158,8 @@ R-SKILLS-2 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日�
 注入扩展 `xray-skills` 在 `before_agent_start` 追加 `<available_skills>` 目录。两者都**不得 `registerCommand`**
 (pi 会把访客以 `/` 开头的输入当命令分发)。
 
-R-WEBFETCH 补记(2026-09-03,所有者裁定;规则 9「先改文档」——**待实现,以下是约束不是现状**;方案与十条裁定见 `rounds/round-webfetch/round-webfetch.md`):
+R-WEBFETCH 补记(2026-09-03 所有者裁定,规则 9「先改文档」;**2026-09-04 落地**,以下既是约束也是现状 —— 落点:`runner/skills/web-fetch/scripts/fetch.py`(七点全部在脚本里,文件头逐条对应)、
+`deploy/docker-compose.yml` 的 `skill-runner-egress` 与 `egress` 网络、`deploy/egress-filter.sh`、`apps/api/agent/skill-runner.ts` 的两档 `RunnerTargets`;方案与十条裁定见 `rounds/round-webfetch/round-webfetch.md`):
 
 - **沙箱执行组的 egress 档**:一个 skill 在 `xray.json` 里声明 `network: egress`(缺省 `none`),就只会被路由到 `skill-runner-egress` 实例;
   首个成员是 `web-fetch`(访客给公网 `https://` 网址,脚本抓取并抽正文为 markdown)。它**不是**新工具、不是新分组:入口仍是 `skill_run`,
@@ -177,6 +178,10 @@ R-WEBFETCH 补记(2026-09-03,所有者裁定;规则 9「先改文档」——**�
 - **资源上界的落点变了**:预研里防解析器超线性的 Worker 线程与元素 / 深度计数,在容器形态下由 `mem_limit` + 子进程 rlimit + 超时 kill 进程组承担,
   最坏情况是「这一次运行失败」而不是「api 进程停」;字节上界仍必须(它同时卡内存与时长)。元素 / 深度计数改为按 Python 侧实测决定
 - 限额与超时**复用** `sandbox_config` / `daily_quota.skill_runs`,不另起一套;`skills_agent_set web-fetch false` 即单独下线
+- **落地时的两处补充**(2026-09-04):①嵌套 v4 的几种 v6 形态(v4-mapped / 6to4 / Teredo / NAT64)**整段拒**、不再往里判嵌的 v4 —— 比裁定的
+  「嵌的 v4 再判一遍」更严、少一处判错的代码,公网网站不会只以这些形态可达;②失败短码怎么到模型跟前:`skill_run` 在非零退出时,stdout **恰好只有一个**
+  `E_` 短码才把它附在固定文案后(`tools.ts` 的 `failureShortCode`,闭集正则),别的 stdout 一个字都进不了失败文案 —— 任务卡 §2.3 第 10 步预留的
+  两种接缝里选了这一种,对既有 skill 零行为变化
 
 ### 第 2 层 · 数据面只读
 
@@ -222,16 +227,16 @@ R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日落�
 - **执行容器 `skill-runner`**(R-SKILLS-2,2026-09-03 裁定并落地;`deploy/docker-compose.yml` + `runner/Dockerfile`)比 api 再收紧三处:`network_mode: none`(不在任何 docker 网络里;api 经命名卷里的
   unix socket 调它)、`tmpfs /run/work` 为 `noexec,nosuid,nodev` 且有容量上限、`cpus` 限 1。其余同 api:非 root(与 api 同 uid,socket 才能共用)、
   `read_only`、`cap_drop ALL`、`no-new-privileges`、`mem_limit 384m`、`pids_limit 64`;子进程另叠 rlimit。它的 Python 基座与依赖按 digest / hash 钉(§7)
-- **egress 实例 `skill-runner-egress`**(R-WEBFETCH,2026-09-03 裁定,待实现):同一镜像、同一套收紧项,只有网络不同 —— `networks: [egress]`,
-  一个**只有它一个成员**的 bridge 网络(固定网段,给宿主过滤规则用),不在 `front` / `back`;docker 内嵌 DNS 只解析同网络的容器名,
-  `api` / `postgres` 对它不存在。`mem_limit 256m`、并发 1。它能到的是公网 443 与宿主上绑定 `0.0.0.0` 的端口(也就是本站自己);
-  云元数据与宿主的私网邻居靠脚本的地址段校验 + 宿主 `DOCKER-USER` 规则(§5)两道挡
+- **egress 实例 `skill-runner-egress`**(R-WEBFETCH,2026-09-03 裁定、2026-09-04 落地):同一镜像、同一套收紧项,只有网络不同 —— `networks: [egress]`,
+  一个**只有它一个成员**的 bridge 网络(固定网段 `172.30.0.0/24`,给宿主过滤规则用),不在 `front` / `back`;docker 内嵌 DNS 只解析同网络的容器名,
+  `api` / `postgres` 对它不存在。`mem_limit 256m`、并发 1(`RUNNER_CONCURRENCY=1`,runner.py 的信号量大小;默认实例不设、仍是 2)。
+  它能到的是公网 443 与宿主上绑定 `0.0.0.0` 的端口(也就是本站自己);云元数据与宿主的私网邻居靠脚本的地址段校验 + 宿主 `DOCKER-USER` 规则(§5)两道挡
 
 ### 第 4 层 · 出网管控
 
 - 外呼型工具(LLM / 生图 / 搜索)的 API key 全部服务端持有,目标域白名单
 - 每日 token + 费用计数(`daily_quota`),超限拒绝新会话;单会话 turn 上限
-- 用户无法借工具把服务器变成**任意**代理。R-WEBFETCH(2026-09-03 裁定,待实现)的 egress 档 skill 是一个**受限**取页器
+- 用户无法借工具把服务器变成**任意**代理。R-WEBFETCH(2026-09-03 裁定,2026-09-04 落地)的 egress 档 skill 是一个**受限**取页器
   (只 GET 公网 https 页面、固定头、无凭据、限额、UA 表明身份),边界见 §1 R-WEBFETCH 补记
 - **沙箱执行也计日限额**(R-SKILLS-2,已落地:`agent/quota.ts` 的 `reserveSkillRun`):`daily_quota.skill_runs`,上限 `sandbox_config.daily_run_limit`(0 = 不限),与 `searches` / `images`
   同样各计各的、不合列;超限时工具抛固定文案(计为一次失败的工具调用),不拒整轮对话
@@ -342,9 +347,11 @@ R-SKILLS 补记(2026-09-03,所有者裁定;规则 9「先改文档」,同日落�
 - 备案期间云厂商封 80/443 → 用 IP + 非标端口自测,备案通过后再绑域名
 - **生产 80 不给任何响应**(所有者要求 2026-09-02,`deploy/Caddyfile` 全局 `auto_https disable_redirects`,连 80→443 的跳转都没有)。由此 **ACME 只剩 TLS-ALPN-01 一条通道,443 从「站点入口」变成「证书续期的唯一命脉」** —— 443 长时间不可达不只是站点打不开,而是证书也续不了。应急:临时注掉那行 + `caddy reload` 让 HTTP-01 顶上
 - **境内直连 Anthropic/OpenAI API 不通或不稳** → LLM 出口配置海外中转端点(自备官方 key),中转地址作为 secrets 管理
-- **宿主 `DOCKER-USER` 出网过滤**(R-WEBFETCH,2026-09-03 裁定,待实现):对 egress 网络的固定网段,丢弃目的为 `10/8` / `172.16/12` / `192.168/16` /
-  `169.254/16` / `100.64/10` / `127/8` 的包(`deploy/egress-filter.sh`,幂等;进上线检查单)。它是「脚本有 bug ≠ 内网可达」的那一道,
-  不替代脚本自己的地址段校验
+- **宿主 `DOCKER-USER` 出网过滤**(R-WEBFETCH,2026-09-03 裁定,2026-09-04 落地):对 egress 网络的固定网段,丢弃目的为 `10/8` / `172.16/12` / `192.168/16` /
+  `169.254/16` / `100.64/10` / `127/8` 的包(`deploy/egress-filter.sh`,幂等,每条先 `-C` 再 `-I`;进上线检查单)。它是「脚本有 bug ≠ 内网可达」的那一道,
+  不替代脚本自己的地址段校验。**iptables 规则不持久**:`--install-unit` 把脚本复制到 `/usr/local/sbin`(root 所有,不能让 root 开机执行 deploy
+  用户可写的文件)并装一个 `After=docker.service` 的 systemd oneshot,重启后自动重放;`--status` 查六条是否齐全(退出码即判据)。只管 IPv4:
+  egress 网络没开 IPv6,容器里没有全局 v6 地址
 
 ### 5.1 HTTP 安全响应头(R11,所有者裁定 2026-09-02)
 
@@ -490,6 +497,7 @@ R-VISITOR 落地补记(2026-09-01,`apps/api/agent/visitor.ts` + `shared/visitor-
 - lockfile 固定版本;`npm audit` 进 CI;Dependabot 开启
 - pi 依赖体量大(~130MB),部署镜像分层缓存,升级前先在本地过一遍事件兼容性
 - **执行容器的供应链**(R-SKILLS-2,已落地:`runner/Dockerfile`):基座 `python:3.12-slim` 按 **digest** 钉;`runner/requirements.txt` 用 `pip install --require-hashes` 锁定,
-  装完把 pip / setuptools 从 venv 里删掉(运行期没有网络也没有写权限,留着只是攻击面);执行容器自身零第三方依赖(`runner.py` 只用标准库);R-WEBFETCH 起 `requirements.txt` 不再为空(抽取库 `trafilatura`,exact + hash,
-  可选依赖不装;只用它的 `extract`,不用它自带的下载器)。**可运行脚本是仓库里的代码**,与其它代码一样走轮次 + codex 审查,审阅口径是
+  装完把 pip / setuptools 从 venv 里删掉(运行期没有网络也没有写权限,留着只是攻击面);执行容器自身零第三方依赖(`runner.py` 只用标准库);R-WEBFETCH 起 `requirements.txt` 不再为空(抽取库 `trafilatura` 2.2.0 **及其全部传递依赖**,
+  `pip-compile --generate-hashes` 出的清单、每行 exact + hash,可选依赖不装;只用它的 `bare_extraction`,不用它自带的下载器)。构建时的
+  `PIP_INDEX_URL` build-arg 只是**下载来源**(本机直连 PyPI 慢时指向镜像站):每个包仍按清单里的 sha256 核对,来源给错包只会让构建失败。**可运行脚本是仓库里的代码**,与其它代码一样走轮次 + codex 审查,审阅口径是
   `rounds/round-skills/research.md` §2.2 的准入清单(stdin JSON → stdout;无 `subprocess` / `socket` / `eval`;不写 cwd 之外;确定性;有 schema)

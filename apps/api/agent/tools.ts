@@ -54,12 +54,13 @@ import { reserveImage, reserveSearch, reserveSkillRun } from "./quota";
 import { queryAsAgentRo } from "./ro-db";
 import { loadSandboxConfig, type SandboxConfig } from "./sandbox-config";
 import {
-  DEFAULT_RUNNER_URL,
-  resolveRunnerTarget,
-  RUNNER_URL_ENV,
+  DEFAULT_RUNNER_URLS,
+  resolveRunnerTargets,
+  runnableNetworks,
+  RUNNER_URL_ENVS,
   runSkillScript,
   SkillRunError,
-  type RunnerTarget,
+  type RunnerTargets,
   type SkillRunPhase,
 } from "./skill-runner";
 import {
@@ -926,6 +927,18 @@ const RUN_QUEUE_TEXT = "执行容器忙,排队超时;请稍后再试一次,或�
 const RUN_UNAVAILABLE_TEXT = "执行容器当前不可用,本轮无法运行脚本;请基于已有知识回答,并说明这一点。";
 const RUN_FAILURE_TEXT = "脚本运行失败(非零退出),本轮没有拿到结果;请检查 input 是否符合说明,或基于已有知识回答并说明这一点。";
 
+/**
+ * 非零退出时 stdout 若**只有一个** `E_` 开头的短码,把它附在固定文案后面(R-WEBFETCH:`web-fetch` 的六个短码
+ * E_BAD_URL / E_UNFETCHABLE / … 就是这样到模型跟前的;含义写在该 skill 的 SKILL.md 里)。
+ * 判据刻意收得很窄:整段 stdout 去掉首尾空白后必须恰好是一个短码 —— 脚本 stdout 里任何别的东西(traceback、
+ * 半截 JSON、一句话)都进不了失败文案,失败文案仍然是写死的那一句加一个闭集里的标记。
+ */
+const FAILURE_SHORT_CODE_RE = /^E_[A-Z][A-Z0-9_]{1,30}$/;
+export function failureShortCode(stdout: string): string | null {
+  const m = FAILURE_SHORT_CODE_RE.exec(stdout.trim());
+  return m ? m[0] : null;
+}
+
 /** 阶段 → 面板文案,按上报顺序(设计稿 1g 的 PROGRESS 段)。前一段是工具自己的校验,后三段来自 skill-runner.ts。 */
 const SKILL_RUN_PHASE_LABELS: Readonly<Record<"validated" | SkillRunPhase, string>> = {
   validated: "校验",
@@ -973,7 +986,9 @@ export const SKILL_RUN_META: ToolMeta = {
   },
   // 与 execute 里拼结果文本的格式一致
   output: "首行 `exit=<退出码> · <耗时>`,其后是脚本的 stdout(通常是 JSON);exit 0 时另附 stderr 尾部",
-  outputNote: "stdout / stderr 在执行容器里各按 256 KiB 截断,正文再按统一上限截断;超时 / 非零退出 / 排队超时以固定文案失败",
+  outputNote:
+    "stdout / stderr 在执行容器里各按 256 KiB 截断,正文再按统一上限截断;超时 / 非零退出 / 排队超时以固定文案失败" +
+    "(非零退出时若 stdout 只有一个 E_ 开头的短码,短码附在文案后,含义见该 skill 的说明)",
   phases: Object.values(SKILL_RUN_PHASE_LABELS),
 };
 
@@ -982,11 +997,13 @@ export const SKILL_RUN_META: ToolMeta = {
  * 工具体做三件事 —— 校验(skill ∈ 可用集合 ∧ script ∈ 其 xray.json ∧ input 过 schema)、占额、经 `runSkillScript`
  * 把「哪个 skill、哪个脚本(带清单里的 sha256)、什么入参」送给执行容器。**api 进程不 spawn 任何东西。**
  *
- * `skills` / `sandbox` / `runner` 三者都在注册环节取好、定格在闭包里(与 web_search 的配置定格同一语义);
- * 任一变化 → 指纹变 → 会话下一轮重建。socket 路径只活在 `runner` 里:不进日志、不进事件流、不进任何返回值。
+ * `skills` / `sandbox` / `runners` 三者都在注册环节取好、定格在闭包里(与 web_search 的配置定格同一语义);
+ * 任一变化 → 指纹变 → 会话下一轮重建。socket 路径只活在 `runners` 里:不进日志、不进事件流、不进任何返回值。
+ * `runners` 每档一个(R-WEBFETCH):按该 skill 清单里的 `network` 选实例 —— none 档去无网络的 `skill-runner`,
+ * egress 档去只出公网的 `skill-runner-egress`;可用集合已按「有运行器的档次」过滤过,这里再兜一次底。
  * 导出只为 catalog.test.ts 能拿一份「按真实路径构造出来的定义」与目录逐字段比对。
  */
-export function makeSkillRunTool(skills: AvailableSkills, sandbox: SandboxConfig, runner: RunnerTarget): MetaToolDefinition {
+export function makeSkillRunTool(skills: AvailableSkills, sandbox: SandboxConfig, runners: RunnerTargets): MetaToolDefinition {
   return {
     ...SKILL_RUN_META,
     async execute(_toolCallId, params, signal, onUpdate) {
@@ -1013,6 +1030,14 @@ export function makeSkillRunTool(skills: AvailableSkills, sandbox: SandboxConfig
           report("validated", `${skill.name}/${script.file} 入参已通过校验`);
 
           // 【先占额,再提交】docs/security.md §1 第 4 层。占不到就明确告诉模型「今天不能跑了」
+          // 按档次选运行器。可用集合在注册环节已按 runnableNetworks 过滤,这里为 null 只可能是集合与运行器
+          // 被分别构造(测试)—— 与「容器被 stop」同一文案,不占额
+          const runner = runners[skill.network];
+          if (!runner) {
+            console.warn(`tool skill_run denied: no runner for network tier ${skill.network} (${skill.name})`);
+            throw new ToolRefusal(RUN_UNAVAILABLE_TEXT);
+          }
+
           if (!(await reserveSkillRun(sandbox.dailyRunLimit))) {
             console.warn(`tool skill_run denied: daily run limit reached (limit=${sandbox.dailyRunLimit})`);
             throw new ToolRefusal(RUN_QUOTA_TEXT);
@@ -1062,11 +1087,13 @@ export function makeSkillRunTool(skills: AvailableSkills, sandbox: SandboxConfig
             throw new ToolRefusal(RUN_TIMEOUT_TEXT);
           }
           if (outcome.exitCode !== 0) {
-            // 非零退出的 stderr 里常是 traceback(含容器内路径):只进服务端日志,不进模型与事件流
+            // 非零退出的 stderr 里常是 traceback(含容器内路径):只进服务端日志,不进模型与事件流。
+            // stdout 恰好是一个 E_ 短码时附在文案后(failureShortCode 的判据),别的 stdout 一律不进来
+            const code = failureShortCode(outcome.stdout);
             console.warn(
-              `tool skill_run non-zero exit: ${skill.name}/${script.file} exit=${outcome.exitCode} stderr=${safeErrorText(outcome.stderr.slice(-300))}`,
+              `tool skill_run non-zero exit: ${skill.name}/${script.file} exit=${outcome.exitCode}${code ? ` code=${code}` : ""} stderr=${safeErrorText(outcome.stderr.slice(-300))}`,
             );
-            throw new ToolRefusal(RUN_FAILURE_TEXT);
+            throw new ToolRefusal(code ? `${RUN_FAILURE_TEXT}(${code})` : RUN_FAILURE_TEXT);
           }
 
           const head = `exit=${outcome.exitCode} · ${outcome.durationMs}ms${outcome.stdoutTruncated ? " · stdout 已在容器内截断" : ""}`;
@@ -1343,15 +1370,23 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
   const skillRunRow = rows.find((r) => r.name === SKILL_RUN_TOOL);
   const skillLoadGated = !!skillLoadRow && !(isDangerous(skillLoadRow) && !unlocked);
   const skillRunGated = !!skillRunRow && !(isDangerous(skillRunRow) && !unlocked);
-  const skills = skillLoadGated || skillRunGated ? await loadAgentSkills() : emptySkills();
+  // 【两档运行器,按 skill 清单里的 network 路由】(R-WEBFETCH)none 档地址不合法 → skill_run 整个不注册(下面的循环);
+  // none 档合法而 egress 档不合法 → skill_run 照常注册,只是 egress 档的 skill 不进可用集合(loadAgentSkills 按
+  // runnable 过滤并记原因)。skill_run 没开时不按档次过滤:只有 skill_load 的会话读 SKILL.md 不需要运行器。
+  const runners = skillRunGated ? resolveRunnerTargets(process.env) : null;
+  const runnable = runners?.none ? runnableNetworks(runners) : undefined;
+  const skills = skillLoadGated || skillRunGated ? await loadAgentSkills(runnable) : emptySkills();
   const sandbox = skillRunGated ? await loadSandboxConfig() : null;
-  const runner = skillRunGated ? resolveRunnerTarget(process.env[RUNNER_URL_ENV]) : null;
   const runnableSkills = skills.skills.filter((s) => s.scripts.length > 0);
 
   const names: string[] = [];
   const definitions: ToolDefinition[] = [];
   const sessionScoped: string[] = [];
   const dropped: string[] = [...skills.dropped];
+  if (runners?.none && !runners.egress) {
+    // 值本身不进日志(那可能是一段随便什么东西);哪一档、哪个变量说清楚就够
+    dropped.push(`egress 档运行器(${RUNNER_URL_ENVS.egress} 不合法:只接受 ${DEFAULT_RUNNER_URLS.egress} 或 http://127.0.0.1:<port>)`);
+  }
   for (const row of rows) {
     const isWebSearch = row.name === WEB_SEARCH_TOOL_NAME;
     const isImageGen = row.name === GENERATE_IMAGE_TOOL;
@@ -1388,9 +1423,9 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
         dropped.push(`${row.name}(读不到 sandbox_config)`);
         continue;
       }
-      if (!runner) {
+      if (!runners?.none) {
         // env 里写了闭集之外的地址:不注册,并把它说出来(值本身不进日志 —— 那可能是一段随便什么东西)
-        dropped.push(`${row.name}(${RUNNER_URL_ENV} 不合法:只接受 ${DEFAULT_RUNNER_URL} 或 http://127.0.0.1:<port>)`);
+        dropped.push(`${row.name}(${RUNNER_URL_ENVS.none} 不合法:只接受 ${DEFAULT_RUNNER_URLS.none} 或 http://127.0.0.1:<port>)`);
         continue;
       }
       if (runnableSkills.length === 0) {
@@ -1398,7 +1433,7 @@ export async function loadEnabledTools(): Promise<EnabledTools> {
         continue;
       }
       names.push(row.name);
-      definitions.push(makeSkillRunTool(skills, sandbox, runner));
+      definitions.push(makeSkillRunTool(skills, sandbox, runners));
       continue;
     }
     if (isWebSearch) {

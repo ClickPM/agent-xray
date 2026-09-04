@@ -37,6 +37,17 @@
         "json_pretty.py": "9923083dc1e24bc52fed4d915feccc93447bd49dcfdc48ee22ad3250709ef5af",
         "wordfreq.py": "52bf4700f54ee8a9942218bdd04fe74ed6c4f596c7b1aa0189a98ecb31e39ef3"
       }
+    },
+    "web-fetch": {
+      "network": "egress",
+      "files": {
+        "SKILL.md": "9776f60d1161c615e9354510d0f4539a051904517a3f3ed6b97f7d89b3243689",
+        "scripts/fetch.py": "3b22b6a4a76655e2347ac5aec627498b42874b11d27099b85877aa112317f236",
+        "xray.json": "e07b84358e9bdbc9dc7777c5d6e23308cd5f95cff4f95a8003a29eb1322a9344"
+      },
+      "scripts": {
+        "fetch.py": "3b22b6a4a76655e2347ac5aec627498b42874b11d27099b85877aa112317f236"
+      }
     }
   }
 }

@@ -75,7 +75,7 @@
 ## 禁止
 
 - 不改前端页面样式(规则 7)。本轮**连组件都不碰**:搜索流程走既有的 34 事件通路进视图
-- 不加设计稿没有的功能:不做 Perplexity、不做「抓指定网址」、不做搜索结果缓存表
+- 不加设计稿没有的功能:不做 Perplexity、不做「抓指定网址」(2026-09-03 起「读访客指定网址」由 R-WEBFETCH 以沙箱执行组 egress 档的 skill `web-fetch` 承担,不在 api 进程内、不经本工具;本条对 `web_search` 一字不改)、不做搜索结果缓存表
 - **不给工具任何形式的 URL / host / header 入参**——那是 SSRF,不是搜索
 - 不把 websearch 的 token 折进 `daily_quota.tokens`(那是聊天 provider 的账)
 - 不在工具体内读 `process.env` / 读库 / 解密

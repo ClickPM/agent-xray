@@ -146,9 +146,11 @@ services:
       # 关掉只需 `tool_config_set skill_run false`(不用动这里);要回到「注册表里没有 dangerous 实现」的状态
       # 才把这一行去掉并重建 api。
       - XRAY_UNLOCK_DANGEROUS_TOOLS=${XRAY_UNLOCK_DANGEROUS_TOOLS:-}
-      # 执行容器地址**不在这里配**:api 走命名卷 runner_sock 里的 unix socket(代码默认值 unix:/run/runner/runner.sock),
-      # `XRAY_SKILL_RUNNER_URL` 是本机开发专用的 TCP 覆盖项(代码级闭集,只认 http://127.0.0.1:<port>),生产不设。
-      # 需要新增变量时,先在 infra-config.json 的 secrets 段增声明再在此处补。
+      # 执行容器地址**不在这里配**:api 走命名卷里的 unix socket,每档一条(代码默认值):
+      #   none 档   runner_sock        → unix:/run/runner/runner.sock          (skill-runner,无网络)
+      #   egress 档 runner_egress_sock → unix:/run/runner-egress/runner.sock   (skill-runner-egress,只出公网;R-WEBFETCH)
+      # `XRAY_SKILL_RUNNER_URL` / `XRAY_SKILL_RUNNER_EGRESS_URL` 是本机开发专用的 TCP 覆盖项(代码级闭集,只认
+      # http://127.0.0.1:<port>),生产不设。需要新增变量时,先在 infra-config.json 的 secrets 段增声明再在此处补。
       #
       # 联网搜索的目标域白名单**追加**项(R-WEBSEARCH),默认空。
       # 内置白名单在代码里(shared/websearch-hosts.ts),这个变量只能加不能减 ——
@@ -166,12 +168,17 @@ services:
       # 两个容器同 uid 10001,socket 0660。api 这边只读挂载没有意义(连接 socket 不需要写目录),
       # 但也不需要写:目录里只会有 runner 创建的那一个 socket 文件。
       - runner_sock:/run/runner
+      # 第二条 socket(R-WEBFETCH):egress 实例的。api 按 skill 清单里的 network 档次选用哪一条
+      - runner_egress_sock:/run/runner-egress
     depends_on:
       postgres:
         condition: service_healthy
       # 只保证启动顺序(socket 目录先由 runner 建好),**不是**硬依赖:
       # `docker compose stop skill-runner` 之后 api 照常服务,skill_run 以固定文案失败(止损路径)。
       skill-runner:
+        condition: service_started
+      # 同上:`docker compose stop skill-runner-egress` 之后只有 egress 档的 skill(web-fetch)以固定文案失败,其余照常
+      skill-runner-egress:
         condition: service_started
     # 必须 ≥ infra-config.json 的 graceful_shutdown.total(30s)+ 余量,
     # 否则 SSE 长连接会被 SIGKILL 硬断而不是走优雅关闭
@@ -183,8 +190,8 @@ services:
     image: ${IMAGE_REGISTRY:-local}/xray-runner:${IMAGE_TAG:?IMAGE_TAG 必须显式指定(git SHA),禁止 latest}
     restart: unless-stopped
     # 【硬约束】没有任何网络 —— 连 DNS 都没有,因而也回打不了 api / postgres(共网方案的硬伤,research.md §2.4)。
-    # api 经上面那个命名卷里的 unix socket 单向找它,反向无通道。R-WEBFETCH 的 egress 实例是**另一个** service,
-    # 这一行对它不适用;本实例的 network_mode: none 一字不改。
+    # api 经上面那个命名卷里的 unix socket 单向找它,反向无通道。R-WEBFETCH 的 egress 实例是下面**另一个** service
+    # (skill-runner-egress),这一行对它不适用;本实例的 network_mode: none 一字不改。
     network_mode: none
     # 【必须】docker 自带的 tini 当 PID 1:脚本 fork 出来的孙进程被 killpg 之后由它收养并 reap。
     # runner.py 刻意**不**自己 waitpid(-1) —— 并发两次运行时那会把另一次还没 wait 的子进程先收走、退出码丢成 0
@@ -209,6 +216,42 @@ services:
       # egress 实例(R-WEBFETCH)会把它设成 egress 并挂在专用网络上;本实例永远是 none。
       - RUNNER_NETWORK=none
     # 走同一个 socket 的 GET /health;冒烟清单第 1 条「skill-runner healthy」看的就是它
+    healthcheck:
+      test: ["CMD", "/opt/venv/bin/python", "-I", "/opt/runner.py", "--health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  skill-runner-egress:
+    # egress 档执行容器(R-WEBFETCH,所有者裁定 C1 / C7):**同一镜像**的第二个实例,只跑 xray.json 声明 `network: egress`
+    # 的 skill(首个是 web-fetch:访客给公网 https 网址 → 脚本抓取抽正文)。与上面的 skill-runner 只有四处不同:
+    # 网络(专用 egress 网络而不是 none)、RUNNER_NETWORK、socket 卷、并发 1 + mem_limit 256m。其余收紧项逐字相同。
+    image: ${IMAGE_REGISTRY:-local}/xray-runner:${IMAGE_TAG:?IMAGE_TAG 必须显式指定(git SHA),禁止 latest}
+    restart: unless-stopped
+    # 【硬约束】只在 egress 这一个网络里,**不在 front / back**:docker 内嵌 DNS 只解析同网络的容器名,api / postgres /
+    # web / caddy 在它眼里不存在;跨 bridge 的流量被 docker 的 isolation 链挡住。它能到的是公网(经宿主 NAT)与宿主上
+    # 绑定 0.0.0.0 的端口(也就是本站自己);宿主的私网邻居与云元数据由脚本的地址段校验 + 宿主 DOCKER-USER 规则
+    # (deploy/egress-filter.sh)两道挡。
+    networks: [egress]
+    init: true
+    read_only: true
+    tmpfs:
+      - /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001
+    volumes:
+      # 自己的 socket 卷;容器内路径与默认实例相同(镜像 ENV RUNNER_LISTEN 不用改),api 那边挂到 /run/runner-egress
+      - runner_egress_sock:/run/runner
+    user: "10001:10001"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    # 所有者裁定 C7:256m + 并发 1(抓取是 I/O 型且低频;主机预算紧)。子进程 rlimit AS 256 MB 与默认实例相同
+    mem_limit: 256m
+    pids_limit: 64
+    cpus: 1.0
+    environment:
+      - RUNNER_NETWORK=egress
+      - RUNNER_CONCURRENCY=1
     healthcheck:
       test: ["CMD", "/opt/venv/bin/python", "-I", "/opt/runner.py", "--health"]
       interval: 15s
@@ -249,6 +292,15 @@ networks:
   back:
     # 数据库只在内部网段可达:caddy/web 无法直接连 postgres
     internal: true
+  egress:
+    # skill-runner-egress 的专用出网网络(R-WEBFETCH):只有它一个成员,能出公网、不 internal。
+    # **网段固定**,因为宿主的 DOCKER-USER 过滤规则(deploy/egress-filter.sh)按源网段匹配;改这里要连脚本的
+    # EGRESS_SUBNET 一起改。172.30.0.0/24 在 docker 默认地址池(172.17–172.31)之内但由 compose 显式占用,
+    # 后建的自动分配网络会绕开它;若与宿主 VPC 网段重叠(腾讯云轻量默认是 10.x,不重叠)再换。
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 
 volumes:
   caddy_data:
@@ -256,3 +308,5 @@ volumes:
   pg_data:
   # api ↔ skill-runner 的 unix socket 所在(R-SKILLS-2)。只有一个 socket 文件,不持久化任何数据
   runner_sock:
+  # api ↔ skill-runner-egress 的 unix socket 所在(R-WEBFETCH),同上
+  runner_egress_sock:

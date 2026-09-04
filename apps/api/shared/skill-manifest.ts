@@ -7,8 +7,12 @@
 // 【本文件不碰文件系统、不执行任何内容】输入是字符串与哈希,输出是判定。
 import { createHash } from "node:crypto";
 
-/** 出网档次:`none` = 默认实例(network_mode: none);`egress` = R-WEBFETCH 的第二个实例,本轮不接。 */
-export type SkillNetwork = "none" | "egress";
+/**
+ * 出网档次(闭集):`none` = 默认实例 `skill-runner`(network_mode: none);`egress` = R-WEBFETCH 的第二个实例
+ * `skill-runner-egress`(只出公网、不在 front / back)。api 按它选运行器,两个实例各自拒绝不属于自己档次的 skill。
+ */
+export const SKILL_NETWORKS = ["none", "egress"] as const;
+export type SkillNetwork = (typeof SKILL_NETWORKS)[number];
 
 /** 脚本入参 schema 的子集:与 agent/tools.ts 的 ToolParametersSchema 同形,多一个 boolean。 */
 export interface SkillInputParam {

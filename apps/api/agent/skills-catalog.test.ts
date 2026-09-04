@@ -15,7 +15,8 @@ const SKILLS_DIR = resolve(here, "..", "..", "..", "runner", "skills");
 function walk(dir: string, base = dir): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir)) {
-    if (name.startsWith(".")) continue;
+    // 与生成器 / skills-manifest.test.ts 同一跳过规则:本机跑过 python 留下的 __pycache__ 不是 skill 文件
+    if (name.startsWith(".") || name === "__pycache__") continue;
     const full = join(dir, name);
     if (statSync(full).isDirectory()) out.push(...walk(full, base));
     else out.push(relative(base, full).split("\\").join("/"));
@@ -121,6 +122,26 @@ describe("四个条件真值表(验收 ④)", () => {
     await db.rawExec(`UPDATE skills SET agent_enabled = FALSE WHERE name = 'text-tools'`);
     const r3 = await loadAgentSkills();
     expect(r3.skills.map((s) => s.name)).toEqual(["encore-api", "encore-database"]);
+  });
+
+  it("R-WEBFETCH:按档次过滤 —— 不给 runnable 不过滤;给了就丢掉没有运行器那一档的 skill 并记原因", async () => {
+    await seedFromCode("web-fetch", { enabled: true });
+    await seedFromCode("text-tools", { enabled: true });
+    // 不按档次过滤(只有 skill_load 的会话):两个都可用,web-fetch 是 egress 档
+    const all = await loadAgentSkills();
+    expect(all.skills.map((s) => [s.name, s.network])).toEqual([
+      ["text-tools", "none"],
+      ["web-fetch", "egress"],
+    ]);
+    // 只有 none 档运行器:web-fetch 不进集合,dropped 说明档次;指纹随之变化
+    const noneOnly = await loadAgentSkills(new Set(["none"]));
+    expect(noneOnly.skills.map((s) => s.name)).toEqual(["text-tools"]);
+    expect(noneOnly.dropped).toContain("web-fetch(network=egress,本会话没有这一档的运行器)");
+    expect(noneOnly.fingerprint).not.toBe(all.fingerprint);
+    // 两档都有:与不过滤相同
+    const both = await loadAgentSkills(new Set(["none", "egress"]));
+    expect(both.skills.map((s) => s.name)).toEqual(["text-tools", "web-fetch"]);
+    expect(both.fingerprint).toBe(all.fingerprint);
   });
 
   it("库里的 SQL 侧哈希与代码侧的 UTF-8 字节哈希同口径(中文内容也一致)", async () => {

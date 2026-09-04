@@ -4,21 +4,37 @@
 // 规则 9 的三句话在这里的落点:api 进程**不 spawn 任何东西**、不碰文件系统、不做动态 import;
 // 执行发生在独立容器(`runner/runner.py`),这里只把「哪个 skill、哪个脚本、什么入参」送过去、把结果收回来。
 //
-// 【通道只有 unix socket】默认实例 `skill-runner` 是 `network_mode: none`,没有任何网络;api 经命名卷里的
-// socket 单向找它,反向无通道。Bun 的全局 `fetch` 支持 `unix` 选项(spike 留证:任务卡「本轮实测」);
-// 本机开发时 api 跑在 Windows 宿主上拿不到容器里的 socket,所以有一个 TCP 覆盖项 —— 它是**代码级闭集**
-// (`resolveRunnerTarget`):只接受 `unix:` 默认值或 `http://127.0.0.1:<port>`,写别的值 `skill_run` 直接不注册。
+// 【通道只有 unix socket,每个实例一条】默认实例 `skill-runner` 是 `network_mode: none`,没有任何网络;
+// R-WEBFETCH 的 egress 实例 `skill-runner-egress` 只在专用 egress 网络里(不在 front / back)。api 经各自命名卷里的
+// socket 单向找它们,反向无通道;**按清单里 skill 的 `network` 档次选实例**(`RunnerTargets`),送错档次的请求
+// 两边都会拒(这里 `runSkillScript` 先拒一次,runner.py 再按 `RUNNER_NETWORK` 拒一次)。
+// Bun 的全局 `fetch` 支持 `unix` 选项(spike 留证:round-skills-2 任务卡「本轮实测」);
+// 本机开发时 api 跑在 Windows 宿主上拿不到容器里的 socket,所以每档有一个 TCP 覆盖项 —— 它们是**代码级闭集**
+// (`resolveRunnerTarget`):只接受 `unix:` 默认值或 `http://127.0.0.1:<port>`,写别的值这一档就没有运行器
+// (none 档没有 → `skill_run` 不注册;egress 档没有 → 该档 skill 不进可用集合)。
 // 覆盖项只在注册环节读(tools.ts 的 loadEnabledTools),工具体内不读 `process.env`。
 //
 // 【错误在构造处不带容器内路径】socket 路径、超时数字、限额数字都不进错误文案:错误对象会被传递、被别处 catch、
 // 进 `safeErrorText` 日志 —— 而 `/agent/tools` 与 SSE 原始流里「搜不到 socket 路径 / 超时数字」是本轮验收项。
 import { readBodyCapped } from "../shared/http-body";
-import type { SkillNetwork } from "../shared/skill-manifest";
+import { SKILL_NETWORKS, type SkillNetwork } from "../shared/skill-manifest";
 
-/** 生产默认:compose 把命名卷 runner_sock 挂到 api 与 runner 的 /run/runner。 */
-export const DEFAULT_RUNNER_URL = "unix:/run/runner/runner.sock";
-/** 注册环节读的 env 名(只在 tools.ts 的 loadEnabledTools 里读一次)。 */
-export const RUNNER_URL_ENV = "XRAY_SKILL_RUNNER_URL";
+/**
+ * 生产默认,每档一条 socket:compose 把命名卷 `runner_sock` 挂到 api 与 `skill-runner` 的 /run/runner,
+ * 把 `runner_egress_sock` 挂到 `skill-runner-egress` 的 /run/runner 与 api 的 /run/runner-egress(R-WEBFETCH)。
+ */
+export const DEFAULT_RUNNER_URLS: Readonly<Record<SkillNetwork, string>> = {
+  none: "unix:/run/runner/runner.sock",
+  egress: "unix:/run/runner-egress/runner.sock",
+};
+/** 注册环节读的 env 名,每档一个(只在 tools.ts 的 loadEnabledTools 里读一次)。 */
+export const RUNNER_URL_ENVS: Readonly<Record<SkillNetwork, string>> = {
+  none: "XRAY_SKILL_RUNNER_URL",
+  egress: "XRAY_SKILL_RUNNER_EGRESS_URL",
+};
+/** none 档的两个常量保留原名:既有调用点与日志文案都指它 */
+export const DEFAULT_RUNNER_URL = DEFAULT_RUNNER_URLS.none;
+export const RUNNER_URL_ENV = RUNNER_URL_ENVS.none;
 
 /** 执行容器回的响应体上限:stdout / stderr 各 256 KiB 再经 JSON 转义,2 MiB 足够且远小于内存预算。 */
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -32,24 +48,40 @@ export type RunnerTarget =
   | { kind: "tcp"; origin: string; network: SkillNetwork };
 
 /**
- * 运行器地址的**代码级闭集**。
+ * 运行器地址的**代码级闭集**(每档一个)。
  *
- * 只有两种形状能过:`unix:<绝对路径>`(生产默认)与 `http://127.0.0.1:<port>`(本机开发,dev.ps1 runner)。
- * 别的 host(哪怕 `localhost`)、别的 scheme、带路径 / query 的写法一律 `null` —— 这个变量存在的意义是
- * 「让本机能连到 docker run 出来的 runner」,不是「让 api 能被配置成去打任何地址」(docs/security.md §1 第 4 层)。
+ * 只有两种形状能过:`unix:<绝对路径>`(生产默认,缺省值按档次取 `DEFAULT_RUNNER_URLS`)与 `http://127.0.0.1:<port>`
+ * (本机开发,dev.ps1 runner / runner egress)。别的 host(哪怕 `localhost`)、别的 scheme、带路径 / query 的写法一律 `null`
+ * —— 这个变量存在的意义是「让本机能连到 docker run 出来的 runner」,不是「让 api 能被配置成去打任何地址」
+ * (docs/security.md §1 第 4 层)。返回值带 `network`:请求的档次与运行器的档次不等时 `runSkillScript` 不发请求就拒。
  */
-export function resolveRunnerTarget(raw: string | undefined): RunnerTarget | null {
-  const value = (raw ?? "").trim() || DEFAULT_RUNNER_URL;
+export function resolveRunnerTarget(raw: string | undefined, network: SkillNetwork = "none"): RunnerTarget | null {
+  const value = (raw ?? "").trim() || DEFAULT_RUNNER_URLS[network];
   if (value.startsWith("unix:")) {
     const socketPath = value.slice("unix:".length);
     if (!socketPath.startsWith("/") || socketPath.includes("..") || /\s/.test(socketPath)) return null;
-    return { kind: "unix", socketPath, network: "none" };
+    return { kind: "unix", socketPath, network };
   }
   const m = /^http:\/\/127\.0\.0\.1:(\d{1,5})$/.exec(value);
   if (!m) return null;
   const port = Number(m[1]);
   if (port < 1 || port > 65535) return null;
-  return { kind: "tcp", origin: `http://127.0.0.1:${port}`, network: "none" };
+  return { kind: "tcp", origin: `http://127.0.0.1:${port}`, network };
+}
+
+/** 每档一个运行器;`null` = 这一档的地址不合法(env 写了闭集之外的值),该档 skill 本会话不可用。 */
+export type RunnerTargets = Readonly<Record<SkillNetwork, RunnerTarget | null>>;
+
+/** 注册环节一次读完两档的 env(只在 tools.ts 的 loadEnabledTools 里调)。 */
+export function resolveRunnerTargets(env: Readonly<Record<string, string | undefined>>): RunnerTargets {
+  const out = {} as Record<SkillNetwork, RunnerTarget | null>;
+  for (const network of SKILL_NETWORKS) out[network] = resolveRunnerTarget(env[RUNNER_URL_ENVS[network]], network);
+  return out;
+}
+
+/** 有合法运行器的档次集合(`RunnerTargets` → 可用集合的过滤条件)。 */
+export function runnableNetworks(runners: RunnerTargets): ReadonlySet<SkillNetwork> {
+  return new Set(SKILL_NETWORKS.filter((n) => runners[n] !== null));
 }
 
 export interface SkillRunRequest {

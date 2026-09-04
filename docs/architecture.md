@@ -30,9 +30,10 @@ Caddy :443(自动 TLS,单机反代)
                         ├── skill-runner 容器(R-SKILLS-2,已落地):agent 的 `skill_run` 经命名卷里的 unix socket 调它;
                         │     `network_mode: none` / 只读 / 非 root / rlimit;每次运行一次性进程 + tmpfs 工作目录;
                         │     可运行的 skill 与 venv 烧在镜像里(`runner/`),库只管开关与一致性判据
-                        ├── skill-runner-egress 容器(R-WEBFETCH 待实现):同一镜像的第二个实例,只在专用 egress 网络(不在 front / back),
-                        │     只跑 xray.json 声明 network: egress 的 skill(首个 `web-fetch`:访客给公网 https 网址 → 抓取抽正文);
-                        │     SSRF 防线在脚本(逐地址校验 + 钉 IP)与宿主 DOCKER-USER 规则,api 进程不碰 URL / HTML;不维护域名黑白名单
+                        ├── skill-runner-egress 容器(R-WEBFETCH,2026-09-04 落地):同一镜像的第二个实例,只在专用 egress 网络(不在 front / back),
+                        │     只跑 xray.json 声明 network: egress 的 skill(首个 `web-fetch`:访客给公网 https 网址 → 抓取抽正文);api 经第二条
+                        │     unix socket(/run/runner-egress)按清单里的 network 档次路由;SSRF 防线在脚本(逐地址校验 + 钉 IP)与宿主
+                        │     DOCKER-USER 规则(deploy/egress-filter.sh),api 进程不碰 URL / HTML;不维护域名黑白名单
                         └── Postgres(docker-compose 内;单库 agent,迁移由 deploy/migrate.sh 施加)
 ```
 
@@ -52,7 +53,7 @@ Caddy :443(自动 TLS,单机反代)
 | notes 附件 | 存 Postgres,运行期由 api 供图;**镜像内不烧任何 notes 内容** | 2026-08-31 裁定。对外 URL 保持 `/notes/<系列>/<哈希>.webp` 不变(免改写存量正文);API 侧走 `/assets/notes/…`,因为 Encore 路由里 `/notes/:series/:file` 会与 `/notes/series/:slug` 撞车 |
 | Skills 内容 | 与 notes 同形:所有者经 MCP **整包**发布(`SKILL.md` + `scripts/` + `references/` 的文本文件入库 `skill_files`),读面只读、文件一律当文本渲染、zip 写入时打好存库由读面吐;**agent 侧本轮不可读**(新表不授权任何 agent 角色) | 2026-09-03 裁定,R-SKILLS 落地(迁移 `012`,`apps/api/skills/` + mcp 八个 `skills_*` 工具,判据在 `shared/skill-pack.ts`,zip 用 `fflate`);约束见 security.md §1 第 2 层 / §4 的 R-SKILLS 补记;对外 zip URL `/skills/<name>.zip`,API 侧 `/assets/skills/…`(与 notes 配图同一前缀策略) |
 | agent 使用 skills(R-SKILLS-2) | **执行不进 api 进程**:第五个容器 `skill-runner`(Python venv,`network_mode: none`),api 经 unix socket 调它,每次运行一次性进程 + tmpfs 目录;**可执行集合在代码里**(`runner/skills/` → 构建期生成 api 与容器两份同源清单),库里 `skills.agent_enabled` 只开关、且展示副本须与代码副本 sha256 一致才注入;pi 侧 `xray-guard`(`tool_call` 否决)/ `xray-skills`(`before_agent_start` 注入)两个扩展把裁决写进既有 34 事件(派生字段 `handlers`),不新增事件类型 | 2026-09-03 所有者七条裁定,同日落地(spike 留证:两个 `network_mode: none` 容器经命名卷 unix socket,bun 1.4.0 `fetch({unix})` 通;任务卡「本轮实测」);规则 9「一次性沙箱容器」措辞同日改为「独立容器可常驻 + 一次性进程」,理由与残余风险在 security.md §1 第 1 层;研究全文 `rounds/round-skills/research.md`。**生成物落在 `apps/api/shared/`**(不是任务卡写的 `agent/`):mcp 的 `skills_agent_status` 也要同一份清单,两个服务不互相 import |
-| 读访客指定网页(R-WEBFETCH) | **不是新工具,是一个 egress 档 skill**:`runner/skills/web-fetch` 经 `skill_run` 跑在 `skill-runner-egress`(同一 runner 镜像、第二个实例,只出公网)里;`xray.json` 的 `network` 字段决定路由,两个实例各自拒绝不属于自己档次的 skill;**不维护域名黑白名单**,拒的是固定内网地址段;限额与超时复用 R-SKILLS-2 的;零新工具 / 画板 / 迁移 / MCP 工具 / 前端改动 | 2026-09-03 所有者十条裁定(待实现;预研 in-process 形态同日退役);任务卡 `rounds/round-webfetch/round-webfetch.md`;约束 security.md §0 威胁 7–9、§1 R-WEBFETCH 补记 |
+| 读访客指定网页(R-WEBFETCH) | **不是新工具,是一个 egress 档 skill**:`runner/skills/web-fetch` 经 `skill_run` 跑在 `skill-runner-egress`(同一 runner 镜像、第二个实例,只出公网)里;`xray.json` 的 `network` 字段决定路由,两个实例各自拒绝不属于自己档次的 skill;**不维护域名黑白名单**,拒的是固定内网地址段;限额与超时复用 R-SKILLS-2 的;零新工具 / 画板 / 迁移 / MCP 工具 / 前端改动 | 2026-09-03 所有者十条裁定(预研 in-process 形态同日退役),**2026-09-04 落地**(`runner/skills/web-fetch` + compose `skill-runner-egress` / `egress` 网络 / `deploy/egress-filter.sh` + `agent/skill-runner.ts` 两档路由;抽取库 `trafilatura` 及传递依赖全部 hash 钉进 `runner/requirements.txt`);任务卡 `rounds/round-webfetch/round-webfetch.md`;约束 security.md §0 威胁 7–9、§1 R-WEBFETCH 补记 |
 
 ## 事件模式与观测
 

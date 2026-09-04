@@ -68,13 +68,16 @@ describe("清单同源(验收 ③)", () => {
     }
   });
 
-  it("network 字段透传两份清单、缺省 none;本轮只允许 none(egress 由 R-WEBFETCH 接)", () => {
+  it("network 字段透传两份清单、缺省 none;egress 档只有 web-fetch(R-WEBFETCH),且两份清单一致", () => {
     for (const s of AGENT_SKILLS) {
       expect(["none", "egress"]).toContain(s.network);
-      expect(s.network, `${s.name} 声明了 egress,本轮没有对应运行器`).toBe("none");
+      expect(MANIFEST.skills[s.name].network, `${s.name}: manifest.json 的 network`).toBe(s.network);
+      // 新增一个 egress 档 skill = 新增一个能出公网的脚本:必须在这里显式登记(codex 审查按 security.md 第九条约束逐条判)
+      expect(s.network, `${s.name} 声明了 egress,但不在 egress 档登记名单里`).toBe(s.name === "web-fetch" ? "egress" : "none");
     }
     // text-tools 没写 network 也是 none(缺省);xray.json 里显式写了也一样
     expect(AGENT_SKILLS.find((s) => s.name === "encore-api")?.network).toBe("none");
+    expect(AGENT_SKILLS.find((s) => s.name === "web-fetch")?.network).toBe("egress");
   });
 
   it("可运行脚本都有 description 与 additionalProperties:false 的 schema,string 字段都有 maxLength", () => {
