@@ -675,6 +675,22 @@ describe("R-GSEARCH · 正文里抽来源(extractLinkCitations)", () => {
     expect(extractLinkCitations(`见 ${REDIRECT}。`)).toEqual([{ url: REDIRECT, title: "" }]);
   });
 
+  it("URL 里的一层配对括号是 URL 的一部分;落单的 ) 仍是分隔符(codex 首轮 P2)", () => {
+    const wiki = "https://en.wikipedia.org/wiki/Agent_(computing)";
+    // markdown 链接目标含括号:整个 URL 要收全,链接自己的收尾括号不被吃掉
+    expect(extractLinkCitations(`来源:[维基](${wiki})。后文`)).toEqual([{ url: wiki, title: "维基" }]);
+    // 裸 URL 含括号;紧跟的全角逗号是中文正文的分隔符,不是 URL 的一部分
+    expect(extractLinkCitations(`详见 ${wiki},以及`)).toEqual([{ url: wiki, title: "" }]);
+    // 未编码的中文路径要收全(CJK 字母不是终止符),句末的全角句号照样去掉
+    expect(extractLinkCitations("见 https://zh.wikipedia.org/wiki/人工智能。")).toEqual([
+      { url: "https://zh.wikipedia.org/wiki/人工智能", title: "" },
+    ]);
+    // 散文里用括号包住整个链接:断在 ) 前,不把 ) 当 URL 的一部分
+    expect(extractLinkCitations("(见 https://a.example/1)")).toEqual([{ url: "https://a.example/1", title: "" }]);
+    // 只认一层:括号里再出现 ( 时,这组括号整个不算 URL,断在它前面(与 CommonMark 的一层口径一致,嵌套形态极少见)
+    expect(extractLinkCitations("https://b.example/x_(y_(z))")).toEqual([{ url: "https://b.example/x_", title: "" }]);
+  });
+
   it("extractChatText 只认 choices[0].message.content 字符串", () => {
     expect(extractChatText({ choices: [{ message: { content: " 答案 " } }] })).toBe("答案");
     expect(extractChatText({ choices: [{ message: { content: null } }] })).toBe("");

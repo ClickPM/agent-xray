@@ -224,7 +224,15 @@ export function extractChatText(data: unknown): string {
  *
  * 顺序:markdown 链接(带标题)优先,再补裸 URL;同一 URL 只收一次;只收 http(s)(`javascript:` 的"来源"
  * 在前端是一个可点的注入面,与 `extractCitations` 同一条判据);裸 URL 去掉紧贴的句末标点;封顶 MAX_CITATIONS。
- * 两个正则的量词都有界或被字符类锁死,输入本身又被 MAX_ANSWER_CHARS 封顶,不存在回溯爆炸。
+ *
+ * 【括号】(codex 首轮 P2)URL 本身可以含**一层配对括号**(`…/wiki/Agent_(computing)` 是常见形态),
+ * 所以两个正则的 URL 字符集都是「非分隔字符 | 一组 `(…)`」;落单的 `)` 仍是分隔符,markdown 链接的收尾括号
+ * 与散文里 `(见 https://x)` 这种包法都照常断在 `)` 前。与 CommonMark 对链接目标的处理同一口径(只认一层)。
+ * 两个正则的分支互斥(一个字符要么是 `(` 要么不是),输入又被 MAX_ANSWER_CHARS 封顶,不存在回溯爆炸。
+ *
+ * 【全角标点】中文正文里裸 URL 后面常常**不空格**直接接 `,` / `。` / `;`(实测「…(computing),以及」),
+ * 这些字符不会出现在合法 URL 里(会被百分号编码),所以列进裸 URL 的终止集;CJK **字母**不列 —— 模型偶尔会写
+ * 未编码的中文路径(`/wiki/人工智能`),截掉比粘上一个词更糟。
  */
 export function extractLinkCitations(text: string): Citation[] {
   const seen = new Set<string>();
@@ -236,10 +244,10 @@ export function extractLinkCitations(text: string): Citation[] {
     cites.push({ url, title: title === url ? "" : title });
     return cites.length < MAX_CITATIONS;
   };
-  for (const m of text.matchAll(/\[([^\]\n]{0,200})\]\((https?:\/\/[^\s()<>]+)\)/gi)) {
+  for (const m of text.matchAll(/\[([^\]\n]{0,200})\]\((https?:\/\/(?:[^\s()<>]|\([^\s()<>]*\))+)\)/gi)) {
     if (!push(m[2], m[1].trim())) return cites;
   }
-  for (const m of text.matchAll(/https?:\/\/[^\s()<>[\]"'`]+/gi)) {
+  for (const m of text.matchAll(/https?:\/\/(?:[^\s()<>[\]"'`,。;:!?、]|\([^\s()<>]*\))+/gi)) {
     if (!push(m[0].replace(/[.,;:!?。,;:!?]+$/, ""), "")) return cites;
   }
   return cites;

@@ -74,8 +74,15 @@ provider 的 `toolType` 配成 `google_search` 时,请求打 `{baseUrl}/v1/chat/
 
 <!-- 完成后回填。 -->
 
-- 审查方式:codex `/codex:review`(全量 `branch diff against main`)
-- findings 处理:待回填
+- 审查方式:codex `/codex:review`(全量 `branch diff against main`;PowerShell `Start-Process` 脱离启动 + Monitor 盯 `.out`,
+  记忆 `codex-review-detached-launch` 的做法)
+- **第 1 轮**(审 `5715e8a`,约 6 分钟):**1 条 P2** —— `extractLinkCitations` 把 URL 里的括号当分隔符,
+  `…/wiki/Agent_(computing)` 这类来源会被截断成不可用的链接。**采纳**(改判断,不是新机制):两个正则的 URL 字符集改成
+  「非分隔字符 | 一组配对 `(…)`」,只认一层(CommonMark 对链接目标的口径),落单的 `)` 仍是分隔符,markdown 链接的收尾括号与
+  散文里 `(见 https://x)` 的包法都照常断开。补用例时又撞到同一函数的另一处边界:裸 URL 紧跟**全角逗号**会粘上
+  (`…(computing),以及`),一并把全角标点列进裸 URL 的终止集(CJK **字母**不列 —— 模型偶尔写未编码的中文路径,截掉比粘上一个词更糟)。
+  `websearch.test.ts` 59 用例全过。
+- 第 2 轮:待回填
 - 结论:待回填
 
 ## 失败处理
