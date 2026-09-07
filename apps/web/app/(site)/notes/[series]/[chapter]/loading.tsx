@@ -62,7 +62,7 @@ export default function ChapterLoading() {
             <Bar w={240} h={10} />
             <div style={{ flex: 1 }} />
             {/* 移动端这句移到功能条中间(画板 4s),这里不重复 */}
-            <span className="m-hide-narrow"><LoadingNote /></span>
+            <LoadingNote className="m-hide-narrow" />
           </div>
 
           {/* 大标题条:31px 行高对上 2c 的 22px/1.4;omPulseBg 全页只给它一处 */}

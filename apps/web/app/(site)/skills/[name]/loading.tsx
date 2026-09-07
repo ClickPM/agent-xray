@@ -82,7 +82,7 @@ export default function SkillLoading() {
           <Bar w={108} h={10} />
           <div style={{ flex: 1 }} />
           {/* 移动端这句移到功能条中间(画板 4s),这里不重复 */}
-          <span className="m-hide-narrow"><LoadingNote /></span>
+          <LoadingNote className="m-hide-narrow" />
         </div>
 
         {/* 头部 */}
