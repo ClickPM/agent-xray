@@ -303,7 +303,8 @@ R-GSEARCH 落地补记(2026-09-07,`apps/api/agent/websearch.ts` + 迁移 `015`;�
   不经过「模型要工具 → 客户端执行 → 回传」的循环。选哪条线由 `websearch_config.tool_type` **唯一**决定(闭集扩为
   `web_search` / `web_search_YYYY_MM_DD` / `google_search`,库级 CHECK 与 MCP 的 zod 同步收紧),不另加 `apiStyle` 一类的开关:
   A/B 实测 `{type:"web_search"}` 打 chat/completions 会被网关**静默忽略**(HTTP 200、答案停在训练截止期),`/v1/responses`
-  对 gemini 模型同样拿不到 grounding —— 两个字段能拼出的四种组合里只有一种是通的,一个字段就没有非法组合。
+  对 gemini 模型同样拿不到 grounding —— 对 gemini 模型而言,「端点 × 工具声明」能拼出的四种组合里只有一种是通的,
+  一个字段就没有非法组合(Responses + `web_search` 对 OpenAI 系模型照常可用,那是既有的第一条线)。
 - **六条外呼组约束一条不松**:URL / method / headers / model / tools 仍全部来自配置,访客的 `query` 只落进 `messages[0].content`
   一个字段;白名单、`redirect:"manual"`、双计时器、日限额、字节上界、凭据脱敏与 Responses 路径**共用同一段代码**,
   分叉只在「请求体怎么拼」与「事件流怎么读」两处(`chat.completion.chunk` 的 `choices[0].delta.content` 累积正文,顶层 `error` 是失败)。

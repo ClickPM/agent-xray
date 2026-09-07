@@ -22,7 +22,8 @@ provider 的 `toolType` 配成 `google_search` 时,请求打 `{baseUrl}/v1/chat/
 ## 方案(自行裁定,理由写清)
 
 1. **线协议由 `toolType` 唯一决定**(`wireOf`):`google_search` → chat/completions;其余 → Responses。**不加 `apiStyle` 一类的开关**。
-   理由是探针 C / E:两个字段能拼出的四种组合里只有一种通,另外三种要么静默离线要么空正文 —— 一个字段就没有非法组合。
+   理由是探针 C / E:对 gemini 模型,「端点 × 工具声明」能拼出的四种组合里只有一种通,另外三种要么静默离线要么空正文
+   —— 一个字段就没有非法组合(Responses + `web_search` 对 OpenAI 系模型照常可用,那是既有的第一条线)。
    闭集扩一项:迁移 015 改 CHECK,`mcp/tools.ts` 的 zod 同步,两边各有测试钉住。
 2. **分叉只在两处**:拼请求体(`buildSearchRequestBody`)与读事件流(`handleChatEvent`);URL / headers / 白名单 / `redirect:"manual"` /
    双计时器 / 字节上界 / 脱敏 / 日限额与 Responses 线共用同一段代码。访客的 `query` 只落进 `messages[0].content`。

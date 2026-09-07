@@ -6,8 +6,9 @@
 -- `/v1/responses` 的 `tools:[{type:…}]`;哪条线由 websearch.ts 的 `wireOf(toolType)` 决定。
 --
 -- 【为什么不加一列 api_style】A/B 实测:`{type:"web_search"}` 打 chat/completions 会被网关静默忽略
--- (200、答案停在训练截止期),`/v1/responses` 对 gemini 模型也拿不到 grounding。两个字段能拼出的
--- 四种组合里只有一种通 —— 一个字段唯一决定线协议,就没有「配了却静默不生效」的组合。
+-- (200、答案停在训练截止期),`/v1/responses` 对 gemini 模型也拿不到 grounding。对 gemini 模型而言,
+-- 「端点 × 工具声明」能拼出的四种组合里只有一种通 —— 一个字段唯一决定线协议,就没有
+-- 「配了却静默不生效」的组合(Responses + web_search 对 OpenAI 系模型照常可用,那是既有的第一条线)。
 --
 -- CHECK 仍然是**闭集**(迁移 008 的理由原样成立):库里能出现的取值可枚举,mcp/tools.ts 的 zod 与这里同步。
 -- 列级 CHECK 的自动命名是 <表>_<列>_check;测试库从零迁移会验证这个名字。
