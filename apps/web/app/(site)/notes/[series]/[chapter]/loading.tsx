@@ -55,13 +55,14 @@ export default function ChapterLoading() {
             也避免内容到达时才插入一条 44 高的 sticky 栏、把整页顶一下
             (本轮 codex 第 2 轮 P2)。`loading.tsx` 拿不到 params,
             所以回面包屑第一级 /notes(画板点名它是已知层级)。 */}
-        <MobilePageBar backHref="/notes" backLabel="Notes" />
+        <MobilePageBar backHref="/notes" backLabel="Notes" center={<LoadingNote />} />
         <div style={{ minWidth: 0 }}>
           {/* 面包屑:四级都来自数据(分类 / 系列 / 章节),整条骨架 */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 17 }}>
             <Bar w={240} h={10} />
             <div style={{ flex: 1 }} />
-            <LoadingNote />
+            {/* 移动端这句移到功能条中间(画板 4s),这里不重复 */}
+            <span className="m-hide-narrow"><LoadingNote /></span>
           </div>
 
           {/* 大标题条:31px 行高对上 2c 的 22px/1.4;omPulseBg 全页只给它一处 */}

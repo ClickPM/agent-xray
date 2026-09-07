@@ -72,7 +72,7 @@ export default function SkillLoading() {
             加载期必须有返回路径,内容到达时也不会再插入一条 44 高的栏造成跳版
             (本轮 codex 第 2 轮 P2)。`loading.tsx` 拿不到 params,所以只能回
             面包屑第一级 /skills —— 画板点名它是已知层级。 */}
-        <MobilePageBar backHref="/skills" backLabel="Skills" />
+        <MobilePageBar backHref="/skills" backLabel="Skills" center={<LoadingNote />} />
         {/* 面包屑:Skills 是真实链接(层级已知,也是访客改主意时的出口),后两级骨架 */}
         <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6, minHeight: 17 }}>
           <Link href="/skills" style={{ color: "var(--accent)" }}>Skills</Link>
@@ -81,7 +81,8 @@ export default function SkillLoading() {
           <span>/</span>
           <Bar w={108} h={10} />
           <div style={{ flex: 1 }} />
-          <LoadingNote />
+          {/* 移动端这句移到功能条中间(画板 4s),这里不重复 */}
+          <span className="m-hide-narrow"><LoadingNote /></span>
         </div>
 
         {/* 头部 */}
@@ -119,9 +120,13 @@ export default function SkillLoading() {
           {/* chip 条骨架:三枚 32 高胶囊 —— 内容到达后这里就是横滚的文件 chip 条,
               外形一致才不会跳版(画板 4s) */}
           <div className="m-show-narrow m-chips" aria-hidden>
-            <Bar w={90} h={32} radius={16} />
-            <Bar w={132} h={32} radius={16} />
-            <Bar w={108} h={32} radius={16} />
+            {/* ⚠️ 用**百分比**不用像素:三枚固定宽(90+132+108+16 间距 = 346)在 320 视口下
+                超出 288 的内容宽,会把整页顶出横向滚动条 —— 而画板 4s 明写「加载态里
+                没有真实内容,横滚容器留到内容到达后再出现」,不能靠给骨架加横滚兜底。
+                百分比之和 94% + 两道 8px 间距,320 与 430 下都收得住。 */}
+            <Bar w="26%" h={32} radius={16} />
+            <Bar w="38%" h={32} radius={16} />
+            <Bar w="30%" h={32} radius={16} />
           </div>
           <div className="m-hide-narrow">
             <div style={sectionLabel}>FILES</div>
