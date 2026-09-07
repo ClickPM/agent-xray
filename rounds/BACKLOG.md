@@ -364,3 +364,8 @@
       而目录仍写着基名,锚点点了不跳**。修法二选一 —— ①`extractToc` 也跳过引用块内的 `##`(与渲染侧仍不一致,
       但目录与 id 的对应关系不受影响);②渲染侧不给引用块内的 h2 挂 id(改 `rehypeHeadingIds`,判父节点是不是
       `blockquote`)。②更贴近「目录 = 正文骨架」的语义。按「跨轮次发现的问题不当场顺手改」记这里 (2026-09-03)
+- [ ] 提示词加固 **`model_select` 事件的派生字段把 provider / model id / name 送进公开轨迹流**:`agent/events.ts` 的 `EVENT_DERIVED.model_select`
+      经 `summarizeModel` 透出 `{provider, id, name}`,随 `/trace/stream` 推给访客、也落库(前端 detail 卡是否原样渲染未逐一核对,但数据已经出了服务端)。
+      与规则 8 两次裁定(R-TOOLS「provider 与 model 名公开即泄配置面」、R-TOOLCARDS「会话区不显示模型名 / provider 名」)口径相反。
+      2026-09-07 给系统提示加了「不透露底层模型」条款,但这条通道不归提示词管。修法是派生字段只留 `source`、或把 id / name 换成占位
+      (`events.test.ts` 的白名单用例要跟);轨迹面板「像 DevTools」的定位要不要保留这一项属所有者裁定,不当场顺手改 (2026-09-07)
