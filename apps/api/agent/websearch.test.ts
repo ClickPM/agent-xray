@@ -627,6 +627,18 @@ describe("R-GSEARCH · chat.completion.chunk 事件流解析", () => {
     expect((await runWebSearch("q", gcfg(), { fetchImpl: f })).text).toBe("被截断的答案");
   });
 
+  it("流在收尾前被干净关闭(没有 finish_reason 也没有 [DONE])→ upstream_failed,不把半截正文当成功(codex 第 2 轮 P2)", async () => {
+    const f = streamingFetch([chunk("今天是 2026 年"), chunk(" 9 月 7 日,头条一")]);
+    await expect(runWebSearch("q", gcfg(), { fetchImpl: f })).rejects.toMatchObject({
+      kind: "upstream_failed",
+    });
+  });
+
+  it("只发 [DONE] 不发 finish_reason 的网关也算收尾", async () => {
+    const f = streamingFetch([chunk("完整答案"), "data: [DONE]\n\n"]);
+    expect((await runWebSearch("q", gcfg(), { fetchImpl: f })).text).toBe("完整答案");
+  });
+
   it("网关回普通 JSON 时按 choices[0].message.content 解析;顶层 error 是失败", async () => {
     const ok = (async () =>
       new Response(JSON.stringify({ choices: [{ message: { content: "非流式答案 https://a.example/x" } }] }), {
@@ -680,10 +692,27 @@ describe("R-GSEARCH · 正文里抽来源(extractLinkCitations)", () => {
     // markdown 链接目标含括号:整个 URL 要收全,链接自己的收尾括号不被吃掉
     expect(extractLinkCitations(`来源:[维基](${wiki})。后文`)).toEqual([{ url: wiki, title: "维基" }]);
     // 裸 URL 含括号;紧跟的全角逗号是中文正文的分隔符,不是 URL 的一部分
-    expect(extractLinkCitations(`详见 ${wiki},以及`)).toEqual([{ url: wiki, title: "" }]);
+    expect(extractLinkCitations(`详见 ${wiki}，以及`)).toEqual([{ url: wiki, title: "" }]);
     // 未编码的中文路径要收全(CJK 字母不是终止符),句末的全角句号照样去掉
     expect(extractLinkCitations("见 https://zh.wikipedia.org/wiki/人工智能。")).toEqual([
       { url: "https://zh.wikipedia.org/wiki/人工智能", title: "" },
+    ]);
+  });
+
+  it("ASCII 的 ? : , 是 URL 字符,只在末尾当句末标点剥掉(codex 第 2 轮 P2)", () => {
+    // 查询串、端口、参数里的逗号都要收全;全角逗号仍是中文正文的分隔符
+    expect(extractLinkCitations("见 https://news.example/story?id=42&tags=a,b:c，以及 https://h.example:8443/p?q=1.")).toEqual([
+      { url: "https://news.example/story?id=42&tags=a,b:c", title: "" },
+      { url: "https://h.example:8443/p?q=1", title: "" },
+    ]);
+    // 句末的 ASCII 标点(英文正文)照样剥掉,且只剥末尾
+    expect(extractLinkCitations("See https://a.example/x?y=1, then https://b.example/z?")).toEqual([
+      { url: "https://a.example/x?y=1", title: "" },
+      { url: "https://b.example/z", title: "" },
+    ]);
+    // markdown 链接目标里的查询串同样完整
+    expect(extractLinkCitations("[报道](https://c.example/s?id=7&k=v)")).toEqual([
+      { url: "https://c.example/s?id=7&k=v", title: "报道" },
     ]);
     // 散文里用括号包住整个链接:断在 ) 前,不把 ) 当 URL 的一部分
     expect(extractLinkCitations("(见 https://a.example/1)")).toEqual([{ url: "https://a.example/1", title: "" }]);

@@ -247,8 +247,10 @@ export function extractLinkCitations(text: string): Citation[] {
   for (const m of text.matchAll(/\[([^\]\n]{0,200})\]\((https?:\/\/(?:[^\s()<>]|\([^\s()<>]*\))+)\)/gi)) {
     if (!push(m[2], m[1].trim())) return cites;
   }
-  for (const m of text.matchAll(/https?:\/\/(?:[^\s()<>[\]"'`,。;:!?、]|\([^\s()<>]*\))+/gi)) {
-    if (!push(m[0].replace(/[.,;:!?。,;:!?]+$/, ""), "")) return cites;
+  // 终止集里的标点**只有全角**(，。；：！？、):ASCII 的 ? : , 都是合法 URL 字符(查询串 / 端口 / 参数),
+  // 只能在**末尾**当句末标点剥掉(下一行),不能在中间当分隔符(codex 第 2 轮 P2:上一版误把 ASCII 打了进去)
+  for (const m of text.matchAll(/https?:\/\/(?:[^\s()<>[\]"'`\uFF0C\u3002\uFF1B\uFF1A\uFF01\uFF1F\u3001]|\([^\s()<>]*\))+/gi)) {
+    if (!push(m[0].replace(/[.,;:!?\uFF0C\u3002\uFF1B\uFF1A\uFF01\uFF1F\u3001]+$/, ""), "")) return cites;
   }
   return cites;
 }
@@ -422,6 +424,12 @@ export async function runWebSearch(
      * 闭包里的赋值不被追踪,`let x: string | null = null` 会被窄化成 `null`,后面 `x !== "stop"` 就编译不过。
      */
     let chatFinish: string | undefined;
+    /**
+     * google 线收到过收尾信号没有:`finish_reason` 或 `[DONE]` 任一即算(网关实测两个都发;有的只发其一)。
+     * 两个都没见到就是流在收尾前被关掉了 —— 半截正文不能当成功交给模型(codex 第 2 轮 P2)。
+     * 同样不用 `false` 初始化,理由同 `chatFinish`。
+     */
+    let chatTerminal: "finish" | "done" | undefined;
     /** chat/completions 事件流(google 线):`choices[0].delta.content` 累积,顶层 `error` 是失败。 */
     const handleChatEvent = (evt: unknown) => {
       const err = upstreamErrorMessage(evt);
@@ -439,11 +447,17 @@ export async function runWebSearch(
       }
       if (typeof choice?.finish_reason === "string" && choice.finish_reason !== "") {
         chatFinish = choice.finish_reason;
+        chatTerminal = "finish";
       }
     };
 
     const handleEvent = (jsonStr: string) => {
-      if (!jsonStr || jsonStr === "[DONE]") return;
+      if (!jsonStr) return;
+      if (jsonStr === "[DONE]") {
+        // OpenAI 系流的哨兵。responses 线不发它、也不靠它;google 线把它当收尾信号之一
+        chatTerminal ??= "done";
+        return;
+      }
       let evt: { type?: unknown; delta?: unknown; response?: unknown };
       try {
         evt = JSON.parse(jsonStr);
@@ -517,6 +531,12 @@ export async function runWebSearch(
     // 上游的错误文案同样是外部文本,同样过一遍 —— 它进的是错误对象,不只是日志
     if (failed) throw new WebSearchError("upstream_failed", redactUpstream(failed, cfg.apiKey));
     if (wire === "google") {
+      // 流被干净地关掉却没有任何收尾信号 = 半截响应(代理超时 / 上游中途断开都长这样)。
+      // 不能像 responses 线那样回落到累积的 delta:那边的回落是 R-WEBSEARCH 明确测过的取舍,
+      // 这边 chat.completion 协议的收尾信号是稳定的,缺了就是缺了(codex 第 2 轮 P2)。
+      if (chatTerminal === undefined) {
+        throw new WebSearchError("upstream_failed", "事件流在收尾前被关闭(未收到 finish_reason 或 [DONE])");
+      }
       const text = answer.trim();
       // 没正文而 finish_reason 又不是正常收尾(实测有 `malformed_function_call`,还会有 content_filter 一类):
       // 报成上游失败并把原因记进日志。正常收尾却没正文的,交给 finish() 报 empty。
