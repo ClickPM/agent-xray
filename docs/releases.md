@@ -23,7 +23,7 @@
 | 2026-09-04 | `09e7fd2` | 13 → **14** | **R-USAGE**(顶栏统计条的 tokens 与 ctx 接真实数据):迁移 014 给 `sessions` 加 `total_tokens BIGINT`(会话累计,与全站按天的 `daily_quota` 是两个维度)、`/agent/ask` 的 `done` / `error` 收尾帧带 `totalTokens` + `ctxPercent`、`GET /agent/sessions/:id` 回库内累计与实时 ctx(会话不在运行时注册表里就字段缺席、前端显示 `-`);cost 按所有者裁定**固定占位**不接数据。**零 MCP 工具变动(46 不变)、零部署资产变动、零画板**;`apps/api/package.json` 未动(不需要 `npm ci`);前端只换数据源(`demo-data` 的三项硬编码 → `lib/stats-bar.ts` 纯函数投影),样式零改动 | 无(`deploy/` 四件资产零改动,随 `ship` 重传同内容、未 reload caddy;`.env` **只改 `IMAGE_TAG`**,备份 `~/deploy/.env.bak-pre-09e7fd2`) | `2c503d3` | 冒烟:九服务正式端点全部非 404(`/api/agent/tools` 200、`/api/trace/stream` 400、`/api/notes/series` 200、`/api/mcp` 无 token 401、`/api/t` 405、`/api/about` 200、`/api/health` 200、`/api/site/tabs` 200、`/api/skills` 200);`/api/spike/*` 与 `/admin` 404;`/` `/notes` `/skills` `/about` 全 200(**本次 `runtime` 可见,`/` 落在根路径、不再 307**),`/skills/diagram.zip` 回 `application/zip`,`/rss.xml` 200;配图 200 + `ETag` + 复请求 **304**、同形文章页不被图片路由劫走;裸域 **301** 带路径到 www、`http://` 连不上;两容器 `process.versions.bun` = **1.4.0**、真实 node 不存在、`dpkg` 无 nodejs;MCP 三种坏 token 401、认证 GET **405**、`server/discover` 回 `["2026-07-28"]`、`tools/list` **46**;第 19 / 21 条隔离复核(容器随发版重建):none 档出网 `OSError`、路由表只有表头、`/opt/skills` 只读、清单外脚本 `404 unknown_script`、egress 档 `getaddrinfo('postgres')` `gaierror` 且公网可达、`169.254.169.254:80` 被挡;`docker inspect` 六项(`NetworkMode=none` / 只读 / `CapDrop=[ALL]` / `Pids=64` / api 1g·runner 384m·egress 256m)。**R-USAGE 端到端**(两条验收会话验后即删,库内 remaining 0):第 1 轮 `done` 回 `totalTokens:5315 ctxPercent:0.988`、`GET /agent/sessions/:id` 读回 **同一个 5315**(先落库再发帧,F5 不回退);第 2 轮累加到 **8059**、ctx 涨到 1.008,库与帧一致;`/trace/stream` 回放 **25 种事件类型**;两条流原始字节里 `Authorization` / `api-key` / `sk-` / `baseUrl` / `/run/runner` / `unix:` 均 **0** 次。**前端实测**(浏览器真实一轮):顶栏统计条显示 「**5.4k tokens · - · ● ctx 1% · 76 events**」,F5 后重开会话数字不回退 |
 | 2026-09-07 | `d59407a` | 14 → **15** | **R-GSEARCH**(`web_search` 的第二条线协议:provider 的 `toolType=google_search` 时打 `/v1/chat/completions` + `tools:[{google_search:{}}]`,检索与综述由 Google 后端在服务端完成,来源从正文的 markdown 链接抽;迁移 015 只做两件事 —— `tool_type` 的 CHECK 闭集扩一项、改 `tool_config.web_search` 的 note,旧值仍合法故后向兼容)+ **agent 系统提示词加固**(`40c246d`:身份保密 / 指令只来自系统提示 / 内容边界三条通用条款,**工具全关的会话也送达** —— 原先零工具时提示词只有「没有任何可用工具」一句,没有任何注入防御)+ `.gitignore` 补 `.codex/` 与 `.venv/`(`d59407a` 本身;不补则 `dev.ps1 build` 判工作区脏、拒绝构建)。**零 MCP 工具变动(46 不变)、零部署资产变动、零前端改动、零画板**;`apps/api/package.json` 未动(不需要 `npm ci`)。api 镜像 603 MB(与上一版同),**web 359 MB 与 runner 269 MB 全缓存命中**(`apps/web` 与 `runner/` 相对 `09e7fd2` 零改动);`docker save` tar **218.8 MB**,`ship` 一次成功无重传 | 无(`deploy/` 五件资产零改动,随 `ship` 重传同内容、未 reload caddy;`.env` **只改 `IMAGE_TAG`**,备份 `~/deploy/.env.bak-pre-d59407a`) | `09e7fd2` | 冒烟:九服务正式端点全部非 404(`/api/agent/tools` 200、`/api/trace/stream` 400、`/api/notes/series` 200、`/api/mcp` 无 token 401、`/api/t` 405、`/api/about` 200、`/api/health` 200、`/api/site/tabs` 200、`/api/skills` 200);`/api/spike/*` 与 `/admin` 404;`/` `/notes` `/skills` `/about` 全 200(`runtime` 保持可见)、`/skills/diagram.zip` 回 `application/zip`、`/rss.xml` 200;配图 200 + `ETag` + 复请求 **304**、同形文章页不被图片路由劫走;裸域 **301** 带路径到 www、`http://` 连不上;MCP 三种坏 token 401、认证 GET **405**、`server/discover` 回 `["2026-07-28"]`、`tools/list` **46**;两容器 `process.versions.bun` = **1.4.0**、`/usr/bin/node` 与 `/usr/local/bin/node` 均不存在、`dpkg` 无 nodejs;第 19 / 21 条隔离复核(容器随发版重建):none 档 `create_connection` 抛 `OSError` 且 `/proc/net/route` 只有表头(1 行)、`/opt/skills` 只读、egress 档 `getaddrinfo('postgres')`/`('api')` 均 `gaierror` 且公网可达(`223.5.5.5:443`)、`169.254.169.254:80` 被挡(`TimeoutError`);`docker inspect` 六项(`Net=none` / `deploy_egress` / `deploy_back`、`RO=true`、`CapDrop=[ALL]`、`Pids=64/64/256`、`Mem=384m/256m/1g`)。**HTTP 冒烟脚本 26 项 0 失败**(发版前同脚本跑过一次基线,两次同样 26/26)。**R-GSEARCH 端到端见下**。**未验**:HTTP/3(第 17 条,本机 curl 不支持 h3)、配额(第 9 条)、`agent_ro` 沙箱(第 10 条)—— 三项本次 diff 未触及 |
 
-### `google_search` 线打开(2026-09-07,`d59407a` 发版当日)
+### `google_search` 线打开(2026-09-07,`d59407a` 发版当日;当天定在 `gemini-3.8-flash-high`)
 
 发版并过完冒烟之后按 `rounds/round-gsearch/round-gsearch.md`「本轮实测 · 发版后要用它」那条做。
 `web_search` 的 `tool_config` 自 `5bd6ace` 起就是开的,所以只有配 provider 一步。
@@ -43,10 +43,27 @@
      `done` 回 `modelRoundTrips:3 turnMs:51189 totalTokens:11753`。
    - 脱敏:两次的原始 SSE 字节里 `Authorization` / `api-key` / `sk-` 前缀 / 明文 key / `sslip.io` / `gemini-pro-agent`
      均 **0** 次。
-4. **`gemini-pro-agent` 比 `gemini-3.8-flash-high` 慢一档**,要认:单次搜索 15–28 s,一轮两次搜索 **51 s**
-   (任务卡 E2E 直连网关时是 28.3 / 37.6 s,与此吻合)。仍在 provider 的双计时器内(空闲 45 s / 总时长 180 s),
-   但访客侧的观感是一轮要等近一分钟。想换快的:`websearch_provider_upsert{provider:"cliproxy-gemini", modelId:"gemini-3.8-flash-high"}`
-   (部分更新,省略的字段保留库内原值)。
+4. **当天随即换成 `gemini-3.8-flash-high`**(所有者要求)。先配 `gemini-pro-agent` 跑通,量到它**慢一档**:
+   单次搜索 15–28 s、一轮两次搜索 **51 s**(任务卡 E2E 直连网关时是 28.3 / 37.6 s,与此吻合)—— 仍在双计时器内
+   (空闲 45 s / 总时长 180 s),但访客侧观感是一轮等近一分钟。换模型只发**部分更新**
+   (`websearch_provider_upsert{provider:"cliproxy-gemini", modelId:"gemini-3.8-flash-high"}`),回 `"status":"updated"`,
+   `toolType` / `baseUrl` / key / 两个超时 / `isDefault` **逐项保留** —— 部分更新语义当场核过。两个模型的实测对比:
+
+   | | `gemini-pro-agent` | `gemini-3.8-flash-high` |
+   |---|---|---|
+   | 单次搜索 `durationMs` | 27673 / 15769 | **7971**(第二轮 10862) |
+   | 整轮 `turnMs` | 51189 | **12935**(第二轮 14055) |
+   | 本轮搜索次数 | 2 | 1 |
+   | `modelRoundTrips` | 3 | 2 |
+   | `totalTokens` | 11753 | 7452 |
+   | 回答里的 markdown 来源 | 3 条 | 3 条(两轮都是) |
+
+   **来源质量没有因为换快模型而下降**,耗时降到约 1/4。切回只需再发一次部分更新改 `modelId`。
+   flash-high 那两轮的脱敏检查扩到 **7 项**(明文 key / `Authorization` / `api-key` / `sk-` 前缀 / `sslip.io` /
+   **任何 `gemini` 模型名** / **`cliproxy` provider 名**)全部 0 次 —— 前一轮只查了写死的 `gemini-pro-agent`,
+   换模型后那条判据会失效,已改成通用匹配。
+   **grounding 真实生效的硬证据**:第二轮问「Encore.ts 最新稳定版本号」,搜回 **v1.58.4** 并给出 GitHub Releases 与
+   npm 两条来源 —— 训练截止不可能知道这个版本号(本仓库钉的还是 1.57.13)。
 5. **一次自己的失误值得记**:首轮端到端的 prompt 写成「2026 年 9 月第一周有哪些 AI 新闻」,模型按自己的训练截止
    判定「该日期尚未发生」,把 grounding 回来的内容当成「推演/虚构预测类综述」而拒绝给来源 —— 链路其实是通的
    (`tool_start`/`tool_end` 各一、37.3 s),**是 prompt 把验收判据带偏了**。验实时检索能力时别把「未来日期」写进问题,

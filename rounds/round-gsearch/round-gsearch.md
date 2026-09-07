@@ -125,11 +125,13 @@ provider 的 `toolType` 配成 `google_search` 时,请求打 `{baseUrl}/v1/chat/
 - **发版后要用它**:经 `xray-admin-prod` 的 `websearch_provider_upsert{provider:"cliproxy-gemini", apiKey:<同一把>, baseUrl:同现行,
   modelId:"gemini-3.8-flash-high", toolType:"google_search", makeDefault:true}`;切回 `websearch_set_default{provider:"cliproxy-dmit"}` 即回滚,
   不用发版。迁移 015 随发版跑(`migrate.sh` 14 → 15)。
-- **实际发版当日(2026-09-07,`d59407a`)所有者要的是 `gemini-pro-agent`,不是上面写的 `gemini-3.8-flash-high`** ——
+- **发版当日(2026-09-07,`d59407a`)先按所有者要求配 `gemini-pro-agent`,量完耗时后当天换回 `gemini-3.8-flash-high`** ——
   其余字段照上面那条。生产端到端:一轮里 `web_search` 被调 **2 次**(`durationMs` 27673 / 15769),`resultPreview` 是
   **综述文本**而不是结果列表(google 线的形态),回答带出 3 条 markdown 链接来源,`done` 回 `modelRoundTrips:3 turnMs:51189`。
-  **代价是慢**:一轮近一分钟(本轮预研直连网关时是 28.3 / 37.6 s,与此吻合),仍在双计时器内。换快的只需
-  `websearch_provider_upsert{provider:"cliproxy-gemini", modelId:"gemini-3.8-flash-high"}`(部分更新)。
+  **代价是慢**:一轮近一分钟(本轮预研直连网关时是 28.3 / 37.6 s,与此吻合),仍在双计时器内。所有者据此当天要求换成
+  `gemini-3.8-flash-high`,只发一次**部分更新**(`{provider, modelId}`)即可 —— 回 `"status":"updated"`,
+  `toolType` / `baseUrl` / key / 两个超时 / `isDefault` 逐项保留。换后实测:整轮 **12.9 s / 14.1 s**(单次搜索 8.0 / 10.9 s),
+  来源仍是 3 条 markdown 链接,**耗时降到约 1/4 而来源质量不降**。对比表与脱敏留证见 [`docs/releases.md`](../../docs/releases.md)。
 - **验实时检索能力时别把「未来日期」写进 prompt**(发版当日踩到):首轮端到端问「2026 年 9 月第一周有哪些 AI 新闻」,
   模型按训练截止判定「该日期尚未发生」,把 grounding 回来的内容当「推演/虚构预测类综述」拒绝给来源 —— 链路其实是通的
   (`tool_start`/`tool_end` 各一、37.3 s),是 prompt 把验收判据带偏了。换中性问法立刻拿到来源。
