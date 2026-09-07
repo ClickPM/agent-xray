@@ -390,7 +390,9 @@ html {
     background: var(--bg-panel);
   }
   .m-cards > a {
-    background: var(--bg) !important;
+    /* ⚠️ 行是**透明**的,卡的 `--bg-panel` 才是可见底色(画板 4k:卡 #f5f5f5、行不设背景)。
+       把行做成白底等于把卡整个盖住 —— 单行分组时会完全看不出卡的边界。 */
+    background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     padding: 12px 16px !important;
@@ -437,6 +439,10 @@ html {
      「从第 1 章开始读」是这一页唯一的动作,值得一个满宽命中区 */
   .m-series-head {
     flex-direction: column;
+    /* ⚠️ 必须显式 stretch:这一层的**内联** style 是 `alignItems:"flex-start"`
+       (桌面要它把右侧 ghost 按钮顶到顶端)。改成 column 之后 flex-start 会让
+       子项收缩到内容宽,整宽主按钮就只有 129px —— 实测踩到过。 */
+    align-items: stretch !important;
     gap: 14px !important;
     margin-top: 8px !important;
   }

@@ -85,7 +85,7 @@ export function MobileChapterBar({
                 minHeight: 56,
                 boxSizing: "border-box",
                 padding: "12px 16px",
-                background: "var(--bg)",
+                // 行透明,分组卡的 --bg-panel 才是可见底色(画板 4k/4n)
                 color: "var(--text)",
                 fontSize: 15,
                 lineHeight: 1.5,

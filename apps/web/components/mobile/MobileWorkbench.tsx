@@ -370,7 +370,8 @@ function MobileSessionSheet({
                   alignItems: "center",
                   gap: 10,
                   padding: "0 16px",
-                  background: s.id === selected ? "rgba(37,99,235,0.06)" : "var(--bg)",
+                  // 未选中的行透明,分组卡的 --bg-panel 才是可见底色;选中用品牌色淡底
+                  background: s.id === selected ? "rgba(37,99,235,0.06)" : "transparent",
                   borderTop: i === 0 ? "none" : "1px solid var(--border)",
                   transform: isSwiped ? "translateX(-80px)" : "translateX(0)",
                   transition: "transform .2s ease",
