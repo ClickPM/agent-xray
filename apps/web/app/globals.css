@@ -430,6 +430,145 @@ html {
   .m-group {
     margin-top: 22px !important;
   }
+
+  /* ── 系列目录页(画板 4l)────────────────────────────────────────────── */
+
+  /* 系列头:桌面是「左信息 + 右 ghost 按钮」一行,移动端拆成上下两块 ——
+     「从第 1 章开始读」是这一页唯一的动作,值得一个满宽命中区 */
+  .m-series-head {
+    flex-direction: column;
+    gap: 14px !important;
+    margin-top: 8px !important;
+  }
+  .m-h2 {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+  }
+  /* ghost 按钮 → 整宽胶囊主按钮。`!important` 是因为 GhostButton 的尺寸与配色
+     全在内联 style 里(与桌面画板逐条对齐,不能改那份) */
+  .m-cta {
+    width: 100% !important;
+    height: 44px !important;
+    border-radius: 22px !important;
+    background: var(--accent) !important;
+    border-color: transparent !important;
+    color: #ffffff !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+  }
+
+  /* 章节列表:1px 描边 + r7 的容器 → 分组卡 r16 + 组内内缩分隔线 */
+  .m-list {
+    border: none !important;
+    border-radius: 16px !important;
+    margin-top: 18px !important;
+    background: var(--bg-panel);
+  }
+  .m-list > a {
+    position: relative;
+    min-height: 56px;
+    padding: 12px 16px !important;
+    /* 内联的 borderTop 是通栏的,移动端一律抹掉,改用下面的伪元素内缩 16 */
+    border-top: none !important;
+  }
+  .m-list > a + a::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+  /* 置顶徽标:方角 r4 → 胶囊 r9(画板 4l) */
+  .m-badge {
+    border-radius: 9px !important;
+    padding: 2px 8px !important;
+  }
+
+  /* ── 章节阅读页(画板 4m)──────────────────────────────────────────────
+     桌面是 `minmax(0,720px) 1fr` 的双栏(正文 + 右侧悬浮目录)。
+     358 的正文宽里塞不下第二列,而且读长文时目录是「偶尔要用」的东西,
+     不该常占一栏 —— 收成单列,目录改由功能条右侧的按钮开 Sheet。 */
+  .m-chapter {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+
+  /* 阅读进度线贴在功能条底缘。
+     它自己是 `sticky top:0 z-index:2`,而功能条是 `sticky top:0 z-index:4` ——
+     不动的话进度线会被玻璃盖住、完全看不见。改成停在 44(功能条高度)那一行,
+     正好落在玻璃下边缘;z 提到 5 压住玻璃,因为它必须在任何滚动位置都可见
+     (画板 4m:全站唯一贴在玻璃上的实色元素)。 */
+  .m-progress {
+    top: 44px !important;
+    z-index: 5 !important;
+  }
+
+  /* 正文排版 15/1.75(苹方与 SF 都站得住的中文行距);小标题 16 → 17/650。
+     引用块、代码块、行内 mono 属**内核层,照搬桌面**,不在这里动。 */
+  .m-chapter-body h1 {
+    font-size: 24px !important;
+    line-height: 1.35 !important;
+  }
+  /* `components/Markdown` **不套容器类**,正文元素直接落在 `.m-chapter-body` 下,
+     所以这里按元素选。h1 是页面自己渲染的章节标题,不归 Markdown 管。 */
+  .m-chapter-body p,
+  .m-chapter-body li {
+    font-size: 15px !important;
+    line-height: 1.75 !important;
+  }
+  .m-chapter-body h2 {
+    font-size: 19px !important;
+  }
+  .m-chapter-body h3 {
+    font-size: 17px !important;
+  }
+
+  /* 上一章 / 下一章:两枚 ghost 按钮 → 两枚等宽胶囊(次 + 主,下一章是默认动作)。
+     桌面用 `justify-content: space-between` + 一个空 `<span/>` 占位来把单侧按钮
+     推到对边;移动端两个都 flex:1,那个空 span 也要占位否则单侧按钮会占满整行。 */
+  .m-prevnext {
+    gap: 10px !important;
+    margin-top: 28px !important;
+  }
+  .m-prevnext > * {
+    flex: 1;
+    min-width: 0;
+  }
+  .m-prevnext a {
+    display: block;
+  }
+  .m-prevnext button {
+    width: 100% !important;
+    height: 44px !important;
+    border-radius: 22px !important;
+    font-size: 14px !important;
+    background: var(--m-fill) !important;
+    border-color: transparent !important;
+    color: var(--accent) !important;
+  }
+  /* 最后一枚是「下一章」= 默认动作,升为品牌色实底主按钮 */
+  .m-prevnext > *:last-child button {
+    background: var(--accent) !important;
+    color: #ffffff !important;
+  }
+}
+
+/* iOS inset grouped 列表里的行分隔线:**从左内边距 16 起、不通栏**。
+   与 `.m-cards`/`.m-list` 里那两处是同一条规则,这里抽出来给 Sheet 内的列表用
+   (那两处要 `!important` 盖内联样式,这里的行是新写的、不需要)。 */
+.m-sep-row {
+  position: relative;
+}
+.m-sep-row + .m-sep-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 1px;
+  background: var(--border);
 }
 
 /* 内核层的横滚盒子。禁缩放之后,宽内容唯一的出路就是在自己的盒子里横滚 ——
