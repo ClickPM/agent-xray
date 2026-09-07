@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#fafafa}
+a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
+@keyframes omPulseBg{0%,100%{background-color:rgba(37,99,235,0.05)}50%{background-color:rgba(37,99,235,0.16)}}
+@keyframes omWaveSweep{from{background-position:200% 0}to{background-position:-100% 0}}
+@keyframes omSpin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<section style="display:flex;flex-wrap:wrap;gap:48px;padding:48px;align-items:flex-start;width:2238px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif">
+
+<!-- ━━━━━━━━━━ 4k Notes 首页 ━━━━━━━━━━ -->
+<div id="4k" style="flex:none;width:390px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4k</span><span style="font-size:12px;font-weight:600;color:#6b7280">Notes 首页</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 · 安全 708 · 本屏不可双指缩放</span></div>
+<div data-screen-label="4k Notes首页" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容安全高度 708 · 弹性</span></div>
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="width:44px;height:44px;flex:none"></div>
+      <div style="flex:1;min-width:0"></div>
+      <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px;display:flex;flex-direction:column;gap:22px">
+      <div>
+        <div style="font-size:34px;font-weight:700;letter-spacing:-0.02em;line-height:1.2">Notes</div>
+        <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px;text-wrap:pretty">从产品视角到源码拆解的 harness 工程研习库,全部内容提供 RSS 订阅。</div>
+      </div>
+      <sc-for list="{{notesGroups}}" as="g" hint-placeholder-count="3">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;padding:0 4px 8px">
+            <span style="width:10px;height:10px;border-radius:4px;background:{{g.dot}};flex:none"></span>
+            <span style="font-size:13px;font-weight:600;flex:none">{{g.name}}</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0">{{g.slug}}</span>
+          </div>
+          <div style="background:#f5f5f5;border-radius:16px;overflow:hidden">
+            <sc-for list="{{g.items}}" as="c" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;min-height:56px;box-sizing:border-box;padding:12px 16px;cursor:pointer" style-active="background:rgba(120,120,128,0.10)">
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                  <div style="font-size:15px;font-weight:600;line-height:1.4">{{c.name}}</div>
+                  <div style="font-size:13px;line-height:1.6;color:#6b7280;text-wrap:pretty">{{c.desc}}</div>
+                  <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af">{{c.meta}}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c7c7cc" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+      <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+          <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+</div>
+<div style="width:390px;box-sizing:border-box;background:#ffffff;border:1px dashed #d4d4d4;border-radius:7px;padding:10px 12px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">附 · 大标题收起态(向上滚动后)</div>
+  <div style="height:44px;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06);border:1px solid #eeeeee;border-radius:6px">
+    <div style="width:8px;flex:none"></div>
+    <div style="flex:1;min-width:0;font-size:17px;font-weight:600">Notes</div>
+    <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg></div>
+  </div>
+  <div style="font:400 10px/1.85 'JetBrains Mono',monospace;color:#6b7280;margin-top:8px">34/700 收进功能条后是 <span style="color:#1a1a1a">17/600 且左对齐</span>,不居中 —— 微信导航栏上方已经有一个居中标题,再来一个居中标题会读成两级标题打架。这是三个一级页(Notes / Skills / About)共用的收起规则。</div>
+</div>
+<div style="width:390px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4k · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2a</span>:桌面 1100 宽三列卡片网格 → 移动端<span style="color:#1a1a1a">单列 inset grouped 分组卡</span>。分类点(10px / r4 / 四色)与 slug(mono 11)照搬,分类标题留在卡外当组头 —— iOS 分组列表的组头本来就在卡外。<span style="color:#1a1a1a">不加搜索框</span>(桌面裁定过:Notes 与 Skills 无搜索 / 筛选 / 排序)。功能条左位子空着,右位子放 RSS —— 一级页没有返回。</div>
+    <div>· 行内三段照搬卡片三段(名 / 描述 / meta),字号 13→15 / 12→13 / mono 11 不变;桌面卡片的 min-height 38 描述留白取消 —— 列表行按内容高度长,固定高在移动端只会造成参差的空隙。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 分组卡整宽(左右外边距 16 固定)与描述折行行数;不变 = 分类点 10、r16、行内边距 16/12、chevron 14、字号。高度上弹性 = 列表;固定 = 大标题块与功能条 / Tab Bar。</div>
+    <div>· <span style="color:#1a1a1a">横滚</span>:本屏无。</div>
+    <div>· <span style="color:#1a1a1a">token · 保留</span>:分类四色 #2563eb / #16a34a / #f9c22e / #8b5cf6、slug 与 meta 的 mono 11 #9ca3af、描述 #6b7280。<span style="color:#1a1a1a">换掉</span>:#f5f5f5 卡 + 1px #e0e0e0 描边 + r7 → 实底分组卡 r16 无描边 + 组内 1px 分隔线(此处行间靠 12/16 内边距与卡边界区分,单行分类下不画多余线);20px/650 页标题 → iOS 大标题 34/700;44px 顶部导航条 + 四格 tab 组 → 功能条 + 底部 Tab Bar。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:本屏无内核层 —— Notes 首页在桌面也没有 mono 数据以外的内核元素,只有 slug 与 meta 两处 mono 保留了内核语汇。<span style="color:#1a1a1a">玻璃降级</span>:功能条与 Tab Bar 两处退 rgba(255,255,255,0.94) 实底 + 1px rgba(0,0,0,0.06) 分隔线;分组卡是实底,与玻璃无关。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4l 系列目录 ━━━━━━━━━━ -->
+<div id="4l" style="flex:none;width:390px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4l</span><span style="font-size:12px;font-weight:600;color:#6b7280">系列目录</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 · 安全 708 · 本屏不可双指缩放</span></div>
+<div data-screen-label="4l 系列目录" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容安全高度 708 · 弹性</span></div>
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"></polyline></svg><span style="font-size:15px">Notes</span></div>
+      <div style="flex:1;min-width:0"></div>
+      <div style="width:44px;height:44px;flex:none"></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px;display:flex;flex-direction:column;gap:18px">
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9ca3af"><a href="#4k" style="font-size:12px">Notes</a><span>/</span><a href="#4k" style="font-size:12px">源码拆解</a></div>
+        <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em;line-height:1.35;margin-top:10px">Claude Code Harness</div>
+        <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px;text-wrap:pretty">从 5.4MB 混淆产物逆向一个闭源 harness 的完整架构</div>
+        <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:10px">15 章 · 约 12 万字 · 更新于 3d ago</div>
+        <div style="display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:22px;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;margin-top:16px;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)">从第 1 章开始读</div>
+      </div>
+      <div style="background:#f5f5f5;border-radius:16px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:12px;min-height:56px;box-sizing:border-box;padding:10px 16px;cursor:pointer" style-active="background:rgba(120,120,128,0.10)">
+          <span style="font:600 12px 'JetBrains Mono',monospace;color:#6b7280;flex:none">README</span>
+          <span style="font-size:15px;font-weight:600;flex:1;min-width:0;line-height:1.5">教程总览与阅读路线</span>
+          <span style="font:600 10px 'JetBrains Mono',monospace;color:#6b7280;background:#ffffff;border-radius:9px;padding:2px 8px;flex:none">置顶</span>
+        </div>
+        <sc-for list="{{chapters}}" as="ch" hint-placeholder-count="8">
+          <div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:56px;box-sizing:border-box;padding:10px 16px;cursor:pointer" style-active="background:rgba(120,120,128,0.10)">
+              <span style="font:400 12px 'JetBrains Mono',monospace;color:#9ca3af;flex:none;font-variant-numeric:tabular-nums">{{ch.num}}</span>
+              <span style="font-size:15px;flex:1;min-width:0;line-height:1.5;text-wrap:pretty">{{ch.title}}</span>
+              <span style="font-size:11px;color:#9ca3af;flex:none;font-variant-numeric:tabular-nums">{{ch.time}}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+      <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+          <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+</div>
+<div style="width:390px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4l · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2b</span>:880 宽单列 → 满宽单列。系列头四段(标题 / 简介 / meta / 开始读)顺序不变,「从第 1 章开始读」从 ghost 32px 按钮升为<span style="color:#1a1a1a">整宽胶囊主按钮</span> —— 它是这一页唯一的动作,在移动端值得一个满宽命中区。功能条左侧是带文字的返回(iOS 惯例:返回带上一级名字),右侧空。</div>
+    <div>· <span style="color:#1a1a1a">行尾放的是「更新时间」不是「阅读时长」</span>:桌面章节列表里没有 per-chapter 阅读时长这个字段(它只出现在章节页顶部的「约 8 分钟」),移动端不新增数据字段,沿用 2b 的相对时间。</div>
+    <div>· README 行保留 2b 的置顶语义:mono 12/600 的 README 前缀 + 置顶徽标(方角 r4 → 胶囊 r9),底色不再用 #f5f5f5 区分 —— 分组卡本身就是灰面,再加一层灰会看不出;它靠位置(第一行)+ 前缀 + 徽标三重标记。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 章节标题(flex:1,允许折两行)、简介;不变 = 序号列 mono 12、时间列 11 tabular、行 min-height 56、r16、左右 16、主按钮 44 高。</div>
+    <div>· <span style="color:#1a1a1a">横滚</span>:本屏无。</div>
+    <div>· <span style="color:#1a1a1a">token · 保留</span>:面包屑 12px #9ca3af + 品牌色链接、序号 mono 12 #9ca3af、meta mono 11、置顶徽标配色。<span style="color:#1a1a1a">换掉</span>:1px #e0e0e0 边框 + r7 的列表容器 → 分组卡 r16 + 组内 1px 分隔线(从左内边距 16 起);ghost 按钮 → 胶囊主按钮;22px/650 → 22/700。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:无内核层,mono 只用于序号与 meta。<span style="color:#1a1a1a">玻璃降级</span>:同 4k。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4m 章节阅读 ━━━━━━━━━━ -->
+<div id="4m" style="flex:none;width:390px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4m</span><span style="font-size:12px;font-weight:600;color:#6b7280">章节阅读</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 · 安全 708 · 本屏不可双指缩放</span></div>
+<div data-screen-label="4m 章节阅读" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容安全高度 708 · 弹性</span></div>
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"></polyline></svg><span style="font-size:15px">Pi</span></div>
+      <div style="flex:1;min-width:0;text-align:center"><span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af">3 / 13</span></div>
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 12px;font-size:13px;font-weight:600;color:#2563eb">目录</span></div>
+      <div style="position:absolute;left:0;bottom:0;width:31%;height:2px;background:#2563eb"></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9ca3af"><a href="#4k" style="font-size:12px">Notes</a><span>/</span><a href="#4l" style="font-size:12px">Pi</a><span>/</span><span style="color:#6b7280">第3章</span></div>
+      <div style="font-size:22px;font-weight:700;line-height:1.4;margin-top:12px;text-wrap:pretty">第3章:Agent Loop — 让模型转动起来的引擎</div>
+      <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:8px">约 8 分钟 · 更新于 2026-08-25</div>
+      <div style="border-left:3px solid #b6bac2;border-radius:0 6px 6px 0;background:rgba(0,0,0,0.03);padding:12px 14px;margin-top:18px;font-size:15px;line-height:1.75;color:#6b7280;text-wrap:pretty">本章回答一个问题:模型自己不会「连续做事」,是谁在推着它一轮轮转?答案藏在 <span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.05);border-radius:4px;padding:1px 5px">agent-loop.ts</span> 的一个 <span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.05);border-radius:4px;padding:1px 5px">while</span> 循环里。</div>
+      <div style="font-size:17px;font-weight:650;margin-top:26px">一、循环在哪里</div>
+      <div style="font-size:15px;line-height:1.75;margin-top:10px;text-wrap:pretty">pi 把整个 agent 内核压缩在一个可读的循环里:只要模型还想调用工具,循环就继续;一旦它给出纯文本回答,循环自然停下。没有调度器、没有状态机——<span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">while</span> 就是全部的控制流。</div>
+      <div style="align-items:center;gap:6px;margin-top:12px;display:{{noteDisplay}}"><span style="flex:1;height:0;border-top:1px dashed rgba(26,26,26,0.35)"></span><span style="font:600 9px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px;white-space:nowrap">接缝:↓ 代码块是内核层</span><span style="flex:1;height:0;border-top:1px dashed rgba(26,26,26,0.35)"></span></div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;margin-top:12px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+        <div style="display:flex;align-items:center;padding:7px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:1">typescript</span><div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:9px;padding:3px 8px" style-active="color:#2563eb;background:#eeeeee"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div></div>
+        <div style="overflow-x:auto"><pre style="margin:0;padding:12px 14px;font:400 12px/1.7 'JetBrains Mono',monospace"><span style="color:#2563eb">while</span> (!stopReason) {
+  <span style="color:#2563eb">const</span> response = <span style="color:#2563eb">await</span> callModel(messages, tools);
+  <span style="color:#2563eb">if</span> (response.toolCalls.length === 0) <span style="color:#2563eb">break</span>;
+  messages.push(<span style="color:#2563eb">await</span> executeTools(response.toolCalls));
+}</pre></div>
+      </div>
+      <div style="font-size:15px;line-height:1.75;margin-top:12px;text-wrap:pretty">你在 Runtime 工作台里看到的每一条 <span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">before_provider_request</span> 事件,就是这个循环转过一圈的心跳。</div>
+      <div style="display:flex;gap:10px;margin-top:26px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:22px;background:rgba(120,120,128,0.12);color:#2563eb;font-size:15px;font-weight:600;cursor:pointer;padding:0 12px;text-align:center" style-active="background:rgba(120,120,128,0.2);transform:scale(0.97)">← 第2章</div>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:22px;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;cursor:pointer;padding:0 12px;text-align:center" style-active="background:#1d4ed8;transform:scale(0.97)">第4章 →</div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+      <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+          <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+</div>
+<div style="width:390px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4m · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2c</span>:<span style="color:#1a1a1a">桌面 720 正文 + 右侧悬浮「本章目录」的双栏在移动端取消</span> —— 358 的正文宽里塞不下第二列,而且移动端读长文时目录是「偶尔要用」的东西,不该常占一栏。改为功能条右侧一枚「目录」按钮开 Sheet(见 <a href="#4n" style="font:400 10px 'JetBrains Mono',monospace">4n</a>)。功能条中间放 3 / 13 的章序(mono 11)—— 轻量信息,不是标题。</div>
+    <div>· <span style="color:#1a1a1a">阅读进度线仍在功能条底缘</span>:2px #2563eb,宽度接真实滚动(板上 31% 是定格示意)。它压在玻璃的下边缘上,是全站唯一贴在玻璃上的实色元素 —— 因为它必须在任何滚动位置都可见。</div>
+    <div>· 正文排版从桌面 14/1.7 提到 <span style="color:#1a1a1a">15/1.75</span>(苹方与 SF 都站得住的中文行距),小标题 16 → 17/650,摘要引用块的 3px #b6bac2 左边线 + rgba(0,0,0,.03) 底 + r0/6/6/0 一字不改,内联 mono 12 → 13。上一章 / 下一章从两枚 ghost 按钮变成两枚等宽胶囊:次按钮 + 主按钮(下一章是默认动作)。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 正文段、标题折行、两枚底部胶囊(各 flex:1);不变 = 左右 16、引用块左边线 3、代码块 r7 与 mono 12/1.7、进度线 2px、字号。</div>
+    <div>· <span style="color:#1a1a1a">横滚</span>:代码块(整块 overflow-x,pre 不折行)、宽表、行间公式各自横滚;页面本身永不横滚。代码块<span style="color:#1a1a1a">不缩字号</span> —— mono 12 是桌面代码的字号,缩到 10 会让高亮三色失去可读性。</div>
+    <div>· <span style="color:#1a1a1a">token · 保留</span>:代码块外壳(1px #e0e0e0 + r7 + #f5f5f5 头 + mono 650/11 语言名 + copy)、高亮三色(关键字 #2563eb / 字符串 #16a34a / 注释 #9ca3af)、内联代码片、引用块、面包屑、进度线 #2563eb。<span style="color:#1a1a1a">换掉</span>:双栏 → 单列 + 目录 Sheet;ghost 上下章按钮 → 胶囊;copy 按钮 r5 → r9 胶囊。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:虚线以下的代码块是内核层(外壳、字号、高亮全照搬),其余正文是 iOS 排版。<span style="color:#1a1a1a">玻璃降级</span>:功能条退实底 0.94 时进度线仍在其底缘,对比度反而更高;Tab Bar 同 4k。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4n 本章目录 Sheet + RSS Sheet ━━━━━━━━━━ -->
+<div id="4n" style="flex:none;width:804px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4n</span><span style="font-size:12px;font-weight:600;color:#6b7280">本章目录 Sheet + RSS 订阅 Sheet</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">两屏并列 · 各 390×845 · 安全 708 · 不可双指缩放</span></div>
+<div style="display:flex;gap:24px">
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">① 本章目录 SHEET · MEDIUM</div>
+    <div data-screen-label="4n 目录Sheet" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative">
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;transform:scale(0.96);transform-origin:50% 0;padding:52px 16px 0;display:flex;flex-direction:column">
+          <div style="font-size:22px;font-weight:700;line-height:1.4">第3章:Agent Loop — 让模型转动起来的引擎</div>
+          <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:8px">约 8 分钟 · 更新于 2026-08-25</div>
+          <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:18px">本章回答一个问题:模型自己不会「连续做事」,是谁在推着它一轮轮转?</div>
+        </div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.22)"></div>
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;color:#2563eb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"></polyline></svg><span style="font-size:15px">Pi</span></div>
+          <div style="flex:1;min-width:0;text-align:center"><span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af">3 / 13</span></div>
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px"><span style="display:flex;align-items:center;height:30px;border-radius:15px;background:#2563eb;padding:0 12px;font-size:13px;font-weight:600;color:#ffffff">目录</span></div>
+          <div style="position:absolute;left:0;bottom:0;width:31%;height:2px;background:#2563eb"></div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:430px;z-index:6;background:#ffffff;border-radius:20px 20px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,0.18);display:flex;flex-direction:column;overflow:hidden">
+          <div style="flex:none;display:flex;justify-content:center;padding:6px 0 2px"><span style="width:36px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+          <div style="flex:none;padding:6px 16px 10px;font:600 11px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.05em">本章目录</div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:0 16px">
+            <div style="background:#f5f5f5;border-radius:16px;overflow:hidden">
+              <sc-for list="{{chapterToc}}" as="t" hint-placeholder-count="5">
+                <div>
+                  <div style="height:1px;background:#e0e0e0;margin-left:16px;display:{{t.sep}}"></div>
+                  <div style="display:flex;align-items:center;gap:10px;min-height:56px;box-sizing:border-box;padding:8px 16px;background:{{t.bg}};cursor:pointer" style-active="background:rgba(120,120,128,0.10)">
+                    <span style="font-size:15px;line-height:1.5;flex:1;min-width:0;color:{{t.color}};font-weight:{{t.fw}}">{{t.label}}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c7c7cc" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">② RSS 订阅 SHEET · MEDIUM(含 COPIED 态)</div>
+    <div data-screen-label="4n RSS Sheet" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative">
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;transform:scale(0.96);transform-origin:50% 0;padding:52px 16px 0"><div style="font-size:34px;font-weight:700;letter-spacing:-0.02em">Notes</div><div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px">从产品视角到源码拆解的 harness 工程研习库。</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.22)"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:430px;z-index:6;background:#ffffff;border-radius:20px 20px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,0.18);display:flex;flex-direction:column;overflow:hidden">
+          <div style="flex:none;display:flex;justify-content:center;padding:6px 0 2px"><span style="width:36px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+          <div style="flex:none;padding:6px 16px 10px"><span style="font-size:17px;font-weight:600">订阅更新</span></div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:0 16px;display:flex;flex-direction:column;gap:8px">
+            <div style="background:#f5f5f5;border-radius:16px;overflow:hidden">
+              <sc-for list="{{rssRows}}" as="r" hint-placeholder-count="5">
+                <div>
+                  <div style="height:1px;background:#e0e0e0;margin-left:16px;display:{{r.sep}}"></div>
+                  <div style="display:flex;align-items:center;gap:10px;min-height:56px;box-sizing:border-box;padding:8px 16px">
+                    <span style="width:9px;height:9px;border-radius:3px;background:{{r.dot}};flex:none"></span>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                      <span style="font-size:15px;line-height:1.4">{{r.name}}</span>
+                      <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.url}}</span>
+                    </div>
+                    <sc-if value="{{r.copied}}" hint-placeholder-val="{{false}}">
+                      <span style="display:flex;align-items:center;gap:4px;flex:none;font-size:13px;font-weight:600;color:#16a34a;border-radius:15px;padding:6px 12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>已复制</span>
+                    </sc-if>
+                    <span style="align-items:center;flex:none;font-size:13px;font-weight:600;color:#2563eb;background:rgba(120,120,128,0.12);border-radius:15px;padding:6px 12px;cursor:pointer;display:{{r.copyBtn}}" style-active="transform:scale(0.97)">复制</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:rgba(0,0,0,0.03);border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.7;color:#6b7280;text-wrap:pretty">任何 RSS 阅读器(Folo / NetNewsWire / Feedly…)均可订阅。微信里复制可能不生效 —— 那就<span style="color:#1a1a1a">长按上面的地址选中再复制</span>。</div>
+          </div>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+</div>
+<div style="width:804px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4n · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2c 右栏 / 2d 弹层</span>:悬浮目录 → medium detent Sheet(354),桌面居中模态弹层 → 底部 Sheet(400)。两个 Sheet 都停在同一档 430(安全高度 61%):RSS 那屏在五条之下还有说明与微信剪贴板兜底提示两段,354 装不下;目录屏本可以更矮,但两个从同一入口性质(看目录 / 拿地址)升起的 Sheet 停在同一高度,读者不会觉得每次弹出来的东西大小不一。large(651)会留一半空白。当前章节在目录里用 <span style="color:#1a1a1a">rgba(37,99,235,.06) 底 + 品牌色 600 字</span>标出(桌面用 2px 品牌色左边线 —— 在 iOS 分组卡里左边线会与卡圆角打架,所以换成整行淡底,语义不变)。</div>
+    <div>· <span style="color:#1a1a1a">复制按钮:两态各画一次</span> —— 常态是次按钮胶囊「复制」,copied 态换成 #16a34a 的「已复制」+ 勾(照搬 2h 的 copied 语汇,只把 11px 升到 13px 以够 44 命中)。按钮宽度两态接近,切换不跳版。</div>
+    <div>· 2d 页脚那句「任何 RSS 阅读器均可订阅」与微信兜底提示并成一段 —— 两句都是「拿到地址之后怎么用」,合一段也让提示不至于贴着 Sheet 下缘。</div>
+    <div>· <span style="color:#1a1a1a">微信注意</span>:webview 里 <span style="color:#1a1a1a">navigator.clipboard 可能不可用</span>(非 https 或权限被拒),所以 Sheet 底部常驻一条兜底提示「长按地址选中再复制」——不是错误态,是常态提示;地址行因此必须允许 user-select,不能设 user-select:none。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 地址行(mono 11 单行省略)与 Sheet 宽;不变 = 分类点 9/r3、行 56、r16、复制按钮内边距与字号、grabber 36×5、Sheet 圆角 20。两个 Sheet 的高度都是固定 px(354 / 400),但按内容安全高度的比例计算 —— 机型变化时按 50% / 56% 重算,不写死。</div>
+    <div>· <span style="color:#1a1a1a">横滚</span>:两屏都无 —— 订阅地址单行省略(要看全量靠长按选中),不给横滚。</div>
+    <div>· <span style="color:#1a1a1a">token · 保留</span>:分类四色点(9px / r3,2d 原值)、地址 mono 11 #9ca3af、copied 的 #16a34a + 勾、目录小标题 mono 11/600 0.05em、说明 11px #9ca3af。<span style="color:#1a1a1a">换掉</span>:居中模态 + 1px 描边 + r8 + 关闭 × → Sheet(r20 上两角 + grabber,下滑关闭,无 × 按钮);行 r6 hover → 分组卡行 + active;2px 左边线高亮 → 整行淡底。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:两屏都无内核层;地址与目录里的 mono 是既有语汇的延续,不构成内核层。<span style="color:#1a1a1a">玻璃降级</span>:目录屏功能条仍露出(Sheet 只到 354),退实底 0.94 后进度线与「目录」按钮对比度更高;RSS 屏功能条被 Sheet 盖住,不涉及。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4o Skills 首页 ━━━━━━━━━━ -->
+<div id="4o" style="flex:none;width:390px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4o</span><span style="font-size:12px;font-weight:600;color:#6b7280">Skills 首页</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 · 安全 708 · 本屏不可双指缩放</span></div>
+<div data-screen-label="4o Skills首页" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容安全高度 708 · 弹性</span></div>
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="width:44px;height:44px;flex:none"></div><div style="flex:1"></div><div style="width:44px;height:44px;flex:none"></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px;display:flex;flex-direction:column;gap:20px">
+      <div>
+        <div style="font-size:34px;font-weight:700;letter-spacing:-0.02em;line-height:1.2">Skills</div>
+        <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px;text-wrap:pretty">我在 agent 开发里反复用到的 skill:自己写的与精选的第三方都在这里,每个都能看目录、读文件、一条命令装进 Claude Code / Codex。</div>
+      </div>
+      <sc-for list="{{skillGroups}}" as="g" hint-placeholder-count="3">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;padding:0 4px 8px">
+            <span style="width:10px;height:10px;border-radius:4px;background:{{g.dot}};flex:none"></span>
+            <span style="font-size:13px;font-weight:600;flex:none">{{g.name}}</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0">{{g.slug}}</span>
+          </div>
+          <div style="background:#f5f5f5;border-radius:16px;overflow:hidden">
+            <sc-for list="{{g.items}}" as="k" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;min-height:56px;box-sizing:border-box;padding:12px 16px;cursor:pointer" style-active="background:rgba(120,120,128,0.10)">
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font:600 14px 'JetBrains Mono',monospace;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{k.name}}</span>
+                    <span style="font:600 10px 'JetBrains Mono',monospace;color:{{k.badgeColor}};border:1px solid currentColor;border-radius:9px;padding:1px 7px;line-height:1.5;flex:none">{{k.badge}}</span>
+                  </div>
+                  <div style="font-size:13px;line-height:1.6;color:#6b7280;text-wrap:pretty">{{k.desc}}</div>
+                  <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{k.meta}}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c7c7cc" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+      <div style="font-size:11px;line-height:1.9;color:#9ca3af">
+        <div>共 9 个 skill · 最近更新:<span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">codex-review-loop</span> · 3 天前</div>
+        <div style="text-wrap:pretty">skill = 一个目录:<span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">SKILL.md</span>(必需)+ <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">scripts/</span> + <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">references/</span>,放进 <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">.claude/skills/</span> 即生效。</div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+      <sc-for list="{{tabsSkills}}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+          <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+</div>
+<div style="width:390px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4o · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2f</span>:三列卡片 → 单列 inset grouped,按用途分类分组(分类点四色照搬)。<span style="color:#1a1a1a">卡片上不放按钮</span>(复制 / 下载都在详情页)—— 桌面这条裁定在移动端更重要:56 高的行里再塞按钮,整行点击与按钮点击会打架。整个 Skills tab <span style="color:#1a1a1a">只读</span>:无搜索 / 筛选 / 点赞 / 评论 / 安装量 / 排序。</div>
+    <div>· skill 名是 <span style="color:#1a1a1a">mono 13 → 14/600</span>(它是标识符,必须是等宽;14 是等宽字体在 15px 正文旁不显小的最低值);自研 / 精选徽标保留<span style="color:#1a1a1a">描边式</span>(border:1px solid currentColor)—— 全站唯一的描边徽标,用来和实底的 blocked / 修改 / 追加 徽标区分:那些是运行时事实,这个是来源标注。方角 r4 改胶囊 r9。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 描述与 meta(单行省略 / 折行)、skill 名(省略);不变 = 分类点 10、徽标、r16、行内边距、chevron。页脚两行统计与解释照搬 2f,字号 11 不变。</div>
+    <div>· <span style="color:#1a1a1a">横滚</span>:本屏无 —— meta(出处 · 文件数 · 更新时间)单行省略,详情页有全量。</div>
+    <div>· <span style="color:#1a1a1a">token · 保留</span>:分类四色、skill 名 mono 600、徽标两色(#2563eb 自研 / #9ca3af 精选)、描述 #6b7280、meta mono 11 #9ca3af、页脚 11px。<span style="color:#1a1a1a">换掉</span>:#f5f5f5 卡 + 描边 + r7 → 分组卡 r16;20/650 页标题 → 34/700 大标题;hover → active。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:skill 名与 meta 的 mono 是内核语汇的延续,但本屏没有真正的内核层组件。<span style="color:#1a1a1a">玻璃降级</span>:同 4k。功能条两侧都空 —— Skills 首页既无返回也无 RSS,空功能条仍然保留(它承载大标题收起态,见 4k 附)。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4p Skill 详情 · SKILL.md(两屏) ━━━━━━━━━━ -->
+<div id="4p" style="flex:none;width:804px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4p</span><span style="font-size:12px;font-weight:600;color:#6b7280">Skill 详情 · SKILL.md(顶部态 / 预览态)</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">两屏并列 · 各 390×845 · 安全 708 · 不可双指缩放</span></div>
+<div style="display:flex;gap:24px">
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">① 顶部态 · 含微信不可用提示</div>
+    <div data-screen-label="4p Skill详情 顶部态" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容安全高度 708 · 弹性</span></div>
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"></polyline></svg><span style="font-size:15px">Skills</span></div>
+      <div style="flex:1;min-width:0"></div>
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 12px;font-size:13px;font-weight:600;color:#2563eb">文件</span></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:hidden;padding:52px 0 60px;display:flex;flex-direction:column">
+      <div style="padding:0 16px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9ca3af"><a href="#4o" style="font-size:12px">Skills</a><span>/</span><a href="#4o" style="font-size:12px">审查与质量</a></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+          <span style="font:650 22px 'JetBrains Mono',monospace;letter-spacing:-0.01em">codex-review-loop</span>
+          <span style="font:600 10px 'JetBrains Mono',monospace;color:#2563eb;border:1px solid currentColor;border-radius:9px;padding:1px 7px;line-height:1.5;flex:none">自研</span>
+        </div>
+        <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px;text-wrap:pretty">用 codex 做独立代码审查的固定回路:发起 → 等结果 → findings 逐条裁定 → 只对整改 diff 复审,直到 high 级清零。</div>
+        <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:10px">v1.2 · 4 个文件 · 8.0 KB · 更新于 2026-08-31 · @ClickPM</div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;border-radius:22px;background:rgba(120,120,128,0.12);color:#9ca3af;font-size:15px;font-weight:600;cursor:default">GitHub ↗</div>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;border-radius:22px;background:rgba(120,120,128,0.12);color:#9ca3af;font-size:15px;font-weight:600;cursor:default">下载 zip</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;background:rgba(0,0,0,0.03);border-radius:10px;padding:10px 12px;margin-top:8px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#f9c22e;flex:none;margin-top:6px"></span>
+          <span style="font-size:11px;line-height:1.7;color:#6b7280;text-wrap:pretty">这两项在微信里不可用(外链跳转与 zip 下载都被 webview 拦)。点右上「…」→ <span style="color:#1a1a1a">在浏览器中打开</span>后可用;或直接用下面的安装命令。</span>
+        </div>
+        <div style="background:#f5f5f5;border-radius:16px;padding:12px 14px;margin-top:14px">
+          <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">INSTALL</div>
+          <div style="display:flex;align-items:center;gap:10px;background:#ffffff;border-radius:10px;padding:8px 10px">
+            <div style="flex:1;min-width:0;overflow-x:auto"><span style="font:400 12px 'JetBrains Mono',monospace;white-space:pre">npx skills add ClickPM/agent-skills <span style="color:#9ca3af">--skill</span> codex-review-loop</span></div>
+            <span style="flex:none;font-size:13px;font-weight:600;color:#2563eb;background:rgba(120,120,128,0.12);border-radius:15px;padding:6px 12px;cursor:pointer" style-active="transform:scale(0.97)">复制</span>
+          </div>
+          <div style="font-size:11px;line-height:1.7;color:#9ca3af;margin-top:8px;text-wrap:pretty">装进 <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">.claude/skills/codex-review-loop/</span>;Codex 读 <span style="font:400 11px 'JetBrains Mono',monospace;color:#6b7280">.agents/skills/</span>,同一目录结构。</div>
+        </div>
+      </div>
+      <div style="align-items:center;gap:6px;padding:14px 16px 6px;display:{{noteDisplay}}"><span style="flex:1;height:0;border-top:1px dashed rgba(26,26,26,0.35)"></span><span style="font:600 9px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px;white-space:nowrap">接缝:↓ chip 条以下是内核层</span><span style="flex:1;height:0;border-top:1px dashed rgba(26,26,26,0.35)"></span></div>
+      <div style="overflow-x:auto;padding:2px 16px 10px"><div style="display:flex;gap:8px;width:max-content">
+        <sc-for list="{{chipsMd}}" as="c" hint-placeholder-count="4">
+          <span style="font:400 12px 'JetBrains Mono',monospace;font-weight:{{c.fw}};color:{{c.color}};background:{{c.bg}};border-radius:15px;padding:8px 14px;white-space:nowrap;cursor:pointer" style-active="transform:scale(0.97)">{{c.label}}</span>
+        </sc-for>
+      </div></div>
+      <div style="margin:0 16px;border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:none">SKILL.md</span>
+          <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">markdown · 3.8 KB · 96 行</span>
+          <div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:9px;padding:3px 8px;flex:none" style-active="color:#2563eb;background:#eeeeee"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div>
+        </div>
+        <div style="padding:14px"><div style="background:#f5f5f5;border-radius:6px;padding:10px 12px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280">name</span><div style="font:400 12px/1.6 'JetBrains Mono',monospace;margin-top:2px">codex-review-loop</div></div></div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+      <sc-for list="{{tabsSkills}}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+          <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">② 已滚动 · CHIP 条吸附 + FRONTMATTER + 正文</div>
+    <div data-screen-label="4p Skill详情 预览态" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容安全高度 708 · 弹性</span></div>
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"></polyline></svg><span style="font-size:15px">Skills</span></div>
+      <div style="flex:1;min-width:0"></div>
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 12px;font-size:13px;font-weight:600;color:#2563eb">文件</span></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:hidden;padding:44px 0 60px;display:flex;flex-direction:column">
+      <div style="flex:none;background:#ffffff;box-shadow:0 1px 0 rgba(0,0,0,0.06);padding-top:8px"><div style="overflow-x:auto;padding:2px 16px 10px"><div style="display:flex;gap:8px;width:max-content">
+        <sc-for list="{{chipsMd}}" as="c" hint-placeholder-count="4">
+          <span style="font:400 12px 'JetBrains Mono',monospace;font-weight:{{c.fw}};color:{{c.color}};background:{{c.bg}};border-radius:15px;padding:8px 14px;white-space:nowrap;cursor:pointer" style-active="transform:scale(0.97)">{{c.label}}</span>
+        </sc-for>
+      </div></div></div>
+      <div style="margin:10px 16px 0;border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:none">SKILL.md</span>
+          <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">markdown · 3.8 KB · 96 行</span>
+          <div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:9px;padding:3px 8px;flex:none" style-active="color:#2563eb;background:#eeeeee"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div>
+        </div>
+        <div style="padding:14px">
+          <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:6px">
+            <div><span style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280">name</span><div style="font:400 12px/1.6 'JetBrains Mono',monospace;margin-top:2px">codex-review-loop</div></div>
+            <div><span style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280">description</span><div style="font-size:12px;line-height:1.6;margin-top:2px;text-wrap:pretty">Run an independent codex code review as a fixed loop: kick off, wait, adjudicate findings one by one, re-review only the fix diff until high-severity findings are zero.</div></div>
+          </div>
+          <div style="font-size:17px;font-weight:650;margin-top:20px">何时用</div>
+          <div style="font-size:15px;line-height:1.8;margin-top:10px;text-wrap:pretty">一轮实现完成、<span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">dev.ps1 test / check</span> 全过之后、准备合并 <span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">main</span> 之前。它只做<span style="font-weight:650">缺陷门禁</span>,不做设计评审;findings 指向设计缺陷时,停下回任务卡重定方案。</div>
+          <div style="font-size:17px;font-weight:650;margin-top:20px">回路</div>
+          <div style="font-size:15px;line-height:1.8;margin-top:10px;display:flex;flex-direction:column;gap:6px">
+            <div><span style="color:#9ca3af">1.</span> <span style="font-weight:650">发起</span>:改动超过 1–2 个文件带 <span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">--background</span>。</div>
+            <div><span style="color:#9ca3af">2.</span> <span style="font-weight:650">逐条裁定</span>:采纳整改 / 不采纳写明理由,回填任务卡。</div>
+            <div><span style="color:#9ca3af">3.</span> <span style="font-weight:650">复审</span>:第 3 轮起只审整改 diff。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+      <sc-for list="{{tabsSkills}}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+          <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+</div>
+<div style="width:804px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4p · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">本板两屏</span>:Skill 详情在 390 宽下必然长过一屏(头部七段 + 预览框正文),硬塞进 708 只能靠删内容。所以按 4n / 4s 的做法两屏并列:<span style="color:#1a1a1a">① 顶部态</span>(面包屑 → mono22 标题 + 徽标 → 描述 → meta → 两枚按钮 → 微信提示 → INSTALL → chip 条 → 预览框头,预览框正文自然落在折叠线下)与 <span style="color:#1a1a1a">② 已向上滚动的预览态</span>(chip 条吸附在功能条下,frontmatter 键值块 + markdown 正文)。</div>
+    <div>· <span style="color:#1a1a1a">源 2g</span>:<span style="color:#1a1a1a">240px 粘性目录树 → 顶部横向滚动的文件 chip 条</span>。理由:一个 skill 通常 3–8 个文件,chip 条<span style="color:#1a1a1a">少一层操作</span>(直接切,不用开关 Sheet);<span style="color:#1a1a1a">滚动时它吸附在功能条下</span>(② 屏画的就是这一态)—— 这是它能取代粘性树的前提。完整目录树留给深目录,放在功能条右侧「文件」按钮里(见 <a href="#4q" style="font:400 10px 'JetBrains Mono',monospace">4q</a>):chip 条是切换器,树是浏览器。</div>
+    <div>· <span style="color:#1a1a1a">微信里 GitHub ↗ 与 下载 zip 都不可用</span>:外链跳转会落到微信自己的提示,zip 下载被 webview 拦。两枚画成禁用态(rgba(120,120,128,.12) 底 + #9ca3af 字 + cursor:default),下面一条 #f9c22e 点提示告诉访客怎么绕(右上「…」→ 在浏览器中打开)。<span style="color:#1a1a1a">不用红色</span> —— 这不是错误,是载体限制。在浏览器 / standalone 下这两枚恢复为次按钮 + 主按钮。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = chip 条(横滚,chip 本身不缩)、两枚按钮(各 flex:1)、INSTALL 命令行(横滚)、描述与正文;不变 = mono 22 标题(320 下折行,不缩字号)、徽标、r16/r10/r7、左右 16、复制按钮。<span style="color:#1a1a1a">横滚</span>:文件 chip 条、INSTALL 命令行(white-space:pre)、正文里的代码块 —— 三处各自独立,页面不横滚。</div>
+    <div>· <span style="color:#1a1a1a">token · 保留</span>:mono 650/22 标题 + 描边徽标、meta mono 11、INSTALL 小标题语汇、命令行 mono 12、frontmatter 键值块(#f5f5f5 + r6 + 键 mono 11/600 #6b7280)、预览框(1px #e0e0e0 + r7 + #f5f5f5 头 + mono 650/11 文件名 + copy)、markdown 正文层级。<span style="color:#1a1a1a">换掉</span>:粘性树 → chip 条 + 树 Sheet;ghost 按钮 → 胶囊(此屏为禁用态);INSTALL 外框 r7 + 描边 → 分组卡 r16,内层命令行 r6 → r10。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:chip 条就是接缝 —— <span style="color:#1a1a1a">容器是 iOS(胶囊、横滚、吸附),内容是 mono 文件名</span>;它以下(预览框 + frontmatter + markdown)全是内核层的排版语汇。<span style="color:#1a1a1a">玻璃降级</span>:功能条与 Tab Bar 退 rgba(255,255,255,0.94) 实底 + 1px rgba(0,0,0,0.06);② 屏 chip 条吸附时用的是<span style="color:#1a1a1a">实底白 + 1px 分隔线</span>,不是玻璃(全站只有三处玻璃)。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4q Skill 详情 · 代码文件 + 文件树 Sheet ━━━━━━━━━━ -->
+<div id="4q" style="flex:none;width:390px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4q</span><span style="font-size:12px;font-weight:600;color:#6b7280">代码文件态 + 文件树 Sheet</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 · 安全 708 · 本屏不可双指缩放</span></div>
+<div data-screen-label="4q Skill详情 代码" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;padding:52px 0 0;display:flex;flex-direction:column;transform:scale(0.96);transform-origin:50% 0">
+      <div style="padding:0 16px">
+        <div style="background:#f5f5f5;border-radius:16px;padding:12px 14px">
+          <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">INSTALL</div>
+          <div style="display:flex;align-items:center;gap:10px;background:#ffffff;border-radius:10px;padding:8px 10px">
+            <div style="flex:1;min-width:0;overflow-x:auto"><span style="font:400 12px 'JetBrains Mono',monospace;white-space:pre">npx skills add ClickPM/agent-skills <span style="color:#9ca3af">--skill</span> codex-review-loop</span></div>
+            <span style="flex:none;display:flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:#16a34a;border-radius:15px;padding:6px 12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>已复制</span>
+          </div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;padding:12px 16px 10px"><div style="display:flex;gap:8px;width:max-content">
+        <sc-for list="{{chipsPy}}" as="c" hint-placeholder-count="4">
+          <span style="font:400 12px 'JetBrains Mono',monospace;font-weight:{{c.fw}};color:{{c.color}};background:{{c.bg}};border-radius:15px;padding:8px 14px;white-space:nowrap">{{c.label}}</span>
+        </sc-for>
+      </div></div>
+      <div style="margin:0 16px;border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:none">scripts/review.py</span>
+          <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">python · 0.9 KB · 27 行</span>
+          <div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;border-radius:9px;padding:3px 8px;flex:none"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div>
+        </div>
+        <div style="overflow-x:auto"><div style="display:grid;grid-template-columns:36px max-content;font:400 12px/1.7 'JetBrains Mono',monospace;padding:10px 0;width:max-content">
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">1</span><span style="padding:0 16px 0 12px;white-space:pre"><span style="color:#9ca3af">#!/usr/bin/env python3</span></span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">2</span><span style="padding:0 16px 0 12px;white-space:pre"><span style="color:#9ca3af">"""Kick off a codex review and wait for the verdict."""</span></span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">3</span><span style="padding:0 16px 0 12px;white-space:pre"><span style="color:#2563eb">import</span> json</span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">4</span><span style="padding:0 16px 0 12px;white-space:pre"><span style="color:#2563eb">import</span> subprocess</span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">5</span><span style="padding:0 16px 0 12px;white-space:pre"><span style="color:#2563eb">from</span> pathlib <span style="color:#2563eb">import</span> Path</span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">6</span><span style="padding:0 16px 0 12px;white-space:pre"></span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">7</span><span style="padding:0 16px 0 12px;white-space:pre">COMPANION = Path(<span style="color:#16a34a">".claude/plugins/codex/companion.mjs"</span>)</span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">8</span><span style="padding:0 16px 0 12px;white-space:pre">HIGH = {<span style="color:#16a34a">"high"</span>, <span style="color:#16a34a">"critical"</span>}</span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">9</span><span style="padding:0 16px 0 12px;white-space:pre"></span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">10</span><span style="padding:0 16px 0 12px;white-space:pre"><span style="color:#2563eb">def</span> run_review(base: str | <span style="color:#2563eb">None</span>, background: bool = <span style="color:#2563eb">True</span>) -&gt; str:</span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">11</span><span style="padding:0 16px 0 12px;white-space:pre">    <span style="color:#9ca3af">"""Return the job id printed by codex-companion."""</span></span>
+          <span style="font-size:11px;color:#9ca3af;text-align:right;padding-right:10px;border-right:1px solid #e0e0e0;user-select:none">12</span><span style="padding:0 16px 0 12px;white-space:pre">    cmd = [<span style="color:#16a34a">"node"</span>, str(COMPANION), <span style="color:#16a34a">"review"</span>]</span>
+        </div></div>
+      </div>
+    </div>
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.22)"></div>
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;color:#2563eb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"></polyline></svg><span style="font-size:15px">Skills</span></div>
+      <div style="flex:1;min-width:0"></div>
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px"><span style="display:flex;align-items:center;height:30px;border-radius:15px;background:#2563eb;padding:0 12px;font-size:13px;font-weight:600;color:#ffffff">文件</span></div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:400px;z-index:6;background:#ffffff;border-radius:20px 20px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,0.18);display:flex;flex-direction:column;overflow:hidden">
+      <div style="flex:none;display:flex;justify-content:center;padding:6px 0 2px"><span style="width:36px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+      <div style="flex:none;padding:6px 16px 10px;font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">FILES · 4 个文件 · 8.0 KB</div>
+      <div style="flex:1;min-height:0;overflow:hidden;padding:0 16px">
+        <div style="background:#f5f5f5;border-radius:16px;overflow:hidden">
+          <sc-for list="{{fileTree}}" as="f" hint-placeholder-count="7">
+            <div style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 16px 0 {{f.indent}}px;background:{{f.bg}};cursor:pointer" style-active="background:rgba(120,120,128,0.10)">
+              <span style="width:10px;flex:none;text-align:center;font-size:9px;color:#9ca3af">{{f.caret}}</span>
+              <span style="font:400 13px 'JetBrains Mono',monospace;font-weight:{{f.fw}};flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.label}}</span>
+              <span style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;flex:none">{{f.size}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+</div>
+<div style="width:390px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4q · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2h</span>:代码视图<span style="color:#1a1a1a">整块横滚</span> —— 外层 overflow-x,内层 grid 宽 max-content,所以行号列会随内容一起滚出去。这是刻意的:分栏固定行号需要两个同步滚动容器,在移动端会与页面纵滚抢手势;而读代码时人是「先定位行号,再横读该行」,行号跟着走反而不丢行。行号列规格照搬 2h(<span style="color:#1a1a1a">宽 36、mono 11 #9ca3af、右侧 1px #e0e0e0、user-select:none</span>),代码 mono 12/1.7 不缩。</div>
+    <div>· 高亮只用三色:关键字 #2563eb / 字符串 #16a34a / 注释 #9ca3af。<span style="color:#1a1a1a">安装命令处于 copied 态</span>(#16a34a + 勾),与 4p 的常态互为一对。</div>
+    <div>· <span style="color:#1a1a1a">文件树 Sheet</span>(medium 400)与 4p 的 chip 条并存:chip 条切文件,树看结构(缩进 0 / 14 / 28、目录带 ▾、文件带 KB)。树行 <span style="color:#1a1a1a">44 高</span>(比桌面 26 高)—— 树是纯触控目标,不是数据密度区。当前文件用 rgba(37,99,235,.06) 底 + 600,与 4n 目录 Sheet 同一套选中语汇。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 代码块可视宽(横滚量随之变化)、chip 条、树的文件名列;不变 = 行号列 36、缩进阶梯、mono 12/1.7、r7 预览框、Sheet 400 高与 r20。</div>
+    <div>· <span style="color:#1a1a1a">横滚</span>:代码块整块、chip 条、INSTALL 命令行。三处独立;Sheet 与页面都不横滚。</div>
+    <div>· <span style="color:#1a1a1a">token · 保留</span>:行号列整套、高亮三色、预览框外壳与头部三段(文件名 mono 650/11 + 元信息 + copy)、copied 语汇、FILES 小标题、mono 文件名与 KB。<span style="color:#1a1a1a">换掉</span>:粘性树 → Sheet;树行 26 → 44;每行独立横滚 → 整块横滚;chip 与 copy 的方角 → 胶囊。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:Sheet 与 chip 是 iOS 容器,里面的 mono 文件名、KB、代码与行号是内核层 —— 这一屏是两层贴得最紧的一块:<span style="color:#1a1a1a">iOS 的 44 行高包着 mono 13 的文件名</span>。<span style="color:#1a1a1a">玻璃降级</span>:功能条露出,退实底 0.94;Sheet 与预览框本就实底。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4r About ━━━━━━━━━━ -->
+<div id="4r" style="flex:none;width:390px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4r</span><span style="font-size:12px;font-weight:600;color:#6b7280">About(含主题切换)</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 · 安全 708 · 本屏不可双指缩放</span></div>
+<div data-screen-label="4r About" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容安全高度 708 · 弹性</span></div>
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="width:44px;height:44px;flex:none"></div><div style="flex:1"></div><div style="width:44px;height:44px;flex:none"></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px;display:flex;flex-direction:column;gap:20px">
+      <div style="font-size:34px;font-weight:700;letter-spacing:-0.02em;line-height:1.2">About</div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="width:64px;height:64px;border-radius:32px;background:#f5f5f5;flex:none;display:flex;align-items:center;justify-content:center;font:600 20px 'JetBrains Mono',monospace;color:#6b7280">ck</span>
+        <div style="flex:1;min-width:0">
+          <a href="https://github.com/cking000bigdemon" style="font:600 15px 'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">@cking000bigdemon</a>
+          <div style="font-size:13px;color:#9ca3af;margin-top:4px">7 repositories</div>
+        </div>
+      </div>
+      <div style="font-size:15px;line-height:1.75;color:#6b7280;text-wrap:pretty">研究 agent 运行时与 harness 工程。本站本身就是一件作品:你在 Runtime 里看到的每一条事件轨迹,都来自它背后真实运行的 agent 内核。</div>
+      <div>
+        <div style="font-size:13px;font-weight:600;padding:0 4px 8px">本站如何构建</div>
+        <div style="background:#f5f5f5;border-radius:16px;padding:6px 0">
+          <sc-for list="{{buildPoints}}" as="p" hint-placeholder-count="5">
+            <div style="display:flex;gap:10px;padding:9px 16px;font-size:14px;line-height:1.7;text-wrap:pretty"><span style="color:#9ca3af;flex:none">·</span><span>{{p}}</span></div>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;padding:0 4px 8px">技术栈</div>
+        <div style="display:flex;height:8px;border-radius:4px;overflow:hidden">
+          <sc-for list="{{langBar}}" as="l" hint-placeholder-count="4">
+            <div style="height:8px;background:{{l.color}};width:{{l.pct}}%"></div>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
+          <sc-for list="{{langBar}}" as="l" hint-placeholder-count="4">
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#6b7280"><span style="width:8px;height:8px;border-radius:50%;background:{{l.color}}"></span>{{l.name}} {{l.pct}}%</span>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;padding:0 4px 8px">外观</div>
+        <div style="background:#f5f5f5;border-radius:16px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;min-height:56px;box-sizing:border-box;padding:8px 16px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            <span style="font-size:15px;flex:1;min-width:0">深色模式</span>
+            <span style="width:51px;height:31px;border-radius:16px;background:rgba(120,120,128,0.16);flex:none;display:flex;align-items:center;padding:2px;box-sizing:border-box;cursor:pointer"><span style="width:27px;height:27px;border-radius:14px;background:#ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.15)"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+      <sc-for list="{{tabsAbout}}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+          <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+</div>
+<div style="width:390px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4r · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2e</span>:880 单列 → 满宽单列;头像行从「头像 + 简介 + GitHub ↗ 按钮」三段拆成「头像 + @名 + repo 数」一行 + 简介独立一段 —— 358 宽里三段并排会把简介压成一列窄字。GitHub ↗ 按钮去掉:@名本身就是链接(2e 里它也是),而微信里外链跳转受限(见 4p),留一枚点不动的按钮不如不留。</div>
+    <div>· <span style="color:#1a1a1a">主题切换从导航条搬到这里</span>(2e 导航条右端那枚月亮图标)。移动端功能条只有两个位子,给会话与运行时;主题是一次性设置,一个月点不到一次,收进 About 的「外观」分组是它该在的地方。控件用 <span style="color:#1a1a1a">iOS Switch 51×31</span>,开启态填品牌色 #2563eb(不用 iOS 系统绿 —— 全站只有一个强调色)。</div>
+    <div>· 「本站如何构建」五条从裸列表变成 inset grouped 分组卡里的五行,行首 · 保留(它是 2e 的语汇);技术栈条形图照搬(8px 高、r4、四色按 pct 分段 + 下方图例),<span style="color:#1a1a1a">去掉桌面那圈 1px #e0e0e0 描边</span> —— 在白底上 8px 的条加描边会显脏。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 简介与五条要点(折行)、条形图(width 用 %,四段比例恒定)、图例(flex-wrap);不变 = 头像 64、Switch 51×31、r16、行 56、左右 16、条高 8。公开仓库网格(2e 的 7 张卡 + 一个 dashed 出口)在本屏之下,滚动可见,按 4o 的单列分组卡排。</div>
+    <div>· <span style="color:#1a1a1a">横滚</span>:本屏无。</div>
+    <div>· <span style="color:#1a1a1a">token · 保留</span>:@名 mono 15/600 + 品牌色链接、语言四色(#dea584 / #3178c6 / #3572A5 / #41b883,GitHub 语言色照搬)、条形图 8px/r4、要点行首 ·、月亮图标。<span style="color:#1a1a1a">换掉</span>:导航条月亮键 → About 的 Switch;裸列表 → 分组卡;头像 1px 描边 → 无描边(iOS 头像不描边);ghost GitHub 按钮 → 去掉。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:本屏无内核层;@名与技术栈的 mono 是既有语汇。<span style="color:#1a1a1a">玻璃降级</span>:同 4k。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4s 加载骨架(两屏) ━━━━━━━━━━ -->
+<div id="4s" style="flex:none;width:804px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4s</span><span style="font-size:12px;font-weight:600;color:#6b7280">加载骨架 · Skill 详情 / Notes 章节</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">两屏并列 · 各 390×845 · 安全 708</span></div>
+<div style="display:flex;gap:24px">
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">① SKILL 详情加载态(源 2i)</div>
+    <div data-screen-label="4s Skill加载态" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;color:#2563eb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"></polyline></svg><span style="font-size:15px">Skills</span></div>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite;transform-origin:50% 50%"><path d="M12 3a9 9 0 1 0 9 9"></path></svg><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">正在取…</span></div>
+          <div style="width:60px;height:30px;flex:none;border-radius:15px;background:rgba(120,120,128,0.12);display:flex;align-items:center;justify-content:center"><div style="width:26px;height:11px;border-radius:4px;background:#e0e0e0"></div></div>
+        </div>
+        <div style="flex:1;min-height:0;overflow:hidden;padding:52px 0 60px;display:flex;flex-direction:column">
+          <div style="padding:0 16px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:6px;min-height:17px;font-size:12px;color:#9ca3af"><a href="#4o" style="font-size:12px">Skills</a><span>/</span><div style="width:56px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+            <div style="display:flex;align-items:center;gap:10px;height:30px"><div style="width:210px;height:22px;border-radius:6px;background:#eeeeee;animation:omPulseBg 1.8s ease-in-out infinite"></div><div style="width:34px;height:16px;border-radius:4px;background:#eeeeee"></div></div>
+            <div style="display:flex;flex-direction:column;gap:8px"><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:72%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+            <div style="width:60%;height:10px;border-radius:4px;background:#eeeeee"></div>
+            <div style="display:flex;gap:10px;margin-top:4px">
+              <div style="flex:1;min-height:44px;border-radius:22px;background:#eeeeee;display:flex;align-items:center;justify-content:center"><div style="width:64px;height:11px;border-radius:4px;background:#e0e0e0"></div></div>
+              <div style="flex:1;min-height:44px;border-radius:22px;background:#eeeeee;display:flex;align-items:center;justify-content:center"><div style="width:64px;height:11px;border-radius:4px;background:#e0e0e0"></div></div>
+            </div>
+            <div style="background:#f5f5f5;border-radius:16px;padding:12px 14px;margin-top:4px">
+              <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">INSTALL</div>
+              <div style="background:#ffffff;border-radius:10px;padding:10px"><div style="width:88%;height:12px;border-radius:4px;background:#eeeeee;animation:omPulseBg 1.8s ease-in-out infinite"></div></div>
+              <div style="height:17px;display:flex;align-items:center;margin-top:8px"><div style="width:80%;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;padding:14px 16px 10px">
+            <div style="width:86px;height:33px;border-radius:15px;background:#eeeeee;flex:none"></div>
+            <div style="width:120px;height:33px;border-radius:15px;background:#eeeeee;flex:none"></div>
+            <div style="width:110px;height:33px;border-radius:15px;background:#eeeeee;flex:none"></div>
+          </div>
+          <div style="margin:0 16px;border:1px solid #e0e0e0;border-radius:7px;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><div style="width:70px;height:11px;border-radius:4px;background:#e0e0e0"></div><div style="width:110px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+            <div style="padding:14px;display:flex;flex-direction:column;gap:14px">
+              <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px"><div style="width:52px;height:10px;border-radius:4px;background:#e0e0e0"></div><div style="width:100%;height:10px;border-radius:4px;background:#e0e0e0"></div><div style="width:86%;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+              <div style="width:46%;height:16px;border-radius:5px;background:#eeeeee"></div>
+              <div style="display:flex;flex-direction:column;gap:9px"><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:64%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+            </div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsSkills}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">② NOTES 章节加载态(源 2j · 无进度线)</div>
+    <div data-screen-label="4s Notes加载态" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;color:#2563eb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"></polyline></svg><span style="font-size:15px">Notes</span></div>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite;transform-origin:50% 50%"><path d="M12 3a9 9 0 1 0 9 9"></path></svg><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">正在取…</span></div>
+          <div style="width:60px;height:30px;flex:none;border-radius:15px;background:rgba(120,120,128,0.12);display:flex;align-items:center;justify-content:center"><div style="width:26px;height:11px;border-radius:4px;background:#e0e0e0"></div></div>
+        </div>
+        <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:6px;min-height:17px;font-size:12px;color:#9ca3af"><a href="#4k" style="font-size:12px">Notes</a><span>/</span><div style="width:44px;height:10px;border-radius:4px;background:#eeeeee"></div><span>/</span><div style="width:38px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px"><div style="width:100%;height:22px;border-radius:6px;background:#eeeeee;animation:omPulseBg 1.8s ease-in-out infinite"></div><div style="width:58%;height:22px;border-radius:6px;background:#eeeeee"></div></div>
+          <div style="width:52%;height:10px;border-radius:4px;background:#eeeeee"></div>
+          <div style="border-left:3px solid #b6bac2;border-radius:0 6px 6px 0;background:rgba(0,0,0,0.03);padding:12px 14px;margin-top:8px;display:flex;flex-direction:column;gap:9px"><div style="width:100%;height:11px;border-radius:4px;background:#e0e0e0"></div><div style="width:100%;height:11px;border-radius:4px;background:#e0e0e0"></div><div style="width:56%;height:11px;border-radius:4px;background:#e0e0e0"></div></div>
+          <div style="width:40%;height:17px;border-radius:5px;background:#eeeeee;margin-top:14px"></div>
+          <div style="display:flex;flex-direction:column;gap:10px"><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:46%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;margin-top:8px">
+            <div style="display:flex;align-items:center;padding:9px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><div style="width:64px;height:11px;border-radius:4px;background:#e0e0e0"></div></div>
+            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:9px"><div style="width:74%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:88%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:60%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:30%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px"><div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div><div style="width:82%;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+</div>
+<div style="width:804px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4s · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2i / 2j</span>:骨架不新造视觉语言 —— 填充 <span style="color:#1a1a1a">#eeeeee</span>,压在灰面(#f5f5f5 分组卡 / 引用块)上时<span style="color:#1a1a1a">降一档到 #e0e0e0</span>,圆角走既有 4/5/6 档,动效只用 <span style="color:#1a1a1a">omPulseBg</span>(每屏只给标题条与 INSTALL 命令行两处)与 <span style="color:#1a1a1a">omSpin</span>(功能条中间的「正在取…」)。骨架说「这里会有东西」,那行 spinner 说「已经在取了」——两句话不重复。</div>
+    <div>· <span style="color:#1a1a1a">移动端补充:骨架按 iOS 分组卡的形状对位,不按桌面双栏</span>。① 屏里 chip 条的骨架是三枚 33 高胶囊(不是 240 树的一列方块)、两枚按钮的骨架是 44 高胶囊、INSTALL 是 r16 分组卡 —— 骨架的外形必须等于内容到达后的外形,否则到达那一刻整页跳版。</div>
+    <div>· <span style="color:#1a1a1a">已知的层级照旧渲染</span>:面包屑第一级(Skills / Notes)、功能条返回按钮、INSTALL 小标题、Tab Bar、预览框外壳 —— 这些在路由层就已知,画成骨架是撒谎。骨架只给「要等网络才知道」的部分。</div>
+    <div>· <span style="color:#1a1a1a">② 屏不出现阅读进度线</span>:正文还没到,「读到哪」这件事不存在。进度线在正文首屏渲染完成后才出现(这条与 2j 一致)。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 所有 width 用 % 的骨架条(它们本来就是按行宽比例给的);不变 = 条高(10 / 11 / 12 / 16 / 22)、圆角档、胶囊高度、左右 16。<span style="color:#1a1a1a">横滚</span>:两屏都无 —— 加载态里没有真实内容,横滚容器留到内容到达后再出现。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:骨架期两层的边界暂时消失(都是灰块),所以两处内核层容器的<span style="color:#1a1a1a">外壳照旧画出</span>(代码 / 文件预览框的 1px #e0e0e0 + r7 + #f5f5f5 头)—— 外壳是接缝唯一还在的证据。<span style="color:#1a1a1a">玻璃降级</span>:同 4k;骨架块全是实底,降级后可读性不变。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4t 错误态 A / B / 断网 ━━━━━━━━━━ -->
+<div id="4t" style="flex:none;width:1218px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4t</span><span style="font-size:12px;font-weight:600;color:#6b7280">错误态 A 出错 / B 找不到 / C 断网</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">三屏并列 · 各 390×845 · 安全 708</span></div>
+<div style="display:flex;gap:24px">
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">A · 页面出错(源 2k)</div>
+    <div data-screen-label="4t 错误A" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="width:44px;height:44px;flex:none"></div><div style="flex:1"></div><div style="width:44px;height:44px;flex:none"></div>
+        </div>
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:44px 16px 60px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:4px;background:#ef4444"></span><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">HTTP 500</span></div>
+          <div style="font-size:20px;font-weight:650;margin-top:12px">这一页没能取回来</div>
+          <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:8px;text-wrap:pretty">服务端在处理这次请求时出错了,不是你操作的问题。重试通常就好;要是反复出现,把下面这个标识发我,我能在日志里对上这一次。</div>
+          <div style="display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:22px;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;margin-top:22px;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)">重试</div>
+          <div style="display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:6px"><a href="#4k" style="font-size:15px;color:#6b7280">返回首页</a></div>
+          <div style="display:flex;align-items:center;gap:10px;background:#f5f5f5;border-radius:10px;padding:10px 12px;margin-top:20px">
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">err_7f3a2c14 · 2026-09-03 06:41 UTC</span>
+            <span style="flex:none;font-size:13px;font-weight:600;color:#2563eb;background:rgba(120,120,128,0.12);border-radius:15px;padding:6px 12px;cursor:pointer" style-active="transform:scale(0.97)">复制</span>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsErr}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">B · 找不到(源 2k)</div>
+    <div data-screen-label="4t 错误B" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="width:44px;height:44px;flex:none"></div><div style="flex:1"></div><div style="width:44px;height:44px;flex:none"></div>
+        </div>
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:44px 16px 60px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:4px;background:#9ca3af"></span><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">HTTP 404</span></div>
+          <div style="font-size:20px;font-weight:650;margin-top:12px">这个地址没有对应的内容</div>
+          <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:8px;text-wrap:pretty">链接可能过期了,或者这一篇 / 这个 skill 改了名字。从列表里找一遍通常能找到它。</div>
+          <div style="display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:22px;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;margin-top:22px;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)">回 Skills 列表</div>
+          <div style="display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:6px"><a href="#4k" style="font-size:15px;color:#6b7280">返回首页</a></div>
+          <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/skills/codex-review-lop</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsErr}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">C · 断网(移动端补态)</div>
+    <div data-screen-label="4t 错误C 断网" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">✕ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="width:44px;height:44px;flex:none"></div><div style="flex:1"></div><div style="width:44px;height:44px;flex:none"></div>
+        </div>
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:44px 16px 60px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:4px;background:#9ca3af"></span><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">OFFLINE</span></div>
+          <div style="font-size:20px;font-weight:650;margin-top:12px">需要联网才能打开这一页</div>
+          <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:8px;text-wrap:pretty">当前没有网络。连上之后重试一次就好。</div>
+          <div style="display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:22px;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;margin-top:22px;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)">重试</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsErr}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+</div>
+<div style="width:1218px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4t · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2k</span>:三态共用一套版式 —— 10px 方点 + mono 10 eyebrow → 标题 → 15/1.75 说明 → <span style="color:#1a1a1a">品牌色实心胶囊主按钮</span>(2k 定的出口层级,全站唯一的实心按钮层级,在移动端也只出现在这里与 4l 的「开始读」)→ 次级文字链。桌面 460px 单列居中 → 移动端满宽单列(左右 16),垂直居中不变;桌面 16px 标题 → 20/650。</div>
+    <div>· <span style="color:#1a1a1a">Tab Bar 四格都不高亮</span>(照搬 2k 的「导航条四格都不高亮」):出错时当前路由已经无效,高亮任何一格都是假信息;四格保持常态可点,本身就是最快的出口。功能条两侧都空 —— 出错页没有可用的功能。</div>
+    <div>· <span style="color:#1a1a1a">A 有可复制标识,B 没有</span>:A 的 err_ + UTC 是服务端日志里唯一能对上这一次请求的钩子;B 的 404 背后没有异常可对账,给 id 只会让人误判故障,末尾只回显访问路径。<span style="color:#1a1a1a">错误红只用在 A 的方点</span>,B 与 C 的方点是 #9ca3af。</div>
+    <div>· <span style="color:#1a1a1a">C 断网是移动端补的一态</span>(桌面无对应物):文案只说「需要联网」+ 一枚重试,<span style="color:#1a1a1a">不做离线阅读</span> —— 缓存正文是新功能,不在本轮。方点用 #9ca3af 而非红色:断网不是站点故障。状态栏占位里把信号画成 ✕ 以示区别(占位区,不是我们能控的)。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 说明段折行与主按钮宽(整宽胶囊);不变 = 方点 10/r4、eyebrow、标题 20、按钮 44 高与 r22、标识行 r10、左右 16。<span style="color:#1a1a1a">横滚</span>:三屏都无 —— 标识与路径单行省略(长按可选中复制)。</div>
+    <div>· <span style="color:#1a1a1a">接缝</span>:三屏都无内核层,mono 只用于 eyebrow / 标识 / 路径。<span style="color:#1a1a1a">玻璃降级</span>:功能条与 Tab Bar 退实底 0.94 + 1px rgba(0,0,0,0.06);错误页内容是纯白底,降级后层级更清楚。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4u 载体适配四态 ━━━━━━━━━━ -->
+<div id="4u" style="flex:none;width:1632px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4u</span><span style="font-size:12px;font-weight:600;color:#6b7280">载体适配四态(桌面无对应物)</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">四屏并列 · 各 390×845</span></div>
+<div style="display:flex;gap:24px">
+
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">① 微信 WEBVIEW · 主场景 · 内容 708</div>
+    <div data-screen-label="4u 微信webview" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容 708</span></div>
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+          <div style="flex:1"></div>
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时</span></div>
+        </div>
+        <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px">
+          <div style="font-size:34px;font-weight:700;letter-spacing:-0.02em">Notes</div>
+          <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px">从产品视角到源码拆解的 harness 工程研习库。</div>
+          <div style="background:#f5f5f5;border-radius:16px;margin-top:18px;overflow:hidden">
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Claude Code Harness</div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Codex Harness</div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">DeepSeek Harness</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">② 移动浏览器 · TAB BAR 与工具栏相叠 · 内容 653</div>
+    <div data-screen-label="4u 移动浏览器" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:50px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">Safari 地址栏 · 不可控 · 50</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容 653</span></div>
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+          <div style="flex:1"></div>
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时</span></div>
+        </div>
+        <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px">
+          <div style="font-size:34px;font-weight:700;letter-spacing:-0.02em">Notes</div>
+          <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px">从产品视角到源码拆解的 harness 工程研习库。</div>
+          <div style="background:#f5f5f5;border-radius:16px;margin-top:18px;overflow:hidden">
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Claude Code Harness</div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Codex Harness</div>
+          </div>
+          <div style="margin-top:18px;border:1px dashed rgba(26,26,26,0.35);border-radius:10px;padding:10px 12px;display:{{noteDisplay}};flex-direction:column;gap:4px">
+            <div style="font:600 9px 'JetBrains Mono',monospace;color:#1a1a1a;letter-spacing:0.06em">向下滚动时:Tab Bar 隐藏(与 Safari 工具栏同步的观感)</div>
+            <div style="font:400 9px/1.7 'JetBrains Mono',monospace;color:#6b7280">向上滚动或到底时复现。理由:两条 49 高的横条上下相叠会吃掉 98px(内容 653 的 15%),而且两条都是「导航」,视觉上分不清哪条是网页的。Safari 自己就是滚动隐藏地址栏的,跟着它走最不违和。</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:49px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">Safari 工具栏 · 不可控 · 49</span></div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">③ STANDALONE · 内容 752(最大)· 我们不引导安装</div>
+    <div data-screen-label="4u standalone" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 唯一占位</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;right:0;bottom:0;width:14px;z-index:3;pointer-events:none;border-left:1px dashed rgba(26,26,26,0.18);align-items:center;justify-content:center;display:{{noteDisplay}}"><span style="writing-mode:vertical-rl;font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">内容 752 · 最大的一态</span></div>
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+          <div style="flex:1"></div>
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时</span></div>
+        </div>
+        <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px">
+          <div style="font-size:34px;font-weight:700;letter-spacing:-0.02em">Notes</div>
+          <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px">从产品视角到源码拆解的 harness 工程研习库。</div>
+          <div style="background:#f5f5f5;border-radius:16px;margin-top:18px;overflow:hidden">
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Claude Code Harness</div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Codex Harness</div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">DeepSeek Harness</div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Pi</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">④ 玻璃降级(BACKDROP-FILTER 不可用)</div>
+    <div data-screen-label="4u 玻璃降级" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;padding:0 6px;background:rgba(255,255,255,0.94);border-bottom:1px solid rgba(0,0,0,0.06);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+          <div style="flex:1"></div>
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时</span></div>
+        </div>
+        <div style="flex:1;min-height:0;overflow:hidden;padding:52px 16px 60px">
+          <div style="font-size:34px;font-weight:700;letter-spacing:-0.02em">Notes</div>
+          <div style="font-size:15px;line-height:1.75;color:#6b7280;margin-top:6px">从产品视角到源码拆解的 harness 工程研习库。</div>
+          <div style="background:#f5f5f5;border-radius:16px;margin-top:18px;overflow:hidden">
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Claude Code Harness</div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">Codex Harness</div>
+            <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+            <div style="min-height:56px;box-sizing:border-box;padding:12px 16px;font-size:15px;font-weight:600">DeepSeek Harness</div>
+          </div>
+          <div style="margin-top:18px;border:1px dashed rgba(26,26,26,0.35);border-radius:10px;padding:10px 12px;display:{{noteDisplay}};flex-direction:column;gap:4px">
+            <div style="font:600 9px 'JetBrains Mono',monospace;color:#1a1a1a;letter-spacing:0.06em">三处玻璃 → 实底 rgba(255,255,255,0.94) + 1px rgba(0,0,0,0.06)</div>
+            <div style="font:400 9px/1.7 'JetBrains Mono',monospace;color:#6b7280">版式一格不动:高度 44 / 49 / 58 不变、内边距不变、内高光与外投影保留。变的只有「能不能看见玻璃后面的内容边缘」—— 那是观感,不是结构,所以降级后层级仍然清楚。深色模式对应 rgba(28,28,30,0.72) → rgba(28,28,30,0.94)。</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.94);border-top:1px solid rgba(0,0,0,0.06);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+</div>
+<div style="width:1632px;box-sizing:border-box;background:#ffffff;border:1px dashed #d4d4d4;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">④ 附 · 横屏降级(做不到硬锁)· 844×390 示意</div>
+  <div style="width:844px;height:230px;box-sizing:border-box;border:1px solid #e0e0e0;background:#f5f5f5;display:flex;overflow:hidden">
+    <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">留白</span></div>
+    <div style="width:430px;flex:none;background:#ffffff;border-left:1px solid #e0e0e0;border-right:1px solid #e0e0e0;display:flex;flex-direction:column">
+      <div style="height:34px;flex:none;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06);display:flex;align-items:center;padding:0 6px"><span style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#2563eb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line></svg></span><span style="flex:1"></span><span style="height:26px;border-radius:13px;background:rgba(120,120,128,0.12);padding:0 10px;display:flex;align-items:center;font-size:12px;font-weight:600;color:#2563eb">运行时</span></div>
+      <div style="flex:1;min-height:0;overflow:hidden;padding:12px 16px">
+        <div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Notes</div>
+        <div style="background:#f5f5f5;border-radius:16px;margin-top:10px;overflow:hidden">
+          <div style="min-height:44px;padding:10px 16px;font-size:15px;font-weight:600">Claude Code Harness</div>
+          <div style="height:1px;background:#e0e0e0;margin-left:16px"></div>
+          <div style="min-height:44px;padding:10px 16px;font-size:15px;font-weight:600">Codex Harness</div>
+        </div>
+      </div>
+      <div style="height:44px;flex:none;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06);display:flex">
+        <sc-for list="{{tabsNotes}}" as="t" hint-placeholder-count="4">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+            <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">留白</span></div>
+  </div>
+  <div style="font:400 10px/1.85 'JetBrains Mono',monospace;color:#6b7280;margin-top:8px">网页拿不到方向锁,所以横屏时<span style="color:#1a1a1a">维持竖屏版式:最大宽 430 居中、两侧留白</span>(#f5f5f5,与站点灰面同色,不引入新底色)。功能条与 Tab Bar 高度按横屏可视高度收(34 / 44),字号与命中区不变;不为横屏做第二套版式 —— 那会变成第二个设计,而横屏在这个站上不是主要使用方式。</div>
+</div>
+<div style="width:1632px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4u · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">桌面无对应物</span>:这一板画的是载体,不是页面。四态共用同一份内容(Notes 首页片段),差别只在 chrome 占位与由此决定的内容高度:<span style="color:#1a1a1a">微信 708 / 浏览器 653 / standalone 752</span>。三个数都不是常量 —— 状态栏、微信栏、Home Indicator 各机型不同,所以实现上一律用 <span style="color:#1a1a1a">100dvh − 实测 chrome 高度</span>(或 visualViewport),不写 708。</div>
+    <div>· <span style="color:#1a1a1a">① 微信 webview 是主场景</span>:没有地址栏、没有底部工具栏 —— Tab Bar 可以放心贴安全区,这是社交 webview 相对普通浏览器的优势。代价是顶部永远有一条不可控的微信标题栏,所以我们的顶部条只能是<span style="color:#1a1a1a">功能条</span>(不重复标题)。</div>
+    <div>· <span style="color:#1a1a1a">② 浏览器里我们的 Tab Bar 会与 Safari 工具栏相叠</span>:两条 49 高的横条上下贴着,吃掉 98px 且都长得像「导航」。处理:<span style="color:#1a1a1a">Tab Bar 随滚动隐藏 / 显示</span> —— 向下滚隐藏、向上滚或到底复现,与 Safari 自己收放地址栏的节奏一致。不做的两个替代方案:把 Tab Bar 改成顶部(会与微信栏冲突,两个载体就要两套骨架)、把 Tab Bar 上移 49(在微信里就会多出一条 49 的空档)。</div>
+    <div>· <span style="color:#1a1a1a">③ standalone 是内容最高的一态</span>,但<span style="color:#1a1a1a">我们不引导安装</span>(所有者裁定:不做「添加到主屏幕」引导),这条路只是留着 —— 访客自己装了就自动吃到 752。</div>
+    <div>· <span style="color:#1a1a1a">④ 玻璃降级 + 横屏降级</span>:见屏内与上方附图的注释。降级判定用 <span style="color:#1a1a1a">@supports (backdrop-filter: blur(1px))</span>,不做 UA 嗅探 —— Android 微信内核版本太杂,能力检测比名单可靠。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430 与横滚</span>:四态的横向规则与各自的页面板一致(此板只改上下 chrome);四态都禁页面级 overscroll 与双指缩放。<span style="color:#1a1a1a">接缝</span>:此板不含内核层。</div>
+  </div>
+</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;siteName&quot;: {&quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Agent X-Ray&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Site&quot;},
+  &quot;barScale&quot;: {&quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 1, &quot;min&quot;: 0.6, &quot;max&quot;: 2, &quot;step&quot;: 0.1, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Runtime panel&quot;},
+  &quot;boardLabels&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Canvas&quot;},
+  &quot;seamNotes&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Canvas&quot;}
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const scale = this.props.barScale ?? 1;
+    const pulse = 'omPulseBg 1.8s ease-in-out infinite';
+    const wave = 'omWaveSweep 1.8s linear infinite';
+    const waveRowBg = 'rgba(37,99,235,0.05) linear-gradient(90deg,rgba(37,99,235,0) 0%,rgba(37,99,235,0.16) 50%,rgba(37,99,235,0) 100%) 200% 0 / 200% 100% no-repeat';
+    const waveBar = '#9ca3af linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.6) 50%,rgba(255,255,255,0) 100%) 200% 0 / 200% 100% no-repeat';
+    // 桌面公式 min(198, max(4, sqrt(ms)*11)) 的 198 上限 ≈ ms 324 满格。
+    // 移动端轨道是弹性列,改写成同一条 √ 曲线的比例式:min(100%, max(3px, sqrt(ms/324) × 轨道宽))。
+    const WP = ms => Math.min(100, Math.max(3, Math.round(Math.sqrt(ms / 324) * 100 * scale))) + '%';
+    const row = (name, ms, dur, c, x = {}) => ({ name, dur, c, dot: c, w: WP(ms), rowBg: 'transparent', anim: 'none', barAnim: 'none', hasNote: false, ...x });
+
+    const t1rows = [
+      row('context', 12, '12ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('after_provider_response', 2, '2ms', '#9ca3af'),
+      row('tool_call · read_file', 8, '8ms', '#ef4444'),
+      row('tool_execution_start', 0.3, '0ms', '#9ca3af'),
+      row('tool_execution_end', 310, '310ms', '#9ca3af'),
+      row('tool_result', 10, '10ms', '#2563eb'),
+    ];
+    const ctxSel = row('context', 11, '11ms', '#2563eb');
+    const t2rest = [
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('tool_call · bash', 18, '18ms', '#ef4444', { hasNote: true }),
+      row('tool_result', 6, '6ms', '#2563eb'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 2, '…', waveBar, { dot: '#9ca3af', rowBg: waveRowBg, anim: wave, barAnim: wave }),
+    ];
+
+    const seg = active => ['Timeline', 'Chain', 'Lifecycle', 'Tools'].map(label => label === active
+      ? { label, fw: 600, color: '#1a1a1a', bg: '#ffffff', shadow: '0 1px 3px rgba(0,0,0,0.08)' }
+      : { label, fw: 400, color: '#6b7280', bg: 'transparent', shadow: 'none' });
+
+    const tabDefs = [
+      { label: 'Runtime', d: 'M22 12h-4l-3 9L9 3l-3 9H2' },
+      { label: 'Notes', d: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
+      { label: 'Skills', d: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z' },
+      { label: 'About', d: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1' },
+    ];
+    const mkTabs = (active, names) => tabDefs.filter(t => !names || names.indexOf(t.label) > -1).map(t => ({
+      ...t,
+      color: t.label === active ? '#2563eb' : '#6b7280',
+      fw: t.label === active ? 600 : 400,
+    }));
+
+    const styles = {
+      fired: { icon: '✓', iconColor: '#16a34a', color: '#1a1a1a', border: '#e0e0e0', bg: '#ffffff' },
+      active: { icon: '●', iconColor: '#2563eb', color: '#2563eb', border: '#2563eb', bg: 'rgba(37,99,235,0.06)', anim: pulse, fw: 600 },
+      pending: { icon: '○', iconColor: '#9ca3af', color: '#9ca3af', border: '#e0e0e0', bg: '#ffffff' },
+      llm: { icon: '', iconColor: '#6b7280', color: '#1a1a1a', border: '#9ca3af', bg: '#f5f5f5', outline: '1px solid #e0e0e0', fw: 600 },
+    };
+    const N = (name, st, count, x = {}) => ({ name, count, dot: 'none', line: 'block', outline: 'none', anim: 'none', fw: 400, ...styles[st], ...x });
+    const lifeGroups = [
+      { title: '会话级 · 一次会话一次', arrow: 'block', nodes: [N('session_start', 'fired', '×1'), N('before_agent_start', 'fired', '×1')] },
+      { title: '每轮 · 本会话 ×2', arrow: 'block', nodes: [N('context', 'fired', '×2'), N('before_provider_request', 'fired', '×2'), N('LLM', 'llm', '')] },
+      { title: '工具', arrow: 'block', nodes: [N('tool_call', 'fired', '×2', { dot: 'inline-block' }), N('tool_execution', 'fired', '×1'), N('tool_result', 'fired', '×2')] },
+      { title: '收尾', arrow: 'none', nodes: [N('message_update', 'active', ''), N('turn_end', 'pending', ''), N('agent_end', 'pending', ''), N('session_shutdown', 'pending', '')] },
+    ];
+
+    const P = (name, type, required, rule, desc) => ({
+      name, type, rule, desc,
+      req: required ? '必填' : '可选',
+      reqBg: required ? '#eeeeee' : '#f5f5f5',
+      reqColor: required ? '#1a1a1a' : '#9ca3af',
+    });
+    const T = (name, cn, badge, color, desc, params, schema, out, outNote, phaseLabels) => ({
+      name, cn, badge, color, desc, params, schema, out, outNote: outNote || '',
+      hasPhases: !!phaseLabels,
+      phases: (phaseLabels || []).map((label, i, a) => ({ label, arrow: i === a.length - 1 ? '' : '→' })),
+      open: false, closed: true, chev: '▸',
+    });
+    const toolGroups = [
+      {
+        label: '纯函数组', color: '#6b7280', note: '只读教程库三张表 · 不联网', empty: false, emptyNote: '',
+        tools: [
+          T('notes_list_series', '教程库索引', '纯函数', '#6b7280',
+            '列出本站 Notes 教程库的系列;给出 series 参数时改为列出该系列的章节表。',
+            [P('category', 'string', false, '≤64', '只看某个分类的 slug,省略则全部'), P('series', 'string', false, '≤128', '给出系列 slug 时改为返回该系列的章节表')],
+            '{ "category": "string?", "series": "string?" }',
+            'JSON 文本。列系列时每条含 slug / name / description / chapterCount', '单次最多 50 条,超出带 more: true'),
+          T('notes_get_chapter', '读教程章节', '纯函数', '#6b7280',
+            '读取某个系列下某一章的正文(标准 markdown,超长会截断)。',
+            [P('series', 'string', true, '1–128', '系列 slug'), P('chapter', 'string', true, '1–128', '章节 slug')],
+            '{ "series": "string", "chapter": "string" }',
+            '一段 markdown —— 首部是标题 / 系列 / 章节 / 摘要 / 原文链接', ''),
+          T('notes_search', '检索教程库', '纯函数', '#6b7280',
+            '在教程库的标题、摘要与正文里做大小写不敏感的子串检索。',
+            [P('query', 'string', true, '1–120', '关键词(子串匹配,不支持通配符)'), P('limit', 'integer', false, '1–20 · 默认 5', '返回条数')],
+            '{ "query": "string", "limit": "integer?" }',
+            'JSON 文本,hits 每条含 series / chapter / title / snippet', 'snippet 取命中处前后共约 160 字'),
+        ],
+      },
+      {
+        label: '外呼组', color: '#2563eb', note: '持服务端凭据发请求 · 访客只控 query', empty: false, emptyNote: '',
+        tools: [
+          T('web_search', '联网搜索', '外呼', '#2563eb',
+            '联网搜索并返回一段带来源的简明答案(搜索网关在服务端执行检索与综述)。只接受一个自然语言查询,不能指定网址;本站教程库的内容请用 notes_search。',
+            [P('query', 'string', true, '2–300', '自然语言查询;不要放网址')],
+            '{ "type": "object", "properties": { "query": { "type": "string", "minLength": 2, "maxLength": 300 } }, "required": ["query"], "additionalProperties": false }',
+            '一段正文 + 末尾「来源:」列表', '来源最多 10 条',
+            ['发起', '已受理', '检索中', '综述中']),
+        ],
+      },
+      {
+        label: '会话绑定组', color: '#f9c22e', note: '只写当前这次会话的标题', empty: false, emptyNote: '',
+        tools: [
+          T('session_rename', '会话命名', '会话绑定', '#f9c22e',
+            '给当前这次会话起一个简短标题,显示在会话列表里。整个会话只需在第一轮调用一次。',
+            [P('title', 'string', true, '1–60', '标题本身,一行,不带引号与标点')],
+            '{ "title": "string" }',
+            '一句确认文本', '已命名过的会话再次调用返回一条正常结果,不算失败'),
+        ],
+      },
+      {
+        label: '沙箱执行组', color: '#8b5cf6', note: '空 · 本站不挂任何执行类工具', tools: [], empty: true,
+        emptyNote: '不存在 bash / write / 任意代码执行类工具 —— 保留颜色位,不放工具。入参一律 additionalProperties: false;结果统一 8000 字符上限。',
+      },
+    ];
+    const toolGroupsOpen = toolGroups.map(g => ({
+      ...g, tools: g.tools.map(t => t.name === 'web_search' ? { ...t, open: true, closed: false, chev: '▾' } : t),
+    }));
+
+    const sessions = [
+      { title: '演示:危险命令拦截', time: '2m ago', bg: 'rgba(37,99,235,0.06)', sep: 'none', chev: 'block', swiped: false },
+      { title: '帮我查上海→东京的低价航线', time: '1h ago', bg: '#ffffff', sep: 'block', chev: 'block', swiped: false },
+      { title: 'permission-gate 源码解读', time: '3h ago', bg: '#ffffff', sep: 'block', chev: 'none', swiped: true },
+      { title: 'context 注入前后对比实验', time: '昨天', bg: '#ffffff', sep: 'block', chev: 'block', swiped: false },
+      { title: '/demo 接管命令演示', time: '2d ago', bg: '#ffffff', sep: 'block', chev: 'block', swiped: false },
+    ];
+
+    // ── P1 / P2:Notes · Skills · About 的既有数据(照搬桌面 2a–2k,不新增字段)
+    const S = (name, desc, meta) => ({ name, desc, meta });
+    const notesGroups = [
+      { name: '产品经理', slug: 'pm', dot: '#2563eb', items: [
+        S('Agent 基础知识', '从能力盘点到综合项目的 14 阶段学习路线,含术语表与外部权威资料索引', '14 阶段 · 更新于 2d ago'),
+        S('AI native 软件工程教程', '为什么 vibe coding 不可以?AI 时代如何快速学习一项技术', '7 讲 · 更新于 5d ago'),
+        S('内容分享', '四大 Agent Harness 对比、pi 实战、karpathy 的 LLM-wiki 方法论与我们的实践', '5 个专题 · 更新于 1w ago'),
+      ] },
+      { name: '源码拆解', slug: 'deep-dive', dot: '#16a34a', items: [
+        S('Claude Code Harness', '从混淆源码逆向一个闭源 harness:上下文预算才是架构主线', '15 章 · 更新于 3d ago'),
+        S('Codex Harness', '102 个 crate 的单二进制:SQEQ 队列、模型判官审批、四套沙箱', '15 章 · 更新于 1w ago'),
+        S('DeepSeek Harness', '一切皆插件:cordis 底座、Seam 架构、fail-closed 权限四层防线', '13 章 · 更新于 1w ago'),
+        S('Pi', '最小可懂的 agent 内核:事件驱动、扩展系统、会话分叉', '13 章 · 更新于 2w ago'),
+        S('Harness Engineering', '横向研究报告:四种 harness 哲学对照', '研究报告 · 更新于 2w ago'),
+      ] },
+      { name: '代码工程', slug: 'engineering', dot: '#f9c22e', items: [
+        S('Rust 语言圣经', '所有权到 Tokio Mini-Redis:写出可靠高性能 Rust 的完整路径', '15 章 · 更新于 1w ago'),
+        S('TypeScript 深度教程', '类型建模、infer、Monorepo 到发布策略的 18 章深潜', '18 章 · 更新于 2w ago'),
+      ] },
+    ];
+    const chTitles = ['开篇 — Claude Code Harness 总览', '工程骨架 — 一个 npm 包里的 AgentOS', 'Agent Loop — query 这一个循环', '模型调用与缓存经济学', '系统提示词 — 一个可编排的装配架构', '附件与 system-reminder — 第二条注入通道', '上下文压缩 — 五层防线', '工具系统 — 47 个成员的接口与延迟加载'];
+    const chTimes = ['2w ago', '2w ago', '2w ago', '2w ago', '1w ago', '1w ago', '1w ago', '1w ago'];
+    const chapters = chTitles.map((t, i) => ({ num: String(i + 1).padStart(2, '0'), title: t, time: chTimes[i], sep: i === 0 ? 'none' : 'block' }));
+    const K = (name, own, desc, meta) => ({ name, desc, meta, badge: own ? '自研' : '精选', badgeColor: own ? '#2563eb' : '#9ca3af' });
+    const skillGroups = [
+      { name: '开发框架', slug: 'framework', dot: '#2563eb', items: [
+        K('encore-api', false, '在 Encore.ts 里定义类型化端点:路径 / 查询 / 头部参数、请求校验、APIError 的用法。', 'encoredev/skills · 1 个文件 · 更新于 12 天前'),
+        K('encore-database', false, 'SQLDatabase 建表与迁移、查询写法、Drizzle / Prisma 的接法。', 'encoredev/skills · 1 个文件 · 更新于 12 天前'),
+        K('encore-testing', false, '用 encore test 跑 vitest:隔离测试库、直接调 handler、外部依赖 mock。', 'encoredev/skills · 1 个文件 · 更新于 12 天前'),
+      ] },
+      { name: '工作流', slug: 'workflow', dot: '#16a34a', items: [
+        K('worktree-round', true, '开一轮:建 round 分支与 worktree、复制本地 secrets、npm ci 两次;收口时按安全闸清理。', '@ClickPM · 3 个文件 · 更新于 5 天前'),
+        K('release-ship', true, '本机构建镜像(tag = git SHA)、送到服务器、compose 重建,把发版记进 releases.md。', '@ClickPM · 2 个文件 · 更新于 6 天前'),
+      ] },
+      { name: '审查与质量', slug: 'review', dot: '#f9c22e', items: [
+        K('codex-review-loop', true, '用 codex 做独立代码审查的固定回路:发起 → 逐条裁定 → 只对整改 diff 复审,直到 high 级清零。', '@ClickPM · 4 个文件 · 更新于 3 天前'),
+        K('security-review', false, '对当前分支的改动做一次安全审查:输入边界、凭据、注入面、依赖。', 'anthropics/skills · 2 个文件 · 更新于 20 天前'),
+      ] },
+    ];
+    const chipSel = { bg: '#2563eb', color: '#ffffff', fw: 600 };
+    const chipIdle = { bg: 'rgba(120,120,128,0.12)', color: '#1a1a1a', fw: 400 };
+    const mkChips = sel => ['SKILL.md', 'scripts/review.py', 'scripts/findings.py', 'references/findings-format.md']
+      .map(label => ({ label, ...(label === sel ? chipSel : chipIdle) }));
+    const treeRow = (label, indent, size, sel) => ({
+      label, indent: 16 + indent, size,
+      bg: sel ? 'rgba(37,99,235,0.06)' : 'transparent',
+      fw: sel ? 600 : 400,
+      caret: size ? '' : '▾',
+    });
+    const fileTree = [
+      treeRow('codex-review-loop/', 0, '', false),
+      treeRow('SKILL.md', 14, '3.8 KB', false),
+      treeRow('scripts/', 14, '', false),
+      treeRow('review.py', 28, '0.9 KB', true),
+      treeRow('findings.py', 28, '1.9 KB', false),
+      treeRow('references/', 14, '', false),
+      treeRow('findings-format.md', 28, '1.4 KB', false),
+    ];
+    const chapterToc = ['一、循环在哪里', '二、一个 turn 的解剖', '三、流式事件如何冒泡', '四、循环怎么停下来', '五、小结']
+      .map((label, i) => ({ label, color: i === 1 ? '#2563eb' : '#1a1a1a', fw: i === 1 ? 600 : 400, bg: i === 1 ? 'rgba(37,99,235,0.06)' : 'transparent', sep: i === 0 ? 'none' : 'block' }));
+    const rss = (name, url, dot, sep, copied) => ({ name, url, dot, sep, copied, copyBtn: copied ? 'none' : 'flex' });
+    const rssRows = [
+      rss('全站更新', 'agent-xray.dev/rss.xml', '#1a1a1a', 'none', false),
+      rss('产品经理', 'agent-xray.dev/rss/pm.xml', '#2563eb', 'block', true),
+      rss('源码拆解', 'agent-xray.dev/rss/deep-dive.xml', '#16a34a', 'block', false),
+      rss('代码工程', 'agent-xray.dev/rss/engineering.xml', '#f9c22e', 'block', false),
+      rss('AI 前沿', 'agent-xray.dev/rss/frontier.xml', '#8b5cf6', 'block', false),
+    ];
+    const buildPoints = [
+      'pi coding agent 以 SDK 方式 in-process 嵌入 Encore.ts 后端(无 sidecar)',
+      '一个观测者扩展订阅全部 34 种内核事件,零侵入采集运行时轨迹',
+      'SSE 双通道:对话流 + 事件轨迹流,毫秒级推到浏览器',
+      '前端基于 pi-web (Next.js) 改造:三栏工作台 + DevTools 式运行时面板',
+      '教程库由 Obsidian vault 静态编译,四分类 RSS 自动生成',
+    ];
+    const langBar = [
+      { name: 'Rust', pct: 29, color: '#dea584' },
+      { name: 'TypeScript', pct: 43, color: '#3178c6' },
+      { name: 'Python', pct: 14, color: '#3572A5' },
+      { name: 'Vue', pct: 14, color: '#41b883' },
+    ];
+    const repos = [
+      { name: 'GPUI-Pi', lang: 'Rust', dot: '#dea584', stars: 0, desc: 'Native GPUI desktop client for the pi coding agent — no Electron, no Chromium', pushed: '2026-08-27', sep: 'none' },
+      { name: 'dsh-acp-interactive', lang: 'TypeScript', dot: '#3178c6', stars: 1, desc: '面向 Zed 等编辑器的 DeepSeek Harness 交互式 ACP 插件', pushed: '2026-08-27', sep: 'block' },
+    ];
+
+    return {
+      siteName: this.props.siteName ?? 'Agent X-Ray',
+      t1rows, t2rows: [ctxSel, ...t2rest], t2rest, ctxSel,
+      segTimeline: seg('Timeline'), segChain: seg('Chain'), segLife: seg('Lifecycle'), segTools: seg('Tools'),
+      tabs: mkTabs('Runtime'), tabsNotes: mkTabs('Notes'), tabsSkills: mkTabs('Skills'), tabsAbout: mkTabs('About'),
+      tabs3: mkTabs('Runtime', ['Runtime', 'Notes', 'About']),
+      // 错误态:四格都不高亮(照搬 2k —— 出错时当前路由已失效,高亮任何一格都是假信息)
+      tabsErr: mkTabs(''),
+      notesGroups, chapters, skillGroups, fileTree, chapterToc, rssRows, buildPoints, langBar, repos,
+      chipsMd: mkChips('SKILL.md'), chipsPy: mkChips('scripts/review.py'),
+      lifeGroups, toolGroupsOpen, sessions,
+      labelDisplay: (this.props.boardLabels ?? true) ? 'flex' : 'none',
+      noteDisplay: (this.props.seamNotes ?? true) ? 'flex' : 'none',
+    };
+  }
+}
+</script>
+</body>
+</html>

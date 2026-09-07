@@ -6,6 +6,8 @@
 |---|---|
 | `Agent Runtime Workbench.dc.html` | **静态画板集(终稿,20 块)**:1a–1e Runtime 工作台(主屏 Timeline / 事件详情 / Chain View / Lifecycle Map / 空状态)、**1f–1g Tools 工具面板**(列表 / 展开 `web_search`;2026-09-02 新增)、2a–2e Notes/About(教程库首页 / 系列目录 / 文章阅读 / RSS 弹层 / 关于页)、**2f–2h Skills 技能库**(首页 / 详情页 SKILL.md 预览态 / 详情页 Python 文件预览态;2026-09-03 新增)、**2i–2k 加载态与错误态**(Skill 详情页加载 / Notes 章节页加载 / 错误态 A 出错 B 找不到;2026-09-03 新增)、**2l–2m 会话区一轮完成态**(处理过程折叠行 / 折叠行展开 + 卡片展开;2026-09-03 新增),实现时逐画板对照 |
 | `Agent X-Ray Prototype.dc.html` | **可交互原型**:单页状态机(Runtime/Notes/Series/Article/**Skills/Skill**/About **七**屏 + RSS 弹层 + 运行时面板**四** tab 切换 + Tools 面板逐工具展开/收起 + **Skill 详情页目录树点选切换预览、安装命令与文件两处 copy**),`data-dc-script` 里含全部演示数据与交互逻辑——**主站实现的首要参照** |
+| `Agent X-Ray Mobile - Runtime.dc.html` | **移动端画板集 · Runtime(终稿,10 块)**:`4a` 空状态 / `4b` 对话进行中 / `4c` 一轮完成折叠态 / `4d` 折叠行展开 + 卡片展开 / `4e` 运行时 Sheet · Timeline(medium detent)/ `4f` 事件详情(large)/ `4g` Chain View / `4h` Lifecycle Map / `4i` Tools / `4j` 会话列表 Sheet。2026-09-07 新增(R-MOBILE) |
+| `Agent X-Ray Mobile - Notes Skills About.dc.html` | **移动端画板集 · 其余(终稿,11 块)**:`4k` Notes 首页 / `4l` 系列目录 / `4m` 章节阅读 / `4n` 本章目录 Sheet + RSS Sheet / `4o` Skills 首页 / `4p` Skill 详情 SKILL.md / `4q` 代码文件 + 文件树 Sheet / `4r` About / `4s` 加载骨架 / `4t` 错误态 A·B·断网 / `4u` 载体适配四态。2026-09-07 新增(R-MOBILE) |
 | `support.js` | Claude Design 画布运行时(解析 `<x-dc>` 模板、挂载 React)。仅本地打开 .dc.html 预览时需要,实现不依赖它 |
 
 > **画板增删记录**(画板编号只增不改,与 CLAUDE.md 硬性规则同一约定):
@@ -15,6 +17,25 @@
 
 > - **`2i–2k`(加载态与错误态)于 2026-09-03 新增**:站点投产后所有者报障 —— 点 Skills 卡片「经常没反应」、点 Notes 有时候也会,以及 `/skills/ppt-master` 白屏报 `Application error`。定位发现站点**没有任何加载态与错误边界**:软导航在服务端 RSC 返回之前 UI 一动不动(点 `diagram` 实测 4.0 秒静止),渲染失败则掉到 Next 的默认英文白屏。三块画板:`2i` Skill 详情页加载态(照 2g 逐项对位的骨架 + 面包屑右侧 `omSpin`「正在取…」)、`2j` Notes 章节页加载态(照 2c;**阅读进度线裁定为「不出现」**——正文没到就不存在「读到哪」)、`2k` 错误态(A 页面出错 / B 找不到,同一版式 460px 单列,A 带可复制的 `err_ + UTC` 标识、B 回显访问路径)。**骨架不新造视觉语言**:填充 `#eeeeee`、压在灰面上降一档 `#e0e0e0`,圆角走现有 4/5/6/7 档,动效只复用 `omPulseBg` 与 `omSpin`。**唯一的新语汇是 2k 的品牌色实心主按钮**(既有按钮语汇只有 ghost),由画板明确定为出口层级。每块画板下方带一块「裁定」面板,记录取舍与理由。实现轮次:ROUNDS.md R-PERF。
 > - **`2l–2m`(会话区 · 一轮完成态)于 2026-09-03 新增**:核对发现会话区的工具调用卡**丢了**——画板 1a–1d / 1f–1g 一直画着两张(`read_file` / `bash`),首版 `bdc1ca4` 实现过,R3 `88dc2ae` 切真实数据源时断了来源,`ToolChip` 留成死代码。恢复卡片本身不涉及设计稿;**缺的是两个没画过的态**:`2l` 一轮已完成(处理过程收成一行「处理详情 · 2 次模型往返 · 2 次工具调用 · 0.4s」,13px/1.7 `#6b7280` 导航行、行尾 6px `#ef4444` 圆点提示「里面有一次没成功」,发送按钮回常态、Timeline 末行不再扫光;板上三条规则:无工具调用不出折叠行 / 进行中不折叠 / 最终回答为空只剩折叠行)、`2m` 折叠行展开 + `bash` 卡展开(边界 = 左侧 1px `#e0e0e0` 竖线 + 左内边距 14;卡片展开体紧贴卡下 4px、r6 + `rgba(0,0,0,.03)` 底 + 卡片同色描边、`INPUT` / `RESULT` 小标题、mono 11/1.6 每段最多 6 行 `max-height:106px` 超出接 `…(已截断)`;折叠行箭头 › / ˅,卡片箭头 ˅ / ˄;展开不做动画)。参考 pi-web 的折叠行为,但**不带**模型名 / provider 名 / 分段 token 与费用 / 「思考」块。**这两块不带 44px 站点导航条**(照抄 1a,1a 的工作台主屏本来就没有)。`support.js` 两边 md5 一致未动;本次拉稿 `diff | grep -c '^<'` 为 0,直接覆盖。提示词 `rounds/round-toolcards/design-prompt.md`;实现轮次:ROUNDS.md R-TOOLCARDS(2026-09-03 开工,分支 `round-toolcards`)。
+>
+> - **`4a–4u`(移动端,21 块)于 2026-09-07 新增**:所有者裁定做移动端,**主要目标场景是微信等社交 webview**。
+>   放在**两份新文件**里(`- Runtime` = `4a–4j`、`- Notes Skills About` = `4k–4u`),桌面两份一个字节没碰 ——
+>   所以这次拉稿**没有合并动作**,是纯新增文件。核心裁定是**两层语言**:外壳(顶部功能条 / 底部 Tab Bar /
+>   Sheet / 胶囊按钮 / inset grouped 列表)按 **iOS 26** 重画;**内核**(Timeline 耗时色条 / Chain / Lifecycle /
+>   工具卡解剖 / 代码视图行号与三色高亮 / markdown 排版)**照搬桌面 token,只做触控与换行适配**。
+>   载体裁定见 CLAUDE.md 规则 8 的 R-MOBILE 修订段(PWA 只取 manifest + standalone + theme-color,
+>   不做 SW、不做安装引导;竖屏靠 CSS 降级因为网页锁不了方向;禁双指要 JS 拦 `gesturestart`)。
+>   微信带来的三条画法约束都画进去了:**每屏顶部画出微信导航栏 44pt 占位**(不可隐藏,所以我们自己的顶条
+>   是**功能条不是标题栏**、不重复标题)、**内容安全高度 708**(845 − 59 状态栏 − 44 微信栏 − 34 Home Indicator)、
+>   **玻璃材质给 `backdrop-filter` 降级两套值**(Android 微信内核支持不确定)。
+>   提示词 `rounds/round-mobile/design-prompt.md`;实现轮次:ROUNDS.md R-MOBILE。
+>
+> **⚠️ 单文件 256 KiB 硬上限(2026-09-07 实测撞线,下次扩画板前必读)**:DesignSync `get_file` 的上限是
+> 262,144 字节,**超了静默截断、不报错**。移动端 21 块最初画在一份文件里,拉下来正好 262,144 字节、
+> 末尾断在属性中间、`</x-dc>` 与 `</html>` 都没有、`<div>` 开合差 7 个 —— `4a–4t` 完整而 `4u` 只到一半。
+> 拆成两份文件后重拉,两份分别 132,859 / 186,339 字节,四项判据(字节数 / 闭合标签 / div 开合 / 画板数)全过。
+> **桌面 `Agent Runtime Workbench.dc.html` 现为 248,815 字节,离上限只剩 13 KB —— 下次给桌面加画板前必须先拆文件**。
+> 拉稿后一律先验那四项,齐了才算拿到稿。
 >
 > **与云端稿的合并口径(2026-09-03 实操记录,下次拉稿照此)**:本地两份 `.dc.html` 在 2026-09-02 之后有三处**本地**优化——Timeline 进行中行的波浪扫光(`omWaveSweep`,提交 `9dd0c89`)、发送按钮生成期间转圈禁用(`omSpin`,同一提交)、文章页阅读进度线的示意注释(`d2a87d0`)——而云端 Claude Design 项目是从更早的 `16a82bd`(R-TOOLS 收 1f–1g 那版)上加的 Skills 画板,**不含这三处**。所以**没有用云端稿覆盖本地**,而是以 `16a82bd` 为 base 做三方合并(`git merge-file`,两份文件零冲突;云端 Workbench 相对 base 是纯增量,Prototype 相对 base 只改了 tab 占位数 / state 初值 / navTabs 三行):本地三处优化全部保留,云端新增(2f–2h、四格 tab、原型 Skills 两屏与交互逻辑)全部并入。`support.js` 两边 md5 一致未动。**同日收尾:合并稿已经 DesignSync 写回云端项目**(两份 `.dc.html`,写回后再拉一次比对 md5 完全一致),**云端从此是正本、与本地一字不差**。之后的口径:本地 `design/` 只拉不改——想改设计稿去画布上改,或改完立刻写回;拉新稿时先跑 `diff "design/<文件>" "<新稿>" | grep -c '^<'`,为 0(新稿没丢本地任何一行)就直接覆盖,不为 0 说明两边又分叉了,才回到上面的「找 base → `merge-file` → 核验」。
 
