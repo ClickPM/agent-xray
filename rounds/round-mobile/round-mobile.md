@@ -83,8 +83,14 @@ Notes 一分类 + 一系列 + 三章(含置顶 README)、Skills 一包两文件�
   备案条在下面照旧可见,桌面因内外层 flex 属性一致而完全透明。要不要换位置请裁定。
 - **安卓微信 `fetch` + `resp.body.getReader()` 的真机验证没做**(需要真机)。按二次裁定
   已不为微信优化,但 Runtime 的流式在**任何**移动浏览器上都该实测一次。
-- **主题开关的像素态没确认**:React 渲染的 style 属性是对的(`var(--accent)` / `translateX(20px)`),
-  但 `getComputedStyle` 读回关闭色,两者矛盾;窗口最小化导致截图不可用。功能已验证正确。
+- ~~主题开关的像素态没确认~~ **已查清并销项**:`getComputedStyle` 读回关闭色**不是 bug,是测量假象**。
+  判据三步:① 直接用 JS 写 `track.style.background` 后 computed 仍不变,而**无 transition 的
+  `outline` 立刻跟随** → 不是渲染器整体冻结,是带 transition 的属性卡住;② 窗口隐藏时不产生
+  动画帧,**transition 时间线冻结**,computed 因此永远停在起始值(等 700ms 也一样);
+  ③ 临时 `transition:none` 强制回流后,**旋钮 computed = `matrix(1,0,0,1,20,0)` 即 `translateX(20px)`,
+  正是开启位**(旋钮全程没被探针碰过,证据干净)。开关的功能与视觉都正确。
+  **顺带得到一条通用教训**:窗口不可见时,凡是带 `transition` 的属性都不能用 `getComputedStyle` 验,
+  要么读 style 属性、要么临时去掉 transition。
 - 三条既有问题已记 `rounds/BACKLOG.md`:全站 ghost 按钮字号 14≠设计稿 12、
   `/skills/[name]` 在 dev 下卡加载骨架(**已排除是本轮改动**)、各页 `generateMetadata`。
 
