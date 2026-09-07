@@ -94,6 +94,62 @@ Notes 一分类 + 一系列 + 三章(含置顶 README)、Skills 一包两文件�
 - 三条既有问题已记 `rounds/BACKLOG.md`:全站 ghost 按钮字号 14≠设计稿 12、
   `/skills/[name]` 在 dev 下卡加载骨架(**已排除是本轮改动**)、各页 `generateMetadata`。
 
-## 代码审查
+## 代码审查(codex,5 轮,收口 PASS)
 
-见下方「codex 审查」段。
+前两轮全量 `branch diff against main`,第 3 轮起 `--base <上一轮已审提交>` 只审整改 diff
+(CLAUDE.md 的审查范围约定)。**共 17 条 findings:16 条采纳整改、1 条实证不采纳;
+high 级为零,末两轮零 findings。**
+
+| 轮 | 范围 | findings | 结果 |
+|---|---|---|---|
+| 1 | 全量 | 8(2×P1 + 6×P2) | 全部采纳 → `df3030e` |
+| 2 | 全量 | 7(2×P1 + 5×P2) | 6 采纳 + **1 实证不采纳** → `e8ac2b1` |
+| 3 | `--base df3030e` | 2(P2) | 全部采纳 → `9bcea19` |
+| 4 | `--base e8ac2b1` | **0** | 自查另修一处非法嵌套 → `af30b17` |
+| 5 | `--base 9bcea19` | **0** | 收口 |
+
+### 第 1 轮(8 条,全部采纳)
+
+两条 P1 都会让移动端**核心交互不可用**:①输入栏被软件键盘整条盖住(iOS 只缩
+`visualViewport` 不改布局视口)——这是 `impl-prompt.md` §3.3 早就写明、我却漏做的;
+②输入栏与内容留白没计入 `safe-bottom`,而 Tab Bar 实际高度是 `49 + safe-bottom`,
+34px Home Indicator 机型上重叠且 Tab Bar 的 `z-index:5` 盖住输入框下半部。
+根因是我到处写裸的 `49`,已抽出 `--m-top-inset` / `--m-bottom-inset` 从源头堵住。
+六条 P2:缩放拦截没有视口条件(**吃掉了 macOS Safari 的触控板捏合**,违反规则 7)、
+`--safe-top` 无消费者、内容页底部只留 24px 被 Tab Bar 遮住、移动 RSS 仍是桌面弹层、
+目录 Sheet 档位写着 61% 却传 50%、chip 条没有吸附。
+
+### 第 2 轮(7 条,6 采纳 + 1 不采纳)
+
+**不采纳的那条(P1「Sheet 被滚动容器裁切/偏移」)—— 实证证伪,不加 portal。**
+用与站点完全同构的合成 DOM 测两次:①容器滚 800px 后 Sheet 相对外层仍是 `200..400`,
+不随滚动偏移;②Sheet `top:400` 远超容器 200 可视高时 `elementFromPoint` 仍命中它,
+未被裁切。原因是它的 containing block(布局层 `position:relative` 的外层)是滚动容器的
+**祖先** —— CSS 2.1 §11.1.1 的既定行为。
+
+采纳的六条里有三条是我没读透画板:**会话列表应是左侧滑出抽屉**(画板 4j 标题就写着
+「(左侧滑出)」,宽 84%、右两角 r20、右侧留 16% 露出被压暗的会话区,而我做成了 92% 全宽的
+底部 Sheet,**位置感与画板相反**)、**下拉刷新**(画板明写「刷新图标 → 下拉刷新手势」,
+并强调它「是移动端固有的交互原语,**不是新功能**」——所以不适用「非阻塞性 findings
+不许新增机制」那条)、**文件树丢了目录节点**(`scripts/run.py` 与 `references/run.py`
+会双双显示成无法区分的 `run.py`)。
+
+### 第 3 轮(2 条 P2)
+
+chip 骨架在 320 下把整页顶出横滚(346 塞进 288)。**修法不是给骨架加横滚** ——
+画板 4s 明写「加载态里没有真实内容,横滚容器留到内容到达后再出现」,并给了正解
+「320/430 吸收差值 = 所有 width 用 % 的骨架条」。另一条:加载功能条中间槽空着,
+而画板裁定原话是「`omSpin`(**功能条中间**的「正在取…」)」。
+
+### 第 4 轮(零 findings,但自查另修一处)
+
+复审零 findings,但它的**推理轨迹**里出现过 `Confirming span-div invalid nesting`
+却没写进 findings。自己复核确认属实:DOM 里存在 `DIV > SPAN > DIV` —— 第 3 轮我用
+`<span className="m-hide-narrow">` 包了返回 `<div>` 的 `LoadingNote`。浏览器解析器
+对 `span > div` 不像 `<p>` 那样自动闭合,所以没当场炸,但那是侥幸不是正确、且是水合隐患。
+改为给 `LoadingNote` 加 `className`。**审查没报不等于没问题。**
+
+### 收口门禁
+
+`dev.ps1 test` 全绿(**api 28 文件 564 用例 + web 21 用例**)、`apps/web` `tsc --noEmit`
+通过(门禁不跑它)、桌面四 tab 零改动实测通过。
