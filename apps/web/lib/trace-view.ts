@@ -20,6 +20,26 @@ export const EV = {
 export const barWidth = (ms: number) =>
   Math.min(198, Math.max(4, Math.round(Math.sqrt(ms) * 11)));
 
+/**
+ * R-MOBILE:移动端的耗时色条宽度(画板 4e 裁定)。
+ *
+ * 桌面 `barWidth` 是像素式 `min(198, max(4, √ms×11))`,198 的上限对应 **ms ≈ 324**。
+ * 移动端的轨道是一列 32% 的弹性列,像素上限没有意义 —— 改写成同一条 √ 曲线的比例式:
+ *
+ *   条宽 = min(100%, max(3px, √(ms/324) × 轨道宽))
+ *
+ * **曲线与满格点都与桌面一致**,只把「198px 满格」换成「轨道 100% 满格」。
+ * 于是 310ms 那行在 320 / 390 / 430 三种宽度下都是 ≈98% 轨道宽 ——
+ * 比例不变,读者跨机型看到的相对长短一致(这正是换公式的目的,不是为了省地方)。
+ *
+ * 返回 CSS 长度字符串而不是数字:`max()` 里要混用 px 与 %,只能交给 CSS 算。
+ */
+export const barWidthPct = (ms: number) => {
+  const safe = Number.isFinite(ms) && ms > 0 ? ms : 0;
+  const pct = Math.min(100, Math.round(Math.sqrt(safe / 324) * 100));
+  return `max(3px, ${pct}%)`;
+};
+
 const MAX_PREVIEW = 400;
 
 /** 毫秒 → 设计稿口径的时长文本(`12ms` / `1.2s`)。 */

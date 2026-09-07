@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, Fragment, type CSSProperties } from "react";
-import { barWidth } from "@/lib/trace-view";
+import { barWidth, barWidthPct } from "@/lib/trace-view";
 import type { TraceRow, TraceRowDetail, TraceTurn } from "@/lib/types";
 import { mono } from "@/lib/styles";
 
@@ -67,15 +67,25 @@ function DetailCard({ detail }: { detail: TraceRowDetail }) {
   );
 }
 
-function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; onToggle?: () => void }) {
+function Row({ row, expanded, onToggle, compact }: { row: TraceRow; expanded: boolean; onToggle?: () => void; compact?: boolean }) {
   const selectable = !!row.expandable;
   return (
     <>
       <div
         onClick={selectable ? onToggle : undefined}
+        // 内核层行高 26 是刻意的密度(照搬桌面);命中区靠 ::after 上下各外扩 9px
+        // 补到 44,**不改变布局**(画板 4e 裁定:视觉密度与触控尺寸分开算)
+        className={compact && selectable ? "m-row-tap" : undefined}
         style={{
-          display: "grid", gridTemplateColumns: "200px 1fr 52px", alignItems: "center",
-          gap: 10, padding: "3px 4px", borderRadius: 4,
+          display: "grid",
+          // R-MOBILE(画板 4e):移动端把弹性列**换到名字上**、色条固定 32%。
+          // 桌面那套 `200px 1fr 52px` 在 390 宽下会让名字占死 200、色条几乎没地方。
+          // 多出来的 8px 首列是模式色点:色条最窄只有 3px,光靠它读不出模式色。
+          gridTemplateColumns: compact ? "8px minmax(0,1fr) 32% 40px" : "200px 1fr 52px",
+          alignItems: "center",
+          gap: compact ? 8 : 10,
+          padding: compact ? "7px 4px" : "3px 4px",
+          borderRadius: 4,
           // 底色用 backgroundColor 而不是 background 简写:波浪那几条是 background-*
           // 长写,简写与长写混着用,streaming 翻回 false 时 React 会报
           // 「Removing a style property … when a conflicting property is set」。
@@ -87,6 +97,9 @@ function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; on
           cursor: selectable ? "pointer" : "default",
         }}
       >
+        {compact && (
+          <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: row.color }} />
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", overflow: "hidden" }}>
           {selectable && (
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={expanded ? "var(--accent)" : "var(--text-dim)"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "none" : "rotate(-90deg)", transition: "transform 0.12s", flexShrink: 0 }}>
@@ -101,7 +114,8 @@ function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; on
         <div style={{ minWidth: 0, overflow: "hidden" }}>
           <div
             style={{
-              height: 10, borderRadius: 2, maxWidth: "100%", width: barWidth(row.ms),
+              height: 10, borderRadius: 2, maxWidth: "100%",
+              width: compact ? barWidthPct(row.ms) : barWidth(row.ms),
               backgroundColor: row.color, // 同上:不能写 background 简写
               ...(row.streaming ? waveBar : null),
             }}
@@ -121,7 +135,7 @@ function Row({ row, expanded, onToggle }: { row: TraceRow; expanded: boolean; on
 }
 
 /** DevTools 式事件瀑布(画板 1a/1b),消费 /trace/stream 的真实事件投影 */
-export function TimelineView({ turns }: { turns: TraceTurn[] }) {
+export function TimelineView({ turns, compact }: { turns: TraceTurn[]; compact?: boolean }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -172,6 +186,7 @@ export function TimelineView({ turns }: { turns: TraceTurn[] }) {
                   row={row}
                   expanded={expandedKey === key}
                   onToggle={() => setExpandedKey((cur) => (cur === key ? null : key))}
+                  compact={compact}
                 />
               );
             })}

@@ -18,6 +18,7 @@ export function GhostButton({
   style,
   disabled = false,
   title,
+  className,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -25,12 +26,15 @@ export function GhostButton({
   style?: CSSProperties;
   disabled?: boolean;
   title?: string;
+  /** R-MOBILE:纯增量,供移动端用 `m-hide-narrow` 之类的类名控制显隐;不传时行为与从前一字不差 */
+  className?: string;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
+      className={className}
       style={{
         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
         height, padding: "0 12px", background: "var(--bg-hover)",

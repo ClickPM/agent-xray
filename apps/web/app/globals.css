@@ -193,14 +193,16 @@ code {
    一律锁在 `@media (max-width: 768px)` 内;只有两条是全局的,且都不产生视觉差异
    (`-webkit-text-size-adjust` 只在 iOS 生效;`--safe-*` 在没有 env() 的浏览器回落 0px)。
 
-   【主要目标场景是微信等社交 webview】所以这里的取舍常常不是「哪个更好看」,
-   而是「哪个在 X5 内核 / WKWebView 上不会塌」。
+   【按普通 H5 做,不为微信单独优化】所有者 2026-09-07 二次裁定。画板是以微信 webview
+   为主场景画的(每屏画着「微信导航栏 44 · 不可控」占位),但那些占位**只是画布示意、
+   代码从不渲染**,所以画板不作废。被砍掉的是 UA 判定与「在微信中不可用」这类专项提示;
+   玻璃的 @supports 降级保留 —— 它对任何 H5 都成立,不是微信专项。
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
   /* 安全区。`viewport-fit=cover`(layout.tsx 的 viewport 导出)是它们非零的前提。
-     在微信 webview 里 top 通常是 0(微信自己的导航栏已经占掉了状态栏那一段),
-     bottom 在带 Home Indicator 的机型上是 34 —— 所以 Tab Bar 必须按变量留白,不能写死。 */
+     top 在浏览器里通常是 0(地址栏已占掉状态栏那一段),bottom 在带 Home Indicator
+     的机型上是 34 —— 所以 Tab Bar 必须按变量留白,不能写死 34。 */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -208,8 +210,8 @@ code {
 
   /* iOS 26 外壳层 token。画板 4a「裁定」段给的值,4u 给的降级值。
      ⚠️ 默认值写的是**降级态**(不透明 0.94 + 一条 1px 分隔线),支持 backdrop-filter
-     的浏览器再由下面的 @supports 覆盖成玻璃。这个方向不能反 —— Android 微信内核
-     对 backdrop-filter 的支持不确定,把玻璃当默认会在那里退化成「半透明但不模糊」,
+     的浏览器再由下面的 @supports 覆盖成玻璃。这个方向不能反 —— 老 Android WebView
+     对 backdrop-filter 支持不确定,把玻璃当默认会在那里退化成「半透明但不模糊」,
      文字压在内容上直接读不清;而降级态在任何内核上都是安全的。 */
   --m-glass: rgba(255, 255, 255, 0.94);
   --m-glass-blur: none;
@@ -253,7 +255,8 @@ html {
 
 @media (max-width: 768px) {
   /* 页面本身不滚动,滚动一律交给内部容器。
-     少了这条,微信里整页下拉会露出微信的「网页由 … 提供」白条(画板 4j 标注)。 */
+     少了这条,移动端整页下拉会把固定的功能条 / Tab Bar 一起拽动(iOS 橡皮筋),
+     在内嵌 webview 里还会露出宿主自己的背景。 */
   body {
     overscroll-behavior: none;
   }
@@ -332,6 +335,101 @@ html {
 }
 .m-tap-fill:active {
   background: var(--m-fill-active);
+}
+
+/* 内核层密集行的命中区外扩(画板 4e 裁定)。事件行 26 高是刻意的密度 ——
+   照搬桌面,不为触控把它撑大;命中区改用 ::after 上下各外扩 9px 补到 44,
+   **不参与布局、不改变任何可见尺寸**。视觉密度与触控尺寸分开算,
+   是内核层在移动端唯一的适配手段。 */
+@media (max-width: 768px) {
+  .m-row-tap {
+    position: relative;
+  }
+  .m-row-tap::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -9px;
+    bottom: -9px;
+  }
+}
+
+/* ── 内容页(Notes / Skills / About)的移动端版式 ────────────────────────────
+   画板 4k–4r。这些页是 Server Component 渲染的静态内容,**用 CSS 重构而不是
+   渲染两套 DOM**:章节页正文很长,两套会把 RSC 载荷翻倍 —— 那正是 R-PERF 刚
+   治过的问题。代价是要用 `!important` 盖内联样式(那些内联样式与桌面画板逐条对齐,
+   不能改),作用域全部锁在 `max-width:768px` 内,桌面拿不到任何一条。 */
+@media (max-width: 768px) {
+  /* 外层容器:去掉桌面的 maxWidth 居中与 32 左右留白,改成满宽 + 16 */
+  .m-page-wrap {
+    max-width: none !important;
+    padding: 0 16px 24px !important;
+  }
+
+  /* 一级页大标题(iOS Large Title)。桌面 20/650 → 34/700;副标题 13 → 15 */
+  .m-h1 {
+    font-size: 34px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
+    margin-top: 8px;
+  }
+  .m-sub {
+    font-size: 15px !important;
+    line-height: 1.6;
+  }
+
+  /* 卡片网格 → iOS inset grouped 列表。
+     分类标题留在卡外当组头(画板 4k:iOS 分组列表的组头本来就在卡外),
+     所以这里只把 `.m-cards` 这一层变成分组卡。 */
+  .m-cards {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--bg-panel);
+  }
+  .m-cards > a {
+    background: var(--bg) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 12px 16px !important;
+    min-height: 56px;
+    display: flex !important;
+    flex-direction: column;
+    justify-content: center;
+  }
+  /* 组内 1px 分隔线**从左内边距 16 起、不通栏** —— iOS inset grouped 的标志,
+     画板 4l 裁定写死了这一点。
+     ⚠️ 不能用 `box-shadow: inset 0 1px 0`:那条线一定是通栏的,左边内缩不了;
+     也不能用 `border-top` + `margin-left`(会把行的背景一起缩进去)。只能靠伪元素。 */
+  .m-cards > a + a {
+    position: relative;
+  }
+  .m-cards > a + a::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+  /* 行内三段:13→15 / 12→13 / mono 11 不变。
+     **桌面卡片那条 min-height:38 的描述留白要取消** —— 列表行按内容高度长,
+     固定高在移动端只会造成参差的空隙(画板 4k 裁定)。 */
+  .m-cards > a > :first-child {
+    font-size: 15px !important;
+  }
+  .m-card-desc {
+    font-size: 13px !important;
+    min-height: 0 !important;
+  }
+
+  /* 分组之间的间距:桌面 32 在移动端偏大 */
+  .m-group {
+    margin-top: 22px !important;
+  }
 }
 
 /* 内核层的横滚盒子。禁缩放之后,宽内容唯一的出路就是在自己的盒子里横滚 ——

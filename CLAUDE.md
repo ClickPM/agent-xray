@@ -133,9 +133,12 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       ① **移动端是独立的一层**,与桌面并存、由视口宽度切换,**桌面 20 块画板与已实现页面零改动**(规则 7);
       ② 编号开 **`4x` 段**(见下条),画板放**两份新文件**(`Agent X-Ray Mobile - Runtime.dc.html` = `4a`–`4j`、
       `Agent X-Ray Mobile - Notes Skills About.dc.html` = `4k`–`4u`),桌面两份不碰;
-      ③ 载体 = **PWA 只取轻量部分**(manifest + `display:standalone` + theme-color),**不做 Service Worker、不做「添加到主屏幕」引导** ——
-      **主要目标场景是微信等社交 webview**,而微信 webview 里 PWA 三件套(SW / manifest / 安装)**全部失效**,
-      manifest 的唯一作用是访客自行添加到主屏幕后能全屏;④ **竖屏** —— 但**网页锁不了方向**
+      ③ 载体 = **PWA 只取轻量部分**(manifest + `display:standalone` + theme-color),**不做 Service Worker、不做「添加到主屏幕」引导**;
+      manifest 的唯一作用是访客自行添加到主屏幕后能全屏。**2026-09-07 二次裁定:移动端按普通 H5 做,不为微信单独优化** ——
+      画板是以微信 webview 为主场景画的(每屏画着「微信导航栏 44 · 不可控」占位),那些占位**本来就只是画布示意、代码从不渲染**,
+      故画板不作废、无需重画;被这条砍掉的是**微信专项适配**:UA 判定、zip 下载与 GitHub 外链的「在微信中不可用」提示态、
+      以及以微信栏为由的各页 `generateMetadata`(记 BACKLOG)。玻璃的 `@supports` 降级**保留** —— 它对任何 H5 都成立,不是微信专项。
+      ④ **竖屏** —— 但**网页锁不了方向**
       (`screen.orientation.lock()` 在 webview 与 iOS Safari 都拿不到),只能 CSS 降级(画板 `4u`);
       ⑤ 移动端 **SSE 断线重连不做**(新机制,记 BACKLOG);⑥ **禁双指缩放** ——
       `user-scalable=no` 在 iOS 被忽略,必须 JS 拦 `gesturestart`(无障碍代价 WCAG 1.4.4 所有者已认)。

@@ -697,7 +697,7 @@ export function Workbench() {
           ) : !active ? (
             <LifecycleMap nodes={lifeNodes} idle />
           ) : p === "timeline" ? (
-            <TimelineView turns={timelineTurns} />
+            <TimelineView turns={timelineTurns} compact />
           ) : p === "chain" ? (
             <ChainView chain={chain} />
           ) : (
