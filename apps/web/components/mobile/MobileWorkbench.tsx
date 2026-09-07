@@ -43,7 +43,11 @@ export interface MobileWorkbenchProps {
    * 的返回值,在这里重新声明一遍等于把内核层的类型抄第二份,以后改一处就漏一处。
    * 容器直接把桌面那四个组件原样塞进来 —— 「内核层照搬」在类型上也照搬。
    */
-  renderPanel: (p: PanelKey) => ReactNode;
+  /**
+   * 第二个参数是「请把 Sheet 升到 large」的回调(画板 4f):Timeline 某行展开时,
+   * medium 档里详情块只剩两行可见 —— 展开的同时升档。
+   */
+  renderPanel: (p: PanelKey, onExpand: () => void) => ReactNode;
   /** 会话区:同一份 items,用移动端度量渲染(画板 4b:气泡 r18、正文 15/1.75) */
   renderChat: () => ReactNode;
   /** 空状态的建议句(画板 4a) */
@@ -247,7 +251,7 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
           </>
         }
       >
-        {renderPanel(shownPanel)}
+        {renderPanel(shownPanel, () => setRuntimeDetent("large"))}
       </Sheet>
 
       {/* ── 会话列表 Sheet(画板 4j)──────────────────────────────────────── */}

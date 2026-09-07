@@ -66,7 +66,7 @@ function TocLine({ w }: { w: number }) {
 export default function SkillLoading() {
   return (
     <SkeletonScreen>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 32px 64px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 32px 64px" }} className="m-page-wrap">
         {/* 面包屑:Skills 是真实链接(层级已知,也是访客改主意时的出口),后两级骨架 */}
         <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6, minHeight: 17 }}>
           <Link href="/skills" style={{ color: "var(--accent)" }}>Skills</Link>
@@ -98,17 +98,19 @@ export default function SkillLoading() {
         </div>
 
         {/* INSTALL —— 小标题是固定文案,真实渲染;命令未到,不画 copy(复制只会拿到空串) */}
-        <div style={{ marginTop: 22, background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "12px 14px" }}>
+        <div style={{ marginTop: 22, background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "12px 14px" }} className="m-install">
           <div style={sectionLabel}>INSTALL</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px" }} className="m-install-cmd">
             <Bar w={420} h={12} pulse />
           </div>
           <Line h={17} style={{ marginTop: 8 }}><Bar w={330} h={10} tone="onGrey" /></Line>
         </div>
 
         {/* 目录树 / 文件预览 */}
-        <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0,1fr)", gap: 32, marginTop: 26, alignItems: "start" }}>
-          <div>
+        <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0,1fr)", gap: 32, marginTop: 26, alignItems: "start" }} className="m-skill-grid">
+          {/* R-MOBILE:桌面的 240px 树列在窄屏不渲染 —— 内容侧同样隐藏它(改由 chip 条 +
+              树 Sheet 承担),骨架必须跟着隐藏,否则内容到达那一刻会掉一整列(画板 4s)。 */}
+          <div className="m-hide-narrow">
             <div style={sectionLabel}>FILES</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <TreeLine indent={8} w={118} />
@@ -130,7 +132,7 @@ export default function SkillLoading() {
           </div>
 
           {/* 预览卡:边框 / 圆角 / 头部条是容器,保留实体;只有文件名、元信息与正文是骨架 */}
-          <div style={{ border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 0 rgba(0,0,0,0.03)", minWidth: 0 }}>
+          <div style={{ border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 0 rgba(0,0,0,0.03)", minWidth: 0 }} className="m-preview">
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", height: 31, boxSizing: "border-box" }}>
               <Bar w={68} tone="onGrey" />
               <Bar w={150} h={10} tone="onGrey" />

@@ -2,7 +2,61 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { TABS, type TabKey } from "@/lib/tabs";
+
+/**
+ * R-MOBILE(画板 4u 第 2 态):Tab Bar 随滚动隐藏 / 显示。
+ *
+ * 【为什么要这条】在普通移动浏览器里,我们的 49 高 Tab Bar 会和浏览器自己的底部
+ * 工具栏上下贴着 —— 两条横条吃掉近 100px,且都长得像「导航」。向下滚隐藏、
+ * 向上滚或到底复现,节奏与浏览器收放自己那条工具栏一致。
+ *
+ * 【画板明确否掉的两个替代方案】把 Tab Bar 挪到顶部(与内嵌 webview 的宿主标题栏
+ * 冲突,两个载体就要两套骨架);把 Tab Bar 整体上移 49(在没有浏览器工具栏的
+ * webview 里会凭空多出一条 49 的空档)。
+ *
+ * 【为什么用 capture 监听 document】scroll 事件不冒泡,但会**捕获**;各页真正
+ * 滚动的是页面自己那层 `overflow:auto` 容器,监听 document 的捕获阶段一次就能
+ * 覆盖全部页面,不用每页去找滚动元素。
+ *
+ * 【Runtime 例外】Runtime 的壳自己不滚动(对话在内层滚),而输入栏是贴着
+ * `bottom: TABBAR` 定位的 —— 跟着藏会让输入栏一起跳。所以那一屏不启用。
+ */
+function useHideOnScroll(enabled: boolean) {
+  const [hidden, setHidden] = useState(false);
+  const lastY = useRef(0);
+  const frame = useRef(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      setHidden(false);
+      return;
+    }
+    const onScroll = (e: Event) => {
+      const el = e.target as HTMLElement | Document | null;
+      const node = el instanceof HTMLElement ? el : document.documentElement;
+      if (frame.current) return;
+      frame.current = requestAnimationFrame(() => {
+        frame.current = 0;
+        const y = node.scrollTop;
+        const max = node.scrollHeight - node.clientHeight;
+        const dy = y - lastY.current;
+        // 到底、到顶、或幅度太小(手抖)都不改状态
+        if (y <= 0 || y >= max - 1) setHidden(false);
+        else if (Math.abs(dy) > 6) setHidden(dy > 0);
+        lastY.current = y;
+      });
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener("scroll", onScroll, { capture: true });
+      if (frame.current) cancelAnimationFrame(frame.current);
+    };
+  }, [enabled]);
+
+  return hidden;
+}
 
 /**
  * R-MOBILE 底部 Tab Bar(画板 4a,四格;附图给了三格态)。
@@ -33,6 +87,8 @@ const ICONS: Record<TabKey, string> = {
 export function MobileTabBar({ visible }: { visible: readonly TabKey[] }) {
   const pathname = usePathname() ?? "/";
   const tabs = TABS.filter((t) => visible.includes(t.key));
+  // Runtime(站点根路径)不启用随滚动隐藏,理由见 useHideOnScroll 的注释
+  const hidden = useHideOnScroll(pathname !== "/");
 
   return (
     <nav
@@ -50,6 +106,10 @@ export function MobileTabBar({ visible }: { visible: readonly TabKey[] }) {
         // 机型不同这一段高度不同,所以是变量不是写死的 34。
         height: `calc(49px + var(--safe-bottom))`,
         paddingBottom: "var(--safe-bottom)",
+        // 隐藏 = 整条向下平移出屏(不是 display:none)—— 位移走合成器,不触发重排,
+        // 也让复现时有一段自然的滑入
+        transform: hidden ? "translateY(100%)" : "translateY(0)",
+        transition: "transform .25s cubic-bezier(.32,.72,0,1)",
       }}
     >
       {tabs.map((t) => {

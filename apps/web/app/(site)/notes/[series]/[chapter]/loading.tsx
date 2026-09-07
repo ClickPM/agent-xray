@@ -48,6 +48,7 @@ export default function ChapterLoading() {
           maxWidth: 1000, margin: "0 auto", padding: "26px 32px 64px",
           display: "grid", gridTemplateColumns: "minmax(0,720px) 1fr", gap: 56, alignItems: "start",
         }}
+        className="m-page-wrap m-chapter"
       >
         <div style={{ minWidth: 0 }}>
           {/* 面包屑:四级都来自数据(分类 / 系列 / 章节),整条骨架 */}
@@ -111,8 +112,10 @@ export default function ChapterLoading() {
           </div>
         </div>
 
-        {/* 本章目录:标题是固定文案,真实渲染;条目来自正文,骨架 */}
-        <div style={{ paddingTop: 60 }}>
+        {/* 本章目录:标题是固定文案,真实渲染;条目来自正文,骨架。
+            R-MOBILE:窄屏整列不渲染 —— 内容侧的悬浮目录同样隐藏(改由功能条的
+            「目录」按钮开 Sheet),骨架跟着隐藏才不会在内容到达时掉一整列(画板 4s)。 */}
+        <div className="m-hide-narrow" style={{ paddingTop: 60 }}>
           <div style={{ ...mono(11, 600), color: "var(--text-dim)", letterSpacing: "0.05em", marginBottom: 8 }}>本章目录</div>
           <div style={{ padding: "4px 0 4px 10px", borderLeft: "2px solid transparent" }}><Bar w={64} h={10} /></div>
           <div style={{ padding: "4px 0 4px 10px", borderLeft: "2px solid transparent" }}><Bar w={88} h={10} /></div>

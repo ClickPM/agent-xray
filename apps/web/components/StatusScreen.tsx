@@ -14,7 +14,7 @@
 //     **这是全站第一处实心按钮**(既有语汇只有 ghost),是画板 2k 明确定的层级,不是这里自造的。
 //   · 无插画、无吉祥物、无大号 404 数字、无新配色。
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { mono } from "@/lib/styles";
 
@@ -70,24 +70,38 @@ export function StatusScreen({
   secondary?: { label: string; href: string } | null;
   footer?: ReactNode;
 }) {
+  /**
+   * R-MOBILE(画板 4t):出错 / 404 时**底部 Tab Bar 四格都不高亮**。
+   * 理由画板写着:当前路由已经失效,高亮任何一格都是假信息;四格保持常态可点,
+   * 本身就是最快的出口。
+   *
+   * Tab Bar 在站点 layout 里、比这一屏高两层,拿不到「本页出错了」这件事,
+   * 所以用 body 上的一个标记类往上传,由 CSS 在窄屏下抹掉高亮。
+   * 卸载时移除 —— 从错误页导航走之后高亮必须回来。
+   */
+  useEffect(() => {
+    document.body.classList.add("m-errored");
+    return () => document.body.classList.remove("m-errored");
+  }, []);
+
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
-      <div style={{ width: 460, maxWidth: "100%" }}>
+      <div className="m-status" style={{ width: 460, maxWidth: "100%" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ width: 10, height: 10, borderRadius: 4, background: dot, flex: "none" }} />
           <span style={{ ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.08em" }}>{code}</span>
         </div>
-        <div style={{ fontSize: 16, fontWeight: 650, marginTop: 12 }}>{title}</div>
+        <div className="m-status-title" style={{ fontSize: 16, fontWeight: 650, marginTop: 12 }}>{title}</div>
         <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, marginTop: 8, textWrap: "pretty" }}>
           {description}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 20 }}>
           {"onClick" in primary ? (
-            <button type="button" onClick={primary.onClick} style={primaryBtn} onMouseEnter={primaryEnter} onMouseLeave={primaryLeave}>
+            <button type="button" className="m-status-btn" onClick={primary.onClick} style={primaryBtn} onMouseEnter={primaryEnter} onMouseLeave={primaryLeave}>
               {primary.label}
             </button>
           ) : (
-            <Link href={primary.href} style={primaryBtn} onMouseEnter={primaryEnter} onMouseLeave={primaryLeave}>
+            <Link href={primary.href} className="m-status-btn" style={primaryBtn} onMouseEnter={primaryEnter} onMouseLeave={primaryLeave}>
               {primary.label}
             </Link>
           )}

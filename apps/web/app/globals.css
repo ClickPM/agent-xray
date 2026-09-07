@@ -492,6 +492,53 @@ html {
     padding: 2px 8px !important;
   }
 
+  /* ── 运行时 Sheet · 事件详情(画板 4f)────────────────────────────────── */
+
+  /* INPUT / EXTENSION RETURNED / DIFF 三个 payload 盒各自横滚。
+     **不能折行**:JSON 与 diff 折了就读不出结构(画板 4f 裁定)。
+     横滚只发生在盒子里 —— 页面与 Sheet 本身永不横滚。 */
+  .m-payload {
+    white-space: pre;
+  }
+
+  /* ── 错误态 A / B / 断网(画板 4t)──────────────────────────────────── */
+
+  /* 桌面 460px 单列居中 → 满宽单列(左右 16),垂直居中不变 */
+  .m-status {
+    width: 100% !important;
+  }
+  /* 桌面 16px 标题 → 20/650 */
+  .m-status-title {
+    font-size: 20px !important;
+  }
+  /* 出口按钮:32 高 r7 → 44 高整宽胶囊。
+     这是**全站唯一的实心按钮层级**(2k 定的出口层级),移动端也只出现在这里
+     与 4l 的「从第 1 章开始读」。 */
+  .m-status-btn {
+    width: 100%;
+    height: 44px !important;
+    border-radius: 22px !important;
+    justify-content: center;
+    font-size: 15px !important;
+  }
+
+  /* 出错 / 404 时 Tab Bar 四格都不高亮(画板 4t)。
+     `body.m-errored` 由 `components/StatusScreen.tsx` 在挂载时加、卸载时移除 ——
+     Tab Bar 在 layout 里比错误屏高两层,拿不到「本页出错了」,只能这样往上传。
+     选择器同时压住文字与图标:图标是 `stroke="currentColor"`,盖掉 color 就一起灰了。 */
+  body.m-errored nav.m-show-narrow a {
+    color: var(--text-muted) !important;
+  }
+  body.m-errored nav.m-show-narrow span {
+    font-weight: 400 !important;
+  }
+
+  /* ── 加载骨架(画板 4s)────────────────────────────────────────────────
+     骨架的外形必须等于内容到达后的外形,否则到达那一刻整页跳版。
+     内容侧已经在移动端变成了分组卡 / 胶囊 / 单列,骨架的容器也要跟着变 ——
+     下面这几条复用的正是内容侧的同名类(`.m-page-wrap` / `.m-skill-grid` /
+     `.m-install` 等),所以两边天然同形,不需要第二套尺寸表。 */
+
   /* ── Skill 详情(画板 4p / 4q)────────────────────────────────────────── */
 
   /* 240px 粘性树 + 预览的双栏 → 单列。树移到功能条右侧按钮开的 Sheet 里,

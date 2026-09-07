@@ -306,7 +306,25 @@ const LIFE_NODES: Array<{ name: string; event?: string }> = [
   { name: "turn_end", event: "turn_end" },
   { name: "agent_end", event: "agent_end" },
   { name: "session_shutdown", event: "session_shutdown" },
-];
+]
+
+/**
+ * R-MOBILE(画板 4h):Lifecycle 在移动端的四段分组。
+ *
+ * 桌面是 12 个节点一列纵排 + 11 段竖线(整列 900 高放得下);移动端可用高度只有 ~500,
+ * 改成四组纵向、每组内 2 列。**分组不是新信息** —— 上面 `LIFE_NODES` 的顺序本来就
+ * 隐含这四段,这里只是把它写出来当组标题。
+ *
+ * 【为什么按数量切而不是按名字映射】切片直接跟着 `LIFE_NODES` 的顺序走,
+ * 增删节点时 `counts` 之和与 `LIFE_NODES.length` 对不上会被下面的断言拦住,
+ * 而名字映射漏一个只会静默掉队。
+ */
+export const LIFE_GROUPS: readonly { title: string; count: number }[] = [
+  { title: "会话级 · 一次会话一次", count: 2 },
+  { title: "每轮", count: 3 },
+  { title: "工具", count: 3 },
+  { title: "收尾", count: 4 },
+];;
 
 export function toLifecycleNodes(events: TraceEvent[], streaming = false): LifeNode[] {
   const counts = new Map<string, number>();

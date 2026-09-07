@@ -36,33 +36,47 @@ const waveBar: CSSProperties = {
   animation: `omWaveSweep ${WAVE_PERIOD} linear infinite`,
 };
 
-function DetailCard({ detail }: { detail: TraceRowDetail }) {
+function DetailCard({ detail, compact }: { detail: TraceRowDetail; compact?: boolean }) {
   return (
     <div
       style={{
         position: "relative", background: "var(--bg-subtle)", border: "1px solid var(--border)",
-        borderRadius: 6, padding: "10px 12px", margin: "4px 0 8px 20px",
+        borderRadius: 6, padding: "10px 12px",
+        // 移动端左缩进 18(桌面 20):按 8px 节奏与 390 的行内缩进对齐(画板 4f)
+        margin: compact ? "4px 0 8px 18px" : "4px 0 8px 20px",
       }}
     >
+      {/* R-MOBILE(画板 4f):桌面这枚是 absolute 在右上角、靠 hover 露出的角标。
+          移动端没有 hover,而且角标会压住 INPUT 第一行 —— 改成 INPUT 同排右侧的
+          次按钮胶囊(44 命中)。**它是既有功能,不是新增。** */}
       <button
-        style={{
-          position: "absolute", top: 6, right: 8, color: "var(--accent)", fontSize: 11,
-          borderRadius: 5, padding: "2px 6px", cursor: "pointer", background: "none", border: "none",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+        className={compact ? "m-tap" : undefined}
+        style={
+          compact
+            ? {
+                position: "absolute", top: 6, right: 8, color: "var(--accent)",
+                fontSize: 13, fontWeight: 600, height: 30, borderRadius: 15,
+                padding: "0 12px", background: "var(--m-fill)", border: "none",
+              }
+            : {
+                position: "absolute", top: 6, right: 8, color: "var(--accent)", fontSize: 11,
+                borderRadius: 5, padding: "2px 6px", cursor: "pointer", background: "none", border: "none",
+              }
+        }
+        onMouseEnter={(e) => { if (!compact) e.currentTarget.style.background = "var(--bg-hover)"; }}
+        onMouseLeave={(e) => { if (!compact) e.currentTarget.style.background = "none"; }}
         title="问问 agent:这一步为什么这么做?(pi 接入后可用)"
       >
         Ask why ↗
       </button>
       <div style={{ ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.06em", marginBottom: 3 }}>INPUT</div>
-      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{detail.input}</div>
+      <div className={compact ? "m-xscroll m-payload" : undefined} style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{detail.input}</div>
       <div style={{ ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.06em", margin: "10px 0 3px" }}>
         EXTENSION RETURNED · <span style={{ color: "var(--accent)" }}>{detail.extension}</span>
       </div>
-      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{detail.returned}</div>
+      <div className={compact ? "m-xscroll m-payload" : undefined} style={{ ...mono(11), lineHeight: 1.6, color: "var(--text)" }}>{detail.returned}</div>
       <div style={{ ...mono(10, 600), color: "var(--text-dim)", letterSpacing: "0.06em", margin: "10px 0 3px" }}>DIFF</div>
-      <div style={{ ...mono(11), lineHeight: 1.6, color: "var(--ok-text)" }}>{detail.diff}</div>
+      <div className={compact ? "m-xscroll m-payload" : undefined} style={{ ...mono(11), lineHeight: 1.6, color: "var(--ok-text)" }}>{detail.diff}</div>
     </div>
   );
 }
@@ -129,13 +143,26 @@ function Row({ row, expanded, onToggle, compact }: { row: TraceRow; expanded: bo
           └ {row.blockedBy ?? "xray-guard"} returned {"{"}block: true{"}"}
         </div>
       )}
-      {expanded && row.detail && <DetailCard detail={row.detail} />}
+      {expanded && row.detail && <DetailCard detail={row.detail} compact={compact} />}
     </>
   );
 }
 
 /** DevTools 式事件瀑布(画板 1a/1b),消费 /trace/stream 的真实事件投影 */
-export function TimelineView({ turns, compact }: { turns: TraceTurn[]; compact?: boolean }) {
+export function TimelineView({
+  turns,
+  compact,
+  onExpand,
+}: {
+  turns: TraceTurn[];
+  compact?: boolean;
+  /**
+   * R-MOBILE(画板 4f):某一行**展开**时通知外层。移动端的运行时面板是 Sheet,
+   * medium 档只有 ~50% 屏高,详情块加三段 payload 在里面只剩两行可见 ——
+   * 所以展开的同时把 Sheet 升到 large。收起时不回落(读者可能还想看别的行)。
+   */
+  onExpand?: () => void;
+}) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -185,7 +212,13 @@ export function TimelineView({ turns, compact }: { turns: TraceTurn[]; compact?:
                   key={key}
                   row={row}
                   expanded={expandedKey === key}
-                  onToggle={() => setExpandedKey((cur) => (cur === key ? null : key))}
+                  onToggle={() =>
+                    setExpandedKey((cur) => {
+                      const next = cur === key ? null : key;
+                      if (next !== null) onExpand?.();
+                      return next;
+                    })
+                  }
                   compact={compact}
                 />
               );

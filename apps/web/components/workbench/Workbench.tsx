@@ -691,17 +691,17 @@ export function Workbench() {
         renderChat={() => <MobileChat items={items} />}
         renderEmpty={() => <MobileEmptyState onSuggest={setDraft} />}
         // 内核层照搬:Sheet 里装的就是桌面右栏那四个组件本身
-        renderPanel={(p) =>
+        renderPanel={(p, onPanelExpand) =>
           p === "tools" ? (
             <ToolsPanel />
           ) : !active ? (
-            <LifecycleMap nodes={lifeNodes} idle />
+            <LifecycleMap nodes={lifeNodes} idle compact />
           ) : p === "timeline" ? (
-            <TimelineView turns={timelineTurns} compact />
+            <TimelineView turns={timelineTurns} compact onExpand={onPanelExpand} />
           ) : p === "chain" ? (
-            <ChainView chain={chain} />
+            <ChainView chain={chain} compact />
           ) : (
-            <LifecycleMap nodes={lifeNodes} />
+            <LifecycleMap nodes={lifeNodes} compact />
           )
         }
       />
