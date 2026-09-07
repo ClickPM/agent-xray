@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { mono } from "@/lib/styles";
+import { MobilePageBar } from "@/components/mobile/MobilePageBar";
 
 export interface IndexSkill {
   name: string;
@@ -42,10 +43,13 @@ export function SkillsIndex({
 }) {
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 32px 64px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 32px 64px" }} className="m-page-wrap">
+        {/* R-MOBILE(画板 4o):Skills 首页既无返回也无 RSS,功能条两侧都空 ——
+            但仍然保留,它承载大标题的收起态。 */}
+        <MobilePageBar />
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 20, fontWeight: 650 }}>Skills · 技能库</div>
+            <div style={{ fontSize: 20, fontWeight: 650 }} className="m-h1">Skills · 技能库</div>
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>
               我在 agent 开发里反复用到的 skill:自己写的与精选的第三方都在这里,每个都能看目录、读文件、一条命令装进 Claude Code / Codex。
             </div>
@@ -59,7 +63,7 @@ export function SkillsIndex({
               <span style={{ fontSize: 13, fontWeight: 600 }}>{cat.name}</span>
               <span style={{ ...mono(11), color: "var(--text-dim)" }}>{cat.slug}</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }} className="m-cards">
               {cat.cards.map((c) => (
                 <Link
                   key={c.name}
@@ -73,8 +77,8 @@ export function SkillsIndex({
                   onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; e.currentTarget.style.borderColor = "var(--border)"; }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ ...mono(13, 600), flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
-                    <Badge color={BADGE_COLOR[c.sourceType]}>{BADGE_TEXT[c.sourceType]}</Badge>
+                    <span style={{ ...mono(13, 600), flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} className="m-skill-name">{c.name}</span>
+                    <Badge color={BADGE_COLOR[c.sourceType]} className="m-badge">{BADGE_TEXT[c.sourceType]}</Badge>
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, marginTop: 5, minHeight: 38 }}>{c.summary}</div>
                   <div style={{ ...mono(11), color: "var(--text-dim)", marginTop: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.meta}</div>

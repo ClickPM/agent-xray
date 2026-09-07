@@ -492,6 +492,56 @@ html {
     padding: 2px 8px !important;
   }
 
+  /* ── Skills 首页(画板 4o)与 About(画板 4r)────────────────────────── */
+
+  /* skill 名是标识符,必须等宽;mono 13 → 14/600(等宽字在 15px 正文旁不显小的最低值) */
+  .m-skill-name {
+    font-size: 14px !important;
+  }
+  /* 来源微徽标:方角 r4 → 胶囊 r9。**保留描边式**(border: 1px solid currentColor)——
+     它是全站唯一的描边徽标,用来和实底的 blocked / 修改 / 追加 区分:
+     那些是运行时事实,这个是来源标注(画板 4o 裁定)。 */
+  .m-badge {
+    border-radius: 9px !important;
+    padding: 2px 8px !important;
+  }
+
+  /* About 头像行:桌面「头像 + 简介 + GitHub 按钮」三段并排,
+     358 宽里会把简介压成一列窄字 —— 收成上下两块 */
+  .m-about-head {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 14px !important;
+  }
+  /* iOS 头像不描边 */
+  .m-avatar {
+    border: none !important;
+  }
+  /* 「本站如何构建」五条:裸列表 → 分组卡里的五行,行首 · 保留(2e 的语汇) */
+  .m-points {
+    background: var(--bg-panel);
+    border-radius: 16px;
+    padding: 4px 16px !important;
+    gap: 0 !important;
+  }
+  .m-points > div {
+    position: relative;
+    padding: 12px 0 !important;
+  }
+  .m-points > div + div::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+  /* 技术栈条形图:去掉桌面那圈 1px 描边 —— 白底上 8px 的条加描边会显脏(画板 4r) */
+  .m-langbar {
+    border: none !important;
+  }
+
   /* ── 章节阅读页(画板 4m)──────────────────────────────────────────────
      桌面是 `minmax(0,720px) 1fr` 的双栏(正文 + 右侧悬浮目录)。
      358 的正文宽里塞不下第二列,而且读长文时目录是「偶尔要用」的东西,
