@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -24,6 +24,29 @@ export const metadata: Metadata = {
     "See every heartbeat of an agent kernel — 与 agent 对话的同时,实时观测 agent loop 的内核轨迹。",
 };
 
+/**
+ * R-MOBILE。主要目标场景是**微信等社交 webview**(CLAUDE.md 规则 8 的 R-MOBILE 裁定 ③)。
+ *
+ * - `viewportFit: "cover"` 是 `env(safe-area-inset-*)` 生效的前提;少了它底部 Home Indicator
+ *   会盖住 Tab Bar。
+ * - `maximumScale: 1` + `userScalable: false` 是所有者要的「禁双指缩放」(裁定 ⑥)。
+ *   **但 iOS 从 Safari 10 起忽略这两个字段,微信 WKWebView 同内核也忽略** —— 真正拦住捏合的是
+ *   下面 `<head>` 里那段 `gesturestart` 拦截,这里写着是给 Android 与桌面浏览器用的。
+ * - `themeColor` 给明暗两条:Safari 用它染地址栏,深色下不给就会露出浅色条。
+ *   两条的值 = `globals.css` 里 `--bg` 的明暗两态,改那边要一起改。
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1a1a1a" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -35,6 +58,18 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{if(localStorage.getItem("xray-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}})();`,
+          }}
+        />
+        {/* R-MOBILE:禁双指缩放(所有者裁定 ⑥)。
+            **必须是 JS,不能只靠 viewport meta** —— iOS Safari 10 起忽略 `user-scalable=no` 与
+            `maximum-scale`,微信 WKWebView 同内核也忽略;`gesturestart` 是 WebKit 上唯一拦得住捏合的钩子。
+            `touchmove` 那条兜 Android(它没有 gesture 事件);只在**多指**时拦,单指滚动不受影响。
+            三个 gesture 事件都要拦:只拦 start 时,已经开始的捏合仍会继续放大。
+            `{passive:false}` 不能省 —— 触摸事件默认被当 passive,passive 监听里 preventDefault 无效。
+            双击放大由 `globals.css` 的 `touch-action: manipulation` 负责,不在这里。 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=function(e){e.preventDefault()},o={passive:false};document.addEventListener("gesturestart",p,o);document.addEventListener("gesturechange",p,o);document.addEventListener("gestureend",p,o);document.addEventListener("touchmove",function(e){if(e.touches&&e.touches.length>1)e.preventDefault()},o)}catch(e){}})();`,
           }}
         />
       </head>

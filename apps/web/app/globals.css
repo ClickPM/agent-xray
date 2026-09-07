@@ -103,6 +103,18 @@ code {
   margin-top: 0 !important;
 }
 
+/* R-MOBILE:移动端会话区的助手正文 15/1.75(画板 4b;15 是禁缩放后的正文下限)。
+   `components/Markdown` 的排版是**内联样式**写的(与画板逐条对齐),盖过它只能 !important
+   —— 与上面 `.md-chat > :first-child` 是同一条既有例外,不是新开的口子。
+   作用域三重限定:仅 `.m-chat` 内、仅 `.md-chat` 的段落、仅 ≤768px,桌面拿不到这条规则。
+   只覆盖段落:列表 / 引用 / 代码块属内核层排版,照搬桌面(画板「两层语言」)。 */
+@media (max-width: 768px) {
+  .m-chat .md-chat p {
+    font-size: 15px !important;
+    line-height: 1.75 !important;
+  }
+}
+
 /* KaTeX 行间公式(components/Markdown 的 remark-math + rehype-katex)。
    KaTeX 自带样式给 .katex-display 下的公式挂了 white-space: nowrap,长公式会把
    整页顶出横向滚动条 —— 与正文宽表同一个处理:在自己的盒子里横向滚动。
@@ -172,4 +184,161 @@ code {
   * {
     animation: none !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   R-MOBILE —— 移动端外壳层(iOS 26)。画板 4a–4u。
+
+   【为什么是新增而不是改既有规则】规则 7:桌面零改动。本段里凡是可能影响桌面的,
+   一律锁在 `@media (max-width: 768px)` 内;只有两条是全局的,且都不产生视觉差异
+   (`-webkit-text-size-adjust` 只在 iOS 生效;`--safe-*` 在没有 env() 的浏览器回落 0px)。
+
+   【主要目标场景是微信等社交 webview】所以这里的取舍常常不是「哪个更好看」,
+   而是「哪个在 X5 内核 / WKWebView 上不会塌」。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 安全区。`viewport-fit=cover`(layout.tsx 的 viewport 导出)是它们非零的前提。
+     在微信 webview 里 top 通常是 0(微信自己的导航栏已经占掉了状态栏那一段),
+     bottom 在带 Home Indicator 的机型上是 34 —— 所以 Tab Bar 必须按变量留白,不能写死。 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* iOS 26 外壳层 token。画板 4a「裁定」段给的值,4u 给的降级值。
+     ⚠️ 默认值写的是**降级态**(不透明 0.94 + 一条 1px 分隔线),支持 backdrop-filter
+     的浏览器再由下面的 @supports 覆盖成玻璃。这个方向不能反 —— Android 微信内核
+     对 backdrop-filter 的支持不确定,把玻璃当默认会在那里退化成「半透明但不模糊」,
+     文字压在内容上直接读不清;而降级态在任何内核上都是安全的。 */
+  --m-glass: rgba(255, 255, 255, 0.94);
+  --m-glass-blur: none;
+  --m-glass-sep: 1px;
+  --m-glass-highlight: rgba(255, 255, 255, 0.5);
+
+  --m-fill: rgba(120, 120, 128, 0.12); /* 次按钮 / 输入框 / chip 底 */
+  --m-fill-soft: rgba(120, 120, 128, 0.1); /* 建议胶囊行底 */
+  --m-fill-active: rgba(120, 120, 128, 0.18); /* 按下态 */
+  --m-sep: rgba(0, 0, 0, 0.06);
+  --m-chevron: #c7c7cc;
+  --m-grabber: rgba(120, 120, 128, 0.4);
+
+  --m-topbar-h: 44px;
+  --m-tabbar-h: 49px;
+}
+
+html.dark {
+  --m-glass: rgba(28, 28, 30, 0.94);
+  --m-glass-highlight: rgba(255, 255, 255, 0.12);
+  --m-sep: rgba(255, 255, 255, 0.08);
+  --m-chevron: #48484a;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --m-glass: rgba(255, 255, 255, 0.72);
+    --m-glass-blur: blur(24px) saturate(180%);
+    /* 有模糊时不需要那条分隔线:模糊本身已经把玻璃与内容分开了 */
+    --m-glass-sep: 0px;
+  }
+  html.dark {
+    --m-glass: rgba(28, 28, 30, 0.72);
+  }
+}
+
+html {
+  /* iOS 横竖屏切换时会自动放大文本,禁掉 —— 与禁缩放同一诉求 */
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (max-width: 768px) {
+  /* 页面本身不滚动,滚动一律交给内部容器。
+     少了这条,微信里整页下拉会露出微信的「网页由 … 提供」白条(画板 4j 标注)。 */
+  body {
+    overscroll-behavior: none;
+  }
+
+  /* 桌面壳在窄屏永不可见。与 `lib/use-mobile.ts` 的 JS 分流是**一对**:
+     JS 决定挂哪一套(保证只有一份 SSE 与一份取数),CSS 保证水合首帧那一瞬
+     不会把三栏桌面版画到 390 宽的屏上。只留其中一条都不对,理由见那个文件的注释。 */
+  .m-hide-narrow {
+    display: none !important;
+  }
+
+  /* 双击放大在 iOS 上靠它禁(viewport 的 user-scalable=no 拦不住);
+     顺带消掉移动端 300ms 点击延迟。捏合由 layout.tsx 的 gesturestart 拦截负责。 */
+  a,
+  button,
+  [role="button"],
+  .m-tap {
+    touch-action: manipulation;
+  }
+
+  /* 横屏降级(画板 4u 第 4 态)。**网页锁不了屏幕方向** ——
+     screen.orientation.lock() 在 webview 与 iOS Safari 都拿不到,manifest 的
+     orientation:portrait 只在 standalone 启动时生效。所以横屏只能这样兜:
+     维持竖屏版式、最大宽 430 居中、两侧留白,不另做一套布局。 */
+  @media (orientation: landscape) {
+    .m-shell {
+      max-width: 430px;
+      margin: 0 auto;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+  }
+}
+
+/* 移动端专属元素在桌面不渲染出来。与 `.m-hide-narrow` 成对:
+   前者管「桌面的东西别在窄屏露」,这条管「移动端的东西别在桌面露」。
+   默认 none、窄屏才 flex —— 方向不能反,否则桌面首帧会闪一下 Tab Bar。 */
+.m-show-narrow {
+  display: none;
+}
+@media (max-width: 768px) {
+  .m-show-narrow {
+    display: flex;
+  }
+}
+
+/* 玻璃条。三处用它:顶部功能条 / 输入栏 / Tab Bar(画板 4a 裁定)。
+   `-top` 与 `-bottom` 的差别只在投影方向与降级分隔线落在哪一边。 */
+.m-glass-top,
+.m-glass-bottom {
+  background: var(--m-glass);
+  backdrop-filter: var(--m-glass-blur);
+  -webkit-backdrop-filter: var(--m-glass-blur);
+}
+.m-glass-top {
+  box-shadow:
+    inset 0 1px 0 var(--m-glass-highlight),
+    0 1px 12px rgba(0, 0, 0, 0.06);
+  border-bottom: var(--m-glass-sep) solid var(--m-sep);
+}
+.m-glass-bottom {
+  box-shadow:
+    inset 0 1px 0 var(--m-glass-highlight),
+    0 -1px 12px rgba(0, 0, 0, 0.06);
+  border-top: var(--m-glass-sep) solid var(--m-sep);
+}
+
+/* 按下态(画板:hover → active,底色加深一档 + scale 0.97)。
+   移动端没有 hover,`:active` 是唯一的触觉反馈。 */
+.m-tap {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-tap:active {
+  transform: scale(0.97);
+}
+.m-tap-fill:active {
+  background: var(--m-fill-active);
+}
+
+/* 内核层的横滚盒子。禁缩放之后,宽内容唯一的出路就是在自己的盒子里横滚 ——
+   页面本身永不横滚(画板每屏都标注了「本屏哪些盒子可横滚」)。 */
+.m-xscroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
