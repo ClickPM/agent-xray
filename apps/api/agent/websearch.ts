@@ -12,6 +12,17 @@
 // baseUrl / modelId / toolType(DeepSeek 另接受带日期的 `web_search_2025_08_26`)。
 // 所以这里是一份实现,不是两条代码路径 —— 「兼容 DeepSeek」在本文件里不需要任何分支。
 //
+// 【R-GSEARCH:第二条线 —— Gemini 原生 Google Search grounding】(2026-09-07,所有者验证后裁定)
+//   POST {baseUrl}/v1/chat/completions
+//   { model, messages:[{role:"user", content}], tools:[{ google_search: {} }], stream: true }
+// 读回标准 `chat.completion.chunk`:`choices[0].delta.content` 累积正文,`finish_reason` 收尾,
+// 顶层 `error` 是失败。检索同样在**服务端**(Google 后端)做,一次往返闭环。
+// 走哪条线由 `toolType === "google_search"` **唯一**决定(`wireOf`)。A/B 探针试过的两条歧路都不通:
+// `{type:"web_search"}` 打 chat/completions 会被网关**静默忽略**(200、答案停在训练截止期),
+// `/v1/responses` 对 gemini 模型拿不到 grounding —— 所以是 toolType 决定线协议,不另加开关。
+// 网关不透出 grounding 元数据,来源只能从正文的链接里抽(`extractLinkCitations`)。
+// 与 Responses 线共用白名单 / 重定向拒绝 / 双计时器 / 字节上界 / 脱敏;分叉只在拼请求体与读事件流两处。
+//
 // 【本文件不读库、不解密】配置由 `websearch-config.ts` 取好后作参数传进来。
 // 这条边界让本文件可以被纯函数式地测试(注入 fetch),也让「凭据从哪来」只有一个答案。
 import { readBodyCapped } from "../shared/http-body";
@@ -102,6 +113,41 @@ export function responsesUrl(baseUrl: string): string {
   return /\/v1$/i.test(trimmed) ? `${trimmed}/responses` : `${trimmed}/v1/responses`;
 }
 
+/** `google_search` 线的 chat/completions 端点;baseUrl 的两种写法与 `responsesUrl` 同一口径。 */
+export function chatCompletionsUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, "");
+  return /\/v1$/i.test(trimmed) ? `${trimmed}/chat/completions` : `${trimmed}/v1/chat/completions`;
+}
+
+/** 选中 google 线的那个 toolType 取值。闭集在迁移 015 的 CHECK 与 mcp/tools.ts 的 zod 里。 */
+export const GOOGLE_SEARCH_TOOL_TYPE = "google_search";
+
+/** 上游线协议。**只由 toolType 决定**,不看 baseUrl、不猜响应形状。 */
+export type WebSearchWire = "responses" | "google";
+
+export function wireOf(toolType: string): WebSearchWire {
+  return toolType === GOOGLE_SEARCH_TOOL_TYPE ? "google" : "responses";
+}
+
+/**
+ * 请求体。**访客控得到的只有 `query`**,且它只落进一个字段(responses 线是 `input`,google 线是
+ * `messages[0].content`);model / tools / stream 全部来自配置或写死(docs/security.md §1 外呼组约束 1)。
+ * 导出只为测试能逐字段断言这一点。刻意不带 max_tokens / temperature 之类:正文长度由
+ * MAX_ANSWER_CHARS 与字节上界管,时长由双计时器管,不把「多少算够」交给上游参数。
+ */
+export function buildSearchRequestBody(query: string, cfg: ActiveWebSearchConfig): Record<string, unknown> {
+  const input = `联网搜索并给出带来源的简明答案。${query}`;
+  if (wireOf(cfg.toolType) === "google") {
+    return {
+      model: cfg.modelId,
+      messages: [{ role: "user", content: input }],
+      tools: [{ google_search: {} }],
+      stream: true,
+    };
+  }
+  return { model: cfg.modelId, tools: [{ type: cfg.toolType }], input, stream: true };
+}
+
 interface Citation {
   url: string;
   title: string;
@@ -161,6 +207,46 @@ export function extractCitations(data: unknown): Citation[] {
   return cites;
 }
 
+/** chat/completions 非流式响应的正文:只认 `choices[0].message.content` 字符串,不猜别的字段。 */
+export function extractChatText(data: unknown): string {
+  const content = (data as { choices?: Array<{ message?: { content?: unknown } }> })?.choices?.[0]
+    ?.message?.content;
+  return typeof content === "string" ? content.trim() : "";
+}
+
+/**
+ * 从正文里抽来源(google 线)。
+ *
+ * 【为什么从正文抽】网关的 chat/completions 响应**不透出任何 grounding 元数据**(实测 message 里只有
+ * role / content / reasoning_content / tool_calls),来源 URL 只存在于模型写进正文的链接里。
+ * 抽出来之后与 Responses 线的 `url_citation` 走同一个出口(工具结果末尾的「来源:」列表 + 轨迹面板的计数),
+ * 两条线对上层是同一种形状。纯字符串处理,不发任何请求、不跟随任何链接。
+ *
+ * 【只认 markdown 链接,不扫裸 URL】codex 三轮各报一条、全落在裸 URL 的边界上(括号 / ASCII 标点 /
+ * ASCII 标点紧贴 CJK):裸 URL 在中英混排的散文里**没有正确的边界** —— `)` `,` `?` `:` 既是 URL 字符又是标点,
+ * 紧贴 CJK 时连空格这个分隔符都没有,每补一条判据就多一种误切。按「审查循环不是设计」的口径不再堆判据,
+ * 改为只认 markdown 链接:目标由 `(` `)` 包着,边界确定(只认一层配对括号,CommonMark 口径);
+ * 实测三个 gemini 模型给来源一律用 markdown 链接。裸 URL 仍在正文里、照样交给模型,只是不进「来源:」列表
+ * —— 少列一条,好过列一条错的。
+ *
+ * 同一 URL 只收一次;只收 http(s)(`javascript:` 的"来源"在前端是一个可点的注入面,与 `extractCitations`
+ * 同一条判据,由正则本身保证);封顶 MAX_CITATIONS。正则分支互斥、输入被 MAX_ANSWER_CHARS 封顶,不存在回溯爆炸。
+ */
+export function extractLinkCitations(text: string): Citation[] {
+  const seen = new Set<string>();
+  const cites: Citation[] = [];
+  for (const m of text.matchAll(/\[([^\]\n]{0,200})\]\((https?:\/\/(?:[^\s()<>]|\([^\s()<>]*\))+)\)/gi)) {
+    const url = m[2];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const title = m[1].trim();
+    // 标题就是 URL 本身(`[https://x](https://x)` 这种写法)时不重复一遍
+    cites.push({ url, title: title === url ? "" : title });
+    if (cites.length >= MAX_CITATIONS) break;
+  }
+  return cites;
+}
+
 export interface WebSearchOutcome {
   text: string;
   citations: Citation[];
@@ -192,6 +278,8 @@ export async function runWebSearch(
   // 调用前再校验一次:配置可能是白名单收紧之前写进库的
   parseAllowedBaseUrl(cfg.baseUrl);
   const doFetch = opts.fetchImpl ?? fetch;
+  // 线协议在这里定死一次,后面拼请求体与读事件流都按它分叉;不看响应猜(R-GSEARCH)
+  const wire = wireOf(cfg.toolType);
 
   // 节流后的进度上报:phase 变化立刻放行,同 phase 内按 MIN_PROGRESS_INTERVAL_MS
   // 限流,整次搜索封顶 MAX_PROGRESS_EVENTS 条。
@@ -257,19 +345,14 @@ export async function runWebSearch(
   resetIdle();
 
   try {
-    const res = await doFetch(responsesUrl(cfg.baseUrl), {
+    const res = await doFetch(wire === "google" ? chatCompletionsUrl(cfg.baseUrl) : responsesUrl(cfg.baseUrl), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${cfg.apiKey}`,
         Accept: "text/event-stream",
       },
-      body: JSON.stringify({
-        model: cfg.modelId,
-        tools: [{ type: cfg.toolType }],
-        input: `联网搜索并给出带来源的简明答案。${query}`,
-        stream: true,
-      }),
+      body: JSON.stringify(buildSearchRequestBody(query, cfg)),
       signal: ctrl.signal,
       // 【必须关掉自动跟随重定向】(codex 初审 P1)`fetch` 默认 `follow`,
       // 而白名单只校验了**原始** URL —— 白名单内端点上的一个开放重定向,
@@ -313,6 +396,7 @@ export async function runWebSearch(
       } catch {
         throw new WebSearchError("upstream_failed", "上游返回的既不是事件流也不是合法 JSON");
       }
+      if (wire === "google") return finishChat(data, cfg.apiKey);
       return finish(extractText(data), extractCitations(data));
     }
     if (!res.body) throw new WebSearchError("upstream_failed", "流式响应无 body");
@@ -327,13 +411,54 @@ export async function runWebSearch(
     let receivedBytes = 0;
     let searchStages = 0;
 
+    /**
+     * google 线最后一个 `finish_reason`。**不用 `null` 初始化**:与上面 `abortReason` 同一个 TS2367 的坑 ——
+     * 闭包里的赋值不被追踪,`let x: string | null = null` 会被窄化成 `null`,后面 `x !== "stop"` 就编译不过。
+     */
+    let chatFinish: string | undefined;
+    /**
+     * google 线收到过收尾信号没有:`finish_reason` 或 `[DONE]` 任一即算(网关实测两个都发;有的只发其一)。
+     * 两个都没见到就是流在收尾前被关掉了 —— 半截正文不能当成功交给模型(codex 第 2 轮 P2)。
+     * 同样不用 `false` 初始化,理由同 `chatFinish`。
+     */
+    let chatTerminal: "finish" | "done" | undefined;
+    /** chat/completions 事件流(google 线):`choices[0].delta.content` 累积,顶层 `error` 是失败。 */
+    const handleChatEvent = (evt: unknown) => {
+      const err = upstreamErrorMessage(evt);
+      if (err !== null) {
+        failed = err;
+        return;
+      }
+      const choice = (evt as { choices?: unknown[] })?.choices?.[0] as
+        | { delta?: { content?: unknown }; finish_reason?: unknown }
+        | undefined;
+      const piece = choice?.delta?.content;
+      if (typeof piece === "string" && piece !== "") {
+        if (answer.length < MAX_ANSWER_CHARS) answer += piece;
+        progress("composing", `正在综述回答(已 ${answer.length} 字)`);
+      }
+      if (typeof choice?.finish_reason === "string" && choice.finish_reason !== "") {
+        chatFinish = choice.finish_reason;
+        chatTerminal = "finish";
+      }
+    };
+
     const handleEvent = (jsonStr: string) => {
-      if (!jsonStr || jsonStr === "[DONE]") return;
+      if (!jsonStr) return;
+      if (jsonStr === "[DONE]") {
+        // OpenAI 系流的哨兵。responses 线不发它、也不靠它;google 线把它当收尾信号之一
+        chatTerminal ??= "done";
+        return;
+      }
       let evt: { type?: unknown; delta?: unknown; response?: unknown };
       try {
         evt = JSON.parse(jsonStr);
       } catch {
         return; // 半条 / 非 JSON 的 data 行直接忽略,不让一行坏数据掀掉整次搜索
+      }
+      if (wire === "google") {
+        handleChatEvent(evt);
+        return;
       }
       switch (evt?.type) {
         case "response.output_text.delta":
@@ -397,6 +522,25 @@ export async function runWebSearch(
 
     // 上游的错误文案同样是外部文本,同样过一遍 —— 它进的是错误对象,不只是日志
     if (failed) throw new WebSearchError("upstream_failed", redactUpstream(failed, cfg.apiKey));
+    if (wire === "google") {
+      // 流被干净地关掉却没有任何收尾信号 = 半截响应(代理超时 / 上游中途断开都长这样)。
+      // 不能像 responses 线那样回落到累积的 delta:那边的回落是 R-WEBSEARCH 明确测过的取舍,
+      // 这边 chat.completion 协议的收尾信号是稳定的,缺了就是缺了(codex 第 2 轮 P2)。
+      if (chatTerminal === undefined) {
+        throw new WebSearchError("upstream_failed", "事件流在收尾前被关闭(未收到 finish_reason 或 [DONE])");
+      }
+      const text = answer.trim();
+      // 没正文而 finish_reason 又不是正常收尾(实测有 `malformed_function_call`,还会有 content_filter 一类):
+      // 报成上游失败并把原因记进日志。正常收尾却没正文的,交给 finish() 报 empty。
+      // finish_reason 是上游给的字符串,只进错误对象(服务端日志),照样过一遍脱敏。
+      if (text === "" && chatFinish !== undefined && chatFinish !== "stop") {
+        throw new WebSearchError(
+          "upstream_failed",
+          redactUpstream(`上游以 finish_reason=${chatFinish} 收尾且无正文`, cfg.apiKey),
+        );
+      }
+      return finish(text, extractLinkCitations(text));
+    }
     if (finalResponse) {
       const text = extractText(finalResponse);
       return finish(text !== "" ? text : answer.trim(), extractCitations(finalResponse));
@@ -468,4 +612,24 @@ function redactUpstream(text: string, apiKey: string): string {
 function finish(text: string, citations: Citation[]): WebSearchOutcome {
   if (text === "") throw new WebSearchError("empty", "上游未返回任何正文");
   return { text, citations };
+}
+
+/**
+ * chat/completions 的顶层 `error`(google 线)。OpenAI 兼容网关两种写法都见过:
+ * `{error:{message,type,code}}` 与 `{error:"…"}`。没有 error 字段回 null。
+ */
+function upstreamErrorMessage(data: unknown): string | null {
+  const err = (data as { error?: unknown })?.error;
+  if (err === undefined || err === null) return null;
+  if (typeof err === "string") return err;
+  const msg = (err as { message?: unknown })?.message;
+  return typeof msg === "string" && msg !== "" ? msg : "上游返回了 error 对象";
+}
+
+/** google 线的非流式收口:顶层 error 是失败,否则正文 + 从正文抽来源。 */
+function finishChat(data: unknown, apiKey: string): WebSearchOutcome {
+  const err = upstreamErrorMessage(data);
+  if (err !== null) throw new WebSearchError("upstream_failed", redactUpstream(err, apiKey));
+  const text = extractChatText(data);
+  return finish(text, extractLinkCitations(text));
 }

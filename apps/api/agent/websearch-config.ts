@@ -20,7 +20,11 @@ export interface ActiveWebSearchConfig {
   /** 已去掉尾部斜杠的绝对 http(s) 地址;host 必在白名单内(调用前再校验一次) */
   baseUrl: string;
   modelId: string;
-  /** Responses API 的内置工具类型名(web_search / web_search_YYYY_MM_DD) */
+  /**
+   * 上游工具类型名,同时唯一决定线协议(websearch.ts 的 `wireOf`):
+   * `web_search` / `web_search_YYYY_MM_DD` = Responses API 内置搜索;
+   * `google_search` = Gemini 原生 Google Search grounding,走 chat/completions(R-GSEARCH)。
+   */
   toolType: string;
   totalTimeoutMs: number;
   idleTimeoutMs: number;

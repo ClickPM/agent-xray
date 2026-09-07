@@ -217,7 +217,10 @@
 #### WebSearch Provider（联网搜索外呼）
 5. **`websearch_providers_list`**：列出搜索服务商（带掩码与白名单状态）。
 6. **`websearch_provider_upsert`**：配置或更新联网搜索服务商。
-   - 入参：`provider`, `apiKey`, `baseUrl`, `modelId`, `dailySearchLimit` (0 为不限), `toolType` (可选)。
+   - 入参：`provider`, `apiKey`, `baseUrl`, `modelId`, `dailySearchLimit` (0 为不限), `toolType` (可选), `totalTimeoutMs` / `idleTimeoutMs` (可选), `makeDefault`。
+   - `toolType` 是闭集（zod 与迁移 015 的库级 CHECK 同步），**同时唯一决定线协议**（R-GSEARCH，2026-09-07）：
+     - `web_search`（默认）/ `web_search_YYYY_MM_DD`：OpenAI 系 Responses API 内置搜索，`POST {baseUrl}/v1/responses`（DeepSeek 与自建网关同一套）。
+     - `google_search`：Gemini 原生 Google Search grounding，`POST {baseUrl}/v1/chat/completions` + `tools:[{google_search:{}}]`；配合网关上 `owned_by=antigravity` 的 `gemini-*` 模型（如 `gemini-3.8-flash-high` / `gemini-pro-agent`）。其它 `toolType` 与 gemini 模型的组合不报错但拿不到联网结果，见 `docs/security.md` §1 R-GSEARCH 补记。
    - 防护：`baseUrl` 的域名必须在 `apps/api/shared/websearch-hosts.ts` 白名单或环境变量追加列表内。
 7. **`websearch_set_default`**：设置默认搜索服务商。
 8. **`websearch_provider_delete`**：删除搜索服务商。
