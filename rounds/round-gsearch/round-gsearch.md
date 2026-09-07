@@ -1,6 +1,6 @@
 # Round GSEARCH — `web_search` 接 Gemini 原生 Google Search grounding(第二条线协议)
 
-> 状态:进行中(验证成立 → 代码与测试已落地 → 待 codex 审查)
+> 状态:已完成(验证成立 → 代码与测试落地 → codex 4 轮 / 4 条 / 零 high,整改后 PASS → 已合并 `main`,**待发版**)
 
 ## 目标
 
@@ -102,8 +102,11 @@ provider 的 `toolType` 配成 `google_search` 时,请求打 `{baseUrl}/v1/chat/
   只是第四条判据。**处置:不补判据,删掉裸 URL 扫描,只认 markdown 链接**(删代码;边界由 `(` `)` 确定)。所有者不在线,
   这是自行裁定并已写进方案 3 与 `docs/security.md` 补记,可推翻。用例改写为:markdown 链接(去重 / http(s) / 封顶 / 查询串端口完整 /
   一层括号)+ 「裸 URL 一律不抽」的反向断言。
-- 第 4 轮(只审整改 diff,`--base d7e0570`):待回填
-- 结论:待回填
+- **第 4 轮**(只审整改 diff,`--base d7e0570`,审 `47363a7`,约 4 分钟):**零 findings** ——
+  「实现 / 测试 / 安全文档 / 轮次文档一致地去掉了裸 URL 抽取,未发现新的正确性、安全或兼容性缺陷」。
+- **结论:整改后 PASS**(4 轮 / 4 条 / 全 P2、零 high;3 条采纳整改 + 1 条按「审查循环不是设计」收缩方案)。
+  收口状态的全量门禁:`dev.ps1 check` 过,`dev.ps1 test` api 26 文件 **553** 用例 + web 21 用例全绿;
+  真实网关 E2E 在最终代码上复跑:`gemini-3.8-flash-high` 16.6 s / 3 条签名重定向来源,`gemini-pro-agent` 37.6 s / 3 条媒体链接。
 
 ## 失败处理
 
@@ -115,7 +118,13 @@ provider 的 `toolType` 配成 `google_search` 时,请求打 `{baseUrl}/v1/chat/
   是静默忽略(200)而非失败;`{type:"google_search"}` 回 `malformed_function_call`;`/responses` 两种 tools 对 gemini 都拿不到 grounding。
 - **E2E(新代码直连真实网关)**:`gemini-3.8-flash-high` 11.2 s / 4 条签名重定向来源;`gemini-pro-agent` 28.3 s / 5 条媒体链接;
   Responses 线回归 `gpt-5.6-terra` 19.9 s / 9 个检索事件 / 2 条 `url_citation`。
-- **门禁**:`dev.ps1 check` 过;`dev.ps1 test` api 26 文件 549 用例 + web 21 用例全绿。
+- **门禁**:`dev.ps1 check` 过;`dev.ps1 test` api 26 文件 549 用例 + web 21 用例全绿(首版);收口状态 553 + 21。
+- **全角标点会落成半角**:第 1 轮整改时手打进正则的「,;:!?」在源码里是 U+2C / U+3B / U+3A / U+21 / U+3F(od 实测),
+  第 2 轮才被 codex 抓到;是输入时就半角还是经手的工具折的无法回溯。此后凡是源码里要写全角字符,一律用 node 按字符码写入并 od 验证
+  (最终版删掉了裸 URL 扫描,源码里已不再有这类字符)。
+- **发版后要用它**:经 `xray-admin-prod` 的 `websearch_provider_upsert{provider:"cliproxy-gemini", apiKey:<同一把>, baseUrl:同现行,
+  modelId:"gemini-3.8-flash-high", toolType:"google_search", makeDefault:true}`;切回 `websearch_set_default{provider:"cliproxy-dmit"}` 即回滚,
+  不用发版。迁移 015 随发版跑(`migrate.sh` 14 → 15)。
 - **一次自己的失误**:曾加一条「迁移 015 改了 `tool_config.note`」的用例,跑在别的用例清空 `tool_config` 之后就读不到行 ——
   用例依赖执行顺序,删掉;CHECK 那条用例已足以证明迁移应用。
 - **`tsc --noEmit` 有 3 处既有错误**(`catalog.test.ts:214` `socketPath`、`skill-runner.test.ts:368/369`),不在本轮改动文件里、
