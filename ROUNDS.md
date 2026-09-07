@@ -707,7 +707,8 @@
 **方案(自行裁定)**:线协议由 `toolType` **唯一**决定(`google_search` → chat/completions,其余 → Responses),**不加 apiStyle 开关**
 —— 对 gemini 模型,「端点 × 工具声明」能拼出的四种组合里只有一种通,一个字段就没有「配了却静默不联网」的组合。分叉只在拼请求体与读事件流两处,白名单 /
 `redirect:"manual"` / 双计时器 / 字节上界 / 脱敏 / 日限额与 Responses 线共用同一段代码;六条外呼组约束一条不松。网关不透出 grounding
-元数据,来源从正文的 markdown 链接与裸 URL 里抽(只收 http(s)、去重、封顶 10 条),与 `url_citation` 走同一个出口。规则 9 先改
+元数据,来源**只从正文的 markdown 链接**里抽(只收 http(s)、去重、封顶 10 条;**不扫裸 URL** —— codex 三轮各一条边界 findings 后按
+「审查循环不是设计」改为只认边界确定的形态),与 `url_citation` 走同一个出口。规则 9 先改
 `docs/security.md`(§1 R-GSEARCH 补记,含两条已认残余)再动代码;规则 13 同步 `docs/mcp.md`(工具总数仍 46)。
 
 **交付**:迁移 `015_websearch_google`(CHECK 闭集扩一项 + 改 `tool_config.web_search` 的 note)· `websearch.ts` 的 `wireOf` /

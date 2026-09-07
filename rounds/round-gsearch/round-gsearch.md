@@ -27,8 +27,11 @@ provider 的 `toolType` 配成 `google_search` 时,请求打 `{baseUrl}/v1/chat/
    闭集扩一项:迁移 015 改 CHECK,`mcp/tools.ts` 的 zod 同步,两边各有测试钉住。
 2. **分叉只在两处**:拼请求体(`buildSearchRequestBody`)与读事件流(`handleChatEvent`);URL / headers / 白名单 / `redirect:"manual"` /
    双计时器 / 字节上界 / 脱敏 / 日限额与 Responses 线共用同一段代码。访客的 `query` 只落进 `messages[0].content`。
-3. **来源从正文抽**(`extractLinkCitations`):网关不透出 grounding 元数据,来源只在模型写的 markdown 链接与裸 URL 里。
+3. **来源从正文抽**(`extractLinkCitations`):网关不透出 grounding 元数据,来源只在模型写的链接里。
    纯字符串处理,只收 http(s)、去重、封顶 10 条,与 Responses 线的 `url_citation` 走同一个出口(「来源:」列表 + 轨迹计数)。
+   **审查后收缩为只认 markdown 链接、不扫裸 URL**(见「代码审查」第 3 轮):散文里的裸 URL 没有确定的边界,三轮各一条边界
+   findings 之后按「审查循环不是设计」的口径删掉裸 URL 扫描,而不是再补第四条判据。实测三个 gemini 模型给来源一律用 markdown 链接;
+   裸 URL 仍在正文里交给模型,只是不进「来源」列表。**这是自行裁定,所有者可推翻**(推翻 = 恢复裸 URL 扫描并接受其边界判据)。
 4. **不发 `max_tokens`**:与 Responses 线同一取舍,正文长度由 `MAX_ANSWER_CHARS` / 字节上界管,时长由双计时器管。
 5. **不新增 MCP 工具(仍 46)**、不新增端点、不改工具目录、前端零改动;`tool_config.web_search` 的说明文案在迁移里改成不指定协议的说法。
 6. **规则 9 先改文档**:`docs/security.md` §1 追加 R-GSEARCH 补记(线协议 / 六条约束不变 / 来源从正文抽 / 已认的两条残余)再动代码。
@@ -92,7 +95,14 @@ provider 的 `toolType` 配成 `google_search` 时,请求打 `{baseUrl}/v1/chat/
   (`finish_reason` 或 `[DONE]` 任一即算,网关实测两个都发),缺了就报 `upstream_failed`;**刻意不动 Responses 线**的
   「没有 completed 回落到累积 delta」—— 那是 R-WEBSEARCH 明确测过的取舍,而 chat.completion 的收尾信号是稳定的。补 2 组用例
   (中途关闭 → 失败;只发 `[DONE]` 的网关也算收尾)。`websearch.test.ts` 62 用例全过,`tsc --noEmit` 无新增错误。
-- 第 3 轮(只审整改 diff,`--base 506b196`):待回填
+- **第 3 轮**(只审整改 diff,`--base 506b196`,审 `d7e0570`,约 5 分钟):**1 条 P2** —— 裸 URL 后紧跟 ASCII 逗号 + 中文
+  (`…Agent_(computing),以及`)时,逗号与后面的散文一起被吞进 URL;并指出第 2 轮把那条用例改成全角逗号掩盖了这个回归(属实)。
+  **三轮各一条、全落在裸 URL 的边界判据上**(括号 / ASCII 标点 / ASCII 标点紧贴 CJK)—— 这正是记忆 `review-loop-is-not-design`
+  与 CLAUDE.md「审查边界」说的那种模式:散文里的裸 URL 在中英混排下**没有确定的边界**,再补一条「ASCII 标点后紧贴 CJK 即止」
+  只是第四条判据。**处置:不补判据,删掉裸 URL 扫描,只认 markdown 链接**(删代码;边界由 `(` `)` 确定)。所有者不在线,
+  这是自行裁定并已写进方案 3 与 `docs/security.md` 补记,可推翻。用例改写为:markdown 链接(去重 / http(s) / 封顶 / 查询串端口完整 /
+  一层括号)+ 「裸 URL 一律不抽」的反向断言。
+- 第 4 轮(只审整改 diff,`--base d7e0570`):待回填
 - 结论:待回填
 
 ## 失败处理

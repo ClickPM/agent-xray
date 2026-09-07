@@ -309,8 +309,10 @@ R-GSEARCH 落地补记(2026-09-07,`apps/api/agent/websearch.ts` + 迁移 `015`;�
   一个字段;白名单、`redirect:"manual"`、双计时器、日限额、字节上界、凭据脱敏与 Responses 路径**共用同一段代码**,
   分叉只在「请求体怎么拼」与「事件流怎么读」两处(`chat.completion.chunk` 的 `choices[0].delta.content` 累积正文,顶层 `error` 是失败)。
 - **来源只在正文里**:网关的 chat/completions 响应不透出任何 grounding 元数据(`message` 里只有 role / content /
-  reasoning_content / tool_calls),来源 URL 由本进程从正文的 markdown 链接与裸 URL 里抽(`extractLinkCitations`:只收 http(s)、
-  去重、封顶 10 条),**不发任何额外请求**。强特征模型(如 gemini-3.8-flash-high)给的是 Google 签名重定向链接
+  reasoning_content / tool_calls),来源 URL 由本进程**只从正文的 markdown 链接**里抽(`extractLinkCitations`:只收 http(s)、
+  去重、封顶 10 条),**不发任何额外请求**。**不扫裸 URL**:codex 三轮各报一条、全落在裸 URL 的边界上(括号 / ASCII 标点 /
+  ASCII 标点紧贴 CJK)—— 中英混排散文里裸 URL 没有确定的边界,按「审查循环不是设计」的口径改为只认边界确定的 markdown 链接
+  (实测三个 gemini 模型给来源一律用它);裸 URL 仍在正文里交给模型,只是不进「来源」列表。强特征模型(如 gemini-3.8-flash-high)给的是 Google 签名重定向链接
   `vertexaisearch.cloud.google.com/grounding-api-redirect/…`,那是访客浏览器点开时才跳转的地址,本进程不跟随、不解析。
 - **已认的残余**:①响应里没有「这次是否真的检索了」的信号 —— 实测偶发 grounding 后端无结果,模型会在正文里自述「搜索服务未返回结果」,
   本进程照实交给模型、由它向访客说明,不做二次判定;②来源链接是模型写在正文里的,比 Responses 路径的 `url_citation` 注解少一层

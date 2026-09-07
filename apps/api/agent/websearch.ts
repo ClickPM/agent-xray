@@ -218,39 +218,31 @@ export function extractChatText(data: unknown): string {
  * 从正文里抽来源(google 线)。
  *
  * 【为什么从正文抽】网关的 chat/completions 响应**不透出任何 grounding 元数据**(实测 message 里只有
- * role / content / reasoning_content / tool_calls),来源 URL 只存在于模型写进正文的 markdown 链接与裸 URL 里。
+ * role / content / reasoning_content / tool_calls),来源 URL 只存在于模型写进正文的链接里。
  * 抽出来之后与 Responses 线的 `url_citation` 走同一个出口(工具结果末尾的「来源:」列表 + 轨迹面板的计数),
  * 两条线对上层是同一种形状。纯字符串处理,不发任何请求、不跟随任何链接。
  *
- * 顺序:markdown 链接(带标题)优先,再补裸 URL;同一 URL 只收一次;只收 http(s)(`javascript:` 的"来源"
- * 在前端是一个可点的注入面,与 `extractCitations` 同一条判据);裸 URL 去掉紧贴的句末标点;封顶 MAX_CITATIONS。
+ * 【只认 markdown 链接,不扫裸 URL】codex 三轮各报一条、全落在裸 URL 的边界上(括号 / ASCII 标点 /
+ * ASCII 标点紧贴 CJK):裸 URL 在中英混排的散文里**没有正确的边界** —— `)` `,` `?` `:` 既是 URL 字符又是标点,
+ * 紧贴 CJK 时连空格这个分隔符都没有,每补一条判据就多一种误切。按「审查循环不是设计」的口径不再堆判据,
+ * 改为只认 markdown 链接:目标由 `(` `)` 包着,边界确定(只认一层配对括号,CommonMark 口径);
+ * 实测三个 gemini 模型给来源一律用 markdown 链接。裸 URL 仍在正文里、照样交给模型,只是不进「来源:」列表
+ * —— 少列一条,好过列一条错的。
  *
- * 【括号】(codex 首轮 P2)URL 本身可以含**一层配对括号**(`…/wiki/Agent_(computing)` 是常见形态),
- * 所以两个正则的 URL 字符集都是「非分隔字符 | 一组 `(…)`」;落单的 `)` 仍是分隔符,markdown 链接的收尾括号
- * 与散文里 `(见 https://x)` 这种包法都照常断在 `)` 前。与 CommonMark 对链接目标的处理同一口径(只认一层)。
- * 两个正则的分支互斥(一个字符要么是 `(` 要么不是),输入又被 MAX_ANSWER_CHARS 封顶,不存在回溯爆炸。
- *
- * 【全角标点】中文正文里裸 URL 后面常常**不空格**直接接 `,` / `。` / `;`(实测「…(computing),以及」),
- * 这些字符不会出现在合法 URL 里(会被百分号编码),所以列进裸 URL 的终止集;CJK **字母**不列 —— 模型偶尔会写
- * 未编码的中文路径(`/wiki/人工智能`),截掉比粘上一个词更糟。
+ * 同一 URL 只收一次;只收 http(s)(`javascript:` 的"来源"在前端是一个可点的注入面,与 `extractCitations`
+ * 同一条判据,由正则本身保证);封顶 MAX_CITATIONS。正则分支互斥、输入被 MAX_ANSWER_CHARS 封顶,不存在回溯爆炸。
  */
 export function extractLinkCitations(text: string): Citation[] {
   const seen = new Set<string>();
   const cites: Citation[] = [];
-  const push = (url: string, title: string): boolean => {
-    if (!/^https?:\/\//i.test(url) || seen.has(url)) return cites.length < MAX_CITATIONS;
+  for (const m of text.matchAll(/\[([^\]\n]{0,200})\]\((https?:\/\/(?:[^\s()<>]|\([^\s()<>]*\))+)\)/gi)) {
+    const url = m[2];
+    if (seen.has(url)) continue;
     seen.add(url);
+    const title = m[1].trim();
     // 标题就是 URL 本身(`[https://x](https://x)` 这种写法)时不重复一遍
     cites.push({ url, title: title === url ? "" : title });
-    return cites.length < MAX_CITATIONS;
-  };
-  for (const m of text.matchAll(/\[([^\]\n]{0,200})\]\((https?:\/\/(?:[^\s()<>]|\([^\s()<>]*\))+)\)/gi)) {
-    if (!push(m[2], m[1].trim())) return cites;
-  }
-  // 终止集里的标点**只有全角**(，。；：！？、):ASCII 的 ? : , 都是合法 URL 字符(查询串 / 端口 / 参数),
-  // 只能在**末尾**当句末标点剥掉(下一行),不能在中间当分隔符(codex 第 2 轮 P2:上一版误把 ASCII 打了进去)
-  for (const m of text.matchAll(/https?:\/\/(?:[^\s()<>[\]"'`\uFF0C\u3002\uFF1B\uFF1A\uFF01\uFF1F\u3001]|\([^\s()<>]*\))+/gi)) {
-    if (!push(m[0].replace(/[.,;:!?\uFF0C\u3002\uFF1B\uFF1A\uFF01\uFF1F\u3001]+$/, ""), "")) return cites;
+    if (cites.length >= MAX_CITATIONS) break;
   }
   return cites;
 }

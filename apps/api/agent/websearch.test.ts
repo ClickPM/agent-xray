@@ -641,13 +641,13 @@ describe("R-GSEARCH · chat.completion.chunk 事件流解析", () => {
 
   it("网关回普通 JSON 时按 choices[0].message.content 解析;顶层 error 是失败", async () => {
     const ok = (async () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: "非流式答案 https://a.example/x" } }] }), {
+      new Response(JSON.stringify({ choices: [{ message: { content: "非流式答案 [来源](https://a.example/x)" } }] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })) as unknown as typeof fetch;
     const out = await runWebSearch("q", gcfg(), { fetchImpl: ok });
-    expect(out.text).toBe("非流式答案 https://a.example/x");
-    expect(out.citations).toEqual([{ url: "https://a.example/x", title: "" }]);
+    expect(out.text).toBe("非流式答案 [来源](https://a.example/x)");
+    expect(out.citations).toEqual([{ url: "https://a.example/x", title: "来源" }]);
 
     const bad = (async () =>
       new Response(JSON.stringify({ error: { message: "quota exceeded" } }), {
@@ -666,58 +666,44 @@ describe("R-GSEARCH · chat.completion.chunk 事件流解析", () => {
 });
 
 describe("R-GSEARCH · 正文里抽来源(extractLinkCitations)", () => {
-  it("markdown 链接优先、裸 URL 其次;去重、只收 http(s)、去尾部标点、封顶 10 条", () => {
+  it("只认 markdown 链接:去重、只收 http(s)、封顶 10 条;标题就是 URL 时不重复", () => {
     const text = [
       "来源:[甲](https://a.example/1) 与 [甲(重复)](https://a.example/1)。",
-      "裸链接 https://b.example/2, 以及句末的 https://c.example/3。",
-      "[注入](javascript:alert(1)) 与 ftp://d.example/4 不收。",
+      "[注入](javascript:alert(1)) 与 [ftp](ftp://d.example/4) 不收。",
       "[https://e.example/5](https://e.example/5)",
-      ...Array.from({ length: 12 }, (_, i) => `https://f.example/${i}`),
+      "[查询串 / 端口 / 参数里的逗号冒号都完整](https://c.example:8443/s?id=7&k=v,w:x)",
+      ...Array.from({ length: 12 }, (_, i) => `[f${i}](https://f.example/${i})`),
     ].join("\n");
     const cites = extractLinkCitations(text);
     expect(cites).toHaveLength(10);
-    expect(cites.slice(0, 4)).toEqual([
+    expect(cites.slice(0, 3)).toEqual([
       { url: "https://a.example/1", title: "甲" },
-      { url: "https://e.example/5", title: "" }, // 标题就是 URL 本身时不重复一遍
-      { url: "https://b.example/2", title: "" },
-      { url: "https://c.example/3", title: "" },
+      { url: "https://e.example/5", title: "" },
+      { url: "https://c.example:8443/s?id=7&k=v,w:x", title: "查询串 / 端口 / 参数里的逗号冒号都完整" },
     ]);
-    expect(cites.some((c) => c.url.startsWith("javascript:") || c.url.startsWith("ftp:"))).toBe(false);
-    // 签名重定向链接尾部的 `==` 不是标点,原样保留
-    expect(extractLinkCitations(`见 ${REDIRECT}。`)).toEqual([{ url: REDIRECT, title: "" }]);
+    expect(cites.every((c) => c.url.startsWith("https://"))).toBe(true);
   });
 
-  it("URL 里的一层配对括号是 URL 的一部分;落单的 ) 仍是分隔符(codex 首轮 P2)", () => {
+  it("裸 URL 不抽:散文里的裸 URL 没有确定的边界(codex 三轮各一条边界 findings 之后的裁定)", () => {
     const wiki = "https://en.wikipedia.org/wiki/Agent_(computing)";
-    // markdown 链接目标含括号:整个 URL 要收全,链接自己的收尾括号不被吃掉
-    expect(extractLinkCitations(`来源:[维基](${wiki})。后文`)).toEqual([{ url: wiki, title: "维基" }]);
-    // 裸 URL 含括号;紧跟的全角逗号是中文正文的分隔符,不是 URL 的一部分
-    expect(extractLinkCitations(`详见 ${wiki}，以及`)).toEqual([{ url: wiki, title: "" }]);
-    // 未编码的中文路径要收全(CJK 字母不是终止符),句末的全角句号照样去掉
-    expect(extractLinkCitations("见 https://zh.wikipedia.org/wiki/人工智能。")).toEqual([
-      { url: "https://zh.wikipedia.org/wiki/人工智能", title: "" },
-    ]);
+    for (const text of [
+      `详见 ${wiki},以及后文`,
+      "裸链接 https://b.example/2, 以及 https://c.example/3。",
+      `见 ${REDIRECT}。`,
+      "See https://a.example/x?y=1, then https://b.example/z?",
+    ]) {
+      expect(extractLinkCitations(text), text).toEqual([]);
+    }
   });
 
-  it("ASCII 的 ? : , 是 URL 字符,只在末尾当句末标点剥掉(codex 第 2 轮 P2)", () => {
-    // 查询串、端口、参数里的逗号都要收全;全角逗号仍是中文正文的分隔符
-    expect(extractLinkCitations("见 https://news.example/story?id=42&tags=a,b:c，以及 https://h.example:8443/p?q=1.")).toEqual([
-      { url: "https://news.example/story?id=42&tags=a,b:c", title: "" },
-      { url: "https://h.example:8443/p?q=1", title: "" },
+  it("markdown 目标里的一层配对括号是 URL 的一部分;签名重定向链接尾部的 == 原样保留", () => {
+    const wiki = "https://en.wikipedia.org/wiki/Agent_(computing)";
+    expect(extractLinkCitations(`来源:[维基](${wiki})。后文 [半岛](${REDIRECT}),完`)).toEqual([
+      { url: wiki, title: "维基" },
+      { url: REDIRECT, title: "半岛" },
     ]);
-    // 句末的 ASCII 标点(英文正文)照样剥掉,且只剥末尾
-    expect(extractLinkCitations("See https://a.example/x?y=1, then https://b.example/z?")).toEqual([
-      { url: "https://a.example/x?y=1", title: "" },
-      { url: "https://b.example/z", title: "" },
-    ]);
-    // markdown 链接目标里的查询串同样完整
-    expect(extractLinkCitations("[报道](https://c.example/s?id=7&k=v)")).toEqual([
-      { url: "https://c.example/s?id=7&k=v", title: "报道" },
-    ]);
-    // 散文里用括号包住整个链接:断在 ) 前,不把 ) 当 URL 的一部分
-    expect(extractLinkCitations("(见 https://a.example/1)")).toEqual([{ url: "https://a.example/1", title: "" }]);
-    // 只认一层:括号里再出现 ( 时,这组括号整个不算 URL,断在它前面(与 CommonMark 的一层口径一致,嵌套形态极少见)
-    expect(extractLinkCitations("https://b.example/x_(y_(z))")).toEqual([{ url: "https://b.example/x_", title: "" }]);
+    // 只认一层:目标里再嵌套括号就对不上收尾的 ),整条链接不收 —— 不收,好过收错
+    expect(extractLinkCitations("[x](https://b.example/x_(y_(z)))")).toEqual([]);
   });
 
   it("extractChatText 只认 choices[0].message.content 字符串", () => {
