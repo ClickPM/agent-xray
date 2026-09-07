@@ -42,3 +42,10 @@ Thumbs.db
 # python 字节码缓存(runner/ 下本机跑 python / unittest 会生成;生成器与测试都跳过它,但别让它进库)
 __pycache__/
 *.pyc
+
+# 本机工具的私有配置与虚拟环境,不入库
+# .codex/ 是 codex CLI 的本机配置(与 .agents/skills 那份镜像不同,那个是生成物、要入库);
+# .venv/ 是本机跑 runner/tests 时建的 python 环境(容器里的那份由 Dockerfile 建)。
+# 两个都会让 dev.ps1 build 的洁净检查判脏,进而拒绝构建。
+.codex/
+.venv/
