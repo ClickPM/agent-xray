@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "@/components/ui";
 import { MobileBarButton, MobilePageBar } from "@/components/mobile/MobilePageBar";
-import { Sheet, type Detent } from "@/components/mobile/Sheet";
+import { CONTENT_SHEET_HEIGHTS, Sheet, type Detent } from "@/components/mobile/Sheet";
 import { CodeView } from "@/components/skills/CodeView";
 import { MarkdownFile } from "@/components/skills/MarkdownFile";
 import { mono } from "@/lib/styles";
@@ -412,6 +412,7 @@ export function SkillDetail({
         detent={treeDetent}
         onDetentChange={setTreeDetent}
         label="文件树"
+        heights={CONTENT_SHEET_HEIGHTS}
         header={
           <div style={{ flex: "none", padding: "4px 16px 10px" }}>
             <span style={{ ...mono(11, 600), color: "var(--text-dim)", letterSpacing: "0.05em" }}>FILES</span>

@@ -66,10 +66,16 @@ export default function RootLayout({
             `touchmove` 那条兜 Android(它没有 gesture 事件);只在**多指**时拦,单指滚动不受影响。
             三个 gesture 事件都要拦:只拦 start 时,已经开始的捏合仍会继续放大。
             `{passive:false}` 不能省 —— 触摸事件默认被当 passive,passive 监听里 preventDefault 无效。
-            双击放大由 `globals.css` 的 `touch-action: manipulation` 负责,不在这里。 */}
+            双击放大由 `globals.css` 的 `touch-action: manipulation` 负责,不在这里。
+
+            ⚠️ **每次触发都要现查 `matchMedia`,不能只在装监听时判一次**:
+            这几个监听挂在 document 上、对整站生效,不加视口条件的话
+            **macOS Safari 的触控板捏合与宽屏触控设备的缩放也会被吃掉** ——
+            那是改动了桌面既有行为,违反规则 7 的「桌面零改动」(本轮 codex 审查 P2)。
+            `m.matches` 每次现读,所以旋转屏幕 / 改窗口大小后判据自动跟着变。 */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=function(e){e.preventDefault()},o={passive:false};document.addEventListener("gesturestart",p,o);document.addEventListener("gesturechange",p,o);document.addEventListener("gestureend",p,o);document.addEventListener("touchmove",function(e){if(e.touches&&e.touches.length>1)e.preventDefault()},o)}catch(e){}})();`,
+            __html: `(function(){try{var m=window.matchMedia("(max-width: 768px)"),o={passive:false},p=function(e){if(m.matches)e.preventDefault()};document.addEventListener("gesturestart",p,o);document.addEventListener("gesturechange",p,o);document.addEventListener("gestureend",p,o);document.addEventListener("touchmove",function(e){if(m.matches&&e.touches&&e.touches.length>1)e.preventDefault()},o)}catch(e){}})();`,
           }}
         />
       </head>

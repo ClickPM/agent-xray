@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { MobileBarButton, MobilePageBar } from "@/components/mobile/MobilePageBar";
-import { Sheet, type Detent } from "@/components/mobile/Sheet";
+import { CONTENT_SHEET_HEIGHTS, Sheet, type Detent } from "@/components/mobile/Sheet";
 import { mono } from "@/lib/styles";
 
 export interface TocItem {
@@ -35,7 +35,8 @@ export function MobileChapterBar({
 }) {
   const [open, setOpen] = useState(false);
   // 目录与 RSS 两个 Sheet 停在同一档(画板 4n:同一入口性质的 Sheet 高度一致,
-  // 读者不会觉得每次弹出来的东西大小不一)。medium=50%,这里要的是 61%。
+  // 读者不会觉得每次弹出来的东西大小不一)—— 内容类档位 61%,由
+  // `CONTENT_SHEET_HEIGHTS` 覆盖,**不复用 Runtime 的 50% medium**。
   const [detent, setDetent] = useState<Detent>("medium");
 
   return (
@@ -65,6 +66,7 @@ export function MobileChapterBar({
         detent={detent}
         onDetentChange={setDetent}
         label="本章目录"
+        heights={CONTENT_SHEET_HEIGHTS}
         header={
           <div style={{ flex: "none", padding: "4px 16px 10px" }}>
             <span style={{ ...mono(11, 600), color: "var(--text-dim)", letterSpacing: "0.05em" }}>本章目录</span>

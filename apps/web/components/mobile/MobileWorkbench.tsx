@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Sheet, SegmentedControl, type Detent } from "@/components/mobile/Sheet";
 import { relativeTime, type SessionSummary, type SessionUsage } from "@/lib/agent-api";
+import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { formatCtx, formatTokens, STAT_PLACEHOLDER } from "@/lib/stats-bar";
 import { mono } from "@/lib/styles";
 
@@ -63,11 +64,11 @@ const PANEL_ITEMS = [
   { value: "tools" as const, label: "Tools" },
 ];
 
-/** 顶部功能条高度。内容区顶部要留出同样的内边距 —— 内容从玻璃底下穿过去(iOS 26)。 */
-const TOPBAR = 44;
-/** 输入栏高度(8 + 40 + 10)。Tab Bar 49 在它下面。 */
+/** 输入栏自身高度(8 + 40 + 10)。上下两条栏的**总占位**(含安全区)走 CSS 变量
+    `--m-top-inset` / `--m-bottom-inset` —— 别再在这里写裸的 44 / 49:
+    Tab Bar 的实际高度是 `49 + safe-bottom`,写死会在带 Home Indicator 的机型上
+    与输入栏重叠(本轮 codex 审查的 P1)。 */
 const INPUTBAR = 58;
-const TABBAR = 49;
 
 export function MobileWorkbench(props: MobileWorkbenchProps) {
   const {
@@ -76,6 +77,9 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
     renderPanel, renderChat, renderEmpty,
   } = props;
 
+  // 键盘占掉的高度。iOS 只缩 visualViewport、不改布局视口 —— 不跟这个值走的话
+  // 输入栏会被键盘整条盖住(审查 P1)。
+  const keyboard = useKeyboardInset();
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const [runtimeDetent, setRuntimeDetent] = useState<Detent>("medium");
   const [sessionsOpen, setSessionsOpen] = useState(false);
@@ -92,8 +96,10 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          paddingTop: TOPBAR,
-          paddingBottom: INPUTBAR + TABBAR,
+          paddingTop: "var(--m-top-inset)",
+          // 键盘弹起时 Tab Bar 让位(见 globals.css 的 `body.m-keyboard`),
+          // 这时底部只需让开「输入栏 + 键盘」;否则让开「输入栏 + Tab Bar + 安全区」
+          paddingBottom: keyboard > 0 ? INPUTBAR + keyboard : `calc(${INPUTBAR}px + var(--m-bottom-inset))`,
         }}
       >
         {active ? renderChat() : renderEmpty()}
@@ -103,7 +109,8 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
       <div
         className="m-glass-top"
         style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: TOPBAR, zIndex: 4,
+          position: "absolute", top: 0, left: 0, right: 0, zIndex: 4,
+          // 高度与顶部内边距由 `.m-glass-top` 按 `--safe-top` 给,这里不写死
           display: "flex", alignItems: "center", gap: 4, padding: "0 6px",
         }}
       >
@@ -172,7 +179,10 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
       <div
         className="m-glass-bottom"
         style={{
-          position: "absolute", left: 0, right: 0, bottom: TABBAR, zIndex: 4,
+          position: "absolute", left: 0, right: 0, zIndex: 4,
+          // 常态贴在整条 Tab Bar 之上(**含安全区**,不是裸 49);
+          // 键盘弹起时 Tab Bar 让位,输入栏直接贴键盘上沿
+          bottom: keyboard > 0 ? keyboard : "var(--m-bottom-inset)",
           display: "flex", alignItems: "center", gap: 10, padding: "8px 16px 10px",
         }}
       >

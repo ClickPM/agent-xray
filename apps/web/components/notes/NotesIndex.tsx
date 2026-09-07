@@ -9,6 +9,7 @@ import { GhostButton } from "@/components/ui";
 import { mono } from "@/lib/styles";
 import { RssModal, type RssCat } from "@/components/notes/RssModal";
 import { MobilePageBar, MobileBarButton } from "@/components/mobile/MobilePageBar";
+import { MobileRssSheet } from "@/components/mobile/MobileRssSheet";
 
 export interface IndexSeries {
   slug: string;
@@ -96,7 +97,16 @@ export function NotesIndex({
 
         <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>{latestLine}</div>
       </div>
-      <RssModal open={rssOpen} onClose={() => setRssOpen(false)} cats={rssCats} />
+      {/* 桌面居中模态与移动底部 Sheet 是**两份呈现**,共用同一个 `rssOpen`。
+          桌面那份一个字节没动;移动端不能复用它 —— 它是 `fixed; top:110px` 的居中弹窗,
+          没有下滑关闭、没有 44 触控尺寸(本轮 codex 审查 P2)。
+          两份都渲染但各自带 `m-hide-narrow` / 内部 Sheet 只在移动端可达,不会同时出现。 */}
+      <div className="m-hide-narrow">
+        <RssModal open={rssOpen} onClose={() => setRssOpen(false)} cats={rssCats} />
+      </div>
+      <div className="m-show-narrow" style={{ flexDirection: "column" }}>
+        <MobileRssSheet open={rssOpen} onClose={() => setRssOpen(false)} cats={rssCats} />
+      </div>
     </div>
   );
 }

@@ -20,7 +20,20 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
  */
 export type Detent = "medium" | "large";
 
+/**
+ * 两档的默认高度。**Runtime 的运行时面板用这一套**:medium 50% 是画板 4e
+ * 反复强调的「上半屏仍看得见对话」。
+ *
+ * 内容类 Sheet(本章目录 / RSS / 文件树)另有档位 —— 画板 4n 把它们定在
+ * **安全高度的 61%**(354/400 是 708 基准下的绝对值),并要求「同一入口性质的
+ * Sheet 停在同一高度,读者不会觉得每次弹出来的东西大小不一」。
+ * 所以那几处传 `heights={CONTENT_SHEET_HEIGHTS}`,不要复用 Runtime 的 50%
+ * (本轮 codex 审查 P2:注释写着 61% 却传了 medium)。
+ */
 const HEIGHT: Record<Detent, string> = { medium: "50%", large: "92%" };
+
+/** 内容类 Sheet 的档位(画板 4n):medium = 安全高度的 61%。 */
+export const CONTENT_SHEET_HEIGHTS: Partial<Record<Detent, string>> = { medium: "61%" };
 
 /** 拖动切档 / 关闭的位移阈值(px)。低于它按「没想动」处理,回弹原档。 */
 const DRAG_THRESHOLD = 60;
@@ -33,6 +46,7 @@ export function Sheet({
   header,
   children,
   label,
+  heights,
 }: {
   open: boolean;
   onClose: () => void;
@@ -43,6 +57,8 @@ export function Sheet({
   children: ReactNode;
   /** 无障碍名字。禁缩放已经损失了一层可达性,这里不再省。 */
   label: string;
+  /** 档位高度覆盖。内容类 Sheet 传 `CONTENT_SHEET_HEIGHTS`(画板 4n 的 61%)。 */
+  heights?: Partial<Record<Detent, string>>;
 }) {
   // 拖动中的临时位移。松手后清零 —— 落到哪一档由 onDetentChange / onClose 决定。
   const [dragY, setDragY] = useState(0);
@@ -109,7 +125,7 @@ export function Sheet({
           right: 0,
           bottom: 0,
           zIndex: 7,
-          height: HEIGHT[detent],
+          height: heights?.[detent] ?? HEIGHT[detent],
           // 拖动中跟手;松手后 dragY 归零,由 transition 滑到目标档
           transform: `translateY(${Math.max(0, dragY)}px)`,
           transition: dragY === 0 ? "height .28s cubic-bezier(.32,.72,0,1), transform .28s cubic-bezier(.32,.72,0,1)" : "none",

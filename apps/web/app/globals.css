@@ -227,6 +227,15 @@ code {
 
   --m-topbar-h: 44px;
   --m-tabbar-h: 49px;
+
+  /* 顶栏 / 底栏**连同安全区**的总占位。
+     ⚠️ 这两条是本轮 codex 审查两条 P1 的根因:Tab Bar 的实际高度是
+     `49 + safe-bottom`,而输入栏当初钉在 `bottom: 49px`、内容只预留 107px ——
+     在 34px Home Indicator 机型上两者重叠 34px,且 Tab Bar 的 z-index:5
+     会盖住输入框和发送按钮下半部分。凡是要给这两条栏让位的地方,
+     **一律用下面两个变量,不许再写裸的 44 / 49**。 */
+  --m-top-inset: calc(var(--m-topbar-h) + var(--safe-top));
+  --m-bottom-inset: calc(var(--m-tabbar-h) + var(--safe-bottom));
 }
 
 html.dark {
@@ -283,6 +292,10 @@ html {
      维持竖屏版式、最大宽 430 居中、两侧留白,不另做一套布局。 */
   @media (orientation: landscape) {
     .m-shell {
+      /* ⚠️ `width:100%` 不能省:给 flex 子项设 `margin-left/right:auto` 会**关掉
+         交叉轴 stretch**,元素退化成按内容定宽 —— 实测 740×390 横屏下只有 359,
+         比竖屏基准 390 还窄,正文反被压缩(与画板 4u「维持竖屏版式」相反)。 */
+      width: 100%;
       max-width: 430px;
       margin: 0 auto;
       border-left: 1px solid var(--border);
@@ -312,6 +325,12 @@ html {
   -webkit-backdrop-filter: var(--m-glass-blur);
 }
 .m-glass-top {
+  /* standalone 启动时 `safe-area-inset-top` 非零:顶栏必须把状态栏那一段
+     算进自己的高度并用内边距顶开内容,否则文字落到刘海 / 状态栏下面。
+     浏览器里 safe-top 通常是 0,这两行等于没写(审查 P2-4)。 */
+  padding-top: var(--safe-top);
+  height: calc(var(--m-topbar-h) + var(--safe-top));
+  box-sizing: border-box;
   box-shadow:
     inset 0 1px 0 var(--m-glass-highlight),
     0 1px 12px rgba(0, 0, 0, 0.06);
@@ -364,7 +383,10 @@ html {
   /* 外层容器:去掉桌面的 maxWidth 居中与 32 左右留白,改成满宽 + 16 */
   .m-page-wrap {
     max-width: none !important;
-    padding: 0 16px 24px !important;
+    /* 底部必须让开整条 Tab Bar(49 + 安全区)再加一点呼吸,否则最后一段文字
+       / 最后一枚按钮永远滚不出遮挡 —— 滚到底时 `useHideOnScroll` 还会主动把
+       Tab Bar 显示回来,所以不能指望「滚动时它藏着」。画板给的内容底部空间约 60。 */
+    padding: 0 16px calc(var(--m-bottom-inset) + 16px) !important;
   }
 
   /* 一级页大标题(iOS Large Title)。桌面 20/650 → 34/700;副标题 13 → 15 */
@@ -522,6 +544,14 @@ html {
     font-size: 15px !important;
   }
 
+  /* 键盘弹起时 Tab Bar 让位(iOS 惯例,画板 4b 标注)。
+     `body.m-keyboard` 由 `lib/use-keyboard-inset.ts` 挂 —— Tab Bar 在 layout 里
+     比 Runtime 壳高两层,拿不到键盘状态,只能这样往上传(与 `m-errored` 同一手法)。
+     用位移而不是 display:none:走合成器,且收键盘时有一段自然的滑回。 */
+  body.m-keyboard nav.m-show-narrow {
+    transform: translateY(100%);
+  }
+
   /* 出错 / 404 时 Tab Bar 四格都不高亮(画板 4t)。
      `body.m-errored` 由 `components/StatusScreen.tsx` 在挂载时加、卸载时移除 ——
      Tab Bar 在 layout 里比错误屏高两层,拿不到「本页出错了」,只能这样往上传。
@@ -597,8 +627,20 @@ html {
   /* 文件 chip 条:横向滚动的胶囊。chip 本身不缩,靠横滚吸收宽度差 */
   .m-chips {
     gap: 8px;
-    padding: 2px 0 12px;
+    padding: 8px 0;
     align-items: center;
+    /* **吸附在功能条下方**。画板 4p 把「滚动时吸附」写成了 chip 条能取代
+       240px 粘性目录树的前提 —— 不吸附的话读长文件时它会滚走,
+       想切文件得先滚回页顶(审查 P2-8)。
+       实底而不是玻璃:全站只有功能条 / 输入栏 / Tab Bar 三处玻璃。 */
+    position: sticky;
+    top: var(--m-top-inset);
+    z-index: 3;
+    background: var(--bg);
+    /* 负外边距抵消 `.m-page-wrap` 的左右 16,让吸附时的实底铺满整宽 */
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   /* 预览框保持内核层的 r7 与 1px 描边 —— 它装的是 markdown 与代码,不是 iOS 卡片 */
@@ -671,7 +713,7 @@ html {
      正好落在玻璃下边缘;z 提到 5 压住玻璃,因为它必须在任何滚动位置都可见
      (画板 4m:全站唯一贴在玻璃上的实色元素)。 */
   .m-progress {
-    top: 44px !important;
+    top: var(--m-top-inset) !important;
     z-index: 5 !important;
   }
 
