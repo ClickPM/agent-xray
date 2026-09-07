@@ -492,6 +492,73 @@ html {
     padding: 2px 8px !important;
   }
 
+  /* ── Skill 详情(画板 4p / 4q)────────────────────────────────────────── */
+
+  /* 240px 粘性树 + 预览的双栏 → 单列。树移到功能条右侧按钮开的 Sheet 里,
+     文件切换由 chip 条承担(chip 条是切换器,树是浏览器)。 */
+  .m-skill-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+    margin-top: 18px !important;
+  }
+
+  /* 头部:标题信息 + 右侧两枚按钮 → 上下两块,按钮各占一半 */
+  .m-skill-head {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 14px !important;
+    margin-top: 8px !important;
+  }
+  .m-skill-actions {
+    padding-top: 0 !important;
+    gap: 10px !important;
+  }
+  .m-skill-actions > a {
+    flex: 1;
+    justify-content: center;
+    height: 44px !important;
+    border-radius: 22px !important;
+    font-size: 14px !important;
+    background: var(--m-fill) !important;
+    border-color: transparent !important;
+    color: var(--accent) !important;
+  }
+  /* 最后一枚(下载 zip)是这一页的默认动作,升为品牌色实底主按钮 */
+  .m-skill-actions > a:last-child {
+    background: var(--accent) !important;
+    color: #ffffff !important;
+  }
+
+  /* INSTALL:外框 r7 + 描边 → 分组卡 r16 无描边;内层命令行 r6 → r10 */
+  .m-install {
+    border: none !important;
+    border-radius: 16px !important;
+    padding: 12px 16px !important;
+  }
+  .m-install-cmd {
+    border-radius: 10px !important;
+  }
+  /* 安装命令**横滚**而不是省略号截断:命令要能被完整读到才有意义
+     (画板 4p:INSTALL 命令行 white-space:pre 横滚)。 */
+  .m-install-text {
+    white-space: pre !important;
+    overflow-x: auto !important;
+    text-overflow: clip !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 文件 chip 条:横向滚动的胶囊。chip 本身不缩,靠横滚吸收宽度差 */
+  .m-chips {
+    gap: 8px;
+    padding: 2px 0 12px;
+    align-items: center;
+  }
+
+  /* 预览框保持内核层的 r7 与 1px 描边 —— 它装的是 markdown 与代码,不是 iOS 卡片 */
+  .m-preview {
+    border-radius: 7px !important;
+  }
+
   /* ── Skills 首页(画板 4o)与 About(画板 4r)────────────────────────── */
 
   /* skill 名是标识符,必须等宽;mono 13 → 14/600(等宽字在 15px 正文旁不显小的最低值) */
