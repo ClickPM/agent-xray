@@ -1,6 +1,6 @@
 # Round GSEARCH — `web_search` 接 Gemini 原生 Google Search grounding(第二条线协议)
 
-> 状态:已完成(验证成立 → 代码与测试落地 → codex 4 轮 / 4 条 / 零 high,整改后 PASS → 已合并 `main`,**待发版**)
+> 状态:已完成(验证成立 → 代码与测试落地 → codex 4 轮 / 4 条 / 零 high,整改后 PASS → 已合并 `main` → **已发版**:生产 `d59407a`,2026-09-07,迁移 14 → 15;发版当日经 MCP 新建 `cliproxy-gemini`(`gemini-pro-agent` + `google_search`)并设为默认,端到端实测见 [`docs/releases.md`](../../docs/releases.md))
 
 ## 目标
 
@@ -125,6 +125,14 @@ provider 的 `toolType` 配成 `google_search` 时,请求打 `{baseUrl}/v1/chat/
 - **发版后要用它**:经 `xray-admin-prod` 的 `websearch_provider_upsert{provider:"cliproxy-gemini", apiKey:<同一把>, baseUrl:同现行,
   modelId:"gemini-3.8-flash-high", toolType:"google_search", makeDefault:true}`;切回 `websearch_set_default{provider:"cliproxy-dmit"}` 即回滚,
   不用发版。迁移 015 随发版跑(`migrate.sh` 14 → 15)。
+- **实际发版当日(2026-09-07,`d59407a`)所有者要的是 `gemini-pro-agent`,不是上面写的 `gemini-3.8-flash-high`** ——
+  其余字段照上面那条。生产端到端:一轮里 `web_search` 被调 **2 次**(`durationMs` 27673 / 15769),`resultPreview` 是
+  **综述文本**而不是结果列表(google 线的形态),回答带出 3 条 markdown 链接来源,`done` 回 `modelRoundTrips:3 turnMs:51189`。
+  **代价是慢**:一轮近一分钟(本轮预研直连网关时是 28.3 / 37.6 s,与此吻合),仍在双计时器内。换快的只需
+  `websearch_provider_upsert{provider:"cliproxy-gemini", modelId:"gemini-3.8-flash-high"}`(部分更新)。
+- **验实时检索能力时别把「未来日期」写进 prompt**(发版当日踩到):首轮端到端问「2026 年 9 月第一周有哪些 AI 新闻」,
+  模型按训练截止判定「该日期尚未发生」,把 grounding 回来的内容当「推演/虚构预测类综述」拒绝给来源 —— 链路其实是通的
+  (`tool_start`/`tool_end` 各一、37.3 s),是 prompt 把验收判据带偏了。换中性问法立刻拿到来源。
 - **一次自己的失误**:曾加一条「迁移 015 改了 `tool_config.note`」的用例,跑在别的用例清空 `tool_config` 之后就读不到行 ——
   用例依赖执行顺序,删掉;CHECK 那条用例已足以证明迁移应用。
 - **`tsc --noEmit` 有 3 处既有错误**(`catalog.test.ts:214` `socketPath`、`skill-runner.test.ts:368/369`),不在本轮改动文件里、
