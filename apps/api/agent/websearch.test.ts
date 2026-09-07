@@ -559,18 +559,27 @@ describe("R-GSEARCH · 线协议由 toolType 唯一决定", () => {
     expect((seenInit?.headers as Record<string, string>).Authorization).toBe(`Bearer ${FAKE_KEY}`);
 
     // 同一个函数直接断言:两条线各自的形状,且不带 max_tokens / temperature 之类可被人误加的字段
-    expect(buildSearchRequestBody("q", gcfg())).toEqual({
+    // 2026-09-06 17:00 UTC = 北京时间 2026-09-07:日期按站点时区算,刻意跨过 UTC 日界(2026-09-07 修补)
+    const AT = new Date("2026-09-06T17:00:00Z");
+    const PREFIX =
+      "今天是 2026-09-07。联网搜索并给出带来源的简明答案:照实陈述检索到的事实并给出来源," +
+      "不要按你的训练截止去判断问题里的日期是否「尚未到来」。";
+    expect(buildSearchRequestBody("q", gcfg(), AT)).toEqual({
       model: "gemini-3.8-flash-high",
-      messages: [{ role: "user", content: "联网搜索并给出带来源的简明答案。q" }],
+      messages: [{ role: "user", content: `${PREFIX}q` }],
       tools: [{ google_search: {} }],
       stream: true,
     });
-    expect(buildSearchRequestBody("q", cfg({ toolType: "web_search_2025_08_26" }))).toEqual({
+    expect(buildSearchRequestBody("q", cfg({ toolType: "web_search_2025_08_26" }), AT)).toEqual({
       model: "deepseek-v4-flash",
       tools: [{ type: "web_search_2025_08_26" }],
-      input: "联网搜索并给出带来源的简明答案。q",
+      input: `${PREFIX}q`,
       stream: true,
     });
+    // 不传时刻时用当前日期:前缀形状不变,访客的 query 仍在句尾、仍是唯一的可控内容
+    const live = buildSearchRequestBody("q", gcfg()) as { messages: { content: string }[] };
+    expect(live.messages[0].content).toMatch(/^今天是 \d{4}-\d{2}-\d{2}。联网搜索并给出带来源的简明答案:/);
+    expect(live.messages[0].content.endsWith("q")).toBe(true);
   });
 });
 

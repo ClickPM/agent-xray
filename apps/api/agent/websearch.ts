@@ -27,6 +27,7 @@
 // 这条边界让本文件可以被纯函数式地测试(注入 fetch),也让「凭据从哪来」只有一个答案。
 import { readBodyCapped } from "../shared/http-body";
 import { redactSecret, safeErrorText } from "../shared/redact";
+import { siteDay } from "../shared/site-time";
 import { checkBaseUrl } from "../shared/websearch-hosts";
 import type { ActiveWebSearchConfig } from "./websearch-config";
 
@@ -135,8 +136,17 @@ export function wireOf(toolType: string): WebSearchWire {
  * 导出只为测试能逐字段断言这一点。刻意不带 max_tokens / temperature 之类:正文长度由
  * MAX_ANSWER_CHARS 与字节上界管,时长由双计时器管,不把「多少算够」交给上游参数。
  */
-export function buildSearchRequestBody(query: string, cfg: ActiveWebSearchConfig): Record<string, unknown> {
-  const input = `联网搜索并给出带来源的简明答案。${query}`;
+export function buildSearchRequestBody(
+  query: string,
+  cfg: ActiveWebSearchConfig,
+  now: Date = new Date(),
+): Record<string, unknown> {
+  // 【日期写在最前】(2026-09-07 修补)综述模型与主模型一样没有时钟:不给日期,它会按自己的训练截止把
+  // 「2026 赛季」判成尚未发生、在综述里写满犹疑,主模型再顺着这些犹疑把 grounding 结果当成虚构。
+  // 日期来自服务端时钟(站点时区),不是入参;访客控得到的仍只有 `query`,仍只落进这一个字段。
+  const input =
+    `今天是 ${siteDay(now)}。联网搜索并给出带来源的简明答案:照实陈述检索到的事实并给出来源,` +
+    `不要按你的训练截止去判断问题里的日期是否「尚未到来」。${query}`;
   if (wireOf(cfg.toolType) === "google") {
     return {
       model: cfg.modelId,

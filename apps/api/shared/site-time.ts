@@ -29,6 +29,24 @@ export function siteDay(at: Date = new Date()): string {
   return new Date(at.getTime() + SITE_TZ_OFFSET_MIN * 60_000).toISOString().slice(0, 10);
 }
 
+/** 星期几的中文名,索引与 `Date.prototype.getUTCDay()` 一致(0 = 星期日)。 */
+const WEEKDAY_ZH = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"] as const;
+
+/**
+ * 站点时区下的「现在」,给**模型**看的人话:`2026-09-07 15:04(北京时间 UTC+08:00,星期一)`。
+ *
+ * 【用途】进 agent 的系统提示(时间基准段)与 `web_search` 的结果头(2026-09-07 修补)。
+ * 模型没有时钟,它的「现在」默认等于训练截止,于是把当年的赛事、版本与新闻判成「尚未发生」,
+ * 再把联网检索回来的事实当成虚构 —— Gemini 系模型换上当天就复现,发版记录里也记过一次同款。
+ * 精确到分钟即可;与 `siteDay` 同一套固定偏移算法(理由见上),不引入 Intl。
+ */
+export function siteNowLabel(at: Date = new Date()): string {
+  const shifted = new Date(at.getTime() + SITE_TZ_OFFSET_MIN * 60_000);
+  // 平移之后的 ISO 串读作站点本地时间:`2026-09-07T07:04:05.123Z` → 日期 + `HH:mm`
+  const iso = shifted.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}(北京时间 ${SITE_TZ_LABEL},${WEEKDAY_ZH[shifted.getUTCDay()]})`;
+}
+
 /**
  * 从今天往回数 `days` 天的那一天(`days = 0` 即今天)。
  *

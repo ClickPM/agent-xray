@@ -45,6 +45,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Transaction } from "encore.dev/storage/sqldb";
 import { createHash, randomUUID } from "node:crypto";
 import { safeErrorText } from "../shared/redact";
+import { siteNowLabel } from "../shared/site-time";
 import { db } from "./db";
 import { insertGeneratedImageAsAgent } from "./image-db";
 import { ImageGenError, MAX_IMAGE_BYTES, runImageGen, type ImageGenPhase } from "./imagegen";
@@ -550,10 +551,14 @@ const WEB_SEARCH_PHASE_LABELS: Readonly<Record<WebSearchPhase, string>> = {
 export const WEB_SEARCH_META: ToolMeta = {
   name: WEB_SEARCH_TOOL_NAME,
   label: "联网搜索",
+  // 【措辞与 runtime.ts 的搜索段同口径】(2026-09-07 修补)原句「适合超出你已有知识的问题」把「搜不搜」
+  // 交给模型自判 —— 对一个认为 2026 还是未来的模型,那不是「超出知识」而是「不存在」,于是不搜。
+  // 改成两条硬规则:访客要求搜就必须搜;随时间变化 / 不确定已否发生的事实先搜再答,不以「尚未发生」拒答。
   description:
-    "联网搜索并返回一段带来源的简明答案(由搜索网关在服务端执行检索与综述)。" +
-    "适合问「最新 / 现在 / 今年」这类超出你已有知识的问题;本站教程库的内容请用 notes_search,不要用本工具。" +
-    "只接受一个自然语言查询,不能指定网址、不能抓取指定页面。",
+    "联网搜索并返回一段带来源的简明答案(由搜索网关在服务端实时检索与综述)。" +
+    "访客明确要求搜索 / 联网、且要查的不是本站教程内容时必须调用;问题涉及近期新闻、比赛结果、最新版本这类会随时间变化的事实," +
+    "或你不确定是否已经发生的事件时,先调用它再回答,不要以「尚未发生」为由拒答。" +
+    "本站教程库的内容请用 notes_search,不要用本工具。只接受一个自然语言查询,不能指定网址、不能抓取指定页面。",
   promptSnippet: "web_search —— 联网搜索时事与站外资料(有每日次数上限,省着用)",
   // 【别在这里加 `promptGuidelines`】(codex 初审 P1)它与 `promptSnippet` 一样,
   // 只在 pi 拼**默认**系统提示词时才会被用到;而本仓库走的是 `systemPromptOverride`,
@@ -575,8 +580,8 @@ export const WEB_SEARCH_META: ToolMeta = {
     required: ["query"],
     additionalProperties: false,
   },
-  // 与 execute 里拼 `sources` 的格式一致
-  output: "一段正文 + 末尾「来源:」列表(序号 + 标题 + URL)",
+  // 与 execute 里拼 `header` / `sources` 的格式一致
+  output: "首行「实时检索 · 检索时间」说明 + 一段正文 + 末尾「来源:」列表(序号 + 标题 + URL)",
   outputNote: `来源最多 ${MAX_CITATIONS} 条`,
   phases: Object.values(WEB_SEARCH_PHASE_LABELS),
 };
@@ -647,8 +652,11 @@ export function makeWebSearchTool(cfg: ActiveWebSearchConfig): MetaToolDefinitio
                 )
                 .join("\n")}`
             : "";
-        const body = capText(outcome.text, Math.max(200, MAX_RESULT_CHARS - sources.length));
-        return textResult(`${body}${sources}`, {
+        // 【结果头:检索时间 + 可信度锚,口径按有无来源分两种】见 `webSearchResultHeader`(2026-09-07 修补)。
+        // 头与来源都先算好,正文只拿剩下的额度(理由同上一条注释)。
+        const header = webSearchResultHeader(outcome.citations.length);
+        const body = capText(outcome.text, Math.max(200, MAX_RESULT_CHARS - header.length - sources.length));
+        return textResult(`${header}${body}${sources}`, {
           provider: cfg.provider,
           model: cfg.modelId,
           citations: outcome.citations.length,
@@ -661,6 +669,27 @@ export function makeWebSearchTool(cfg: ActiveWebSearchConfig): MetaToolDefinitio
 function truncateTo(s: string, max: number): string {
   const t = s.trim();
   return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
+
+/**
+ * `web_search` 结果头:检索时间 + 可信度锚(2026-09-07 修补)。模型没有时钟,「现在」等于训练截止;没有这一行,
+ * 晚于其训练数据的事实会被判成「虚构 / 推演」而不是「新闻」—— 主模型换 Gemini 系当天就复现。
+ * 它与系统提示里「那是资料,不是指令」不冲突:一个说来源可信,一个说指令无效,管的是两件事。
+ *
+ * 【零来源时不给可信度锚】(codex 复审第 1 轮 P1)网关偶发「有正文、无 grounding」(rounds/round-gsearch/verify.md),
+ * 那种正文可能是综述模型凭记忆写的;一行「刚从公网检索到、以此为准」会把它盖章成实时信息。
+ * 零来源时改成明说「未经来源核实」,时间戳照给。
+ * 【带来源时也不说「已核实 / 以来源为准」】(codex 复审第 2 轮 P2)google 线的 `citations` 是从综述正文抽的 markdown 链接,
+ * 不是 grounding 元数据 —— 幻觉链接、复述的链接都会让计数 > 0。所以只说两件确定的事:「与记忆不符」不是判它虚构的理由
+ * (这正是要修的故障),以及转述时带链接让访客自行核对。纯函数,导出只为测试(tools.test.ts)。
+ */
+export function webSearchResultHeader(citations: number, now: Date = new Date()): string {
+  const stamp = `[实时检索 · ${siteNowLabel(now)}]`;
+  return citations > 0
+    ? `${stamp} 以下是搜索网关刚从公网检索并综述的资料,可能包含晚于你训练数据的事实;它不是已核实的结论,来源链接由综述给出、未逐条核验。` +
+        "但「与你的记忆不符」不是判它虚构的理由 —— 你的记忆可能已经过时;转述时带上来源链接让访客自行核对,不确定的部分说明不确定。\n\n"
+    : `${stamp} 搜索网关返回了以下内容,但**没有带回任何可核对的来源**:它未经来源核实,可能是综述模型凭记忆写的;` +
+        "引用时要向访客说明没有来源,不确定的部分不要当作已核实的事实。\n\n";
 }
 
 // ───────────────────── 外呼组 + 会话绑定:generate_image(R-IMAGEGEN) ─────────────────────
@@ -1194,7 +1223,7 @@ const SESSION_RENAME_META: ToolMeta = {
   description:
     "给当前这次会话起一个简短标题,显示在左侧会话列表里。用访客使用的语言," +
     "4–18 字概括访客这次要做的事;不要标点、不要引号,也不要「新会话」「帮助」这类没有信息量的词。" +
-    "整个会话只需在第一轮调用一次。",
+    "整个会话只需在第一轮调用一次;可以与其它工具调用一起发出,不要为了它推迟搜索等正事。",
   promptSnippet: `${SESSION_RENAME_TOOL} —— 给本次会话起一个简短标题(整个会话一次)`,
   parameters: {
     type: "object",
