@@ -372,3 +372,14 @@
 - [ ] 修补 2026-09-07 **系统提示的【时间基准】按轮刷新**:这一行定格在会话创建时(pi 的 resource loader 只在 reload 时算一次
       override),持续活跃的会话不回收、它会旧几小时(codex 复审第 2 轮 P2)。措辞已改成「真正的现在不早于它、晚于它的先查证」兜住;
       精确做法是在 before_agent_start 注入时每轮重写(xray-skills 注入器已经在那个事件上追加 systemPrompt,可顺路),属机制,等所有者裁定 (2026-09-07)
+- [ ] 发版 `d9fefb4` **`web_search` 的 `[request]` 阶段文案把搜索网关 hostname 与模型名送进公开轨迹流**:
+      `agent/websearch.ts:314` 的 `progress("request", …)` 直接拼 `new URL(cfg.baseUrl).hostname` 与 `cfg.modelId`,
+      经 `tool_execution_update` 的 `partialResultPreview` 随 `/trace/stream` 推给访客 —— 触发过一次搜索的一轮里,
+      访客在 Timeline 就能读到 `向 api.<网关地址>.sslip.io 发起搜索请求(model=gemini-3.8-flash-high)`。
+      与上一条 `model_select` 是**同族不同通道**(那条在派生字段,这条在工具阶段文案),口径同样与规则 8 的
+      R-TOOLS / R-TOOLCARDS 两次裁定相反(「provider 与 model 名公开即泄配置面」)。**不含凭据,key 没泄**;
+      `/agent/ask` 那条流干净,只有轨迹流带。**引入于 R-WEBSEARCH `4c353fb`,自生产首发 `5bd6ace` 起一直在线**,
+      不是任何一轮的回归;历次冒烟没查到是因为 7 项扩展脱敏此前只对 `/agent/ask` 跑过,`/trace/stream` 那侧
+      只查字面词 `baseUrl` 而泄的是它的**值**。修法三档待裁定:①阶段文案删掉 host 与 model(改成「已向搜索网关发起请求」);
+      ②只保留 model、去掉 host;③给 sanitize 加**值级**白名单(拿当前 provider 配置的 host / modelId 做遮蔽,
+      比①贵但能一次覆盖同族通道)。属跨轮次发现,按规矩不当场顺手改 (2026-09-07)
