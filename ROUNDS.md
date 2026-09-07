@@ -139,6 +139,7 @@
 | **R-PERF** | 软导航反馈 + 详情页载荷瘦身 + 错误边界(生产报障直接触发):T1 Skill 详情页只服务端渲染当前文件、标题 id 改 rehype 阶段赋值 · T2 `loading.tsx` · T3 `error.tsx` / 404 | ✅ **已发版**(生产 `c1ee245`,2026-09-03,与 R-SKILLS-2 / R-TOOLCARDS 同批;审查收口整改后 PASS;[任务卡](rounds/round-perf/round-perf.md) · [画布提示词](rounds/round-perf/design-prompt.md));画板 `2i`/`2j`/`2k` 已并入 `design/`(15 → 18 块),T1/T2/T3 三块代码已落。基线:`ppt-master` RSC 1.57 MB / 5.6–7.2 s、`diagram` 484 KB / 2.2–3.9 s、点击到 URL 变化 4.0 s、React #418 只在 `ppt-master` 复现。已量到:**标题 id 对 225 篇生产章节零漂移**(验收 #3)、详情页预渲染体积 −90.7%(ppt-master)/ −89.4%(diagram)、切文件零新请求;`test` 18 文件 414 用例全绿。codex 两轮(全量 / 全量)共 1 条 finding(0×high · 1×P2「隐藏 tab 的 404 主按钮指回自身」)**采纳整改**,末轮零 findings,缺陷门禁 PASS。验收 #2/#4/#7 的真实数字**至今没有在生产复量**——发版当日冒烟没跑这三项,也没有别的轮次补过;要么补跑要么记 `rounds/BACKLOG.md`,别再当成「待发版」挂着 | — |
 | **R-TOOLCARDS** | 会话区工具调用卡:实时内联(`1a`)+ 跑完后折叠(`2l`)/ 展开(`2m`)+ `payload` 偏移表落库回放;无迁移、无新端点、前端一条渲染路径 | ✅ **已发版**(生产 `c1ee245`,2026-09-03,与 R-SKILLS-2 / R-PERF 同批;审查收口整改后 PASS;[任务卡](rounds/round-toolcards/round-toolcards.md);分支 `round-toolcards`,`c4d6f59` + 整改 `d5ee910`);codex 两轮(全量 / 全量)共 2 条 P2、0×high:第 1 轮「`MessageRow.payload` 必填后测试夹具漏字段,tsc 报错」采纳整改,第 2 轮「展开体超 6 行时 `…(已截断)` 被裁切区盖住」属画板 2m 三条裁定互斥的设计取舍、写明理由记 BACKLOG。`check` / `test` 全绿(api 26 文件 514 用例 + web 15 用例);本机 `llm_config` 为空,验收 #2–#5 / #8 用与 `skills-e2e.test.ts` 同款的本地假 provider 驱动**真实** pi loop 跑通五个剧本(文本→工具→文本→工具→文本 / 工具出错 + 入参含 `apiKey` 已脱敏 / 一句话没说先调工具并以工具收尾 / 超长入参截到 400 接 `…(已截断)` / 无工具),F5 前后会话区 innerHTML 的 sha256 一致、无工具的一轮只有气泡 + `md-chat`;真实 provider 的复核(#11)**已在发版当日冒烟里做掉**:一轮真实对话后回放 `GET /agent/sessions/:id` 拿到 `turn.toolCalls`(`at` 偏移 / `durationMs` / 入参与结果摘要 / `isError`),见 [`docs/releases.md`](docs/releases.md) | — |
 | **R-USAGE** | 顶栏统计条的 tokens 与 ctx 接真实数据(首版起 `tokens` / `cost` / `ctx` 是 `demo-data.ts` 三个常量,四项里只有 `events` 是真的):迁移 014 给 `sessions` 加 `total_tokens`(会话累计,与按天的 `daily_quota` 两个维度)、收尾帧与 `GET /agent/sessions/:id` 各给一条通路、cost 按裁定固定占位 | ✅ **已发版**(生产 `09e7fd2`,2026-09-04;[任务卡](rounds/round-usage/round-usage.md);分支 `round-usage`,合并 `09e7fd2`):codex 两轮(全量 / 全量)共 6 条、**零 high**:第 1 轮 1 P1 + 3 P2 全部采纳(先落库再发帧消除 F5 回退窗口、切会话时统计条与 items 同时作废、ctx 圆点不压灰(违反规则 7 的未画态)、ctxPercent 缺席就缺字段),第 2 轮 2 条采纳(`Number.isFinite` 挡 `Infinity`/`NaN` 永久污染 `rec.totalTokens`);整改后 PASS。`check` / `test` 全绿(api 26 文件 528 用例 + web 21 用例)。**生产实测**:两轮对话 `done` 帧 5315 → 8059 与库内累计逐次一致、F5 不回退,`ctxPercent` 0.988 → 1.008;顶栏显示「5.4k tokens · - · ● ctx 1% · 76 events」(留证 [`docs/releases.md`](docs/releases.md)) | — |
+| **R-GSEARCH** | `web_search` 接 Gemini 原生 Google Search grounding(第二条线协议):provider 的 `toolType=google_search` 时打 `/v1/chat/completions` + `tools:[{google_search:{}}]`,由 Google 后端服务端检索综述;来源从正文抽 · 迁移 015 扩 CHECK 闭集 · 不新增工具 / MCP 工具(仍 46)/ 前端 | 🔄 **进行中**([任务卡](rounds/round-gsearch/round-gsearch.md) · [探针留证](rounds/round-gsearch/verify.md);分支 `round-gsearch`):所有者给的机制说法**先验证再实现** —— 9 个探针 / 3 个模型,核心成立(`{google_search:{}}` 是唯一通路,签名重定向链接为证);两处与说法不同(`{type:"web_search"}` 打 chat/completions 是**静默忽略**而非失败;流式下 grounding 偶发无结果)。现行 Responses 线对 gemini 拿不到 grounding,故开第二条线,线协议由 `toolType` 唯一决定、不加 apiStyle 开关。E2E 直连真实网关:`gemini-3.8-flash-high` 11.2 s / 4 条 vertexaisearch 来源,Responses 线回归 `gpt-5.6-terra` 行为不变。`check` / `test` 全绿(api 549 + web 21)。待 codex 审查 | — |
 
 ## 里程碑
 
@@ -690,6 +691,36 @@
 - **第 2 轮 2 条 P2 亦全部采纳**:⑤`runtime.test.ts` 的夹具缺新必填字段;⑥`typeof === "number"` 拦不住
   `Infinity`(自定义端点报 `1e400`),流进长寿的 `rec.totalTokens` 后是永久污染 —— 三处改 `Number.isFinite`
   并补回归测试。**结论:2 轮 / 6 条 / 零 high,整改后 PASS**
+
+### R-GSEARCH — `web_search` 接 Gemini 原生 Google Search grounding(命名轮;所有者 2026-09-07 要求「先验证、成立再扩展」;代码已落地、待审查)
+
+> 任务卡 [`rounds/round-gsearch/round-gsearch.md`](rounds/round-gsearch/round-gsearch.md),探针留证 [`verify.md`](rounds/round-gsearch/verify.md)。
+> 所有者给出一份「CPA 端点下 Antigravity Gemini 模型的 Google Search 发起机制」汇总(`tools:[{google_search:{}}]` 打
+> `/v1/chat/completions` 触发服务端 grounding),要求验证成立后把本项目的 websearch 扩到支持 Google search。
+
+**验证(2026-09-07,9 个探针 / 3 个模型)**:核心成立 —— 带 `{google_search:{}}` 时 gemini 模型给出真实日期 2026-09-07 与
+`vertexaisearch.cloud.google.com/grounding-api-redirect/…` 签名重定向链接(模型编不出来),不带时停在 2024-05;流式与非流式都通。
+两处与说法不同:`{type:"web_search"}` 打 chat/completions 是 **HTTP 200 静默忽略**(不是失败 / 拒答,比失败更糟);流式下 grounding
+后端偶发无结果(3 次里 1 次,模型自述)。**对本项目的直接含义**:现行 `/v1/responses` + `web_search` 线对 gemini 模型拿不到 grounding
+(换 modelId 没用),要接 Google search 必须开第二条线协议。
+
+**方案(自行裁定)**:线协议由 `toolType` **唯一**决定(`google_search` → chat/completions,其余 → Responses),**不加 apiStyle 开关**
+—— 两个字段能拼出的四种组合里只有一种通,一个字段就没有「配了却静默不联网」的组合。分叉只在拼请求体与读事件流两处,白名单 /
+`redirect:"manual"` / 双计时器 / 字节上界 / 脱敏 / 日限额与 Responses 线共用同一段代码;六条外呼组约束一条不松。网关不透出 grounding
+元数据,来源从正文的 markdown 链接与裸 URL 里抽(只收 http(s)、去重、封顶 10 条),与 `url_citation` 走同一个出口。规则 9 先改
+`docs/security.md`(§1 R-GSEARCH 补记,含两条已认残余)再动代码;规则 13 同步 `docs/mcp.md`(工具总数仍 46)。
+
+**交付**:迁移 `015_websearch_google`(CHECK 闭集扩一项 + 改 `tool_config.web_search` 的 note)· `websearch.ts` 的 `wireOf` /
+`chatCompletionsUrl` / `buildSearchRequestBody` / `extractChatText` / `extractLinkCitations` 与 `runWebSearch` 分叉 · `mcp/tools.ts` 的
+zod 闭集与说明 · 两处测试 · 两处文档。**不交付**:新工具 / 端点 / MCP 工具 / 前端改动 / 模型名白名单 / 「是否真的检索了」的二次判定。
+
+- 验收 9 项(细则在任务卡):`check` / `test` 全绿(api 26 文件 549 用例 + web 21);E2E 直连真实网关 `gemini-3.8-flash-high`
+  11.2 s / 4 条签名重定向来源、`gemini-pro-agent` 28.3 s / 5 条;Responses 线回归 `gpt-5.6-terra`(生产现行)行为不变;
+  迁移从零应用通过;zod 与 CHECK 同一闭集;请求体 keys 恰为四个、query 只在 `messages[0].content`;凭据脱敏;前端零改动。
+- **止损**:迁移只改 CHECK 与一行 note,回退 = revert 代码(CHECK 放宽了一项不影响既有行)。生产要用它 = 经 MCP
+  `websearch_provider_upsert{toolType:"google_search", modelId:"gemini-3.8-flash-high"}`(可另起一个 provider 名,`websearch_set_default`
+  切换;切回原 provider 即回滚,不用发版)。
+- 代码审查:待回填。
 
 ## 轮次外事项
 

@@ -697,8 +697,11 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "配置联网搜索 provider",
       description:
-        "配置 `web_search` 工具打的 **Responses API** 端点(DeepSeek 与自建 AI 网关是同一套协议," +
-        "差异只有 baseUrl / modelId / toolType 三个字段)。apiKey 加密入库,读回只给掩码。" +
+        "配置 `web_search` 工具打的搜索网关端点。**线协议由 toolType 唯一决定**:" +
+        "`web_search` / `web_search_YYYY_MM_DD` = OpenAI 系 Responses API 的内置搜索(DeepSeek 与自建 AI 网关是同一套协议," +
+        "差异只有 baseUrl / modelId / toolType 三个字段);`google_search` = Gemini 原生 Google Search grounding," +
+        "走 `/v1/chat/completions` + `tools:[{google_search:{}}]`(R-GSEARCH;网关上 owned_by=antigravity 的 gemini-* 模型," +
+        "modelId 如 gemini-3.8-flash-high / gemini-pro-agent)。apiKey 加密入库,读回只给掩码。" +
         "**baseUrl 的 host 必须在目标域白名单内**(见 websearch_providers_list 的 allowedHosts)," +
         "且必须是 https、不带 query/fragment、不内嵌凭据 —— 白名单在代码里,改它要发版。" +
         "**部分更新:省略的字段一律保留库内原值**;首次配置必须给出 apiKey、baseUrl 与 modelId。" +
@@ -725,11 +728,18 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           .optional()
           .describe("如 https://api.deepseek.com;host 必须在白名单内(见 websearch_providers_list)"),
         modelId: z.string().min(1).max(128).optional().describe("如 deepseek-v4-flash"),
+        // 闭集与迁移 015 的 CHECK 一字不差(mcp.test.ts 两边都测)
         toolType: z
           .string()
-          .regex(/^web_search(_[0-9]{4}_[0-9]{2}_[0-9]{2})?$/, "只接受 web_search 或 web_search_YYYY_MM_DD")
+          .regex(
+            /^(web_search(_[0-9]{4}_[0-9]{2}_[0-9]{2})?|google_search)$/,
+            "只接受 web_search、web_search_YYYY_MM_DD 或 google_search",
+          )
           .optional()
-          .describe("Responses API 的内置工具类型名;DeepSeek 另接受 web_search_2025_08_26"),
+          .describe(
+            "web_search(默认)/ web_search_YYYY_MM_DD = Responses API 内置搜索(DeepSeek 另接受 web_search_2025_08_26);" +
+              "google_search = Gemini 原生 grounding,走 chat/completions(R-GSEARCH)",
+          ),
         totalTimeoutMs: z.number().int().min(10_000).max(300_000).optional().describe("总时长硬上限,默认 180000"),
         idleTimeoutMs: z.number().int().min(5_000).max(120_000).optional().describe("空闲超时,默认 45000;不得大于 totalTimeoutMs"),
         dailySearchLimit: z.number().int().min(0).optional().describe("每日搜索次数上限;0 = 不限"),

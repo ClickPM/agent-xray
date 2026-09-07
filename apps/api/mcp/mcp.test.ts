@@ -691,6 +691,18 @@ describe("websearch provider(mcp/store + shared/websearch-hosts)", () => {
       KEY,
     );
     expect((await store.listWebSearchProviders())[0].toolType).toBe("web_search_2025_08_26");
+    // R-GSEARCH(迁移 015):第三个取值放行;闭集之外的近似写法仍拒
+    await store.upsertWebSearchProvider(
+      { provider: "deepseek", toolType: "google_search", makeDefault: false },
+      KEY,
+    );
+    expect((await store.listWebSearchProviders())[0].toolType).toBe("google_search");
+    for (const bad of ["google_search_2026_01_01", "google", "type:google_search"]) {
+      await expect(
+        db.rawExec(`UPDATE websearch_config SET tool_type = $1 WHERE provider = 'deepseek'`, bad),
+        bad,
+      ).rejects.toThrow();
+    }
   });
 });
 
@@ -757,13 +769,16 @@ describe("websearch 管理 tool 的入参 schema", () => {
     }
   });
 
-  it("toolType 只接受 web_search / web_search_YYYY_MM_DD", () => {
+  it("toolType 只接受 web_search / web_search_YYYY_MM_DD / google_search(与迁移 015 的 CHECK 同一闭集)", () => {
     const schema = schemaOf("websearch_provider_upsert");
     const parse = (toolType: string) =>
       schema.safeParse({ provider: "p", toolType, makeDefault: false }).success;
     expect(parse("web_search")).toBe(true);
     expect(parse("web_search_2025_08_26")).toBe(true);
-    for (const bad of ["bash", "web_search; drop", "", "websearch"]) expect(parse(bad), bad).toBe(false);
+    expect(parse("google_search")).toBe(true);
+    for (const bad of ["bash", "web_search; drop", "", "websearch", "google", "google_search_2026_01_01"]) {
+      expect(parse(bad), bad).toBe(false);
+    }
   });
 
   it("超时上下界与库的 CHECK 一致(300s / 120s 封顶)", () => {

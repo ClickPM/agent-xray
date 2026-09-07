@@ -296,6 +296,25 @@ R-IMAGEGEN 落地补记(2026-09-02,`apps/api/agent/imagegen.ts` + `imagegen-conf
 - **一次调用一张图,尺寸由 provider 配置**(`image_size`,可空 = 上游默认,`chat` 形态忽略它)。`n` 恒为 1 —— 多一张图就是多一份上游费用与多一行 8 MiB 上限的 BYTEA,模型要多张就多调几次,每次各占一次额度
 - **图片存 `generated_images`**(BYTEA,`byte_size` 的 CHECK 上界 8 MiB 与代码常量同值、测试钉住),随 `sessions` 级联删除:访客删会话、3 天保留期到期,图一起没了。不落盘(容器根文件系统只读、工具禁止碰文件系统、镜像内不烧内容)
 
+R-GSEARCH 落地补记(2026-09-07,`apps/api/agent/websearch.ts` + 迁移 `015`;所有者验证 CPA 网关的 Gemini grounding 后裁定接入):
+
+- **`web_search` 多出第二种线协议:Gemini 原生 Google Search grounding**。触发方式是 OpenAI 兼容网关(CPA)的
+  `POST {baseUrl}/v1/chat/completions` + `tools:[{google_search:{}}]`,检索与综述由 Google 后端在**服务端**完成、一次往返闭环,
+  不经过「模型要工具 → 客户端执行 → 回传」的循环。选哪条线由 `websearch_config.tool_type` **唯一**决定(闭集扩为
+  `web_search` / `web_search_YYYY_MM_DD` / `google_search`,库级 CHECK 与 MCP 的 zod 同步收紧),不另加 `apiStyle` 一类的开关:
+  A/B 实测 `{type:"web_search"}` 打 chat/completions 会被网关**静默忽略**(HTTP 200、答案停在训练截止期),`/v1/responses`
+  对 gemini 模型同样拿不到 grounding —— 两个字段能拼出的四种组合里只有一种是通的,一个字段就没有非法组合。
+- **六条外呼组约束一条不松**:URL / method / headers / model / tools 仍全部来自配置,访客的 `query` 只落进 `messages[0].content`
+  一个字段;白名单、`redirect:"manual"`、双计时器、日限额、字节上界、凭据脱敏与 Responses 路径**共用同一段代码**,
+  分叉只在「请求体怎么拼」与「事件流怎么读」两处(`chat.completion.chunk` 的 `choices[0].delta.content` 累积正文,顶层 `error` 是失败)。
+- **来源只在正文里**:网关的 chat/completions 响应不透出任何 grounding 元数据(`message` 里只有 role / content /
+  reasoning_content / tool_calls),来源 URL 由本进程从正文的 markdown 链接与裸 URL 里抽(`extractLinkCitations`:只收 http(s)、
+  去重、封顶 10 条),**不发任何额外请求**。强特征模型(如 gemini-3.8-flash-high)给的是 Google 签名重定向链接
+  `vertexaisearch.cloud.google.com/grounding-api-redirect/…`,那是访客浏览器点开时才跳转的地址,本进程不跟随、不解析。
+- **已认的残余**:①响应里没有「这次是否真的检索了」的信号 —— 实测偶发 grounding 后端无结果,模型会在正文里自述「搜索服务未返回结果」,
+  本进程照实交给模型、由它向访客说明,不做二次判定;②来源链接是模型写在正文里的,比 Responses 路径的 `url_citation` 注解少一层
+  「网关背书」,但两条路径的返回内容本来就都按「不可信输入」处理(约束 6),口径不变。
+
 ## 2. 事件流脱敏
 
 - SSE 推送前对每个事件做**白名单字段**过滤(sanitize)
