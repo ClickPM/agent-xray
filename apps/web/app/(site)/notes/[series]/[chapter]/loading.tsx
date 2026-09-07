@@ -14,6 +14,7 @@
 // 行距按 2c 对位(段内 14×1.7=23.8px、段间 12–14px、小节标题前 30px、列表 gap 4)。
 import { Bar, Line, LoadingNote, SkeletonScreen } from "@/components/Skeleton";
 import { mono } from "@/lib/styles";
+import { MobilePageBar } from "@/components/mobile/MobilePageBar";
 
 /** 上/下一章按钮:章节名未知,与 2i 右上两枚同一裁定 —— 骨架块,不做禁用态(禁用态要编假文案) */
 function NavBlock() {
@@ -50,6 +51,11 @@ export default function ChapterLoading() {
         }}
         className="m-page-wrap m-chapter"
       >
+        {/* R-MOBILE(画板 4s):加载期就要有返回控件 —— 它在路由层已知,画成骨架是撒谎;
+            也避免内容到达时才插入一条 44 高的 sticky 栏、把整页顶一下
+            (本轮 codex 第 2 轮 P2)。`loading.tsx` 拿不到 params,
+            所以回面包屑第一级 /notes(画板点名它是已知层级)。 */}
+        <MobilePageBar backHref="/notes" backLabel="Notes" />
         <div style={{ minWidth: 0 }}>
           {/* 面包屑:四级都来自数据(分类 / 系列 / 章节),整条骨架 */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 17 }}>

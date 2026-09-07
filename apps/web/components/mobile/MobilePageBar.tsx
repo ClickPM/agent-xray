@@ -37,12 +37,15 @@ export function MobilePageBar({
         position: "sticky",
         top: 0,
         zIndex: 4,
-        height: 44,
         alignItems: "center",
         gap: 4,
-        padding: "0 6px",
-        // sticky 元素要脱离父级的 padding 影响,靠负外边距把自己顶到内容区边缘
-        margin: "0 -16px",
+        // ⚠️ **不要在这里写 `height` 或 `padding` 简写** —— 高度与顶部内边距由
+        // `.m-glass-top` 按 `--safe-top` 给。写死 `height:44` / `padding:"0 6px"`
+        // 会把那两条规则整条盖掉,standalone 下(safe-top 非零)导航控件就落到
+        // 状态栏 / 刘海底下(本轮 codex 第 2 轮 P1)。
+        // sticky 元素要脱离父级的左右 padding,靠负外边距顶到内容区边缘。
+        marginLeft: -16,
+        marginRight: -16,
         paddingLeft: 6,
         paddingRight: 6,
       }}

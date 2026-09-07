@@ -248,6 +248,53 @@ export function SkillDetail({
       ),
     );
 
+  /**
+   * 移动端文件树(画板 4q)。与桌面 `renderTree` 同一份 `tree`,差别只有三处:
+   * 行高 26 → 44(纯触控目标)、目录行不可点只作层级标签、当前文件用品牌色淡底 + 600
+   * (与 4n 目录 Sheet 同一套选中语汇)。
+   */
+  const renderMobileTree = (nodes: TreeNode[], depth: number): React.ReactNode =>
+    nodes.map((n) =>
+      n.path !== undefined ? (
+        <button
+          key={n.path}
+          onClick={() => {
+            pick(n.path!);
+            setTreeOpen(false);
+          }}
+          className="m-tap m-sep-row"
+          style={{
+            display: "flex", alignItems: "center", gap: 8, width: "100%",
+            minHeight: 44, padding: "8px 16px", paddingLeft: 16 + depth * 14,
+            background: n.path === cur ? "rgba(37,99,235,0.06)" : "transparent",
+            border: "none", textAlign: "left",
+          }}
+        >
+          <span style={{ ...mono(13, n.path === cur ? 600 : 400), color: n.path === cur ? "var(--accent)" : "var(--text)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {n.name}
+          </span>
+          <span style={{ ...mono(11), color: "var(--text-dim)", flex: "none" }}>{fmtKB(n.sizeBytes ?? 0)}</span>
+        </button>
+      ) : (
+        <div key={`d-${depth}-${n.name}`}>
+          {/* 目录行:带 ▾ 的层级标签,不可点 */}
+          <div
+            className="m-sep-row"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              minHeight: 44, padding: "8px 16px", paddingLeft: 16 + depth * 14,
+            }}
+          >
+            <span style={{ fontSize: 9, color: "var(--text-dim)", flex: "none" }}>▾</span>
+            <span style={{ ...mono(13, 600), color: "var(--text-muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {n.name}/
+            </span>
+          </div>
+          {renderMobileTree(n.children, depth + 1)}
+        </div>
+      ),
+    );
+
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 32px 64px" }} className="m-page-wrap">
@@ -419,38 +466,12 @@ export function SkillDetail({
           </div>
         }
       >
+        {/* ⚠️ **必须画出目录节点**,不能只把扁平的 `files` 映射成缩进的 basename ——
+            带嵌套目录的 skill 里 `scripts/run.py` 与 `references/run.py` 会双双显示成
+            无法区分的 `run.py`(本轮 codex 第 2 轮 P2)。这里复用桌面同一份
+            `buildTree` 产物,只把行高换成触控尺寸:树是纯触控目标,不是数据密度区。 */}
         <div style={{ margin: "0 16px 16px", borderRadius: 16, background: "var(--bg-panel)", overflow: "hidden" }}>
-          {files.map((f) => {
-            const on = f.path === cur;
-            const depth = f.path.split("/").length - 1;
-            return (
-              <button
-                key={f.path}
-                onClick={() => {
-                  pick(f.path);
-                  setTreeOpen(false);
-                }}
-                className="m-tap m-sep-row"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  width: "100%",
-                  minHeight: 44,
-                  padding: "8px 16px",
-                  paddingLeft: 16 + depth * 14,
-                  background: on ? "rgba(37,99,235,0.06)" : "transparent",
-                  border: "none",
-                  textAlign: "left",
-                }}
-              >
-                <span style={{ ...mono(13, on ? 600 : 400), color: on ? "var(--accent)" : "var(--text)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {f.path.split("/").pop()}
-                </span>
-                <span style={{ ...mono(11), color: "var(--text-dim)", flex: "none" }}>{fmtKB(f.sizeBytes)}</span>
-              </button>
-            );
-          })}
+          {renderMobileTree(tree, 0)}
         </div>
       </Sheet>
     </div>

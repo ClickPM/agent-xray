@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { MobileSessionDrawer } from "@/components/mobile/MobileSessionDrawer";
 import { Sheet, SegmentedControl, type Detent } from "@/components/mobile/Sheet";
 import { relativeTime, type SessionSummary, type SessionUsage } from "@/lib/agent-api";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
@@ -110,8 +111,12 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
         className="m-glass-top"
         style={{
           position: "absolute", top: 0, left: 0, right: 0, zIndex: 4,
-          // 高度与顶部内边距由 `.m-glass-top` 按 `--safe-top` 给,这里不写死
-          display: "flex", alignItems: "center", gap: 4, padding: "0 6px",
+          // ⚠️ 高度与**顶部**内边距由 `.m-glass-top` 按 `--safe-top` 给。
+          // 这里只能写左右内边距 —— 写 `padding: "0 6px"` 简写会把
+          // `.m-glass-top` 的 `padding-top: var(--safe-top)` 一起冲掉,
+          // standalone 下功能条落到刘海底下(codex 第 2 轮 P1)。
+          display: "flex", alignItems: "center", gap: 4,
+          paddingLeft: 6, paddingRight: 6,
         }}
       >
         <button
@@ -264,8 +269,8 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
         {renderPanel(shownPanel, () => setRuntimeDetent("large"))}
       </Sheet>
 
-      {/* ── 会话列表 Sheet(画板 4j)──────────────────────────────────────── */}
-      <MobileSessionSheet
+      {/* ── 会话列表抽屉(画板 4j:左侧滑出、宽 84%、右两角 r20)─────────────── */}
+      <MobileSessionDrawer
         open={sessionsOpen}
         onClose={() => setSessionsOpen(false)}
         sessions={sessions}
@@ -282,129 +287,5 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
         onRefresh={onRefresh}
       />
     </div>
-  );
-}
-
-/**
- * 会话列表 Sheet(画板 4j)。iOS inset grouped 列表。
- *
- * 桌面的「悬停出现删除按钮」在移动端没有 hover 可用,画板裁定换成**左滑出现删除**;
- * 桌面的刷新图标按钮换成**下拉刷新**。两个都是移动端固有的交互原语,不是新功能。
- */
-function MobileSessionSheet({
-  open, onClose, sessions, selected, onSelect, onNew, onDelete, onRefresh,
-}: {
-  open: boolean;
-  onClose: () => void;
-  sessions: SessionSummary[];
-  selected: string | null;
-  onSelect: (id: string) => void;
-  onNew: () => void;
-  onDelete: (id: string) => void;
-  onRefresh: () => void;
-}) {
-  const [detent, setDetent] = useState<Detent>("large");
-  const [swiped, setSwiped] = useState<string | null>(null);
-  const [startX, setStartX] = useState<number | null>(null);
-
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      detent={detent}
-      onDetentChange={setDetent}
-      label="会话列表"
-      header={
-        <div style={{ flex: "none", padding: "4px 16px 10px", display: "flex", alignItems: "center", gap: 10 }}>
-          <button
-            className="m-tap"
-            onClick={onNew}
-            style={{
-              flex: 1, minHeight: 40, borderRadius: 20, background: "var(--accent)", color: "#ffffff",
-              border: "none", fontSize: 15, fontWeight: 600, fontFamily: "inherit",
-            }}
-          >
-            新会话
-          </button>
-          <button
-            className="m-tap"
-            onClick={onRefresh}
-            aria-label="刷新会话列表"
-            style={{
-              width: 40, height: 40, flex: "none", borderRadius: 20, background: "var(--m-fill)",
-              color: "var(--accent)", border: "none", display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
-          </button>
-        </div>
-      }
-    >
-      <div style={{ margin: "0 16px 16px", borderRadius: 16, background: "var(--bg-panel)", overflow: "hidden" }}>
-        {sessions.length === 0 && (
-          <div style={{ padding: "18px 16px", fontSize: 15, color: "var(--text-muted)" }}>还没有会话</div>
-        )}
-        {sessions.map((s, i) => {
-          const isSwiped = swiped === s.id;
-          return (
-            <div key={s.id} style={{ position: "relative", overflow: "hidden" }}>
-              {/* 左滑露出的删除。位置固定在右侧,行本身平移让开 */}
-              <button
-                onClick={() => {
-                  onDelete(s.id);
-                  setSwiped(null);
-                }}
-                style={{
-                  position: "absolute", top: 0, right: 0, bottom: 0, width: 80,
-                  background: "var(--err-text)", color: "#ffffff", border: "none",
-                  fontSize: 15, fontWeight: 600, fontFamily: "inherit",
-                }}
-              >
-                删除
-              </button>
-              <div
-                className="m-tap"
-                onClick={() => (isSwiped ? setSwiped(null) : onSelect(s.id))}
-                onTouchStart={(e) => setStartX(e.touches[0]?.clientX ?? null)}
-                onTouchEnd={(e) => {
-                  if (startX === null) return;
-                  const dx = (e.changedTouches[0]?.clientX ?? 0) - startX;
-                  if (dx < -40) setSwiped(s.id);
-                  else if (dx > 40) setSwiped(null);
-                  setStartX(null);
-                }}
-                style={{
-                  position: "relative",
-                  minHeight: 56,
-                  boxSizing: "border-box",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "0 16px",
-                  // 未选中的行透明,分组卡的 --bg-panel 才是可见底色;选中用品牌色淡底
-                  background: s.id === selected ? "rgba(37,99,235,0.06)" : "transparent",
-                  borderTop: i === 0 ? "none" : "1px solid var(--border)",
-                  transform: isSwiped ? "translateX(-80px)" : "translateX(0)",
-                  transition: "transform .2s ease",
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {s.title || "新会话"}
-                  </div>
-                </div>
-                <span style={{ ...mono(11), color: "var(--text-dim)", flex: "none" }}>{relativeTime(s.lastActiveAt)}</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--m-chevron)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none" }}>
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Sheet>
   );
 }

@@ -13,6 +13,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { Bar, Line, LoadingNote, SkeletonScreen } from "@/components/Skeleton";
 import { mono } from "@/lib/styles";
+import { MobilePageBar } from "@/components/mobile/MobilePageBar";
 
 /** 与 SkillDetail 的 sectionLabel 同一份(INSTALL / FILES) */
 const sectionLabel: CSSProperties = {
@@ -67,6 +68,11 @@ export default function SkillLoading() {
   return (
     <SkeletonScreen>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 32px 64px" }} className="m-page-wrap">
+        {/* R-MOBILE(画板 4s):**返回控件在路由层就已知,画成骨架是撒谎** ——
+            加载期必须有返回路径,内容到达时也不会再插入一条 44 高的栏造成跳版
+            (本轮 codex 第 2 轮 P2)。`loading.tsx` 拿不到 params,所以只能回
+            面包屑第一级 /skills —— 画板点名它是已知层级。 */}
+        <MobilePageBar backHref="/skills" backLabel="Skills" />
         {/* 面包屑:Skills 是真实链接(层级已知,也是访客改主意时的出口),后两级骨架 */}
         <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6, minHeight: 17 }}>
           <Link href="/skills" style={{ color: "var(--accent)" }}>Skills</Link>
@@ -110,6 +116,13 @@ export default function SkillLoading() {
         <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0,1fr)", gap: 32, marginTop: 26, alignItems: "start" }} className="m-skill-grid">
           {/* R-MOBILE:桌面的 240px 树列在窄屏不渲染 —— 内容侧同样隐藏它(改由 chip 条 +
               树 Sheet 承担),骨架必须跟着隐藏,否则内容到达那一刻会掉一整列(画板 4s)。 */}
+          {/* chip 条骨架:三枚 32 高胶囊 —— 内容到达后这里就是横滚的文件 chip 条,
+              外形一致才不会跳版(画板 4s) */}
+          <div className="m-show-narrow m-chips" aria-hidden>
+            <Bar w={90} h={32} radius={16} />
+            <Bar w={132} h={32} radius={16} />
+            <Bar w={108} h={32} radius={16} />
+          </div>
           <div className="m-hide-narrow">
             <div style={sectionLabel}>FILES</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
