@@ -696,11 +696,20 @@ export function Workbench() {
   cardIdsRef.current = cardIds;
   rowKeyRef.current = rowKeyById;
 
-  /** Timeline 详情卡的「查看卡片 ↗」:去会话区把那张卡展开并滚进视野 */
+  /**
+   * Timeline 详情卡的「查看卡片 ↗」:去会话区把那张卡展开并滚进视野。
+   *
+   * 移动端还要**关掉运行时 Sheet**(codex 第 2 轮 P2):这条链接是在 Sheet 里点的,
+   * 而目的地(会话区那张卡)在 Sheet **后面** —— 不关的话卡片确实展开并滚过去了,
+   * 访客却只看见一张没动过的 Sheet。反方向(卡 → 行)本来就要把 Sheet 打开,两边正好互为镜像。
+   */
   const cardLink = useMemo<CrossLink>(
     () => ({
       has: (id) => cardIdsRef.current.has(id),
-      go: (id) => setLocateCard({ toolCallId: id, nonce: ++nonce.current }),
+      go: (id) => {
+        setLocateCard({ toolCallId: id, nonce: ++nonce.current });
+        setSheetRequest({ action: "close", nonce: ++nonce.current });
+      },
     }),
     [],
   );

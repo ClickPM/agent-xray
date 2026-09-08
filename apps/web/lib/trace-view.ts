@@ -76,12 +76,6 @@ function rowName(event: TraceEvent, count: number): string {
   return count > 1 ? `${base} ×${count}` : base;
 }
 
-/** 除 `type` 外还有内容的事件才值得展开详情。 */
-function hasDetail(data: unknown): boolean {
-  if (typeof data !== "object" || data === null) return false;
-  return Object.keys(data as Record<string, unknown>).some((k) => k !== "type");
-}
-
 /**
  * 事件数据里的派生字段 `handlers`(R-SKILLS-2):`tool_call` 由守卫扩展落笔、`before_agent_start` 由注入扩展落笔,
  * 每条是 `{extension, returned?}` 的摘要(服务端 events.ts 白名单)。没有这个字段的事件 = 观测者记录的,
@@ -186,7 +180,14 @@ function toRow(run: EventRun, nextStart: number | undefined, streaming: boolean)
     streaming,
     // 画板 1a 第 1043 行:被拦截的 tool_call 行尾红色 blocked 徽标 + 「└ <扩展> returned {block: true}」注记
     ...(blocker !== undefined && { hasBadge: true, hasNote: true, blockedBy: blocker }),
-    expandable: hasDetail(first.data),
+    // R4 起这里是 `hasDetail(first.data)`:只有「除 type 外还有内容」的事件才可展开。
+    // R-CROSSLINK 改成**每一行都可展开**(codex 第 2 轮 P1):详情卡里那枚 `Ask why ↗` 是
+    // 「问问这一步为什么」的唯一入口,而画板 4v 的裁定是「Ask why 胶囊在**任何**事件行都有」。
+    // 本机实测有四种事件的脱敏数据只剩 `{type}` —— `agent_start` / `before_provider_headers` /
+    // `before_provider_request` / `agent_settled`,其中 `before_provider_request` 正是屏幕上最长的那根条
+    // (一次模型往返),最招人问「为什么这么久」,却恰恰点不开。
+    // 它们展开后 INPUT 段如实显示「(无附加字段)」——没有就是没有,不编内容。
+    expandable: true,
     detail: {
       input: formatEventData(first.data),
       ...detailOf(handlers),
