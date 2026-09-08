@@ -150,7 +150,12 @@
 复验:`before_provider_request` 行现在可展开、Ask why 给出非工具形状文案,全部 33 行**零行没有箭头**;
 移动端点「查看卡片」后 Sheet 关闭、卡展开且在视口内(top 146);`bun test lib` 56 用例全绿(新增 1 条)。
 
-- 结论:**整改后待复审**(第 3 轮起按流程只审整改 diff,`--base e10491a`)。
+**第 3 轮**(按流程只审整改 diff,`--base e10491a`,提交 `85c6abd`):**零 findings**。
+原话:「变更正确修复了移动端卡片定位、无附加字段事件不可展开及 Unicode 行分隔符清洗问题,未发现新增的功能性缺陷。」
+
+- 结论:**整改后 PASS**。三轮共 6 条 findings(1 条 P1 + 5 条 P2),**全部采纳整改、无一条以「写理由记 BACKLOG」放行**;
+  high 级为零,末轮零 findings。收口门禁按 CLAUDE.md「复审收口标准」满足。
+  另有一条**跨轮次**发现(R-MOBILE 的 `onExpand` 在 setState 更新函数里调用)按规矩没当场改,记 `rounds/BACKLOG.md`。
 
 ## 失败处理
 
