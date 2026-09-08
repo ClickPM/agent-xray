@@ -8,6 +8,7 @@
 | `Agent X-Ray Prototype.dc.html` | **可交互原型**:单页状态机(Runtime/Notes/Series/Article/**Skills/Skill**/About **七**屏 + RSS 弹层 + 运行时面板**四** tab 切换 + Tools 面板逐工具展开/收起 + **Skill 详情页目录树点选切换预览、安装命令与文件两处 copy**),`data-dc-script` 里含全部演示数据与交互逻辑——**主站实现的首要参照** |
 | `Agent X-Ray Mobile - Runtime.dc.html` | **移动端画板集 · Runtime(终稿,10 块)**:`4a` 空状态 / `4b` 对话进行中 / `4c` 一轮完成折叠态 / `4d` 折叠行展开 + 卡片展开 / `4e` 运行时 Sheet · Timeline(medium detent)/ `4f` 事件详情(large)/ `4g` Chain View / `4h` Lifecycle Map / `4i` Tools / `4j` 会话列表 Sheet。2026-09-07 新增(R-MOBILE) |
 | `Agent X-Ray Mobile - Notes Skills About.dc.html` | **移动端画板集 · 其余(终稿,11 块)**:`4k` Notes 首页 / `4l` 系列目录 / `4m` 章节阅读 / `4n` 本章目录 Sheet + RSS Sheet / `4o` Skills 首页 / `4p` Skill 详情 SKILL.md / `4q` 代码文件 + 文件树 Sheet / `4r` About / `4s` 加载骨架 / `4t` 错误态 A·B·断网 / `4u` 载体适配四态。2026-09-07 新增(R-MOBILE) |
+| `Agent X-Ray Source.dc.html` | **桌面画板集 · Source 源码 tab(终稿,3 块)**:`2n` Source 首页(`/source` · README 态)/ `2o` 代码文件态(`/source/apps/api/agent/tools.ts`,copy 已按下)/ `2p` 文件加载态(骨架对位 2o)。2026-09-08 新增(R-SOURCE)。**放新文件**是因为 `Agent Runtime Workbench.dc.html` 离 256 KiB 截断线只剩十几 KB;后者本次只改导航条(20 块四格 → 五格) |
 | `support.js` | Claude Design 画布运行时(解析 `<x-dc>` 模板、挂载 React)。仅本地打开 .dc.html 预览时需要,实现不依赖它 |
 
 > **画板增删记录**(画板编号只增不改,与 CLAUDE.md 硬性规则同一约定):
@@ -30,11 +31,28 @@
 >   **玻璃材质给 `backdrop-filter` 降级两套值**(Android 微信内核支持不确定)。
 >   提示词 `rounds/round-mobile/design-prompt.md`;实现轮次:ROUNDS.md R-MOBILE。
 >
+> - **`2n–2p`(Source 源码 tab,3 块)于 2026-09-08 新增**:所有者裁定加**第五个顶部 tab「Source」**(站点自身源码的只读浏览,
+>   快照随每次生产发版发布、页面标 git SHA)并让 agent 读同一份快照。三块画板放**新文件** `Agent X-Ray Source.dc.html`
+>   (`Workbench` 离 256 KiB 截断线只剩十几 KB);既有 20 块桌面画板的导航条同步改成**五格**(`Runtime · Notes · Skills · Source · About`,
+>   `2l` / `2m` 本来没有导航条、照旧);原型 `navTabs` 五格 + Source 两屏(首页 README 态 / 点目录树切换文件、目录行展开收起、copy 回落、`GitHub ↗` 外链),
+>   演示数据含一条 `apps/web/app/(site)/notes/[series]/page.tsx`。画板上的裁定:目录树宽 **264**(2g 是 240;树最深 8 层、末层要留得下 `[chapter]/`),
+>   默认只展开**当前文件所在的那条路径**、其余目录收起(直达 `/source` 时六个根目录全收起);**不要**「本页目录」(README 只有四个小节而目录树有 294 个文件);
+>   meta 行顺序 = 快照 SHA(短 7 位)→ 发布日期 → 文件数 → 总字节,描述的是仓库快照不是当前文件;`GitHub ↗` 首页指 `/tree/<40 位 sha>`、文件页指 `/blob/<sha>/<path>`,
+>   不带行号锚点;**长行只在代码列一个 `overflow-x:auto` 容器里横滚**(行号列钉住,行高写死 20.4px);copy 的 `copied` 态 1.5s 回落(同 2h);
+>   加载态照 2i 规则(`omPulseBg` 只给 22px 标题条与代码区第一行,「正在取 <path>…」压在面包屑右侧);**不画空态**(没有快照走 `2k`-B)。
+>   **拉稿判据**:Source 72,151 B / 3 块;`Workbench` 250,586 B(仍在上限内)/ 20 块;Prototype 107,457 B;`support.js` md5 未变;
+>   三份 `</x-dc>` / `</html>` / `<div>` 开合全过。**合并口径**:`Workbench` 相对本地的 11 处差异**全部是导航行**(`About` → `Source` + `About`);
+>   Prototype 的 17 处差异 = `hint-placeholder-count` 4 → 5、`navTabs` 五格、Source 两屏,以及会话区从静态 HTML 改成**数据驱动**
+>   (`sessTitle` / `sessRunning` / `sessDone` / 折叠行 / 卡片展开体 —— 把 2l / 2m 的态补进了原型);本地 `design/` 自 2026-09-03 写回云端后**没有任何本地改动**
+>   (`git log -- design/` 最近一次是 R-MOBILE 的纯新增),所以三份直接覆盖,没有三方合并。
+>   提示词 `rounds/round-source/design-prompt.md`;实现轮次:ROUNDS.md R-SOURCE。
+>
 > **⚠️ 单文件 256 KiB 硬上限(2026-09-07 实测撞线,下次扩画板前必读)**:DesignSync `get_file` 的上限是
 > 262,144 字节,**超了静默截断、不报错**。移动端 21 块最初画在一份文件里,拉下来正好 262,144 字节、
 > 末尾断在属性中间、`</x-dc>` 与 `</html>` 都没有、`<div>` 开合差 7 个 —— `4a–4t` 完整而 `4u` 只到一半。
 > 拆成两份文件后重拉,两份分别 132,859 / 186,339 字节,四项判据(字节数 / 闭合标签 / div 开合 / 画板数)全过。
-> **桌面 `Agent Runtime Workbench.dc.html` 现为 248,815 字节,离上限只剩 13 KB —— 下次给桌面加画板前必须先拆文件**。
+> **桌面 `Agent Runtime Workbench.dc.html` 现为 250,586 字节(2026-09-08 导航改五格后),离上限只剩 11 KB —— 下次给桌面加画板前必须先拆文件**
+> (R-SOURCE 的 `2n–2p` 已经是放新文件了)。
 > 拉稿后一律先验那四项,齐了才算拿到稿。
 >
 > **与云端稿的合并口径(2026-09-03 实操记录,下次拉稿照此)**:本地两份 `.dc.html` 在 2026-09-02 之后有三处**本地**优化——Timeline 进行中行的波浪扫光(`omWaveSweep`,提交 `9dd0c89`)、发送按钮生成期间转圈禁用(`omSpin`,同一提交)、文章页阅读进度线的示意注释(`d2a87d0`)——而云端 Claude Design 项目是从更早的 `16a82bd`(R-TOOLS 收 1f–1g 那版)上加的 Skills 画板,**不含这三处**。所以**没有用云端稿覆盖本地**,而是以 `16a82bd` 为 base 做三方合并(`git merge-file`,两份文件零冲突;云端 Workbench 相对 base 是纯增量,Prototype 相对 base 只改了 tab 占位数 / state 初值 / navTabs 三行):本地三处优化全部保留,云端新增(2f–2h、四格 tab、原型 Skills 两屏与交互逻辑)全部并入。`support.js` 两边 md5 一致未动。**同日收尾:合并稿已经 DesignSync 写回云端项目**(两份 `.dc.html`,写回后再拉一次比对 md5 完全一致),**云端从此是正本、与本地一字不差**。之后的口径:本地 `design/` 只拉不改——想改设计稿去画布上改,或改完立刻写回;拉新稿时先跑 `diff "design/<文件>" "<新稿>" | grep -c '^<'`,为 0(新稿没丢本地任何一行)就直接覆盖,不为 0 说明两边又分叉了,才回到上面的「找 base → `merge-file` → 核验」。
@@ -52,5 +70,6 @@
 - Skills(2f–2h,同样未新造 token):分类点沿用 Notes 四色(framework=`#2563eb` · workflow=`#16a34a` · review=`#f9c22e` · writing=`#8b5cf6`);出处微徽标 自研=`#2563eb` · 精选=`#9ca3af`(描边,mono 10px,圆角 4);目录树行高 26 / 每层缩进 12 / 选中行 `#e8e8e8` 底 + 字重 600;代码视图行号列宽 36、mono 11 `#9ca3af`、右侧 1px 边框,高亮只用三个 token:关键字=`#2563eb` · 字符串=`#16a34a` · 注释/docstring=`#9ca3af`;`INSTALL` / `FILES` 小标题 = mono 10px/600 `#9ca3af` 字距 0.08em(同 1g 的 INPUT/OUTPUT)
 - 加载态与错误态(2i–2k,未新造色值):骨架填充 `#eeeeee`,叠在 `#f5f5f5` / `#eeeeee` 面上的条降一档取 `#e0e0e0`;骨架圆角 4 文本条 / 5 小节标题条 / 6 大标题条 / 7 按钮块与卡片;动效只用 `omPulseBg`(全页一两块作锚点)与 `omSpin`(「正在取…」),另有一条纯延迟用的 `omSkeletonIn`(0→1 不透明度,延迟 200ms,不参与视觉语汇);错误态 460px 单列 + 10px 方点(出错 `#ef4444` / 找不到 `#9ca3af`)+ **品牌色实心主按钮 32px/r7**(全站唯一一处实心按钮,由 2k 定为出口层级)+ 12px `#6b7280` 次级文字链
 - 会话区一轮完成态(2l–2m,未新造色值):折叠行 13px/1.7 `#6b7280`(hover `#2563eb`)+ 行首 12px 箭头(stroke `#9ca3af`,› 收起 / ˅ 展开)+ 行尾 6px `#ef4444` 圆点(有工具出错或被拦截时);展开区左侧 1px `#e0e0e0` 竖线 + 左内边距 14,内部沿用会话区节奏(项间距 14、正文 14/1.7、卡片解剖与 1a 一字不差);卡片展开体紧贴卡下 4px、r6 + `rgba(0,0,0,.03)` 底 + 与卡片同色的 1px 描边(错误 `rgba(248,113,113,.3)` / 成功 `rgba(34,197,94,.25)`),`INPUT` / `RESULT` 小标题 mono 10/600 `#9ca3af` 0.08em,正文 mono 11/1.6 每段 `max-height:106px`(6 行)`overflow:hidden` 超出接 `…(已截断)`,RESULT 出错时字色 `#ef4444`;卡片箭头收起 ˅ / 展开 ˄;展开 / 收起不做动画
+- Source 源码 tab(2n–2p,未新造 token):目录树宽 264(2g 是 240)、行高 26 / 每层缩进 12 / 目录行 12px 箭头(› 收起 / ˅ 展开,stroke `#9ca3af`,与 2l–2m 同一枚)/ 文件行留 12px 箭头位 / 文件行尾 11px `#9ca3af` 体积 / 选中行 `#e8e8e8` + 600;页头 = 面包屑 12px `#9ca3af`(链接段品牌色)+ mono 22/650 标题 + `MIT` 描边微徽标 + 13px `#6b7280` 一句话 + mono 11 `#9ca3af` meta 行 + 右上 ghost `GitHub ↗`;预览卡头部条与代码视图照 2g/2h,**长行只在代码列一个 `overflow-x:auto` 容器里横滚**(36px 行号列钉住,行高写死 20.4px = 12×1.7);页脚一行 12px `#9ca3af` 行高 1.9;加载态照 2i 规则,`omPulseBg` 只给 22px 标题条与代码区第一行
 - 圆角:4 微徽标 / 5 小按钮 / 6–7 卡片 / 8 弹层 / 12 用户气泡;等宽字体 JetBrains Mono
 - 动画:`omPulseBg`(Lifecycle 活跃节点脉动,1.8s)/ `omWaveSweep`(Timeline 进行中行自左向右扫光,1.8s)/ `omSpin`(发送按钮生成期间转圈,0.8s);Timeline 色条宽度 `min(198, max(4, round(sqrt(ms)*11)))`

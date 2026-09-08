@@ -28,6 +28,10 @@ function exitFor(pathname: string, visible: readonly TabKey[]): { label: string;
   if (pathname.startsWith("/notes") && visible.includes("notes")) {
     return { label: "回 Notes 列表", href: "/notes" };
   }
+  // R-SOURCE:失效的文件链接 / 目录地址(没有目录页)→ 回源码目录;tab 藏着时同样退到首页(理由同上)
+  if (pathname.startsWith("/source") && visible.includes("source")) {
+    return { label: "回 Source 目录", href: "/source" };
+  }
   return { label: "返回首页", href: "/" };
 }
 

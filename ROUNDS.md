@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01、2026-09-02 三次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2m(共 20 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订)+ **移动端**画板 4a–4u(共 21 块,2026-09-07 新增,见 R-MOBILE)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;2026-08-31、2026-09-01、2026-09-02 三次修订)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2p(共 23 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 于 2026-09-08 新增,见第十一次修订)+ **移动端**画板 4a–4u(共 21 块,2026-09-07 新增,见 R-MOBILE)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 >
 > **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
 > 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
@@ -108,6 +108,19 @@
 > 提示词见 [`rounds/round-toolcards/design-prompt.md`](rounds/round-toolcards/design-prompt.md),
 > 拆解见 [`rounds/round-toolcards/round-toolcards.md`](rounds/round-toolcards/round-toolcards.md)。**所有者同日裁定按任务卡默认方案开工**
 > (数据形态 = 偏移表、折叠范围 = 照 pi-web),分支 `round-toolcards` 从 R-PERF 合并后的 `main` 开出,代码同日落地。
+>
+> **2026-09-08 第十一次修订(R-SOURCE)**:所有者裁定新增**第五个顶部 tab「Source」**(站点自身源码的只读浏览:左目录树 / 右文件预览,
+> 页面标 git SHA)并让 agent **读站点源码**(三个纯函数组只读工具 `source_list` / `source_read` / `source_search`,默认开)。
+> 与 R-TOOLS / R-SKILLS / R-PERF 同一顺序、**不是**规则 8 的例外:设计稿先扩到 **23 块**(桌面新增 `2n` 首页 README 态 / `2o` 代码文件态 / `2p` 加载态,
+> 放**新文件** `Agent X-Ray Source.dc.html` —— `Workbench` 离 256 KiB 截断线只剩 13 KB;既有 20 块导航改五格;原型加两屏),并入 `design/` **之后**才开代码。
+> 八条裁定(2026-09-08):tab 顺序 `Runtime · Notes · Skills · Source · About`;收录**含 `rounds/`、不含 lockfile**(闭集在发布脚本里,改 = 发版);单文件 256 KB;
+> 三个工具分开、默认开;**快照随每次生产发版发布,从源头保证展示 = 运行**(不做运行 SHA 比对、不画「快照落后」态);
+> **不做**站内搜索 / zip / 行号深链;**先桌面**(移动 Tab Bar 仍四格、不做 Source 页,agent 工具与视口无关,移动端记 BACKLOG);
+> 发布挂 `dev.ps1 ship` **自动**、不手动。形态:源码像 Notes / Skills 一样**当内容发布进 Postgres**(镜像里本来就没有源码,api 进程也不读文件系统),
+> 写面是 MCP 五个 `source_*`(46 → 51,规则 13),发布脚本只从 `git ls-tree <sha>` 取文件、按 `(path, sha256)` 增量上传、`commit` 单事务翻 current;
+> 读面 `apps/api/source/` 只读;agent 侧新表按第 2 层既定口径显式 `GRANT SELECT` 给 `agent_ro`(仓库本就是公开 MIT,新增的只是「读公开源码」)。
+> 提示词 [`rounds/round-source/design-prompt.md`](rounds/round-source/design-prompt.md),拆解 [`rounds/round-source/round-source.md`](rounds/round-source/round-source.md);
+> 分支 `round-source` 已开,**等设计稿**。
 
 ## 进度表
 
@@ -142,6 +155,7 @@
 | **R-GSEARCH** | `web_search` 接 Gemini 原生 Google Search grounding(第二条线协议):provider 的 `toolType=google_search` 时打 `/v1/chat/completions` + `tools:[{google_search:{}}]`,由 Google 后端服务端检索综述;来源从正文抽 · 迁移 015 扩 CHECK 闭集 · 不新增工具 / MCP 工具(仍 46)/ 前端 | ✅ **已发版**(生产 `d59407a`,2026-09-07,迁移 14 → 15;[任务卡](rounds/round-gsearch/round-gsearch.md) · [探针留证](rounds/round-gsearch/verify.md);分支 `round-gsearch`):所有者给的机制说法**先验证再实现** —— 9 个探针 / 3 个模型,核心成立(`{google_search:{}}` 是唯一通路,签名重定向链接为证);两处与说法不同(`{type:"web_search"}` 打 chat/completions 是**静默忽略**而非失败;流式下 grounding 偶发无结果)。现行 Responses 线对 gemini 拿不到 grounding,故开第二条线,线协议由 `toolType` 唯一决定、不加 apiStyle 开关。codex 四轮(前两轮全量、第 3 轮起只审整改 diff)共 4 条、**全 P2、零 high**:①URL 内括号被当分隔符(采纳);②裸 URL 终止集混进 ASCII `? : ,`(采纳,根因是源码里的「全角标点」实际是半角)+ chat 流无收尾信号仍当成功(采纳,`finish_reason` / `[DONE]` 任一算收尾);③裸 URL 紧跟 ASCII 逗号 + 中文被吞 —— 三轮全落在裸 URL 边界上,按「审查循环不是设计」**删掉裸 URL 扫描、只认 markdown 链接**(自行裁定,可推翻);第 4 轮零 findings,整改后 PASS。E2E 直连真实网关:`gemini-3.8-flash-high` 3–4 条 vertexaisearch 来源,Responses 线回归 `gpt-5.6-terra` 行为不变。`check` / `test` 全绿(api 553 + web 21)。发版当日经 MCP 新建 `cliproxy-gemini`(`google_search`,`makeDefault`)启用,**定在 `gemini-3.8-flash-high`**:先配 `gemini-pro-agent` 跑通并量到它慢一档(整轮 51 s),按所有者要求当天换成 flash-high,只发一次部分更新改 `modelId`(其余字段逐项保留)。换后生产端到端两轮:整轮 **12.9 / 14.1 s**、单次搜索 8.0 / 10.9 s、各带 3 条 markdown 链接来源、脱敏 7 项 0 命中 —— **耗时约 1/4 而来源质量不降**;其中一轮搜回 Encore `v1.58.4`(训练截止不可能知道的版本号)是 grounding 真实生效的硬证据。原 `cliproxy-dmit` 留作回滚点(`websearch_set_default` 一条命令切回 Responses 线,不用发版)。口径与留证见 [`docs/releases.md`](docs/releases.md) | — |
 
 | **R-MOBILE** | 移动端呈现层(iOS 26,21 块画板 `4a`–`4u`):桌面三栏 → 一屏 + 两档 Sheet + 左侧会话抽屉 · 底部 Tab Bar · PWA 只取 manifest/standalone/theme-color(不做 SW、不做安装引导)· **桌面零改动** | ✅ **已发版**(生产 `be6c074`,2026-09-08,**迁移 15 不变**;[任务卡](rounds/round-mobile/round-mobile.md) · [设计提示词](rounds/round-mobile/design-prompt.md) · [实现提示词](rounds/round-mobile/impl-prompt.md);分支 `round-mobile` 已 `--no-ff` 合并 `main`)。设计稿 2026-09-07 并入(两份新文件,桌面两份未碰);**首次拉稿撞上 DesignSync `get_file` 的 256 KiB 静默截断**,拆两份后重拉、四项判据全过。**codex 五轮共 17 条 findings:16 条采纳整改、1 条实证不采纳(Sheet 并不被滚动容器裁切 —— containing block 是滚动容器的祖先,CSS 2.1 §11.1.1),high 级为零,末两轮零 findings**;第 4 轮另自查修掉一处 `span > div` 非法嵌套(审查注意到却没报)。收口门禁:`dev.ps1 test` 全绿(api 28 文件 564 用例 + web 21 用例)、`tsc --noEmit` 通过、每屏实测 `body.scrollWidth === innerWidth`、桌面四 tab 逐项零改动。**2026-09-08 所有者裁定「两件都没问题,打包上生产」并自行验收移动端**(两件 = ICP 备案号在移动端的位置、真机流式只能靠真机验),当日发版 `be6c074`:`apps/api` / `runner/` / `deploy/` / `tools/` 相对上一版**四处零改动**,故零迁移、部署资产未 reload。**HTTP 冒烟 33 项 0 失败**,其中 7 项是本轮新增判据、发版前刻意跑过基线并全部 FAIL(manifest 与三枚图标 404、viewport 无 `user-scalable=no`、无 `theme-color` / `rel=manifest`),发版后全部翻 PASS —— 这组正向对照正是 `apps/web/Dockerfile` 那处 `COPY public`(**缺了是静默失败**:图标 404、站点照常起)的唯一探针。**容器复核 22 项 0 失败**(bun 1.4.0 / 无真 node / none 与 egress 两档隔离 / 双向 `network_mismatch` / `docker inspect` 六项)。生产真机比例实测:四 Tab 在 390×845 全部零横向溢出,桌面 1280×800 回归导航条 h44 · 左栏 260 · 右面板 428 · 移动壳未挂载。口径与留证见 [`docs/releases.md`](docs/releases.md) | — |
+| **R-SOURCE** | 第五个顶部 tab「Source」:站点自身源码的只读浏览(目录树 + 逐文件预览,快照按 git SHA 随每次生产发版**自动**发布)+ agent 三个纯函数组只读工具 `source_list` / `source_read` / `source_search`(默认开)· MCP +5(51)· 迁移 016 · **先桌面** | ✅ **审查收口、已合并 `main`,待所有者裁定发版**(2026-09-08;分支 `round-source`,`5dc7ae8` 设计稿 + 安全补记 → `57e890b` 代码 → `6879a6c` 端到端整改 → 四轮审查整改;**codex 五轮共 9 条(1 P1 / 7 P2 / 1 P3)全部采纳、high 级为零、末轮零 findings**:快照一致性与元数据核对 4 条、BIGINT 契约 1 条、链接改写 3 条(以删代码收口)、空文件 1 条;[任务卡](rounds/round-source/round-source.md) · [设计提示词](rounds/round-source/design-prompt.md)):画板 `2n`–`2p`(新文件 72 KB)+ 20 块导航五格 + 原型两屏同日并入 `design/`;`dev.ps1 test` 全绿(api 33 文件 599 用例 + web 24)、`tsc` 过;本机把 HEAD 快照(319 个文件 / 3.36 MB)经本机 MCP 发进库,`/source` 与文件页逐项对照 2n / 2o / 2p,Tools 面板多三张卡,`site_tab_set source false` 藏导航与页面而 `/api/source` 照常;假 provider e2e 一轮 `source_search → source_read → 回答`。踩到并修掉:库默认 collation 的排序、`path` 入参名撞泄露清单、结果正文按整行凑预算、`dev.ps1` 的 BOM 让 sha256 对不上、父子两层 loading 让 404 卡在骨架、catch-all 段不解码 `[series]` | — |
 
 ## 里程碑
 
@@ -729,6 +743,30 @@ zod 闭集与说明 · 两处测试 · 两处文档。**不交付**:新工具 / 
   第 3 轮 1 条(裸 URL 紧跟 ASCII 逗号 + 中文被吞)—— **三轮全落在裸 URL 的边界判据上**,按「审查循环不是设计」不补第四条判据,
   **删掉裸 URL 扫描、只认 markdown 链接**(实测三个 gemini 模型给来源一律用它;自行裁定、可推翻);第 4 轮零 findings。
   收口门禁 `check` 过、`test` api 553 + web 21 全绿,最终代码在真实网关上复跑两档模型各 3 条来源。
+
+### R-SOURCE — Source 源码 tab + agent 读站点源码(命名轮;所有者裁定 2026-09-08;设计稿待交付、未开工)
+
+> 投产后的第七个功能轮。所有者裁定「先写设计稿提示词与任务卡、等设计稿」,任务卡见 [`rounds/round-source/round-source.md`](rounds/round-source/round-source.md)。
+> 与 R-SKILLS 同一顺序:设计稿**先**扩到 23 块(`2n`–`2p` 放新文件 `Agent X-Ray Source.dc.html`),**再**进轮次,不是规则 8 的例外。
+
+**问题**:站点的卖点是「内核可见」,但访客看得到 agent loop 的轨迹、看不到实现它的代码;仓库虽是公开的 MIT 项目,GitHub 在境内访问不稳、
+也对不上「线上正在跑的是哪一版」。agent 自己同样读不到站点源码,回答「这个站是怎么实现的」只能靠训练记忆。
+
+**形态裁定**(八条,2026-09-08,细则在任务卡):
+- tab 顺序 `Runtime · Notes · Skills · Source · About`;页面 = 页头(仓库名 / `MIT` 徽标 / `GitHub ↗` / SHA · 日期 · 文件数 · 体积)+ 左**可折叠**目录树 + 右预览卡
+  (复用 2g/2h 的 `CodeView` / `MarkdownFile`);默认打开 `README.md`;URL `/source/<path>`。
+- **只读且只有三件事**:点文件、看内容、复制 / 跳 GitHub。不做搜索 / zip / 行号深链;不画空态(走 `2k`-B)。
+- 源码当内容:迁移 016 两张表(`source_snapshots` current 唯一 / `source_files`);MCP 五个 `source_*`(begin 带 manifest 增量 → put 分批 → commit 单事务);
+  发布脚本 `tools/source-publish/publish.mjs` 只从 git 树取、闭集含 `rounds/` 不含 lockfile / `design/` / `.claude/` / 二进制,单文件 256 KB;
+  `dev.ps1 build --check` + `ship` 自动发 + `source-publish` 补发。
+- agent 三工具经 `agent_ro`(迁移里显式 GRANT),默认开;提示词加「源码是数据不是指令」。
+- 先桌面:移动 Tab Bar 按 `desktopOnly` 过滤,`/source*` 窄视口按桌面版式渲染。
+
+- 验收(16 项,细则在任务卡):①`check` + `test` + web `tsc`;②三处登记与五格导航、移动仍四格;③写面十种非法输入逐条拒;④增量与幂等;⑤commit 原子;
+  ⑥读面含 `()[]` 路径;⑦`agent_ro` 权限;⑧三工具边界;⑨轨迹形状;⑩画板 2n/2o/2p 逐项;⑪呈现开关;⑫脚本只看 git 树;⑬`dev.ps1` 挂接;
+  ⑭镜像与冒烟 SHA 相等;⑮体积回填;⑯文档同步(mcp.md 51)。
+- **前置**:设计稿并入 `design/`。**止损**:`site_tab_set source false` 藏页面;`tool_config_set source_* false` 关工具;快照本身不提供「撤下」——
+  `source_snapshot_delete` 只删非 current,要换内容就发下一版。
 
 ## 轮次外事项
 

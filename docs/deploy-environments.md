@@ -32,7 +32,7 @@
    .\dev.ps1 build
    ```
 
-   该命令做四件事:拒绝在脏工作区构建、并核对 skills 清单生成物与 `runner/skills` 一致(`node tools/skills-manifest/generate.mjs --check`)→ `encore build docker --config deploy/infra-config.json --base oven/bun:1.4.0-slim --services agent,trace,notes,mcp,metrics,about,system,site,skills` 出 api 镜像 → `docker build apps/web` 出 web 镜像 → `docker build runner` 出 **runner 镜像**(R-SKILLS-2 的执行容器 `xray-runner:<sha>`;Python 基座按 digest 钉在 `runner/Dockerfile`,不是 JS 运行时;R-WEBFETCH 起它要从 PyPI 装 `requirements.txt` 里全部带 hash 的依赖,本机直连慢就设 `$env:PIP_INDEX_URL` 指向镜像站,hash 照核)。三个 tag 都是 git 短 SHA,`ship` 三镜像一起 save;**egress 实例复用 runner 镜像,不是第四个镜像**。服务白名单以 `dev.ps1` 的 `$hostedServices` 为准,**新增服务必须补进去**,漏补的表现是镜像与健康检查都正常、该服务端点静默 404(冒烟清单第 1 条就是为它设的)。
+   该命令做四件事:拒绝在脏工作区构建、并核对 skills 清单生成物与 `runner/skills` 一致(`node tools/skills-manifest/generate.mjs --check`)→ `encore build docker --config deploy/infra-config.json --base oven/bun:1.4.0-slim --services agent,trace,notes,mcp,metrics,about,system,site,skills,source` 出 api 镜像 → `docker build apps/web` 出 web 镜像 → `docker build runner` 出 **runner 镜像**(R-SKILLS-2 的执行容器 `xray-runner:<sha>`;Python 基座按 digest 钉在 `runner/Dockerfile`,不是 JS 运行时;R-WEBFETCH 起它要从 PyPI 装 `requirements.txt` 里全部带 hash 的依赖,本机直连慢就设 `$env:PIP_INDEX_URL` 指向镜像站,hash 照核)。三个 tag 都是 git 短 SHA,`ship` 三镜像一起 save;**egress 实例复用 runner 镜像,不是第四个镜像**。服务白名单以 `dev.ps1` 的 `$hostedServices` 为准,**新增服务必须补进去**,漏补的表现是镜像与健康检查都正常、该服务端点静默 404(冒烟清单第 1 条就是为它设的)。
 
    > ⚠️ 构建前先 `docker pull python:3.12-slim@<digest>`(digest 在 `runner/Dockerfile` 里)—— 与下面 bun 基座同一个理由,境内网络下让 daemon 侧的 mirror 去拉。
 
@@ -74,6 +74,9 @@
    docker compose up -d --wait postgres   # 1) 只起库,--wait 会阻塞到 healthy
    ./migrate.sh                           # 2) schema 就位(详见下一节)
    docker compose up -d                   # 3) 再起 api / web / caddy
+   # 4) R-SOURCE:源码快照。此后每次 `dev.ps1 ship` 会在传完镜像后自动发该 SHA 的快照(发到正在跑的 api 的 MCP);
+   #    **首次**发带 source_* 工具的版本时旧 api 收不了,ship 只警告 —— 起新版之后在本机补一次:
+   #      .\dev.ps1 source-publish <host> <sha>
    ```
 
    > **顺序不能颠倒。** `/health` 不触库,所以「先 `up -d` 起全部、再迁移」会留下一段中间状态:Caddy 已经对外放流量、容器 healthy、健康检查全绿,而真实业务接口全部 500。这段窗口靠监控发现不了,只能靠部署顺序消除。升级时同理:新镜像若带了新迁移,也要先停在这个顺序上。
@@ -174,9 +177,9 @@
 
    | # | 检查 | 期望 |
    |---|---|---|
-   | 1 | **服务白名单逐项可达** | `agent` / `trace` / `notes` / `mcp` / `metrics` / `about` / `system` / `site` / `skills` 各取一个**正式端点**(`site` 是 `GET /api/site/tabs`,`skills` 是 `GET /api/skills`),全部非 404 |
+   | 1 | **服务白名单逐项可达** | `agent` / `trace` / `notes` / `mcp` / `metrics` / `about` / `system` / `site` / `skills` / `source` 各取一个**正式端点**(`site` 是 `GET /api/site/tabs`,`skills` 是 `GET /api/skills`,`source` 是 `GET /api/source` —— 首次发版在 `source-publish` 之前回 404 是预期,之后必须 200),全部非 404 |
    | 2 | 已删服务 | `/api/spike/*` 与 `/admin` 全部 404 |
-   | 3 | 四 Tab | `/`、`/notes`、`/skills`、`/about` 均 200 且渲染真实数据;`/skills/<name>.zip` 经 Caddy 回 `application/zip`(R-SKILLS 的扩展名分流) |
+   | 3 | 五 Tab | `/`、`/notes`、`/skills`、`/source`、`/about` 均 200 且渲染真实数据;`/skills/<name>.zip` 经 Caddy 回 `application/zip`(R-SKILLS 的扩展名分流) |
    | 4 | MCP 管理面 | 无 token / 错 token / 格式不对的 token / **未认证的** GET 一律 401,且**审计表有 denied 记录**;带 token 且带齐 2026-07-28 逐请求契约的 `server/discover` 回 `supportedVersions: ["2026-07-28"]`,`tools/list` 回全部工具(以 `apps/api/mcp/tools.ts` 的 `registerTool` 计数为准,R-WEBSEARCH 后是 28、R-IMAGEGEN 后是 32、R-TABS 后 34、R-SKILLS 后 42、R-SKILLS-2 后 **46**;**不带 `params._meta` 会落到 legacy 路径,`server/discover` 回 `-32601`,别误判成端点坏了**)(R10 修准:带**正确** token 的 GET 是 **405** —— 认证闸在方法校验之前,别按 401 去核) |
    | 5 | 正文配图路由 | `/notes/<系列>/<哈希>.webp` → 200 + `ETag`;带 `If-None-Match` 复请求 → 304;同形的文章页地址不被图片路由劫走 |
    | 6 | RSS | `/rss.xml` 与 `/rss/<分类>.xml` 200,条目里的绝对链接用的是 `SITE_ORIGIN`;未知分类 404 |
@@ -196,12 +199,13 @@
    | 19 | **skill-runner 隔离形态**(R-SKILLS-2,所有者裁定 7:在生产冒烟验收,**`skill_load` / `skill_run` 双闸关闭状态下跑**,四条都过了才按任务卡「运维」段的顺序打开) | ① `docker compose ps` 里 `skill-runner` 为 `healthy`(healthcheck = `runner.py --health` 走同一个 unix socket);② 容器内出不了网:`docker compose exec skill-runner /opt/venv/bin/python -I -c "import socket; socket.create_connection(('1.1.1.1',53),2)"` 抛 `OSError`,且 `cat /proc/net/route` 只有表头(没有任何路由);③ 只读:`docker compose exec skill-runner sh -c 'touch /opt/skills/x'` 失败(Read-only file system);④ 清单闸:在 api 容器里对 socket 发一个不在清单里的脚本名 → `404 {"error":"unknown_script"}`:`docker compose exec api bun -e 'fetch("http://skill-runner/run",{method:"POST",unix:"/run/runner/runner.sock",headers:{"content-type":"application/json"},body:JSON.stringify({skill:"text-tools",script:"rm.py",sha256:"0".repeat(64),input:{}})}).then(async r=>console.log(r.status,await r.text()))'`。另核 `docker inspect`:`NetworkMode=none`、`ReadonlyRootfs=true`、`CapDrop=[ALL]`、`PidsLimit=64`、`Memory=384m`、tmpfs `/run/work` 带 `noexec` |
    | 20 | **agent 使用 skills 端到端**(R-SKILLS-2,第 19 条过了并按顺序打开之后) | ① `skills_agent_status` 里目标 skill `consistency: ok`、`available: true`;② 对 agent 说「用 text-tools 统计这段话的词频:…」→ Timeline 出现 `before_agent_start`(详情卡 EXTENSION RETURNED · xray-skills 列出可用 skills)→ `tool_call · skill_load` → `tool_call · skill_run` → `tool_execution_update · skill_run ×N` → `tool_execution_end`,回复里有脚本算出的词频;③ 再说「用 text-tools 跑 scripts/rm.py」→ `tool_call · skill_run` 行带红色 `blocked` 徽标与「└ xray-guard returned {block: true}」注记,`tool_execution_end` 为 `isError`;④ `/api/agent/tools` 与 `/api/trace/stream` 原始流里搜不到 `/run/runner`、`unix:`、超时与限额数字;⑤ `tool_config_set skill_run false` 后下一轮工具消失;`skills_agent_set text-tools false` 后该 skill 不再出现在 `before_agent_start` 的 `skills` 里 |
    | 21 | **egress 执行容器 + web-fetch**(R-WEBFETCH;①②③在 `web-fetch` 未打开时就能验,④要 `skills_agent_set web-fetch true` 之后) | ① `docker compose ps` 里 `skill-runner-egress` 为 `healthy`;`docker inspect`:`Networks` 只有 `deploy_egress`、`ReadonlyRootfs=true`、`CapDrop=[ALL]`、`PidsLimit=64`、`Memory=256m`(268435456)、挂载只有 `runner_egress_sock` 与 tmpfs `/run/work`(`noexec`);② 网络边界:`docker compose exec skill-runner-egress /opt/venv/bin/python -I -c "import socket; socket.getaddrinfo('postgres',5432)"` 与 `getaddrinfo('api',4000)` 都抛 `gaierror`,`socket.create_connection(('1.1.1.1',443),3)` 成功,`socket.create_connection(('169.254.169.254',80),3)` **失败**(宿主 `sudo ./egress-filter.sh --status` 六条 `ok`,`systemctl is-enabled xray-egress-filter` 为 `enabled`);③ 档次闸(在 api 容器里,`sha256` 取 `runner/manifest.json` 里 `web-fetch.scripts["fetch.py"]`):对 **none 档** socket(`/run/runner/runner.sock`)发 `{skill:"web-fetch",script:"fetch.py",…}` → `403 {"error":"network_mismatch"}`;对 **egress 档** socket(`unix:"/run/runner-egress/runner.sock"`)发 `text-tools` → 同样 `403`;对 egress socket 发 web-fetch + `{"url":"https://169.254.169.254/"}` → `200` 且 `exitCode:2, stdout:"E_BAD_URL\n"`(**纯数字 TLD 在 `narrow_url` 的 `TLD_RE` 就被拒**,到不了地址校验那层;2026-09-04 生产实测订正,原记 `E_UNFETCHABLE` 有误);发 `{"url":"http://example.com/"}` → `E_BAD_URL`;发 `{"url":"https://www.kzgai.cloud/about"}` → `exitCode:0`、stdout 是以 `#` 开头的 markdown;④ 端到端:`skills_upsert` 上传 `runner/skills/web-fetch/` 的 3 个文件(LF)→ `skills_agent_status` 里 `web-fetch` `consistency: ok` → `skills_agent_set web-fetch true` → 对 agent 说「读一下 https://en.wikipedia.org/wiki/Server-side_request_forgery 并用三句话总结」→ Timeline `tool_call · skill_run`(web-fetch / fetch.py)→ `tool_execution_update ×N` → `tool_result`,回复的三句来自正文;说「读 https://169.254.169.254/latest/meta-data/」→ **模型读过 SKILL.md 后通常在调用前就自己拒了**(2026-09-04 生产实测),不进 `skill_run`;要看工具侧的短码用上面 ③ 的直连 socket 用例。真进了工具则以「脚本运行失败…(E_BAD_URL)」失败(`isError`);`/api/trace/stream` 与 `/api/agent/tools` 原始流里 grep 不到 IPv4 / IPv6 字面量、`Location`、`/run/runner-egress`;`docker compose stop skill-runner-egress` 后 web-fetch 以「执行容器当前不可用」失败、`text-tools` 照常;`skills_agent_set web-fetch false` 后下一轮 `<available_skills>` 里没有它 |
+   | 22 | **源码快照 + Source tab**(R-SOURCE;首次发版要先 `source-publish`)| ① `GET /api/source` 200 且 `snapshot.shortSha` == `.env` 的 `IMAGE_TAG`(**展示的 = 正在跑的**,所有者裁定 5);② `/source` 200 渲染 README、`/source/apps/api/agent/tools.ts` 200 带行号代码、`/source/apps/web/app/(site)/notes/[series]/page.tsx`(括号与方括号的路径)200、`/source/apps/api`(目录地址)与 `/source/nope.ts` 走 2k-B 找不到;③ `dev.ps1 ship` 末尾打印 `commit current`(或首次发版在 compose up 后 `dev.ps1 source-publish <host> <sha>` 成功),MCP `source_snapshots_list` 只有一行 current、`pending: 0`;④ agent:问「这个站的工具注册表在哪个文件」→ Timeline 出现 `tool_call · source_search` / `source_read`,回答带路径与行号;⑤ `site_tab_set source false` 后导航五格变四格、`/source` 404、`/api/source` 仍 200,再 `true` 恢复 |
 
    > **预检必须走 compose 起容器,别用 `docker run` 手工凑。** R11 上线前用 `docker run -p 443:443/udp …` 做过一次
    > 访问层预检,HTTP/3 是通的;正式 `docker compose up` 之后却不通 —— compose 里根本没写 udp 映射,
    > udp 是预检时手敲在命令行上的。「预检用的启动方式和生产不是同一条」这类差异只能靠跑真实部署路径消除。
    >
-   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,metrics,about,system,site,skills`)白名单决定。新增服务时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
+   > **`--services` 是维护热点,必须纳入冒烟。** 打进镜像的服务由 `dev.ps1 build` 里的 `$hostedServices`(当前 `agent,trace,notes,mcp,metrics,about,system,site,skills,source`)白名单决定。新增服务时**必须同步在那里补上服务名**,否则表现是:镜像构建成功、容器 healthy、`/health` 200,而该服务的所有端点静默 404 —— 没有任何一处会报错。
    >
    > 因此冒烟不能只看 `/health`,要**逐个确认当前已落地的正式 service 端点都可达**(表里第 1 条)。本项目不引入自动服务发现,这条靠清单与冒烟兜住。
 

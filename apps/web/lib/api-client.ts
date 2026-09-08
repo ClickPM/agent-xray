@@ -38,6 +38,7 @@ export default class Client {
     public readonly notes: notes.ServiceClient
     public readonly site: site.ServiceClient
     public readonly skills: skills.ServiceClient
+    public readonly source: source.ServiceClient
     public readonly system: system.ServiceClient
     public readonly trace: trace.ServiceClient
     private readonly options: ClientOptions
@@ -60,6 +61,7 @@ export default class Client {
         this.notes = new notes.ServiceClient(base)
         this.site = new site.ServiceClient(base)
         this.skills = new skills.ServiceClient(base)
+        this.source = new source.ServiceClient(base)
         this.system = new system.ServiceClient(base)
         this.trace = new trace.ServiceClient(base)
     }
@@ -846,6 +848,119 @@ export namespace skills {
     }
 }
 
+export namespace source {
+    export interface GetSourceFileRequest {
+        /**
+         * 仓库根相对路径;形状不合法回 invalid_argument,不存在回 not_found(前端都当 404)
+         */
+        path: string
+    }
+
+    export interface GetSourceFileResponse {
+        snapshot: SourceSnapshotInfo
+        path: string
+        kind: shared.SourceFileKind
+        /**
+         * 原文。前端当纯文本处理,永不执行
+         */
+        content: string
+
+        bytes: number
+        lines: number
+        /**
+         * 同一快照里的全部文件元信息(不含内容),按路径码点序 —— 页面的目录树由它长出来。
+         * 与 content 出自同一个 REPEATABLE READ 事务:页面只打这一次后端,页头 / 正文 / 目录树必然是同一个 sha(codex 首轮 P2)。
+         */
+        files: SourceFileEntry[]
+    }
+
+    export interface GetSourceResponse {
+        snapshot: SourceSnapshotInfo
+        /**
+         * 全部文件元信息(不含内容),按路径码点序;目录树由前端从路径长出来
+         */
+        files: SourceFileEntry[]
+    }
+
+    export interface SourceFileEntry {
+        /**
+         * 仓库根相对路径,如 `apps/api/agent/tools.ts`
+         */
+        path: string
+
+        /**
+         * 由扩展名派生的闭集;前端据此选渲染方式(markdown 渲染 / 代码带行号)
+         */
+        kind: shared.SourceFileKind
+
+        bytes: number
+        lines: number
+    }
+
+    /**
+     * 快照头部:页头 meta 行与 `GitHub ↗` 的全部原料
+     */
+    export interface SourceSnapshotInfo {
+        /**
+         * 40 位 git SHA;`GitHub ↗` 拼 `<repoUrl>/tree/<sha>` 与 `<repoUrl>/blob/<sha>/<path>`
+         */
+        sha: string
+
+        /**
+         * 前 7 位,页面 meta 行「快照 be6c074」
+         */
+        shortSha: string
+
+        /**
+         * ISO 8601;页面显示日期
+         */
+        publishedAt: string
+
+        fileCount: number
+        /**
+         * 全部文件的 UTF-8 字节数之和
+         */
+        totalBytes: number
+
+        /**
+         * `owner/repo`(代码常量 shared/source-repo.ts)
+         */
+        repo: string
+
+        /**
+         * `https://github.com/<owner>/<repo>`
+         */
+        repoUrl: string
+    }
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.getSource = this.getSource.bind(this)
+            this.getSourceFile = this.getSourceFile.bind(this)
+        }
+
+        public async getSource(): Promise<GetSourceResponse> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/source`)
+            return await resp.json() as GetSourceResponse
+        }
+
+        public async getSourceFile(params: GetSourceFileRequest): Promise<GetSourceFileResponse> {
+            // Convert our params into the objects we need for the request
+            const query = makeRecord<string, string | string[]>({
+                path: params.path,
+            })
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("GET", `/source/file`, undefined, {query})
+            return await resp.json() as GetSourceFileResponse
+        }
+    }
+}
+
 export namespace system {
 
     export class ServiceClient {
@@ -897,6 +1012,15 @@ export namespace shared {
      * (`encore check` 报 unsupported indexed access type operation,2026-09-03 实测)。
      */
     export type SkillFileKind = "markdown" | "python" | "shell" | "typescript" | "javascript" | "json" | "yaml" | "toml" | "text"
+
+    /**
+     * 文件种类的闭集。前端据此选渲染方式:markdown 走 Markdown 组件,其余走带行号的代码视图
+     * (高亮只对 python / typescript / javascript / shell 四种,其余等宽正文色 —— 与 lib/highlight.ts 同一口径)。
+     * 
+     * 写成显式的字面量联合而不是 `(typeof SOURCE_FILE_KINDS)[number]`:这个类型会进
+     * source 服务的 API 响应形状,而 Encore 的静态解析器不认索引访问类型(R-SKILLS 实测)。
+     */
+    export type SourceFileKind = "markdown" | "typescript" | "javascript" | "python" | "shell" | "powershell" | "sql" | "json" | "yaml" | "toml" | "css" | "dockerfile" | "text"
 }
 
 

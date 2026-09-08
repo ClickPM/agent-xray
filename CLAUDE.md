@@ -9,9 +9,9 @@ This file provides guidance to Claude Code when working in this repository.
 
 ## 项目定位
 
-**Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。四个 Tab:Runtime 工作台 / Notes 研习库 / **Skills 技能库(R-SKILLS,2026-09-03 裁定并落地)** / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。**站点已于 2026-09-02 投产**(https://www.kzgai.cloud/,R11),此后进入运维迭代:**较大迭代依旧延续轮次机制**(命名轮,所有者裁定 2026-09-03),小修补可直接 `main`;**每次生产发版必须记入 [`docs/releases.md`](docs/releases.md)**。
+**Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。五个 Tab:Runtime 工作台 / Notes 研习库 / **Skills 技能库(R-SKILLS,2026-09-03 裁定并落地)** / **Source 源码(R-SOURCE,2026-09-08 裁定,分支 `round-source`)** / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。**站点已于 2026-09-02 投产**(https://www.kzgai.cloud/,R11),此后进入运维迭代:**较大迭代依旧延续轮次机制**(命名轮,所有者裁定 2026-09-03),小修补可直接 `main`;**每次生产发版必须记入 [`docs/releases.md`](docs/releases.md)**。
 
-- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2m(共 20 块)+ **移动端**画板 4a–4u(共 21 块,2026-09-07 新增,R-MOBILE)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,3a–3e 已废弃并于 2026-09-02 从画布删除)。移动端只重排既有功能、不新增,**两套画板的功能范围是同一个**。管理面范围以 ROUNDS.md R6 裁定清单为准。
+- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2p(共 23 块)+ **移动端**画板 4a–4u(共 21 块,2026-09-07 新增,R-MOBILE)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,2n–2p 于 2026-09-08 新增(R-SOURCE,放新文件 `Agent X-Ray Source.dc.html`),3a–3e 已废弃并于 2026-09-02 从画布删除)。移动端只重排既有功能、不新增,**两套画板的功能范围是同一个**。管理面范围以 ROUNDS.md R6 裁定清单为准。
 - 架构与既定决策:[`docs/architecture.md`](docs/architecture.md)(pi SDK in-process、Encore 类型化 RPC、SSE ×2、Postgres、单机 compose)。
 - 安全强约束:[`docs/security.md`](docs/security.md)——威胁模型、四层沙箱、脱敏、凭据管理;**是约束不是建议**(规则 9)。
 
@@ -25,14 +25,17 @@ apps/web      Next.js 15 前端(App Router)。四 Tab 已按画板实现(Skills 
 apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。服务清单与各自边界以
               `apps/api/<服务>/README.md` 为准(about / agent / mcp / metrics / notes / system / trace,
               R-TABS 新增 site/ = 顶部 tab 呈现开关的只读面;R-SKILLS 新增 skills/ = 技能库只读面,
-              一包文件的判据在 shared/skill-pack.ts);本文不再逐服务记状态
+              一包文件的判据在 shared/skill-pack.ts;R-SOURCE 新增 source/ = 站点源码快照只读面,
+              判据在 shared/source-pack.ts、仓库常量在 shared/source-repo.ts);本文不再逐服务记状态
 design/       设计稿终稿存档(.dc.html 画板 + 可交互原型 + token 速查)——实现时逐画板对照
 deploy/       docker compose + Caddyfile + migrate.sh(预发/生产共用的部署资产,R9/R11 定稿)
 docs/         架构 / 安全 / 部署环境矩阵 / 境内轻量服务器部署 / MCP 管理面说明(mcp.md) / **生产发布记录(releases.md)**
 rounds/       轮次任务卡与管理产出(约定见 rounds/README.md);roadmap 在根 ROUNDS.md
 tools/        本机构建期工具,**刻意在 Encore app root 之外**(规则 6)。R5 的 notes-sync 管线已随 R6 删除;
-              现在只有 `skills-manifest/generate.mjs`(R-SKILLS-2):读 runner/skills → 生成 api 与执行容器两份同源清单
-              (`apps/api/shared/skills.generated.ts` + `runner/manifest.json`,都是生成物、都入库),`dev.ps1 skills-gen` 调它
+              现在有两个:`skills-manifest/generate.mjs`(R-SKILLS-2):读 runner/skills → 生成 api 与执行容器两份同源清单
+              (`apps/api/shared/skills.generated.ts` + `runner/manifest.json`,都是生成物、都入库),`dev.ps1 skills-gen` 调它;
+              `source-publish/publish.mjs`(R-SOURCE):只从 `git ls-tree <sha>` 取文件(永不读工作树),按代码里的闭集筛选后经 MCP
+              把源码快照发进库(`begin` 带 manifest 增量 → `put` 分批 → `commit` 单事务);`dev.ps1 ship` 自动调,`build` 跑它的 `--check`
 runner/       **R-SKILLS-2 已落地**:agent 可运行 skills 的执行容器(`Dockerfile` Python 基座按 digest 钉 + venv + `runner.py` /
               `launch.py`)与可被 agent 使用的 skill 源(`runner/skills/<name>/`:SKILL.md + 可选 xray.json + scripts/*.py)。
               刻意在 Encore app root 之外;它不是 JS 运行时,规则 11 不涉及。布局与协议见 `runner/README.md`。
@@ -147,12 +150,22 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       把 Timeline 做成 iOS 列表这个站就不是 X 光机了。**移动端不新增任何产品功能**,新增的只有交互原语
       (Sheet / 左滑 / 下拉刷新 / 大标题收起 / 键盘避让)与 `4u` 的载体适配态。
       提示词 `rounds/round-mobile/design-prompt.md` 与 `impl-prompt.md`;实现轮次:ROUNDS.md R-MOBILE。
-    - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用;**桌面**新画板从 `2n` 顺延
-      (`1a–1g`、`2a–2m` 已用),**移动端**占 `4x` 段(`4a`–`4u` 已用,从 `4v` 顺延)。
+    - **2026-09-08 修订(R-SOURCE)**:所有者裁定新增**第五个顶部 tab「Source」**(站点自身源码的只读浏览,页面标 git SHA)并让 agent **读站点源码**
+      (三个纯函数组只读工具 `source_list` / `source_read` / `source_search`,默认开)。与 R-TOOLS / R-SKILLS / R-PERF 同一顺序、**不是**例外:
+      设计稿先扩(桌面 `2n` 首页 README 态 / `2o` 代码文件态 / `2p` 加载态,放**新文件** `Agent X-Ray Source.dc.html`,因为 `Workbench` 离 256 KiB 截断线只剩 13 KB;
+      既有 20 块导航改五格;原型加两屏),并入 `design/` 之后才开 `round-source`。八条裁定:tab 顺序 `Runtime · Notes · Skills · Source · About`;
+      收录含 `rounds/`、不含 lockfile(闭集在 `tools/source-publish/`,改 = 发版);单文件 256 KB;三工具分开、默认开;
+      **快照随每次生产发版发布,从源头保证展示 = 运行**(`dev.ps1 ship` 自动挂,不手动;不比对运行 SHA、不画「快照落后」态);
+      不做站内搜索 / zip / 行号深链;**先桌面**(移动 Tab Bar 仍四格、不做 Source 页,agent 工具与视口无关,记 BACKLOG)。
+      源码像 Notes / Skills 一样**当内容发布进 Postgres**(镜像里没有源码、api 不读文件系统),写面 MCP 五个 `source_*`(46 → 51,规则 13),
+      发布脚本只从 `git ls-tree <sha>` 取文件;仓库本就是公开 MIT,agent 侧新增的只是「读公开源码」,新表按第 2 层既定口径显式 `GRANT SELECT` 给 `agent_ro`
+      (`docs/security.md` R-SOURCE 补记是开代码的第一步)。提示词 `rounds/round-source/design-prompt.md`,拆解 `rounds/round-source/round-source.md`。
+    - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用;**桌面**新画板从 `2q` 顺延
+      (`1a–1g`、`2a–2p` 已用;`2n–2p` 在单独的 `Agent X-Ray Source.dc.html` 里),**移动端**占 `4x` 段(`4a`–`4u` 已用,从 `4v` 顺延)。
     - **`design/` 的单文件有 256 KiB 硬上限**(DesignSync `get_file`,2026-09-07 实测撞线):
       超了**静默截断、不报错** —— 表现是文件正好 262,144 字节、`</x-dc>` 与 `</html>` 都没有、`<div>` 开合不配平。
       移动端 21 块画板首次拉稿就是这么废掉的,所以才拆成两份文件。**桌面 `Agent Runtime Workbench.dc.html`
-      现为 248,815 字节,离上限只剩 13 KB —— 下次给桌面加画板前必须先拆文件**。
+      现为 250,586 字节(R-SOURCE 导航改五格后),离上限只剩 11 KB —— 下次给桌面加画板前必须先拆文件**(`2n–2p` 已经放新文件)。
       拉稿后一律先验:字节数 / 闭合标签 / div 开合 / 画板数,四项齐了才算拿到稿。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**(执行类能力只能在独立沙箱容器里:容器可常驻,每次运行必须是一次性的进程与工作目录 —— 所有者裁定 2026-09-03,R-SKILLS-2);SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
     - **工具分四组**(R-WEBSEARCH 2026-09-01 定前两组、R-TITLE 同日补第三组、R-SKILLS-2 2026-09-03 裁定并落地第四组「沙箱执行组」;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。**会话绑定组**(`session_rename`;`generate_image` 同时也是会话绑定的)是「纯函数 / 数据面只读」的**唯一例外**:无网络、无凭据,只经专用 NOLOGIN 角色写**本会话那一行**的限定列(`agent_title` 只改 `sessions.title` 两列;`agent_image` 只 INSERT `generated_images`),会话 id 在建会话时闭包绑死、不是入参。**沙箱执行组**(`skill_run`,R-SKILLS-2 已落地)是第四档:api 进程内同样不碰文件系统 / 子进程,只经 **unix socket** 调独立的 `skill-runner` 容器(默认实例 `network_mode: none`、只读、rlimit;R-WEBFETCH 2026-09-03 裁定加**同一镜像的 egress 实例**,只出公网、不在 `front` / `back`,只跑 `xray.json` 声明 `network: egress` 的 skill,首个是 `web-fetch` —— 它是外呼组「不接受 URL 参数」的唯一例外,SSRF 防线 = 脚本逐地址校验 + 钉 IP 连、容器不在内部网络、宿主 `DOCKER-USER` 过滤;**不维护域名黑白名单**,拒的是固定内网地址段);入参只有 `skill` / `script`(闭集)与 `input`(JSON,过 schema),**可执行的 skill 集合在代码里**(`runner/skills/`,改 = 发版),库里只能在集合之内开关;八条附加约束见 `docs/security.md` §1 R-SKILLS-2 补记,egress 档的第九条见 R-WEBFETCH 补记。完整口径见 `docs/security.md` §1「工具分两组」表与 R-TITLE / R-IMAGEGEN / R-SKILLS-2 补记。
@@ -190,6 +203,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 runner     # 本机起 skill-runner 执行容器(TCP 开发模式 127.0.0.1:8000;api 侧设 $env:XRAY_SKILL_RUNNER_URL="http://127.0.0.1:8000")
 .\dev.ps1 runner egress   # 起 egress 档实例(127.0.0.1:8001,有公网;api 侧设 $env:XRAY_SKILL_RUNNER_EGRESS_URL="http://127.0.0.1:8001";R-WEBFETCH)
 .\dev.ps1 runner-test     # 在 runner 镜像里跑 runner\tests(web-fetch 单元测试 + 病态输入夹具,--network none;R-WEBFETCH)
+.\dev.ps1 source-publish <host> [sha]   # 把 <sha> 的源码快照经该 host 的 MCP 发进库(R-SOURCE;ship 会自动调,这条给首次发版、补发与本机)
 .\dev.ps1 wt-clean   # 列出 .claude\worktrees 残留;带 <名字|all> 清理,--force 跳过安全闸
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```

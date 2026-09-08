@@ -21,6 +21,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { remarkLinkHref } from "@/lib/remark-link-href";
 import { mono } from "@/lib/styles";
 // KaTeX 自带样式表:字体文件由构建产物同源提供(不连 CDN,与 app/layout.tsx
 // 自托管 JetBrains Mono 同一个理由 —— 境内首访不能挂在外域字体请求上)。
@@ -226,10 +227,23 @@ export function extractToc(md: string): { id: string; text: string }[] {
  *   聊天区必须传 false:一个会话里会同时渲染多条助手回复,各自从头计数的 slug
  *   会在同一个文档里撞成重复 id(HTML 非法,锚点跳转与读屏都指到第一条)。
  */
-export function Markdown({ children, headingIds = true }: { children: string; headingIds?: boolean }) {
+export function Markdown({
+  children,
+  headingIds = true,
+  linkHref,
+}: {
+  children: string;
+  headingIds?: boolean;
+  /**
+   * R-SOURCE:改写 **link 节点**目标地址的钩子(纯增量,不传时管线一字不变;image / definition 不碰)。
+   * Source tab 用它把仓库内相对链接指到 `/source/...`;在 mdast 上做而不是改正文字符串,
+   * code span / 围栏代码里长得像链接的文本才不会被误伤(codex 第 3 轮 P2)。回 null = 不动。
+   */
+  linkHref?: (url: string) => string | null;
+}) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath, remarkDollarGuard]}
+      remarkPlugins={linkHref ? [remarkGfm, remarkMath, remarkDollarGuard, remarkLinkHref(linkHref)] : [remarkGfm, remarkMath, remarkDollarGuard]}
       // 公式写错时 rehype-katex 自己兜住 ParseError(不会把整页渲染带崩),
       // 退化成「原文标红」;这里只把那个红换成现成的 --err-text(规则 7:不新增视觉语言)。
       // 不挂 id 时连 rehypeHeadingIds 都不装,聊天区因此一个 id 都不会产出(见上方 headingIds 的说明)

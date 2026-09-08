@@ -38,8 +38,8 @@ describe("tab 呈现开关的读面(site/store,R-TABS)", () => {
     await db.rawExec(`UPDATE site_tab_config SET visible = FALSE WHERE key = 'runtime'`);
     const tabs = await store.listTabs();
     expect(tabs.find((t) => t.key === "runtime")?.visible).toBe(false);
-    // 只影响被改的那一个(R-SKILLS 起登记表是四格)
-    expect(tabs.filter((t) => t.visible).map((t) => t.key)).toEqual(["notes", "skills", "about"]);
+    // 只影响被改的那一个(R-SKILLS 起登记表是四格,R-SOURCE 起五格)
+    expect(tabs.filter((t) => t.visible).map((t) => t.key)).toEqual(["notes", "skills", "source", "about"]);
   });
 
   it("登记表里有、库里缺行 → 按可见兜底(漏写的迁移不该让一整块内容消失)", async () => {

@@ -25,6 +25,8 @@ import { appendMessage, createSession } from "./store";
 
 /** 迁移 006 种下的三行启停配置;本文件会清空 tool_config,跑完复原。 */
 const SEED_TOOLS = ["notes_list_series", "notes_get_chapter", "notes_search"];
+/** 迁移 016 种下的三个源码只读工具(R-SOURCE,默认开)。**复原时不能漏**:漏了后面的 source-tools.test 读不到种子行。 */
+const SEED_SOURCE_TOOLS = ["source_list", "source_read", "source_search"];
 /** 迁移 009 种下的会话绑定工具。**复原时不能漏**:漏了等于把默认开启的命名工具关掉。 */
 const SEED_SESSION_TOOLS = [SESSION_RENAME_TOOL];
 
@@ -38,6 +40,13 @@ async function restoreToolSeeds() {
   for (const name of SEED_TOOLS) {
     await db.rawExec(
       `INSERT INTO tool_config (name, enabled, dangerous, note) VALUES ($1, TRUE, FALSE, 'R7 只读工具组')
+       ON CONFLICT (name) DO NOTHING`,
+      name,
+    );
+  }
+  for (const name of SEED_SOURCE_TOOLS) {
+    await db.rawExec(
+      `INSERT INTO tool_config (name, enabled, dangerous, note) VALUES ($1, TRUE, FALSE, 'R-SOURCE 纯函数组')
        ON CONFLICT (name) DO NOTHING`,
       name,
     );
@@ -93,8 +102,8 @@ describe("第 1 层 · 工具白名单", () => {
 
   afterAll(restoreToolSeeds);
 
-  it("两张注册表里只有三个只读工具 + 一个会话绑定工具,执行类工具根本不存在", () => {
-    expect(Object.keys(TOOL_REGISTRY).sort()).toEqual([...SEED_TOOLS].sort());
+  it("两张注册表里只有六个只读工具(notes 三个 + source 三个)+ 一个会话绑定工具,执行类工具根本不存在", () => {
+    expect(Object.keys(TOOL_REGISTRY).sort()).toEqual([...SEED_TOOLS, ...SEED_SOURCE_TOOLS].sort());
     expect(Object.keys(SESSION_TOOL_REGISTRY)).toEqual(SEED_SESSION_TOOLS);
     // CLAUDE.md 规则 9 的物理落点:这些名字不是"被关掉",是没有实现 —— 两张表都不能有
     for (const forbidden of ["bash", "write", "edit", "read", "powershell", "exec"]) {
@@ -598,6 +607,34 @@ describe("第 2 层 · agent_ro 只读(ROUNDS.md R7 验收:写库必须失败)",
         await tx.rollback().catch(() => {});
       }
       expect(`${table}: ${message}`).toMatch(/permission denied/i);
+    }
+  });
+
+  it("R-SOURCE:agent_ro 能 SELECT 源码两张表,写任一张都被拒(迁移 016 显式 GRANT SELECT)", async () => {
+    // 读:两张表都要能查(空表也算 —— 权限判的是能不能 SELECT,不是有没有行)
+    for (const table of ["source_snapshots", "source_files"]) {
+      const rows = await queryAsAgentRo((tx) => tx.rawQueryAll(`SELECT * FROM ${table} LIMIT 1`));
+      expect(Array.isArray(rows), table).toBe(true);
+    }
+    // 写:INSERT / UPDATE / DELETE 三种都 permission denied(不设 READ ONLY,只验角色权限,理由同上一条)
+    const writes = [
+      `INSERT INTO source_snapshots (sha, status) VALUES ('${"a".repeat(40)}', 'staging')`,
+      `UPDATE source_snapshots SET status = 'staging'`,
+      `DELETE FROM source_files`,
+    ];
+    for (const sql of writes) {
+      const tx = await db.begin();
+      let message = "";
+      try {
+        await tx.rawExec("SET LOCAL ROLE agent_ro");
+        await tx.rawExec(sql);
+        message = "NO ERROR";
+      } catch (err) {
+        message = String(err);
+      } finally {
+        await tx.rollback().catch(() => {});
+      }
+      expect(`${sql}: ${message}`).toMatch(/permission denied/i);
     }
   });
 

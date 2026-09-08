@@ -125,9 +125,9 @@
 
 ---
 
-## 5. 当前已注册工具全景清单（共 46 个）
+## 5. 当前已注册工具全景清单（共 51 个）
 
-管理面工具在 `apps/api/mcp/tools.ts` 中集中注册。当前版本共计 **46 个工具**，按业务领域分为 7 大类：
+管理面工具在 `apps/api/mcp/tools.ts` 中集中注册。当前版本共计 **51 个工具**，按业务领域分为 8 大类：
 
 | 领域分类 | 工具数量 | 工具名称清单 |
 |---|---|---|
@@ -138,6 +138,7 @@
 | **5. 站点与开关控制** | 4 | `tool_config_list`, `tool_config_set`, `site_tabs_list`, `site_tab_set` |
 | **6. Skills 技能库** | 8 | `skills_categories_list`, `skills_category_upsert`, `skills_category_delete`, `skills_list`, `skills_get`, `skills_file_get`, `skills_upsert`, `skills_delete` |
 | **7. Agent 沙箱执行**| 4 | `skills_agent_set`, `skills_agent_status`, `sandbox_config_get`, `sandbox_config_set` |
+| **8. Source 源码快照** | 5 | `source_snapshot_begin`, `source_files_put`, `source_snapshot_commit`, `source_snapshots_list`, `source_snapshot_delete` |
 
 ---
 
@@ -241,10 +242,10 @@
 2. **`tool_config_set`**（写）：设置指定工具启用或停用。
    - 入参：`name` (工具名), `enabled` (布尔值)。
    - 注意：高危工具（如 `skill_run`）受环境变量双闸保护，即使此处开闸，宿主环境未解锁仍无法生效。
-3. **`site_tabs_list`**（只读）：查询顶部四大 Tab 的可见性配置。
-   - 返回：`runtime`, `notes`, `skills`, `about` 的可见状态（`visible`）。
+3. **`site_tabs_list`**（只读）：查询顶部五格 Tab 的可见性配置。
+   - 返回：`runtime`, `notes`, `skills`, `source`, `about` 的可见状态（`visible`）。
 4. **`site_tab_set`**（写）：动态设置顶部某一 Tab 是否展示。
-   - 入参：`key` (`runtime` / `notes` / `skills` / `about`), `visible` (布尔值)。
+   - 入参：`key` (`runtime` / `notes` / `skills` / `source` / `about`；R-SOURCE 起 enum 五值), `visible` (布尔值)。
    - 边界：属于合规运维开关。隐藏仅作用于导航栏呈现与页面路由 307，后端数据接口不受影响。
 
 ---
@@ -284,6 +285,32 @@
    - 返回：`dailyRunLimit`（日调用上限，0 为不限）、`totalTimeoutMs`（超时阈值）。
 4. **`sandbox_config_set`**（写）：调整沙箱执行限制。
    - 入参：`dailyRunLimit`（可选）、`totalTimeoutMs`（可选，5000–120000 毫秒，受数据库 CHECK 约束）。
+
+---
+
+### 6.8 Source 源码快照发布（5 个，R-SOURCE，所有者裁定 2026-09-08）
+
+> **设计准则**：站点自身源码的快照按 40 位 git SHA **三段式**发布（begin → put → commit），只保留一份 current；读面 `/api/source*` 与 agent 的 `source_*` 工具只看 current。
+> 正常情况下由 `tools/source-publish/publish.mjs` 随 `dev.ps1 ship` **自动**调用（首次发版在 `compose up` 之后手动 `dev.ps1 source-publish <host> <sha>`），不是人手工具；这里的契约是给排障时看的。
+> 只收文本（UTF-8、无 NUL）；kind 由扩展名 / 文件名派生且是闭集（`markdown / typescript / javascript / python / shell / powershell / sql / json / yaml / toml / css / dockerfile / text`）；`path` 相对、无 `..`、无反斜杠、每段 `[A-Za-z0-9._()[]-]`、≤ 12 段、≤ 300 字符；单文件 ≤ 256 KB、一批 ≤ 512 KB / ≤ 200 个、一个快照 ≤ 2000 个文件（`apps/api/shared/source-pack.ts`）。快照**只来自 git 树**由脚本保证（`docs/security.md` §4 R-SOURCE 补记）。
+
+1. **`source_snapshot_begin`**（写）：按 `sha` 建（或重建）staging 快照，并带整份 manifest。
+   - 入参：`sha`（40 位小写十六进制）、`files[]`（每项 `path` / `sha256`（64 位十六进制）/ `bytes` / `lines`，不含内容；1–2000 项）。
+   - 行为：服务端把 current 快照里 `(path, sha256)` 相同的文件内容直接复制过来；同 sha 重 begin = 清掉上次的 staging 重来；sha 已是 current 时什么都不动。
+   - 返回：`{ sha, total, reused, missing[], alreadyCurrent, status }`（`missing` 是还缺内容的路径）。
+2. **`source_files_put`**（写）：给 staging 快照补一批内容。
+   - 入参：`sha`、`files[]`（每项 `path` / `content`；1–200 项，内容总量 ≤ 512 KB）。
+   - 规则：只收 manifest 里的 path；服务端现算 sha256 必须等于 manifest 声明值，否则**整批拒**（事务回滚）；同文件重传（哈希相同）幂等。
+   - 返回：`{ sha, stored, pending }`（`pending` = 还缺内容的文件数，为 0 才能 commit）。
+3. **`source_snapshot_commit`**（写）：把 staging 翻成 current。
+   - 入参：`sha`。
+   - 行为：一个事务里核 manifest 每一项都有内容且行数相符 → 现 current 退下 → 本 sha 置 current → **删除其余全部快照**；任一不符整体回滚、current 不变，并点名缺哪些文件；sha 本来就是 current 时回 `unchanged`。
+   - 返回：`{ sha, fileCount, totalBytes, publishedAt, replaced, unchanged, status, url }`。
+4. **`source_snapshots_list`**（只读）：列出 current 与残留的 staging（`sha` / `shortSha` / `status` / `fileCount` / `totalBytes` / `pending` / `createdAt` / `publishedAt`）。
+5. **`source_snapshot_delete`**（写）：删除一份**非 current** 的快照（残留的 staging）；删 current 会拒绝——站点上要换内容就发下一版。
+   - 入参：`sha`。
+
+审计：四个写工具（`begin` / `put` / `commit` / `delete`）每次调用一行 `mcp_audit`（`summary` 只有 sha 前 7 位与文件数，不记正文）；`put` 对每个文件核 sha256 / bytes / lines 三个事实，`commit` 从实际文件行重算 `totalBytes`。
 
 ---
 

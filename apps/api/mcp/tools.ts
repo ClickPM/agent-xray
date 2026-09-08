@@ -41,6 +41,18 @@ import {
   SKILL_NAME_RE,
   SKILL_REPO_RE,
 } from "../shared/skill-pack";
+// 源码快照的形状上限(R-SOURCE);深层规则(路径 / kind / NUL / sha256)在 source-store 调 shared/source-pack
+import {
+  MAX_SOURCE_BATCH_BYTES,
+  MAX_SOURCE_BATCH_FILES,
+  MAX_SOURCE_FILE_BYTES,
+  MAX_SOURCE_FILES,
+  MAX_SOURCE_PATH_LENGTH,
+  SOURCE_FILE_KINDS,
+  SOURCE_SHA_RE,
+  SOURCE_SHA256_RE,
+} from "../shared/source-pack";
+import * as sourceStore from "./source-store";
 
 /**
  * slug 口径必须与 `apps/api/notes/series.ts` 的 SLUG_RE 一字不差。
@@ -972,7 +984,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "列出顶部导航各 tab 的呈现状态",
       description:
-        "站点顶部四格(Runtime / Notes / Skills / About)现在分别露不露。" +
+        "站点顶部五格(Runtime / Notes / Skills / Source / About)现在分别露不露。" +
         "updatedAt 为 null = 这个 tab 从没被配置过(此时按可见处理)。" +
         "**这只是呈现开关**:隐藏的 tab 只是导航条上没有、页面在站点上打不开," +
         "后端 API(/agent/*、/trace/*、/notes/*、/rss.xml)一律照常服务。",
@@ -1000,7 +1012,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         // store 层另有一道同样的判断:绕过 tool 直接调 store 也进不了未知的 key。
         key: z
           .enum(SITE_TAB_KEYS)
-          .describe("runtime = 首页的 Runtime 工作台 / notes = 研习库 / skills = 技能库 / about = About 页"),
+          .describe("runtime = 首页的 Runtime 工作台 / notes = 研习库 / skills = 技能库 / source = 站点源码 / about = About 页"),
         visible: z.boolean().describe("false = 导航条上不出现,且该 tab 的页面在站点上不可达"),
       },
     },
@@ -1301,6 +1313,128 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       write(ctx, "sandbox_config_set", `sandbox_config ${JSON.stringify(args)}`, async () => {
         const row = await store.setSandboxConfig(args);
         return { ...row, updatedAt: toIso(row.updatedAt), status: "saved" };
+      }),
+  );
+
+  // ───────────────────── Source 源码快照(R-SOURCE)─────────────────────
+  //
+  // 五个工具,三段式发布:begin(带 manifest,增量)→ put(分批)→ commit(单事务翻 current)+ list / delete。
+  // 调用方是 tools/source-publish/publish.mjs(随 dev.ps1 ship 自动跑),不是人手 —— 但 description 仍按
+  // 「所有者在 MCP 客户端里读得懂」写,出问题时要能看出卡在哪一段。
+  // 只收文本、kind 闭集、路径规则、单文件 256 KB(所有者裁定 3)在 shared/source-pack.ts;快照只来自 git 树
+  // 由脚本保证(docs/security.md §4 R-SOURCE 补记)。
+
+  const sourceSha = z.string().regex(SOURCE_SHA_RE, "sha 需为 40 位小写十六进制 git SHA").describe("40 位 git SHA(全长)");
+
+  server.registerTool(
+    "source_snapshot_begin",
+    {
+      title: "开始发布一份源码快照(带 manifest)",
+      description:
+        "按 40 位 git SHA 建(或重建)一份 staging 快照,files 是整份 manifest(每个文件的 path / sha256 / bytes / lines,不含内容)。" +
+        "服务端把 current 快照里 (path, sha256) 相同的文件内容直接复制过来,只回「还缺哪些」(missing),脚本再用 source_files_put 分批补。" +
+        "同一个 sha 重 begin = 清掉上次的 staging 重来;sha 已经是 current 时什么都不动(alreadyCurrent)。" +
+        `只收文本文件,种类由扩展名 / 文件名派生且是闭集:${SOURCE_FILE_KINDS.join(" / ")};` +
+        "path 相对、无 ..、不以 / 开头、每段只用 [A-Za-z0-9._()[]-]、至多 12 段。" +
+        `上限 ${MAX_SOURCE_FILES} 个文件、单文件 ${MAX_SOURCE_FILE_BYTES} 字节。` +
+        "正常情况下由 dev.ps1 ship 自动调用,不必手工发。",
+      inputSchema: {
+        sha: sourceSha,
+        files: z
+          .array(
+            z.object({
+              path: z.string().min(1).max(MAX_SOURCE_PATH_LENGTH).describe("仓库根相对路径,如 apps/api/agent/tools.ts"),
+              sha256: z.string().regex(SOURCE_SHA256_RE, "sha256 需为 64 位十六进制").describe("内容(UTF-8 字节)的 sha256"),
+              bytes: z.number().int().min(0).max(MAX_SOURCE_FILE_BYTES),
+              lines: z.number().int().min(0),
+            }),
+          )
+          .min(1)
+          .max(MAX_SOURCE_FILES)
+          .describe("整份 manifest;commit 前每一项都必须有内容"),
+      },
+    },
+    async (args) =>
+      write(ctx, "source_snapshot_begin", `源码快照 ${args.sha.slice(0, 7)} begin(${args.files.length} 个文件)`, async () => {
+        const r = await sourceStore.beginSnapshot(args.sha, args.files);
+        return { ...r, status: r.alreadyCurrent ? "already_current" : "staging" };
+      }),
+  );
+
+  server.registerTool(
+    "source_files_put",
+    {
+      title: "补一批源码文件的内容",
+      description:
+        "给 staging 快照补内容,只收 begin 时 manifest 里声明过的 path;服务端现算 sha256 必须等于 manifest 声明值,否则整批拒。" +
+        `一批最多 ${MAX_SOURCE_BATCH_FILES} 个文件 / ${MAX_SOURCE_BATCH_BYTES} 字节;同一文件重传(哈希相同)是幂等的。` +
+        "返回本批之后还缺内容的文件数 pending,为 0 时才能 commit。",
+      inputSchema: {
+        sha: sourceSha,
+        files: z
+          .array(
+            z.object({
+              path: z.string().min(1).max(MAX_SOURCE_PATH_LENGTH),
+              // 字符数上限只是粗闸(1 字符可占 4 字节);字节数在 checkSourceContent 里精确判
+              content: z.string().max(MAX_SOURCE_FILE_BYTES).describe("原文,UTF-8 文本"),
+            }),
+          )
+          .min(1)
+          .max(MAX_SOURCE_BATCH_FILES),
+      },
+    },
+    async (args) =>
+      write(ctx, "source_files_put", `源码快照 ${args.sha.slice(0, 7)} put ${args.files.length} 个文件`, async () =>
+        sourceStore.putFiles(args.sha, args.files),
+      ),
+  );
+
+  server.registerTool(
+    "source_snapshot_commit",
+    {
+      title: "把 staging 快照翻成 current",
+      description:
+        "一个事务:核 manifest 每一项都有内容 → 现 current 退下 → 本 sha 置 current → 删除其余全部快照(只保留一份)。" +
+        "任一不符整体回滚、current 不变,并说明缺哪些文件。sha 本来就是 current 时回 unchanged。" +
+        "翻过之后 /source 页面与 agent 的 source_* 工具下一次读到的就是这一份。",
+      inputSchema: { sha: sourceSha },
+    },
+    async (args) =>
+      write(ctx, "source_snapshot_commit", `源码快照 ${args.sha.slice(0, 7)} commit`, async () => {
+        const r = await sourceStore.commitSnapshot(args.sha);
+        return { ...r, publishedAt: toIso(r.publishedAt), status: r.unchanged ? "unchanged" : "current", url: "/source" };
+      }),
+  );
+
+  server.registerTool(
+    "source_snapshots_list",
+    {
+      title: "列出源码快照",
+      description: "current 一份 + 可能残留的 staging(中途失败的发布)。pending 是还缺内容的文件数。",
+      inputSchema: {},
+    },
+    async () =>
+      read("source_snapshots_list", async () =>
+        (await sourceStore.listSnapshots()).map((s) => ({
+          ...s,
+          shortSha: s.sha.slice(0, 7),
+          createdAt: toIso(s.createdAt),
+          publishedAt: toIsoOrNull(s.publishedAt),
+        })),
+      ),
+  );
+
+  server.registerTool(
+    "source_snapshot_delete",
+    {
+      title: "删除一份非 current 的快照",
+      description: "只能删残留的 staging;current 不能删(站点上要换内容就发下一版,commit 会自动换掉它)。",
+      inputSchema: { sha: sourceSha },
+    },
+    async (args) =>
+      write(ctx, "source_snapshot_delete", `删源码快照 ${args.sha.slice(0, 7)}`, async () => {
+        await sourceStore.deleteSnapshot(args.sha);
+        return { sha: args.sha, status: "deleted" };
       }),
   );
 }
