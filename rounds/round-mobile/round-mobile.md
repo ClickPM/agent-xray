@@ -153,3 +153,31 @@ chip 骨架在 320 下把整页顶出横滚(346 塞进 288)。**修法不是给�
 
 `dev.ps1 test` 全绿(**api 28 文件 564 用例 + web 21 用例**)、`apps/web` `tsc --noEmit`
 通过(门禁不跑它)、桌面四 tab 零改动实测通过。
+
+## 生产发版(2026-09-08,`be6c074`)
+
+所有者裁定「两件都没问题,打包上生产,我来验收移动端」—— 两件即上面留给裁定的
+**ICP 备案号在移动端的位置**(画板没画,现按定位容器 + Tab Bar 贴其底、备案条在下方照旧可见)
+与**真机流式**(只能靠真机)。当日合并 `main`(`--no-ff`)并发版。
+
+- **改动面**:相对生产在跑的 `d9fefb4`,`apps/api` / `runner/` / `deploy/` / `tools/`
+  **四处零改动**,diff 只有 `apps/web` 38 个文件 + 文档 → **零迁移(15→15)**、
+  部署资产重传同内容未 reload caddy、`.env` 只改 `IMAGE_TAG`(`diff` 核到全文件仅此一行)。
+  api 603 MB 与 runner 269 MB **全缓存命中**,web 359 MB;tar 218.8 MB,`ship` 一次成功。
+- **发版前先跑了一次基线冒烟**,让本轮新增的 7 项判据**全部 FAIL**(manifest 与三枚图标 404、
+  viewport 还是 `initial-scale=1`、无 `theme-color` / `rel=manifest`);发版后同一脚本
+  **33/33 全 PASS**。这组正向对照不是形式:`apps/web/Dockerfile` 的 `COPY /app/public ./public`
+  是 R6 删 `/admin` 时连带删掉的,**缺了不会构建失败** —— 站点照常起、只是图标 404,
+  除了这 7 项判据没有任何东西会报警。
+- **容器复核 22 项 0 失败**(容器随 `up -d` 重建,故照旧全查):bun 1.4.0 / 无真 node /
+  none 档四项隔离 / egress 档三项 / 双向 `403 network_mismatch` / `docker inspect` 六项 /
+  宿主 `xray-egress-filter` enabled+active。
+  两处**脚本自身**的坑记下来:① api 容器里**没有 `curl`**,探 unix socket 要用
+  `bun -e` 的 `fetch(url, { unix })`;② api 容器 `ReadonlyRootfs=true`,
+  `docker compose cp` 进去会被拒(`container rootfs is marked read-only`),只能 `-e` 内联。
+- **生产实测**:移动 390×845 四个 Tab 全部 `body.scrollWidth === innerWidth = 390`、
+  Tab Bar 挂载、About 主题开关在位;桌面 1280×800 导航条可见 h44、左栏 260、右面板 428、
+  **移动壳未挂载**、Tab Bar `display:none` —— 与本轮之前逐项一致。
+- **仍未验**:真机(iOS Safari / 各家 webview)上的流式与手势,交所有者验收。
+
+留证与完整口径见 [`docs/releases.md`](../../docs/releases.md) 的 `be6c074` 行。
