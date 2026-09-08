@@ -389,3 +389,12 @@
       只查字面词 `baseUrl` 而泄的是它的**值**。修法三档待裁定:①阶段文案删掉 host 与 model(改成「已向搜索网关发起请求」);
       ②只保留 model、去掉 host;③给 sanitize 加**值级**白名单(拿当前 provider 配置的 host / modelId 做遮蔽,
       比①贵但能一次覆盖同族通道)。属跨轮次发现,按规矩不当场顺手改 (2026-09-07)
+- [ ] R-SOURCE **`agent/source-tools.test.ts` 与 `agent/sandbox.test.ts` 在同一个测试库里抢 `tool_config`**:前者有一条用例断言
+      「迁移 016 的种子行 `source_list` / `source_read` / `source_search` 默认开」,直接从库里 `SELECT`;而后者的多个用例
+      `DELETE FROM tool_config` 后自己重新种。`encore test` 下两个文件由 vitest 并行跑、共用同一个库,于是这条用例是**竞态**:
+      单跑 `dev.ps1 test agent/source-tools.test.ts` 9/9 全过,整套 `dev.ps1 test` 偶发挂在
+      `expected [] to deeply equal [ Array(3) ]`(2026-09-08 发版前的全套跑就挂了这一条,其余 601 用例与 web 侧 28 用例全绿)。
+      **只是测试缺陷,产品代码与迁移种子都是对的**(生产冒烟第 22 条实测三个工具默认开、agent 端到端跑通)。
+      修法二选一:①这条断言不读库,改读迁移 SQL 文本或 `TOOL_REGISTRY` 的静态口径;②`sandbox.test.ts` 改成只删自己关心的
+      那几行(`DELETE ... WHERE name = ANY($1)`)而不是清空全表 —— ②更贴近「测试之间不互相踩」,但动的是既有文件。
+      按「跨轮次发现的问题不当场顺手改」记这里 (2026-09-08)

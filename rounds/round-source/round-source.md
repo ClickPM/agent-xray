@@ -2,9 +2,11 @@
 
 <!-- 保存为 rounds/round-source/round-source.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**审查收口(五轮,整改后 PASS),已合并 `main`,待所有者裁定发版**(2026-09-08;`5dc7ae8` 设计稿 + 安全补记 → `57e890b` 代码 → `6879a6c` 端到端整改 →
-> `367378d` / `061c92d` / `5bcb36f` / `303b44d` 四轮审查整改)。**发版顺序**:`dev.ps1 build` → `ship agent-xray-prod-deploy` → 服务器 停 / 迁移 016 / 起 →
-> **首次要手动 `dev.ps1 source-publish agent-xray-prod-deploy <sha>`**(旧 api 没有 `source_*` 工具,ship 里那步会跳过)→ 冒烟第 22 条 → `docs/releases.md` 加一行。所有者八条裁定已落(见下),分支 `round-source` 从 `main`(`ee7d7f5`)开出;
+> 状态:**已发版 `54f7356`**(2026-09-08 生产上线,迁移 15 → 16;`5dc7ae8` 设计稿 + 安全补记 → `57e890b` 代码 → `6879a6c` 端到端整改 →
+> `367378d` / `061c92d` / `5bcb36f` / `303b44d` 四轮审查整改 → `bf15daf` 收口 → `54f7356` 合并 `main`)。
+> **发版实际走的顺序**(与计划一致):`dev.ps1 build` → `ship agent-xray-prod-deploy 54f7356` → 服务器 停 api/web / `up -d --wait postgres` / `migrate.sh`(016)/ `up -d` →
+> **手动 `dev.ps1 source-publish agent-xray-prod-deploy 54f7356`**(旧 api 没有 `source_*` 工具,ship 里那步按设计跳过并让整条命令以非零码退出 —— 判据看远端三个镜像是否齐)→
+> 冒烟第 22 条五项全过 + HTTP/MCP 29 项 → `docs/releases.md` 已加一行(留证与两条附带现象都记在那里)。所有者八条裁定已落(见下),分支 `round-source` 从 `main`(`ee7d7f5`)开出;
 > 给 Claude Design 的提示词在 [`design-prompt.md`](design-prompt.md)。**设计稿已于 2026-09-08 并入 `design/`**
 > (`2n` / `2o` / `2p` 放新文件 `Agent X-Ray Source.dc.html`,`Workbench` 20 块导航改五格,原型加两屏;四项判据与合并口径记在 `design/README.md`),
 > 与 R-TOOLS / R-SKILLS / R-PERF 同一顺序、**不是**规则 8 的例外。`docs/security.md` 的 R-SOURCE 补记(§1 第 2 层 + §4)已按规则 9 先于代码写入。
