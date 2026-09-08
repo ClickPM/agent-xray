@@ -237,8 +237,19 @@ export function MobileSessionDrawer({
                       gap: 10,
                       padding: "0 16px",
                       // 选中行换品牌色淡底:桌面的 #e8e8e8 在 iOS 白卡上读不出选中
-                      // (画板 4j:保留语义、换值)
-                      background: s.id === selected ? "rgba(37,99,235,0.06)" : "var(--bg)",
+                      // (画板 4j:保留语义、换值)。
+                      //
+                      // **这一层必须不透明** —— 删除按钮是常驻的绝对定位元素,靠本行盖住它、
+                      // 靠 translateX 把它露出来。直接写 `rgba(37,99,235,0.06)` 会 94% 透光:
+                      // 选中的那一行**没划开也露着红色删除按钮**,行内的时间与 chevron 正好压在
+                      // 「删除」二字上,且 `elementFromPoint` 打在按钮中心命中的是时间 span 而不是按钮
+                      // (2026-09-08 所有者在微信 webview 上报障,合成 DOM 复刻确认)。未选中行用
+                      // 不透明的 var(--bg),所以只有选中行会犯 —— 本机验收时选中行恰好没进视野。
+                      // 用 linear-gradient 叠一层实色而不是硬写混合后的色值:渲染结果与原来
+                      // 一字不差,且明暗两套主题各自跟着 --bg 走。
+                      background: s.id === selected
+                        ? "linear-gradient(rgba(37,99,235,0.06), rgba(37,99,235,0.06)), var(--bg)"
+                        : "var(--bg)",
                       transform: isSwiped ? "translateX(-84px)" : "translateX(0)",
                       transition: "transform .2s ease",
                     }}
