@@ -147,6 +147,16 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       把 Timeline 做成 iOS 列表这个站就不是 X 光机了。**移动端不新增任何产品功能**,新增的只有交互原语
       (Sheet / 左滑 / 下拉刷新 / 大标题收起 / 键盘避让)与 `4u` 的载体适配态。
       提示词 `rounds/round-mobile/design-prompt.md` 与 `impl-prompt.md`;实现轮次:ROUNDS.md R-MOBILE。
+    - **2026-09-08 修订(R-SOURCE)**:所有者裁定新增**第五个顶部 tab「Source」**(站点自身源码的只读浏览,页面标 git SHA)并让 agent **读站点源码**
+      (三个纯函数组只读工具 `source_list` / `source_read` / `source_search`,默认开)。与 R-TOOLS / R-SKILLS / R-PERF 同一顺序、**不是**例外:
+      设计稿先扩(桌面 `2n` 首页 README 态 / `2o` 代码文件态 / `2p` 加载态,放**新文件** `Agent X-Ray Source.dc.html`,因为 `Workbench` 离 256 KiB 截断线只剩 13 KB;
+      既有 20 块导航改五格;原型加两屏),并入 `design/` 之后才开 `round-source`。八条裁定:tab 顺序 `Runtime · Notes · Skills · Source · About`;
+      收录含 `rounds/`、不含 lockfile(闭集在 `tools/source-publish/`,改 = 发版);单文件 256 KB;三工具分开、默认开;
+      **快照随每次生产发版发布,从源头保证展示 = 运行**(`dev.ps1 ship` 自动挂,不手动;不比对运行 SHA、不画「快照落后」态);
+      不做站内搜索 / zip / 行号深链;**先桌面**(移动 Tab Bar 仍四格、不做 Source 页,agent 工具与视口无关,记 BACKLOG)。
+      源码像 Notes / Skills 一样**当内容发布进 Postgres**(镜像里没有源码、api 不读文件系统),写面 MCP 五个 `source_*`(46 → 51,规则 13),
+      发布脚本只从 `git ls-tree <sha>` 取文件;仓库本就是公开 MIT,agent 侧新增的只是「读公开源码」,新表按第 2 层既定口径显式 `GRANT SELECT` 给 `agent_ro`
+      (`docs/security.md` R-SOURCE 补记是开代码的第一步)。提示词 `rounds/round-source/design-prompt.md`,拆解 `rounds/round-source/round-source.md`。
     - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用;**桌面**新画板从 `2n` 顺延
       (`1a–1g`、`2a–2m` 已用),**移动端**占 `4x` 段(`4a`–`4u` 已用,从 `4v` 顺延)。
     - **`design/` 的单文件有 256 KiB 硬上限**(DesignSync `get_file`,2026-09-07 实测撞线):
