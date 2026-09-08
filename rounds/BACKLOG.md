@@ -277,6 +277,18 @@
 
 ## 功能提案(需所有者裁定)
 
+- [x] **Ask why 做实 / 卡片 ↔ Timeline 定位 / Notes 章节 → Runtime 入口**(所有者 2026-09-08 从下一阶段分级方案里圈定「1-A、4、5 合成一轮」)——**已裁定「做」,落为 R-CROSSLINK**
+      (任务卡 [`rounds/round-crosslink/round-crosslink.md`](round-crosslink/round-crosslink.md),画板提示词同目录 `design-prompt.md`;文档就绪、设计稿待交付)。
+      Ask why 取预填(1-A),不做服务端拼上下文(1-B)与独立解释器(1-C);三件事共用「预填、永不自动发送」一个原语 (2026-09-08)
+- [ ] R-CROSSLINK 备选 **章节级「示例提问」字段**(`notes_chapter_upsert` 加 `tryPrompt` + 迁移加列 + `docs/mcp.md`),由所有者逐章写更好的提问。
+      本轮用通用模板不加字段;要做另裁定 (2026-09-08)
+- [x] **会话区信息卡片(所有者原话「UI 组件工具」)**(所有者 2026-09-08 圈定「2-A」)——**已裁定「做」,落为 R-CARDS**
+      (任务卡 [`rounds/round-cards/round-cards.md`](round-cards/round-cards.md),画板提示词同目录;文档就绪、设计稿待交付)。内容级围栏块,不是 pi 工具 (2026-09-08)
+- [ ] R-CARDS 备选 **工具级 `render_card`**(schema 强校验、模型收得到校验错误、Tools 面板可见、轨迹可见;代价 = `tool_end` 帧与 `payload` 加结构字段 + `2l` 折叠规则加例外)
+      与 **Notes 侧开卡片**(Notes 正文契约是标准 markdown,开了就是契约变更)。两条都要另裁定 (2026-09-08)
+- [ ] **会话分享链接(只读回放)**:把某次会话的对话 + 轨迹以只读链接分享出去(「分享这张 X 光片」)。访客隔离(R-VISITOR)是刻意建的,分享要走显式 opt-in token、
+      有效期、可撤销,且分享页不带输入框。属新功能、要画板,大;下一阶段分级方案里排在三轮之后待裁定 (2026-09-08)
+
 - [x] **给 agent 加「使用 skills:注入 + 沙箱运行 Python 脚本」的能力**(所有者提出并于同日裁定,2026-09-03)——**已裁定「做」,落为 R-SKILLS-2**
       (`round-skills` 的 2.0 迭代;研究与七条裁定 [`rounds/round-skills/research.md`](round-skills/research.md),任务卡 [`round-skills-2.md`](round-skills/round-skills-2.md))。
       七条:做;规则 9「一次性容器」→「独立容器可常驻 + 一次性进程」;第四组「沙箱执行组」先改画板 1f/1g;`network_mode: none` + unix socket(spike 不通停下重估);
@@ -299,6 +311,7 @@
 
 - [ ] R-TOOLCARDS **卡片 ↔ Timeline 互相定位**:两边都有 `toolCallId`(`messages.payload.toolCalls[].toolCallId` 与轨迹的 `tool_execution_*`),
       点卡片高亮右栏对应行技术上现成;画板没画,等裁定 (2026-09-03)
+      → **2026-09-08 所有者裁定「做」,落为 R-CROSSLINK**(双向:卡 → 行、行 → 卡;已定位态不新造;对不上不渲染)。任务卡 [`rounds/round-crosslink/round-crosslink.md`](round-crosslink/round-crosslink.md);发版后关闭本条
 - [ ] R-TOOLCARDS **`session_rename` 的卡片是否隐藏**:它也是一次工具调用,会以一张卡出现在首轮里(与 Timeline 的 `tool_call · session_rename` 对得上)。
       默认显示(透明是卖点);裁定隐藏再改 (2026-09-03)
 - [ ] R-TOOLCARDS **会话区是否显示「思考」块**:pi-web 有;本站内核透明度靠右栏,画板 2l/2m 明确不放,默认不做 (2026-09-03)
@@ -375,6 +388,7 @@
       与规则 8 两次裁定(R-TOOLS「provider 与 model 名公开即泄配置面」、R-TOOLCARDS「会话区不显示模型名 / provider 名」)口径相反。
       2026-09-07 给系统提示加了「不透露底层模型」条款,但这条通道不归提示词管。修法是派生字段只留 `source`、或把 id / name 换成占位
       (`events.test.ts` 的白名单用例要跟);轨迹面板「像 DevTools」的定位要不要保留这一项属所有者裁定,不当场顺手改 (2026-09-07)
+      → **2026-09-08 所有者裁定「修」,落为 R-LEAK**(派生项整个删掉,`data` 只剩 `{type, source}`;与下一条同轮)。任务卡 [`rounds/round-leak/round-leak.md`](round-leak/round-leak.md);发版后关闭本条
 - [ ] 修补 2026-09-07 **系统提示的【时间基准】按轮刷新**:这一行定格在会话创建时(pi 的 resource loader 只在 reload 时算一次
       override),持续活跃的会话不回收、它会旧几小时(codex 复审第 2 轮 P2)。措辞已改成「真正的现在不早于它、晚于它的先查证」兜住;
       精确做法是在 before_agent_start 注入时每轮重写(xray-skills 注入器已经在那个事件上追加 systemPrompt,可顺路),属机制,等所有者裁定 (2026-09-07)
@@ -389,6 +403,7 @@
       只查字面词 `baseUrl` 而泄的是它的**值**。修法三档待裁定:①阶段文案删掉 host 与 model(改成「已向搜索网关发起请求」);
       ②只保留 model、去掉 host;③给 sanitize 加**值级**白名单(拿当前 provider 配置的 host / modelId 做遮蔽,
       比①贵但能一次覆盖同族通道)。属跨轮次发现,按规矩不当场顺手改 (2026-09-07)
+      → **2026-09-08 所有者裁定「修」,落为 R-LEAK,取 ①**(固定文案「已向搜索网关发起请求」;③ 是新机制,留作备选);同轮把冒烟第 8 条改成值级、同族排查列为交付项。发版后关闭本条
 - [ ] R-SOURCE **`agent/source-tools.test.ts` 与 `agent/sandbox.test.ts` 在同一个测试库里抢 `tool_config`**:前者有一条用例断言
       「迁移 016 的种子行 `source_list` / `source_read` / `source_search` 默认开」,直接从库里 `SELECT`;而后者的多个用例
       `DELETE FROM tool_config` 后自己重新种。`encore test` 下两个文件由 vitest 并行跑、共用同一个库,于是这条用例是**竞态**:

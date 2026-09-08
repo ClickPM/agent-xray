@@ -160,8 +160,25 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       源码像 Notes / Skills 一样**当内容发布进 Postgres**(镜像里没有源码、api 不读文件系统),写面 MCP 五个 `source_*`(46 → 51,规则 13),
       发布脚本只从 `git ls-tree <sha>` 取文件;仓库本就是公开 MIT,agent 侧新增的只是「读公开源码」,新表按第 2 层既定口径显式 `GRANT SELECT` 给 `agent_ro`
       (`docs/security.md` R-SOURCE 补记是开代码的第一步)。提示词 `rounds/round-source/design-prompt.md`,拆解 `rounds/round-source/round-source.md`。
-    - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用;**桌面**新画板从 `2q` 顺延
-      (`1a–1g`、`2a–2p` 已用;`2n–2p` 在单独的 `Agent X-Ray Source.dc.html` 里),**移动端**占 `4x` 段(`4a`–`4u` 已用,从 `4v` 顺延)。
+    - **2026-09-08 修订(R-CROSSLINK,文档就绪、设计稿待交付)**:所有者裁定把画板 `1b` / `4f` 上一直是死按钮的 `Ask why ↗` 做实,并加两条联动 ——
+      会话区工具卡 ↔ Timeline 行**双向定位**(BACKLOG R-TOOLCARDS 那条)、Notes 章节页 → Runtime 的「在 Runtime 里聊这一章」入口。三件事共用**一个原语**:
+      「把一句预设文本放进输入框,永不自动发送」。Ask why 取 **1-A 预填**(不做服务端拼上下文、不做独立解释器;答案就是一轮普通对话,非工具事件靠
+      R-SOURCE 的 `source_*` 读源码解释);已定位态不新造(既有展开态 + 滚入视野),对不上不渲染;Notes 入口用通用模板经 `/?ask=`,零 MCP 变动、零迁移。
+      与 R-TOOLS / R-PERF / R-TOOLCARDS / R-SOURCE 同一顺序、**不是**例外:桌面 `2q` / `2r` 放**新文件** `Agent X-Ray Crosslink.dc.html`(`Workbench` 离上限只剩 11 KB),
+      移动 `4v` / `4w` 追加进 `- Runtime`、`4x` 追加进 `- Notes Skills About`,`1b` / `4f` 只加注释;并入 `design/` 之后才开 `round-crosslink`。
+      **零后端机制**(api 侧只有 `runtime.ts` 一句追问条款);`docs/security.md` §0 第 10 条(经链接预填的诱导)按规则 9 先于代码写入。
+      提示词 `rounds/round-crosslink/design-prompt.md`,拆解 `rounds/round-crosslink/round-crosslink.md`。
+    - **2026-09-08 修订(R-CARDS,文档就绪、设计稿待交付)**:所有者裁定让 agent 在回复里嵌**信息卡片**(所有者原话「UI 组件工具」),形态取 **2-A 内容级**:
+      模型在正文里写 ` ```xray-card ` + JSON,`Markdown.tsx` 识别 `language-xray-card` 画卡;**不是 pi 工具**(工具级要给 `tool_end` 帧与 `payload` 加结构字段、
+      还得给 `2l` 折叠规则加例外)。六种 `kind` 闭集(kv / table / list / stat / compare / tabs);交互**只允许声明式**(tabs / 折叠 / 排序 / 单选),
+      动作按钮唯一动作 = R-CROSSLINK 的预填;所有值纯文本、上限闭合、任一不符整卡回落成代码块;流式期间围栏未闭合先画骨架;**只在会话区开**(Notes 不开);
+      每次回复最多两张。已认代价:坏 JSON 时访客看到裸 JSON 代码块;Timeline 里没有「画了一张卡」的事件。同一顺序、**不是**例外:桌面 `2s` / `2t` 放**新文件**
+      `Agent X-Ray Cards.dc.html`,移动 `4y` / `4z` 追加进 `- Runtime`;并入 `design/` 之后才开 `round-cards`。`docs/security.md` §0 第 11 条(模型输出渲染成 UI 组件)
+      按规则 9 先于代码写入。提示词 `rounds/round-cards/design-prompt.md`,拆解 `rounds/round-cards/round-cards.md`。
+    - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用;**桌面**新画板从 `2u` 顺延
+      (`1a–1g`、`2a–2p` 已用;`2n–2p` 在单独的 `Agent X-Ray Source.dc.html` 里;**`2q–2r` 预留给 R-CROSSLINK、`2s–2t` 预留给 R-CARDS**,各放新文件,
+      两轮若调换顺序编号也不调换),**移动端**占 `4x` 段(`4a`–`4u` 已用;**`4v–4x` 预留给 R-CROSSLINK、`4y–4z` 预留给 R-CARDS**;`4z` 之后的号段由所有者定,
+      建议移动端继续占 `5x` 段从 `5a` 起)。
     - **`design/` 的单文件有 256 KiB 硬上限**(DesignSync `get_file`,2026-09-07 实测撞线):
       超了**静默截断、不报错** —— 表现是文件正好 262,144 字节、`</x-dc>` 与 `</html>` 都没有、`<div>` 开合不配平。
       移动端 21 块画板首次拉稿就是这么废掉的,所以才拆成两份文件。**桌面 `Agent Runtime Workbench.dc.html`

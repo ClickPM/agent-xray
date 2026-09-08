@@ -32,6 +32,16 @@
 9. **第三方资源引用进对话框**(R-WEBFETCH 补)——抓到的 markdown 若含 `![](https://第三方)`,模型抄进回复,`Markdown.tsx` 的 `img` 不限 src →
    访客浏览器去拉第三方图 = 访客 IP 泄给第三方 + 跟踪像素。缓解:抽取时去图片 + 提示词「不要在回复里嵌入抓到的图片」;前端不改
 
+10. **经链接预填的诱导**(R-CROSSLINK 补,2026-09-08 所有者裁定,未落地)——Notes 章节页的「在 Runtime 里聊这一章」入口靠 `/?ask=<text>` 把一句话放进输入框,
+    于是任何人都能构造一条链接让访客的输入框里出现任意文本(prompt injection 换了个入口)。**兜底在「不自动发送」**:预填只落进输入框、访客看得见、
+    发不发由访客的按钮决定;读一次即清(`history.replaceState`)、长度上限 1000(超出整段丢弃、不截断)、去控制字符、不写任何存储。
+    Ask why 与卡片动作按钮走同一原语、同一约束。发出去之后它就是一条普通访客消息,受第 1 层能力边界约束,与威胁 1 无异
+11. **模型输出渲染成 UI 组件**(R-CARDS 补,2026-09-08 所有者裁定,未落地)——会话区把回复里的 ` ```xray-card ` 围栏块渲染成信息卡片,
+    模型输出第一次绕过 markdown 渲染器的既有路径直接变成 DOM 结构。**兜底在闭集**:JSON → 字段白名单 → React 元素,所有值当纯文本(React 转义),
+    `kind` 六种闭集、行 / 列 / 字数 / 嵌套深度全部有上界,任一不符整卡回落成普通代码块;链接口径与 markdown 相同(只收 `http(s)` 与站内相对路径、带 `rel`),
+    v1 不收图片;交互只有 tabs / 折叠 / 排序 / 单选四种本地状态,动作按钮的唯一动作是第 10 条的预填;**没有** `dangerouslySetInnerHTML`、没有表达式求值、
+    没有外部资源。它不是 pi 工具,服务端不碰围栏(`content` 原样落库),Notes / Skills / Source 的渲染器不开这个开关
+
 ## 1. 沙箱化工具执行环境(四层)
 
 pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等插件),隔离目标:**用户不能通过 pi 操作服务器的任何设置**。
@@ -93,7 +103,7 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
    一律拒绝且**不为其调用任何工具** —— 拒绝的同时去搜 / 去画 / 去跑脚本等于替对方烧所有者的额度与凭据)。
    **工具全关的会话也送达**(原先零工具的提示词只有「没有任何可用工具」一句,没有任何注入防御)。
    定位不变:提示词是软层,能力边界(第 1 层)才是可证明的兜底;`model_select` 事件的派生字段仍把 provider / model id
-   送进轨迹流,那是另一条通道,记 BACKLOG 等裁定
+   送进轨迹流,那是另一条通道 —— **2026-09-08 所有者裁定「修」,落为 R-LEAK**(§2 R-LEAK 补记;同轮一并修 `web_search` 阶段文案那条)
 
    **2026-09-07 二次补记(时间基准与「先搜再答」,主模型换 Gemini 系后的修补)**:底座加第四段【时间基准】——
    会话开始的站点本地时间(精确到分,「开始于」措辞在整个会话里都成立)+「记忆里还没到的日期按已到来处理、不以
@@ -387,6 +397,20 @@ R-USAGE 补记(2026-09-04,所有者裁定;规则 9「先改文档」—— 落�
 反过来的话成功路径上也有竞态窗口 —— 访客看到顶栏更新后立刻刷新,`GET /agent/sessions/:id`
 会读到上一轮的库值、数字当着面回退。落库失败时帧仍照发,此时帧比库多一轮,
 下次打开会话回到库内值;**不为这个偏差新增补偿机制**。
+
+R-LEAK 补记(2026-09-08,所有者裁定「修」;规则 9「先改文档」—— 落点:`apps/api/agent/events.ts` / `websearch.ts`;任务卡 `rounds/round-leak/round-leak.md`,文档就绪、未开工):
+**provider 名 / model id / model name / 搜索网关 host 不进轨迹流**,与 R-TOOLS「不公开配置面」、R-TOOLCARDS「会话区不显示模型名」是同一口径的第三处落点 ——
+此前只管住了 `/agent/ask` 与 Tools 目录,`/trace/stream` 漏了两条通道(BACKLOG 2026-09-07 两条):
+
+- **派生字段**:`EVENT_DERIVED.model_select` 经 `summarizeModel` 把 `{provider, id, name}` 并回白名单之外,随流推出并落库。修法是删掉派生项,
+  `model_select` 的 `data` 只剩白名单 `{type, source}`(Timeline 仍有这一行,详情不可展开是既有行为)。
+- **工具阶段文案**:`websearch.ts` 的 `request` 阶段把 `hostname(cfg.baseUrl)` 与 `cfg.modelId` 拼进 `partialResultPreview`。修法是固定文案「已向搜索网关发起请求」
+  (BACKLOG 三档取 ①;② 保留 model 名与两次裁定相反;③ 值级 sanitize 是新机制,非阻塞性 findings 下不许,留作备选)。
+- **判据改成值级**:`docs/deploy-environments.md` 冒烟第 8 条原来只查字面词 `baseUrl`,而泄的是它的**值**;改为拿当前 provider 配置的 host 与 modelId
+  去两条流的原始字节里 grep,`events.test.ts` / `websearch.test.ts` 与 faux e2e 各钉一条同样的值级断言。
+- **同族排查是交付项**:`agent/` 下所有进 `onUpdate` / `progress` / 事件 `data` / 工具结果的字符串模板逐个核(至少 `websearch.ts` 四个 phase、
+  `imagegen.ts` 的 `ImageGenPhase`、`skill-runner.ts` 失败文案、`tools.ts` 固定文案、`events.ts` 其余派生项),清单回填任务卡。
+- **存量不回填**:既有 `trace_events` 行随 3 天保留期清掉(§6 R-VISITOR);发版后 3 天内旧会话回放仍见旧值,所有者已知。
 
 ## 3. 凭据管理
 
