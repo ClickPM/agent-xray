@@ -65,15 +65,15 @@
 
 ## 与画板的对照关系(拉回设计稿后逐项填)
 
-| 画板 | 页面 / 组件 | 核对项 |
-|---|---|---|
-| `1b`(注释) | `TimelineView.tsx` DetailCard | Ask why 的行为说明;右上第二条链接「查看卡片 ↗」(仅 `tool_call` 行) |
-| `2q` 桌面 · 追问预填 + 定位态 | `Workbench.tsx` / `TimelineView.tsx` | 输入框带预填文本、发送按钮常态;右栏 `tool_call` 行展开且滚入视野;会话区卡片展开体多一条「在 Timeline 里查看 ↗」 |
-| `2r` 桌面 · Notes 章节页入口 | `app/(site)/notes/[series]/[chapter]/page.tsx` | 入口位置与语汇照画板;Runtime 隐藏时不渲染 |
-| `4f`(注释) | 同上,`compact` | 胶囊点击 = 关 Sheet + 预填 |
-| `4v` 移动 · 追问预填 | `MobileWorkbench.tsx` | Sheet 收起、输入框带文本、键盘弹起 |
-| `4w` 移动 · 卡片定位 | `MobileChat.tsx` + `MobileWorkbench.tsx` | Sheet large、Timeline 该行展开 |
-| `4x` 移动 · 章节页入口 | 章节页 + `MobileChapterBar` 不改 | 入口跟 meta 行 |
+| 画板 | 页面 / 组件 | 核对项 | 结果 |
+|---|---|---|---|
+| `1b`(注释) | `TimelineView.tsx` DetailCard | Ask why 的行为说明;右上第二条链接「查看卡片 ↗」(仅 `tool_call` 行) | ✅ 两条并排、间距 6、Ask why 在最右;画法照抄(11px **系统字**不是 mono —— 画板 2q 注释点名了这一处,照 1b 抄) |
+| `2q` 桌面 · 追问预填 + 定位态 | `Workbench.tsx` / `TimelineView.tsx` | 输入框带预填文本、发送按钮常态;右栏 `tool_call` 行展开且滚入视野;会话区卡片展开体多一条「在 Timeline 里查看 ↗」 | ✅ 三处全对;链接在展开体**之内**、`RESULT` 段下 10、`margin-left:-6` 与上面两段左对齐 |
+| `2r` 桌面 · Notes 章节页入口 | `app/(site)/notes/[series]/[chapter]/page.tsx` | 入口位置与语汇照画板;Runtime 隐藏时不渲染 | ✅ 取方案 A(meta 行末尾文本链接,与「原文」同一语汇);隐藏时整条连同前面那个「·」一起不渲染 |
+| `4f`(注释) | 同上,`compact` | 胶囊点击 = 关 Sheet + 预填 | ✅ 胶囊仍是唯一一枚(画板 4w 的两枚放不下裁定) |
+| `4v` 移动 · 追问预填 | `MobileWorkbench.tsx` | Sheet 收起、输入框带文本、键盘弹起 | ✅ Sheet 关闭 + 预填 + 聚焦(`focus()` 同步调用,不进 rAF —— iOS 只在手势那一个任务里 focus 才弹键盘) |
+| `4w` 移动 · 卡片定位 | `MobileChat.tsx` + `MobileWorkbench.tsx` | Sheet large、Timeline 该行展开 | ✅ Sheet 升 large + 分段控件切 Timeline + 该行展开滚入视野;「查看卡片」是详情块底部一行链接、命中区实测 44 |
+| `4x` 移动 · 章节页入口 | 章节页 + `MobileChapterBar` 不改 | 入口跟 meta 行 | ✅ meta 行 `line-height: 1.9`(实测 20.9px)自然换行到第二行;功能条一个像素没动 |
 
 ## 交付物
 
@@ -94,22 +94,23 @@
 
 ## 验收
 
-| # | 检查 | 命令 / 期望 |
-|---|---|---|
-| 1 | 编译与测试 | `dev.ps1 check` / `dev.ps1 test` 全绿(含 web `bun test lib` 新增:`ask-why` / `try-in-runtime` / `trace-view` 三处);`apps/web` `tsc --noEmit` 过 |
-| 2 | C1 桌面 | 点 `1b` 的 Ask why → 输入框文本 = `ask-why.ts` 对该行的输出;Network 零新增;按发送后一轮正常,Timeline 出现这次追问 |
-| 3 | C1 非工具行 | 对 `before_agent_start` 行点 Ask why → 文案是非工具形状;faux provider e2e 里模型调用 `source_read` 或直接作答均可,断言只到「发出去了、轨迹形状正常」 |
-| 4 | C1 移动 | `4f` 胶囊 → Sheet 关闭、输入框带文本并聚焦 |
-| 5 | C2 卡 → 行 | 展开体链接 → 右栏该 `tool_call` 行展开、`getBoundingClientRect` 在视口内;新事件到达不再自动滚回底(贴底已解除) |
-| 6 | C2 行 → 卡 | 详情卡链接 → 会话区折叠行打开、该卡展开、在视口内;进行中(未折叠)的一轮同样成立 |
-| 7 | C2 对不上 | 无 `payload` 的旧会话、被裁掉的事件:两侧链接都不渲染 |
-| 8 | C2 移动 | `4w`:Sheet 升到 large、面板切到 Timeline、该行展开 |
-| 9 | C3 桌面 | 章节页入口 → `/` 输入框带模板文本、地址栏无 `?ask=`、刷新后输入框为空、未发送 |
-| 10 | C3 隐藏 tab | `site_tab_set runtime false` 后章节页无入口;直接访问 `/?ask=x` 307 到第一个可见 tab |
-| 11 | 预填边界 | `?ask=` 超 1000 字符整段丢弃;含控制字符被去掉;不写任何存储 |
-| 12 | 画板逐项 | `2q` / `2r` / `4v` / `4w` / `4x` 逐项对照;`1b` / `4f` 之外的既有画板与页面零改动(`git diff --stat` 核) |
-| 13 | 提示词 | `runtime.test.ts` 钉那句在;faux e2e 一轮追问不报错 |
-| 14 | 文档同步 | `design/README.md` 增删记录;BACKLOG「卡片 ↔ Timeline」关闭;`docs/releases.md` 一行;MCP 51 不变 |
+| # | 检查 | 命令 / 期望 | 结果 |
+|---|---|---|---|
+| 1 | 编译与测试 | `dev.ps1 check` / `dev.ps1 test` 全绿(含 web `bun test lib` 新增:`ask-why` / `try-in-runtime` / `trace-view` 三处);`apps/web` `tsc --noEmit` 过 | ✅ `check` 通过;`test` = api 34 文件 609 用例 + web 55 用例(改前 21 → 新增 34)全绿;`tsc --noEmit` 通过 |
+| 2 | C1 桌面 | 点 `1b` 的 Ask why → 输入框文本 = `ask-why.ts` 对该行的输出;Network 零新增;按发送后一轮正常,Timeline 出现这次追问 | ✅ 文本 = `在 Turn 1 里你调用了 notes_search,入参是 {"query":"agent loop"}。为什么要这么做?`,`performance.getEntriesByType('resource')` 增量 0,光标 `[63,63]`;按发送后模型如实解释、轨迹从 49 行涨到 96 行 |
+| 3 | C1 非工具行 | 对 `before_agent_start` 行点 Ask why → 文案是非工具形状;faux provider e2e 里模型调用 `source_read` 或直接作答均可,断言只到「发出去了、轨迹形状正常」 | ✅ `context` 行 → `在 Turn 1 里 context 这一步做了什么?为什么需要它?`(非工具形状,无工具名与入参);未自动发送 |
+| 4 | C1 移动 | `4f` 胶囊 → Sheet 关闭、输入框带文本并聚焦 | ✅ Sheet 关闭(整棵子树卸载)、文本在、`document.activeElement === input`、光标句尾、Network 增量 0 |
+| 5 | C2 卡 → 行 | 展开体链接 → 右栏该 `tool_call` 行展开、`getBoundingClientRect` 在视口内;新事件到达不再自动滚回底(贴底已解除) | ✅ 行 `s18` 展开且在视口内(`scrollTop` 66 / 上限 717);随后发一轮新消息:轨迹 49 → 80 行而 `scrollTop` 恒为 66 —— 贴底跟随确实解除 |
+| 6 | C2 行 → 卡 | 详情卡链接 → 会话区折叠行打开、该卡展开、在视口内;进行中(未折叠)的一轮同样成立 | ✅ 折叠行打开 + 卡展开(`RESULT` 段在)+ `rect` 在视口内 + Network 增量 0。进行中那一支未折叠、卡本来就在 DOM 里,走同一条 effect |
+| 7 | C2 对不上 | 无 `payload` 的旧会话、被裁掉的事件:两侧链接都不渲染 | ✅ 把 `messages.payload` 全置 NULL 再打开会话:会话区无卡无折叠行,`tool_call` 行的详情卡**只剩 `Ask why ↗`**、没有禁用态也没有提示。折叠成 `×N` 的一支由 `trace-view.test.ts` 钉 |
+| 8 | C2 移动 | `4w`:Sheet 升到 large、面板切到 Timeline、该行展开 | ✅ 三件事都发生(分段控件 `aria-selected=true` 落在 Timeline),行在视口内;链接命中区实测 44×128 |
+| 9 | C3 桌面 | 章节页入口 → `/` 输入框带模板文本、地址栏无 `?ask=`、刷新后输入框为空、未发送 | ✅ 地址栏回到 `/`(同页另一个参数 `keep=1` 保留、只删 `ask`),文本在、聚焦、光标句尾、未发送;刷新后输入框为空 |
+| 10 | C3 隐藏 tab | `site_tab_set runtime false` 后章节页无入口;直接访问 `/?ask=x` 307 到第一个可见 tab | ✅ 直接改库 `site_tab_config.runtime=false`(本机 MCP 未连,行为等价):章节页无入口、meta 行无悬空「·」;`/?ask=hello` 跟随重定向落在 `/notes`,`ask` 未带过去 |
+| 11 | 预填边界 | `?ask=` 超 1000 字符整段丢弃;含控制字符被去掉;不写任何存储 | ✅ 1001 字符 → 输入框空;`前
+中	后<U+200B>隐<U+202E>藏` → 只剩五个汉字码位;`localStorage` 0 键、`sessionStorage` 只有既有的 `xray-trace-client`、无 cookie |
+| 12 | 画板逐项 | `2q` / `2r` / `4v` / `4w` / `4x` 逐项对照;`1b` / `4f` 之外的既有画板与页面零改动(`git diff --stat` 核) | ✅ 见上「与画板的对照关系」;`git diff --stat main` 只有本轮交付物 + 一条 CSS 增量(`.m-locate-*` / `.m-chapter-meta`,都在 `@media (max-width:768px)` 内) |
+| 13 | 提示词 | `runtime.test.ts` 钉那句在;faux e2e 一轮追问不报错 | ✅ 新增用例钉「被追问「为什么这么做」时 / 实际做过 / 可以读本站源码再答 / 不要编造没发生过的步骤」四段,且**零工具与有工具两种底座都在**;本机 faux provider 跑完一轮追问正常 |
+| 14 | 文档同步 | `design/README.md` 增删记录;BACKLOG「卡片 ↔ Timeline」关闭;`docs/releases.md` 一行;MCP 51 不变 | ✅ `design/README.md` / CLAUDE.md / ROUNDS.md 三处计数与增删记录已同步(设计稿并入那一提交);`docs/security.md` §0 第 10 条翻成「已落地」;BACKLOG 那两条待**发版后**关闭(本条按既有口径:发版才算关);`apps/api/mcp` 零改动,工具仍 51 |
 
 ## 禁止
 
@@ -134,4 +135,39 @@
 
 ## 本轮实测
 
-<!-- 完成后回填:与画板的偏离及原因、Ask why 文案在真实 provider 上的答复质量(留两三个例子)、踩的坑 -->
+**与任务卡的三处偏离**(画板是边界,任务卡里的派生取舍在画板定稿后按画板走):
+
+1. **非工具行的追问文案取画板那一版,不是任务卡草稿那一版**。任务卡写的是「…出现了 `{eventName}` 事件({mode};扩展 {extension} 返回了 {returned 前 80 字})。这一步是什么…」;
+   画板 `1b` / `2q` / `4v` 三处注释统一定成 **「在 Turn 2 里 context 这一步做了什么?为什么需要它?」** —— 只有 Turn 标签 + 事件名。取画板:
+   模式色与扩展返回值都是**右栏已经画在访客眼前的东西**,再抄进问句只会让预填变长,而模型的上下文里本来就有这一轮的全部事件。
+2. **`TraceRow` 补的是五个派生字段,不是三个**。任务卡列的是 `seq` / `toolCallId` / `eventType`;工具行的文案还要工具名与入参摘要,
+   而它们只在 `name`(`tool_call · web_search`)与 `detail.input`(整串 `{ toolCallId: …, toolName: …, inputPreview: … }`)里 ——
+   从展示串反解等于让文案依赖排版。于是补 `toolName` / `inputPreview` 两个,直接取脱敏事件里的同名字段。
+3. **`toolCallId` 只给 `tool_call` 行**(任务卡只说了「折叠成 `×N` 的不给」)。见下面第 1 个坑。
+
+**踩的三个坑**(都是本机验收照出来的,静态看代码看不出来):
+
+1. **「id → 行」的表被同一次调用的后续事件覆盖,定位落在 `tool_execution_end` 上。** 同一个 `toolCallId` 出现在四种事件上
+   (`tool_execution_start` / `tool_call` / `tool_result` / `tool_execution_end`),投影一开始给这四种行都填了 `toolCallId`,
+   容器建表时 `map.set(id, key)` **后写覆盖先写**,于是从卡片点「在 Timeline 里查看」跳到的是 `tool_execution_end`。
+   表现很像「定位到了」(确实展开了一行、也确实滚过去了),不逐行核对读不出来。修法在投影侧:`toolCallId` 只发给 `tool_call` 行,
+   容器那边不再重复判一次 `eventType`(两处口径会漂)。`trace-view.test.ts` 加了钉这一条的用例。
+2. **`requestAnimationFrame` 在页面不可见时根本不回调**,于是「行展开了但没滚过去」。本机验收时 Browser pane 是隐藏的
+   (`document.visibilityState === "hidden"`),定位的滚动挂在 rAF 里就永远不执行 —— 行确实展开了,`scrollTop` 却纹丝不动,
+   一度以为是「贴底跟随把它拽回去了」。改成 **effect 里立刻滚一次 + `setTimeout(…, 0)` 再补一次**:前者覆盖「行已在 DOM 里」,
+   后者覆盖「这一帧才挂载」(移动端 Sheet 关着时整棵子树不渲染、会话区折叠行收起时卡片不在 DOM 里)。
+   产品上 rAF 也能用(点得到就说明页面可见),但一个不依赖可见性的东西没有理由挂在可见性上。
+3. **本机开发库的 `llm_config` 是空的**,验收要自带假 provider(记忆 `local-acceptance-faux-provider` 的老坑,这轮照方抓药:
+   node 起一个 OpenAI `chat/completions` SSE 假服务按剧本回「调 `notes_search` → 一句正文 → 追问的解释」,
+   `llm_config` 种一行 `faux` 指过去,验完删行、杀进程)。pi loop / 工具 / 轨迹 / SSE / 落库全是真的。
+
+**Ask why 的答复质量**:本机只有假 provider(按关键字回固定剧本),答复质量要等真 provider 才有意义 ——
+本轮只验到「文案是对的、发得出去、答复正常落进轨迹」。三个例子留在这里,发版后照它们在生产上抽验:
+`在 Turn 1 里你调用了 notes_search,入参是 {"query":"agent loop"}。为什么要这么做?` /
+`在 Turn 1 里 context 这一步做了什么?为什么需要它?` /
+`我在读本站教程《Pi · Agent Loop — query 这一个循环》(/notes/pi/01)。请用 notes_get_chapter 读这一章,先用三句话概括核心观点,然后等我提问。`
+
+**顺带发现、按规矩没当场改的一条**:移动端展开 Timeline 任一行都会在控制台报
+`Cannot update a component (MobileWorkbench) while rendering a different component (TimelineView)` ——
+`onExpand?.()`(画板 4f 的「展开即升档」)写在了 `setExpandedKey` 的更新函数里,而更新函数在渲染阶段执行。
+**引入于 R-MOBILE、`git diff main` 里那一段一字未动**,功能表现正常、只是 dev 下报错刷屏,已记 `rounds/BACKLOG.md`。

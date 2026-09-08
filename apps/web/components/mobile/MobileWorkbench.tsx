@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { MobileSessionDrawer } from "@/components/mobile/MobileSessionDrawer";
 import { Sheet, SegmentedControl, type Detent } from "@/components/mobile/Sheet";
 import { relativeTime, type SessionSummary, type SessionUsage } from "@/lib/agent-api";
@@ -40,6 +40,19 @@ export interface MobileWorkbenchProps {
   onDelete: (id: string) => void;
   onRefresh: () => void;
   /**
+   * R-CROSSLINK(画板 4v):预填之后要聚焦这只输入框并把光标停在句尾。
+   * ref 由容器持有 —— 两套壳同时只挂一套,所以桌面 `InputBar` 与这里共用同一个。
+   */
+  inputRef?: RefObject<HTMLInputElement | null>;
+  /**
+   * R-CROSSLINK:容器对运行时 Sheet 的动作请求。`close` = 预填(让位给键盘,画板 4v);
+   * `open` = 卡片定位到 Timeline(升到 large,画板 4w)。`nonce` 让「同一个动作再来一次」也生效。
+   *
+   * 【为什么不把 open/detent 提到容器】Sheet 的开合与档位是移动壳自己的呈现状态,
+   * 桌面壳没有对应物;提上去等于让容器多背一份只有一套壳用得上的状态。这里只收「请求」。
+   */
+  sheetRequest?: { action: "open" | "close"; nonce: number } | null;
+  /**
    * 内核层三视图 + Tools。**用 render prop 而不是把 view model 传进来**:
    * 那三个 view model 的类型是 `toTimelineTurns` / `toChainView` / `toLifecycleNodes`
    * 的返回值,在这里重新声明一遍等于把内核层的类型抄第二份,以后改一处就漏一处。
@@ -75,7 +88,7 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
   const {
     sessions, sessionId, active, title, usage, eventCount, streaming, draft,
     shownPanel, onPanel, onDraft, onSend, onSelect, onNew, onDelete, onRefresh,
-    renderPanel, renderChat, renderEmpty,
+    renderPanel, renderChat, renderEmpty, inputRef, sheetRequest,
   } = props;
 
   // 键盘占掉的高度。iOS 只缩 visualViewport、不改布局视口 —— 不跟这个值走的话
@@ -84,6 +97,18 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const [runtimeDetent, setRuntimeDetent] = useState<Detent>("medium");
   const [sessionsOpen, setSessionsOpen] = useState(false);
+
+  // R-CROSSLINK:容器的 Sheet 动作请求。开 = 升到 large(画板 4w:详情块在 medium 里只剩两行可见);
+  // 关 = 预填(画板 4v:Sheet 留在屏上只会挡键盘)。**不是**受控 open —— 访客自己的开合照旧。
+  useEffect(() => {
+    if (!sheetRequest) return;
+    if (sheetRequest.action === "close") {
+      setRuntimeOpen(false);
+      return;
+    }
+    setRuntimeOpen(true);
+    setRuntimeDetent("large");
+  }, [sheetRequest]);
 
   return (
     <div
@@ -192,6 +217,7 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
         }}
       >
         <input
+          ref={inputRef}
           value={draft}
           onChange={(e) => onDraft(e.target.value)}
           onKeyDown={(e) => {

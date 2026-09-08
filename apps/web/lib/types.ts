@@ -23,6 +23,25 @@ export interface TraceRowDetail {
 export interface TraceRow {
   /** React key:同一 turn 内行名可能重复(如两次 context),用首个事件 seq 保证唯一 */
   key: string;
+  /**
+   * 本行首个事件的 seq(`key` 的数值形态)。R-CROSSLINK 起补上,用于排序与定位;
+   * **不进任何展示文案**——访客与模型都看不到这个号,写进追问句只会让模型去猜它指什么。
+   */
+  seq: number;
+  /** 事件类型原名(不含 `· 工具名` 与 `×N` 后缀)。追问文案与「这是不是 tool_call 行」都按它判。 */
+  eventType: string;
+  /**
+   * R-CROSSLINK:与会话区那张工具卡的 `ToolCallView.toolCallId` 是同一个值,双向定位靠它对上。
+   *
+   * **只有单个 `tool_call` 事件的行才有**:同一个 id 还会出现在 `tool_execution_*` / `tool_result`
+   * 三种事件上(它们是同一次调用的不同阶段),而定位目标只有 `tool_call` 那一行(画板 2q);
+   * 折叠成 `×N` 的行代表多次调用,同样不给 —— 它对不上「那一张卡」。
+   */
+  toolCallId?: string;
+  /** `tool_call` 行的工具名(追问文案用;`name` 里那份带 `· ` 前缀,不适合直接塞进句子) */
+  toolName?: string;
+  /** `tool_call` 行的入参摘要(服务端已脱敏并压成单行,events.ts 的 previewText) */
+  inputPreview?: string;
   name: string;
   ms: number;
   dur: string;
@@ -40,6 +59,19 @@ export interface TraceRow {
 export interface TraceTurn {
   label: string;
   rows: TraceRow[];
+}
+
+/**
+ * R-CROSSLINK C2:一条定位链接的两半(画板 2q / 4w)。两个方向用的是同一个形状 ——
+ * Timeline 详情卡的「查看卡片 ↗」拿它去会话区,会话区卡片展开体的「在 Timeline 里查看 ↗」
+ * 拿它去右栏。
+ *
+ * `has` 存在的理由:对不上时**整条链接不渲染**(旧会话没有 `payload`、事件被
+ * `MAX_TRACE_EVENTS` 裁掉、`tool_call` 折叠成 `×N`),不画灰掉的禁用态、不弹「定位失败」。
+ */
+export interface CrossLink {
+  has: (toolCallId: string) => boolean;
+  go: (toolCallId: string) => void;
 }
 
 /**

@@ -523,6 +523,24 @@ html {
     white-space: pre;
   }
 
+  /* ── 会话区卡片 · 「在 Timeline 里查看 ↗」(R-CROSSLINK,画板 4w)──────────
+     桌面那条是 mono 11 的文本链接(行高随展开体的 1.6),移动端**行高一字不改**、
+     只把命中区靠上下 padding 补到 44 —— 展开体里所有正文共用那个行高,
+     单独抬高这一行会破坏那一栏的节奏(画板 4w 裁定)。
+     上外边距一并去掉:padding 已经把它和 RESULT 段隔开了。 */
+  .m-locate-row {
+    margin-top: 0 !important;
+  }
+  .m-locate-link {
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 13px 0 10px !important;
+    margin-left: 0 !important;
+    border-radius: 0 !important;
+    display: flex;
+    align-items: center;
+  }
+
   /* ── 错误态 A / B / 断网(画板 4t)──────────────────────────────────── */
 
   /* 桌面 460px 单列居中 → 满宽单列(左右 16),垂直居中不变 */
@@ -735,6 +753,14 @@ html {
   }
   .m-chapter-body h3 {
     font-size: 17px !important;
+  }
+
+  /* 章节页 meta 行(画板 4x):390 下装不下四段,链接落到第二行 ——
+     行高提到 1.9 并允许自然换行,**不缩字号、不省略、不横滚**(它是导航文本,不是 payload)。
+     命中区就靠这个行高(mono 11 × 1.9 ≈ 21),低于 44 是**与「原文」一致的既有取舍**:
+     两条链接要么一起升级成 44,要么一起保持文本,不给新的那条单独加特权。 */
+  .m-chapter-meta {
+    line-height: 1.9 !important;
   }
 
   /* 上一章 / 下一章:两枚 ghost 按钮 → 两枚等宽胶囊(次 + 主,下一章是默认动作)。

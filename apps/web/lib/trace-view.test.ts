@@ -140,3 +140,77 @@ describe("Chain View(画板 1c)", () => {
     assert.deepEqual(chain.steps, []);
   });
 });
+
+describe("R-CROSSLINK:TraceRow 的派生字段(双向定位与追问文案的原料)", () => {
+  it("tool_call 行带 toolCallId / toolName / inputPreview,eventType 是原名(不含 · 工具名)", () => {
+    seq = 0;
+    const turns = toTimelineTurns([
+      ev("turn_start", "notify", {}),
+      ev("tool_call", "veto", { toolCallId: "call_a", toolName: "web_search", inputPreview: '{"query":"bun"}', handlers: guardPass }),
+    ]);
+    const row = turns[0].rows.find((r) => r.name === "tool_call · web_search");
+    assert.ok(row);
+    assert.equal(row.eventType, "tool_call");
+    assert.equal(row.toolCallId, "call_a");
+    assert.equal(row.toolName, "web_search");
+    assert.equal(row.inputPreview, '{"query":"bun"}');
+    assert.equal(row.key, `s${row.seq}`);
+  });
+
+  it("同一次调用的其它三种事件**不给** toolCallId —— 定位目标只有 tool_call 那一行", () => {
+    seq = 0;
+    const turns = toTimelineTurns([
+      ev("turn_start", "notify", {}),
+      ev("tool_execution_start", "notify", { toolCallId: "call_a", toolName: "web_search" }),
+      ev("tool_call", "veto", { toolCallId: "call_a", toolName: "web_search", handlers: guardPass }),
+      ev("tool_result", "chain", { toolCallId: "call_a", toolName: "web_search", isError: false }),
+      ev("tool_execution_end", "notify", { toolCallId: "call_a", toolName: "web_search", isError: false }),
+    ]);
+    const withId = turns[0].rows.filter((r) => r.toolCallId !== undefined);
+    assert.equal(withId.length, 1);
+    assert.equal(withId[0].eventType, "tool_call");
+    // 「id → 行」的表若把这四行都收进去,最后一行会覆盖 tool_call,从卡片点过来就落在 tool_execution_end 上
+    assert.equal(turns[0].rows.find((r) => r.eventType === "tool_execution_end")?.toolCallId, undefined);
+    assert.equal(turns[0].rows.find((r) => r.eventType === "tool_result")?.toolCallId, undefined);
+  });
+
+  it("非工具行没有 toolCallId / toolName,但 seq 与 eventType 一定有", () => {
+    seq = 0;
+    const turns = toTimelineTurns([ev("turn_start", "notify", {}), ev("context", "chain", { messageCount: 3 })]);
+    const row = turns[0].rows.find((r) => r.name === "context");
+    assert.ok(row);
+    assert.equal(row.eventType, "context");
+    assert.equal(row.toolCallId, undefined);
+    assert.equal(row.toolName, undefined);
+    assert.equal(typeof row.seq, "number");
+  });
+
+  it("折叠成 ×N 的 tool_call 行**不给** toolCallId —— 它代表多次调用,对不上「那一张卡」", () => {
+    seq = 0;
+    const turns = toTimelineTurns([
+      ev("turn_start", "notify", {}),
+      ev("tool_call", "veto", { toolCallId: "call_a", toolName: "web_search" }),
+      ev("tool_call", "veto", { toolCallId: "call_b", toolName: "notes_search" }),
+    ]);
+    const row = turns[0].rows.find((r) => r.eventType === "tool_call");
+    assert.ok(row);
+    assert.ok(row.name.includes("×2"));
+    assert.equal(row.toolCallId, undefined);
+    // 行名与追问文案仍按首个事件走
+    assert.equal(row.toolName, "web_search");
+  });
+
+  it("字段不是字符串时当没有(白名单之外的形状不进 UI)", () => {
+    seq = 0;
+    const turns = toTimelineTurns([
+      ev("turn_start", "notify", {}),
+      ev("tool_call", "veto", { toolCallId: 42, toolName: null, inputPreview: { a: 1 } }),
+    ]);
+    const row = turns[0].rows.find((r) => r.eventType === "tool_call");
+    assert.ok(row);
+    assert.equal(row.name, "tool_call");
+    assert.equal(row.toolCallId, undefined);
+    assert.equal(row.toolName, undefined);
+    assert.equal(row.inputPreview, undefined);
+  });
+});

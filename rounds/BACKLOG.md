@@ -413,3 +413,11 @@
       修法二选一:①这条断言不读库,改读迁移 SQL 文本或 `TOOL_REGISTRY` 的静态口径;②`sandbox.test.ts` 改成只删自己关心的
       那几行(`DELETE ... WHERE name = ANY($1)`)而不是清空全表 —— ②更贴近「测试之间不互相踩」,但动的是既有文件。
       按「跨轮次发现的问题不当场顺手改」记这里 (2026-09-08)
+- [ ] R-MOBILE **移动端展开 Timeline 某一行时 React 报 `Cannot update a component (MobileWorkbench) while rendering a different component (TimelineView)`**:
+      `TimelineView.tsx` 的 `onToggle` 把 `onExpand?.()`(= `setRuntimeDetent("large")`,画板 4f 的「展开即升档」)
+      写在了 `setExpandedKey` 的**更新函数里**,而更新函数由 React 在渲染阶段执行 —— 于是「渲染 A 时 setState B」。
+      功能表现正常(Sheet 确实升到 large),代价是 dev 下每展开一行报一条 error、Next 的错误角标常亮,
+      真正的问题会被这条噪声盖住。修法是最小改动:把 `onExpand?.()` 挪到更新函数外面、先算 `next` 再决定调不调
+      (`const next = expandedKey === key ? null : key; setExpandedKey(next); if (next) onExpand?.();`)。
+      **引入于 R-MOBILE,与 R-CROSSLINK 无关**(`git diff main` 里这一段一字未动),按「跨轮次发现的问题不当场顺手改」记这里;
+      R-CROSSLINK 本机验收时在移动壳的控制台里发现 (2026-09-08)

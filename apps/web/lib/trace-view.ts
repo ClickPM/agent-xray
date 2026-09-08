@@ -63,10 +63,16 @@ export function formatEventData(data: unknown): string {
   return text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW)}…` : text;
 }
 
+/** 脱敏后的事件数据里的字符串字段;不是字符串(或没有)一律当没有。 */
+function str(data: unknown, key: string): string | undefined {
+  const v = (data as Record<string, unknown> | null)?.[key];
+  return typeof v === "string" ? v : undefined;
+}
+
 /** 事件行名:有工具名时按设计稿 `tool_call · read_file` 的写法补上。 */
 function rowName(event: TraceEvent, count: number): string {
-  const toolName = (event.data as { toolName?: unknown } | null)?.toolName;
-  const base = typeof toolName === "string" ? `${event.eventType} · ${toolName}` : event.eventType;
+  const toolName = str(event.data, "toolName");
+  const base = toolName !== undefined ? `${event.eventType} · ${toolName}` : event.eventType;
   return count > 1 ? `${base} ×${count}` : base;
 }
 
@@ -158,8 +164,21 @@ function toRow(run: EventRun, nextStart: number | undefined, streaming: boolean)
   // R-SKILLS-2:tool_call / before_agent_start 带派生字段 handlers(谁裁决谁记录);其它事件没有,走观测者文案
   const handlers = handlersOf(first.data);
   const blocker = blockedBy(handlers);
+  // R-CROSSLINK:双向定位与追问文案要的派生字段。`toolCallId` 有两道限制,少一道就会指错行:
+  //   ① **只给 `tool_call` 行**。同一次调用的 id 出现在四种事件上(tool_execution_start /
+  //      tool_call / tool_result / tool_execution_end),画板 2q 定的定位目标是 `tool_call` 那一行;
+  //      不限制的话「id → 行」的表会被后面几行覆盖,从卡片点过来落在 tool_execution_end 上(本机实测踩到)。
+  //   ② **只给单事件行**。折叠成 `×N` 的 tool_call 行代表多次调用,拿第一个 id 去定位等于说
+  //      「那一张卡就是这一行」,而它其实只是其中一次;对不上就整条链接不渲染,比指错好。
+  const single = run.events.length === 1;
+  const toolCallId = single && first.eventType === "tool_call" ? str(first.data, "toolCallId") : undefined;
   return {
     key: `s${first.seq}`,
+    seq: first.seq,
+    eventType: first.eventType,
+    ...(toolCallId !== undefined && { toolCallId }),
+    ...(str(first.data, "toolName") !== undefined && { toolName: str(first.data, "toolName") }),
+    ...(str(first.data, "inputPreview") !== undefined && { inputPreview: str(first.data, "inputPreview") }),
     name: rowName(first, run.events.length),
     ms,
     dur: streaming ? "…" : formatDuration(ms),
