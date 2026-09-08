@@ -16,7 +16,14 @@ import { Markdown } from "@/components/Markdown";
 import { splitFrontmatter } from "@/lib/frontmatter";
 import { mono } from "@/lib/styles";
 
-export function MarkdownFile({ content }: { content: string }) {
+export function MarkdownFile({
+  content,
+  linkHref,
+}: {
+  content: string;
+  /** R-SOURCE:纯增量,透传给 Markdown 的链接改写钩子;Skills 详情页不传,行为与从前一字不差 */
+  linkHref?: (url: string) => string | null;
+}) {
   const { entries, body } = splitFrontmatter(content);
   return (
     <div style={{ padding: "4px 24px 24px" }}>
@@ -32,7 +39,7 @@ export function MarkdownFile({ content }: { content: string }) {
           ))}
         </div>
       )}
-      <Markdown>{body}</Markdown>
+      <Markdown linkHref={linkHref}>{body}</Markdown>
     </div>
   );
 }

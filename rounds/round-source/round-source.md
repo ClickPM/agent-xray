@@ -266,7 +266,14 @@ node tools/source-publish/publish.mjs --sha <ref> --check                       
      渲染前把**仓库内相对链接**改成 `/source/<按当前文件目录解析的路径>`(锚点与 title 保留;绝对地址 / 站内根路径 / 纯锚点 / 图片 / 围栏代码块 / 越出仓库根的不动),
      copy 仍复制原文;两个页面与客户端回落都走它;`bun test lib` +3
   4. [P3] 空文件 `source_read` 报 `L1–L1 / 0` → 明说「空文件(0 行)」、details `{from:0,to:0,total:0}`
-- **第 3 轮**(`--base 367378d`,只审整改 diff):<待回填>
+- **第 3 轮**(2026-09-08,`--base 367378d` 只审第 2 轮整改 diff,约 8 分钟):**1 条 P2,采纳;其余「未发现阻断性问题」**
+  1. [P2] 第 2 轮那版逐行正则改写器会碰到行内代码里长得像链接的文本(仓库里就有:`rounds/round-tools/round-tools.md` 的
+     `` `SESSION_TOOL_REGISTRY[name](ctx)` ``),预览不再忠实于快照。**同一块自建机制第二次被点,按「审查循环不是设计」不再补正则**,
+     改成审查者要的形态:`lib/remark-link-href.ts` 是一个遍历 mdast 的 remark 插件,只改 **link / definition 节点**的 `url`
+     (code span / 围栏 / 文本天然不碰);`Markdown` 与 `MarkdownFile` 各加一个可选的 `linkHref` 钩子(纯增量,不传时管线一字不变,
+     Notes / Skills 零行为变化);`lib/source-links.ts` 收成「一个目标 → href」的纯函数 `sourceLinkHref(filePath)`。
+     两份 `bun test lib` 用例(插件只改 link / definition、code 节点原样;目标解析的各种形态)
+- **第 4 轮**(`--base 061c92d`,只审第 3 轮整改 diff):<待回填>
 - 结论:<待回填>
 
 ## 失败处理
