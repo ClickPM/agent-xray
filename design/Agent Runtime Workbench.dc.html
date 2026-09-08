@@ -779,6 +779,15 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
     </div>
   </div>
 </div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">1b · 详情卡链接裁定(图形不变,只补语义)</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">Ask why ↗ 点击 = 把一句追问放进输入框</span>,就这一件事:输入框里出现预设文本、光标停在句尾、发送按钮回常态可点。<span style="color:#1a1a1a">不弹层、不出现新面板、不自动发送</span> —— 答案是访客自己按下发送之后那一轮普通对话,走的是会话区既有的卡片 + 正文,不需要任何新容器。</div>
+    <div>· <span style="color:#1a1a1a">追问文案两种形状</span>:① 工具行 —— 「在 Turn 2 里你调用了 web_search,入参是 {"query":"encore bun runtime"}。为什么要这么做?」;② 非工具行(本板这个 context 行就是) —— 「在 Turn 2 里 context 这一步做了什么?为什么需要它?」。只用 Timeline 行上拿得到的字段:<span style="color:#1a1a1a">Turn 标签 + 事件名(+ 工具行的工具名与入参摘要)</span>;没有行号 / 序号、没有模型名、没有 provider 名。入参摘要单行 ≤ 400 字且已脱敏后才进句子。</div>
+    <div>· <span style="color:#1a1a1a">tool_call 行的详情卡右上多一条 查看卡片 ↗</span>,与 Ask why 并排、间距 6、右对齐,Ask why 永远在最右;画法与 Ask why 完全相同(11px 品牌色 + r5 + padding 2/6 + hover 露 #eeeeee 底 + 尾部 ↗)。点击 = 会话区对应的那张卡<span style="color:#1a1a1a">展开并滚到可见位置</span>,用的是既有展开态,不加新高亮色、不加动效。<span style="color:#1a1a1a">只在 tool_call 行出现</span>,且 toolCallId 对不上那张卡时整条不渲染(不画禁用态、不弹「定位失败」)。完整画法见 <a href="#2q" style="font:400 11px 'JetBrains Mono',monospace">2q</a>(画板集 Agent X-Ray Crosslink)。</div>
+    <div>· 本板画的是 context 行 —— 非工具行,所以右上只有 Ask why ↗ 一条,<span style="color:#1a1a1a">图形一个像素不动</span>。</div>
+  </div>
+</div>
 </div>
 
 <!-- ━━━ 1c Chain View ━━━ -->

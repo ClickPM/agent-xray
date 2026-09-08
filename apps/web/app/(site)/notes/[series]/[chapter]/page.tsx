@@ -2,7 +2,8 @@
 // 由 components/Markdown 映射到画板既有的排版(规则 7)。
 import Link from "next/link";
 import { api, notFoundOnBadRoute } from "@/lib/api";
-import { requireVisibleTab } from "@/lib/tabs-server";
+import { requireVisibleTab, visibleTabKeys } from "@/lib/tabs-server";
+import { tryInRuntimeHref } from "@/lib/try-in-runtime";
 import { GhostButton } from "@/components/ui";
 import { MobileChapterBar } from "@/components/mobile/MobileChapterBar";
 import { mono } from "@/lib/styles";
@@ -37,6 +38,11 @@ export default async function ArticlePage({
 
   // 路由参数是访客可控的:认不出与形状不合法都渲染 404,真故障原样抛出。
   const data = await api.notes.getChapter(series, chapter).catch(notFoundOnBadRoute);
+
+  // R-CROSSLINK C3(画板 2r / 4x):「在 Runtime 里聊这一章」。
+  // Runtime tab 被隐藏时**整条链接不渲染**(连同前面那个「·」)—— 它是一条通往 `/` 的门,
+  // 门后不存在时不该画门;`visibleTabKeys` 与本页开头的门禁是同一次请求内的同一份结果(React cache)。
+  const runtimeVisible = (await visibleTabKeys()).includes("runtime");
 
   const toc = extractToc(data.contentMd);
   const pinned = data.label.toUpperCase() === "README";
@@ -76,7 +82,7 @@ export default async function ArticlePage({
           <h1 style={{ fontSize: 22, fontWeight: 650, lineHeight: 1.4, marginTop: 18, marginBottom: 0 }}>
             {data.title}
           </h1>
-          <div style={{ ...mono(11), color: "var(--text-dim)", marginTop: 8 }}>
+          <div style={{ ...mono(11), color: "var(--text-dim)", marginTop: 8 }} className="m-chapter-meta">
             约 {readingMinutes(data.wordCount)} 分钟 · 更新于 {isoDate(data.updatedAt)}
             {/* 所有者裁定 4.2:第三方文章只收中译,原文链接必须保留 */}
             {data.sourceUrl && (
@@ -85,6 +91,28 @@ export default async function ArticlePage({
                 <a href={data.sourceUrl} target="_blank" rel="noreferrer noopener" style={{ color: "var(--accent)" }}>
                   原文
                 </a>
+              </>
+            )}
+            {/* R-CROSSLINK C3(画板 2r 方案 A):与「原文」同一语汇的文本链接,接在 meta 行末尾 ——
+                它与「原文」是同一类信息(这一章还能去哪),同类同行,读者不用学新位置;
+                h1 右侧的 ghost 按钮(方案 B)会形成一个视觉重心,而本页的主动作是读、不是聊。
+                点击跳到 `/`,输入框里已写好模板文本,**不自动发送**(边界见 lib/ask-why.ts)。 */}
+            {runtimeVisible && (
+              <>
+                {" · "}
+                <Link
+                  href={tryInRuntimeHref({
+                    seriesName: data.seriesName,
+                    title: data.title,
+                    seriesSlug: data.seriesSlug,
+                    // 用服务端回的 slug 而不是路由参数:那两个 slug 是要交给模型去调
+                    // `notes_get_chapter` 的入参,得是库里那份规范值
+                    chapterSlug: data.slug,
+                  })}
+                  style={{ color: "var(--accent)" }}
+                >
+                  在 Runtime 里聊这一章 ↗
+                </Link>
               </>
             )}
           </div>

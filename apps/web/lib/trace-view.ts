@@ -63,17 +63,17 @@ export function formatEventData(data: unknown): string {
   return text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW)}…` : text;
 }
 
-/** 事件行名:有工具名时按设计稿 `tool_call · read_file` 的写法补上。 */
-function rowName(event: TraceEvent, count: number): string {
-  const toolName = (event.data as { toolName?: unknown } | null)?.toolName;
-  const base = typeof toolName === "string" ? `${event.eventType} · ${toolName}` : event.eventType;
-  return count > 1 ? `${base} ×${count}` : base;
+/** 脱敏后的事件数据里的字符串字段;不是字符串(或没有)一律当没有。 */
+function str(data: unknown, key: string): string | undefined {
+  const v = (data as Record<string, unknown> | null)?.[key];
+  return typeof v === "string" ? v : undefined;
 }
 
-/** 除 `type` 外还有内容的事件才值得展开详情。 */
-function hasDetail(data: unknown): boolean {
-  if (typeof data !== "object" || data === null) return false;
-  return Object.keys(data as Record<string, unknown>).some((k) => k !== "type");
+/** 事件行名:有工具名时按设计稿 `tool_call · read_file` 的写法补上。 */
+function rowName(event: TraceEvent, count: number): string {
+  const toolName = str(event.data, "toolName");
+  const base = toolName !== undefined ? `${event.eventType} · ${toolName}` : event.eventType;
+  return count > 1 ? `${base} ×${count}` : base;
 }
 
 /**
@@ -158,8 +158,21 @@ function toRow(run: EventRun, nextStart: number | undefined, streaming: boolean)
   // R-SKILLS-2:tool_call / before_agent_start 带派生字段 handlers(谁裁决谁记录);其它事件没有,走观测者文案
   const handlers = handlersOf(first.data);
   const blocker = blockedBy(handlers);
+  // R-CROSSLINK:双向定位与追问文案要的派生字段。`toolCallId` 有两道限制,少一道就会指错行:
+  //   ① **只给 `tool_call` 行**。同一次调用的 id 出现在四种事件上(tool_execution_start /
+  //      tool_call / tool_result / tool_execution_end),画板 2q 定的定位目标是 `tool_call` 那一行;
+  //      不限制的话「id → 行」的表会被后面几行覆盖,从卡片点过来落在 tool_execution_end 上(本机实测踩到)。
+  //   ② **只给单事件行**。折叠成 `×N` 的 tool_call 行代表多次调用,拿第一个 id 去定位等于说
+  //      「那一张卡就是这一行」,而它其实只是其中一次;对不上就整条链接不渲染,比指错好。
+  const single = run.events.length === 1;
+  const toolCallId = single && first.eventType === "tool_call" ? str(first.data, "toolCallId") : undefined;
   return {
     key: `s${first.seq}`,
+    seq: first.seq,
+    eventType: first.eventType,
+    ...(toolCallId !== undefined && { toolCallId }),
+    ...(str(first.data, "toolName") !== undefined && { toolName: str(first.data, "toolName") }),
+    ...(str(first.data, "inputPreview") !== undefined && { inputPreview: str(first.data, "inputPreview") }),
     name: rowName(first, run.events.length),
     ms,
     dur: streaming ? "…" : formatDuration(ms),
@@ -167,7 +180,14 @@ function toRow(run: EventRun, nextStart: number | undefined, streaming: boolean)
     streaming,
     // 画板 1a 第 1043 行:被拦截的 tool_call 行尾红色 blocked 徽标 + 「└ <扩展> returned {block: true}」注记
     ...(blocker !== undefined && { hasBadge: true, hasNote: true, blockedBy: blocker }),
-    expandable: hasDetail(first.data),
+    // R4 起这里是 `hasDetail(first.data)`:只有「除 type 外还有内容」的事件才可展开。
+    // R-CROSSLINK 改成**每一行都可展开**(codex 第 2 轮 P1):详情卡里那枚 `Ask why ↗` 是
+    // 「问问这一步为什么」的唯一入口,而画板 4v 的裁定是「Ask why 胶囊在**任何**事件行都有」。
+    // 本机实测有四种事件的脱敏数据只剩 `{type}` —— `agent_start` / `before_provider_headers` /
+    // `before_provider_request` / `agent_settled`,其中 `before_provider_request` 正是屏幕上最长的那根条
+    // (一次模型往返),最招人问「为什么这么久」,却恰恰点不开。
+    // 它们展开后 INPUT 段如实显示「(无附加字段)」——没有就是没有,不编内容。
+    expandable: true,
     detail: {
       input: formatEventData(first.data),
       ...detailOf(handlers),

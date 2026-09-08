@@ -17,7 +17,8 @@ import {
 import { openTraceStream } from "@/lib/trace-api";
 import { toChainView, toLifecycleNodes, toTimelineTurns } from "@/lib/trace-view";
 import { foldLabel, hasFailure, splitTurn, toolDuration, type TurnSegment } from "@/lib/turn-view";
-import type { ChatItem, ToolCallView, TraceEvent, TurnView } from "@/lib/types";
+import { readAskParam, sanitizePrefill } from "@/lib/ask-why";
+import type { ChatItem, CrossLink, ToolCallView, TraceEvent, TurnView } from "@/lib/types";
 import { GhostButton } from "@/components/ui";
 import { Markdown } from "@/components/Markdown";
 import { mono } from "@/lib/styles";
@@ -173,7 +174,18 @@ function ToolChip({
  * 超出部分的 `…(已截断)` 由服务端在切断处接好(turn-recorder.ts),这里不再截。
  * 不做内部滚动、不放「展开全部」;要看全量去右栏 Timeline 对应的 tool_call / tool_result 事件。
  */
-function ToolCard({ call, open, onToggle }: { call: ToolCallView; open: boolean; onToggle: () => void }) {
+function ToolCard({
+  call,
+  open,
+  onToggle,
+  rowLink,
+}: {
+  call: ToolCallView;
+  open: boolean;
+  onToggle: () => void;
+  /** R-CROSSLINK C2 卡 → 行(画板 2q / 4w):`has` 决定链接渲不渲染,`go` 去右栏定位那一行 */
+  rowLink?: CrossLink;
+}) {
   const error = call.isError;
   const chip = (
     <ToolChip name={call.name} preview={call.inputPreview} dur={toolDuration(call)} error={error} open={open} onToggle={onToggle} />
@@ -195,6 +207,28 @@ function ToolCard({ call, open, onToggle }: { call: ToolCallView; open: boolean;
         <div style={{ ...body, color: "var(--text)" }}>{call.inputPreview}</div>
         <div style={{ ...label, margin: "10px 0 3px" }}>RESULT</div>
         <div style={{ ...body, color: error ? "var(--err-text)" : "var(--text)" }}>{call.resultPreview}</div>
+        {/* R-CROSSLINK C2(画板 2q):这条链接在展开体**之内**而不是卡片下面 —— 出了展开体它就成了
+            会话区的第四种元素(卡 / 折叠行 / 正文之外),而它讲的正是这一次调用。
+            语汇:展开体里通篇是 mono,所以取 mono 11 品牌色、左对齐、与 RESULT 段间距 10,
+            `margin-left:-6` 把 padding 撑出的左内边距吃掉,让文字与上面两段左对齐。
+            对不上(旧会话没有轨迹、事件被裁掉、tool_call 折叠成 ×N)时整条不渲染。
+            移动端的 44 命中区与去掉的上外边距在 globals.css 的 `.m-locate-*`(画板 4w)。 */}
+        {rowLink?.has(call.toolCallId) && (
+          <div className="m-locate-row" style={{ marginTop: 10 }}>
+            <button
+              className="m-locate-link"
+              onClick={() => rowLink.go(call.toolCallId)}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+              style={{
+                ...mono(11), color: "var(--accent)", borderRadius: 5, padding: "2px 6px",
+                marginLeft: -6, background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap",
+              }}
+            >
+              在 Timeline 里查看 ↗
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -257,28 +291,80 @@ export const AssistantMessage = memo(function AssistantMessage({ text }: { text:
  * 每个文本段各自过 memo 的 `AssistantMessage`:流式期间只有正在长的那一段重新解析 markdown(R9 的 O(n) 性质保住)。
  * 外层 gap 14 与 ChatPane 的 gap 相同,所以内联态的段间距与它们直接躺在会话列里时一样。
  */
-export const AssistantTurn = memo(function AssistantTurn({ text, turn, done }: { text: string; turn: TurnView; done: boolean }) {
+export const AssistantTurn = memo(function AssistantTurn({
+  text,
+  turn,
+  done,
+  rowLink,
+  locate,
+}: {
+  text: string;
+  turn: TurnView;
+  done: boolean;
+  /** R-CROSSLINK C2:卡片展开体里那条「在 Timeline 里查看 ↗」(画板 2q) */
+  rowLink?: CrossLink;
+  /** R-CROSSLINK C2 行 → 卡:右栏要求定位到某个 toolCallId;不在本轮里就什么都不做 */
+  locate?: { toolCallId: string; nonce: number } | null;
+}) {
   const [open, setOpen] = useState(false);
   const [openCards, setOpenCards] = useState<Record<number, boolean>>({});
   const { process, final } = useMemo(() => splitTurn(text, turn.toolCalls), [text, turn.toolCalls]);
   const toggleCard = (index: number) => setOpenCards((prev) => ({ ...prev, [index]: !prev[index] }));
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * R-CROSSLINK C2(画板 2q / 4w):「定位」= **既有折叠行打开 + 既有卡片展开态 + 滚入视野**,
+   * 没有新高亮色、没有「已定位」徽标、滚动不画动效。
+   *
+   * 【按 nonce 去重】`turn.toolCalls` 在流式期间每帧都是新数组(容器每次提交都深拷贝一份),
+   * 不去重的话这个 effect 会跟着每帧重跑,把访客手动收起的卡再打开一次。
+   *
+   * 【为什么不用 querySelector 拼选择器】`toolCallId` 是 provider 给的不透明串,
+   * 拼进属性选择器要考虑转义;遍历 dataset 比较没有这个问题。
+   *
+   * 【滚动挂 setTimeout(0) 而不是 requestAnimationFrame】折叠行收起时卡片压根不在 DOM 里
+   * (`open` 为假就不渲染处理过程),所以滚动必须等 `setOpen(true)` 那次提交之后;
+   * 而 rAF 在页面不可见时**不回调**(本机验收实测),定位对可见性没有依赖。
+   */
+  const appliedNonce = useRef(0);
+  useEffect(() => {
+    if (!locate || locate.nonce === appliedNonce.current) return;
+    const index = turn.toolCalls.findIndex((c) => c.toolCallId === locate.toolCallId);
+    if (index < 0) return; // 不是本轮的卡
+    appliedNonce.current = locate.nonce;
+    setOpen(true);
+    setOpenCards((prev) => ({ ...prev, [index]: true }));
+    const timer = setTimeout(() => {
+      const nodes = rootRef.current?.querySelectorAll<HTMLElement>("[data-tool-call-id]") ?? [];
+      for (const node of nodes) {
+        if (node.dataset.toolCallId === locate.toolCallId) {
+          node.scrollIntoView({ block: "center" });
+          return;
+        }
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [locate, turn.toolCalls]);
+
   const segment = (seg: TurnSegment, i: number) =>
     seg.kind === "text" ? (
       <AssistantMessage key={i} text={seg.text} />
     ) : (
-      <ToolCard key={i} call={seg.call} open={!!openCards[seg.index]} onToggle={() => toggleCard(seg.index)} />
+      <div key={i} data-tool-call-id={seg.call.toolCallId}>
+        <ToolCard call={seg.call} open={!!openCards[seg.index]} onToggle={() => toggleCard(seg.index)} rowLink={rowLink} />
+      </div>
     );
   const finalAnswer = final.trim() !== "" ? <AssistantMessage text={final} /> : null;
   if (!done) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+      <div ref={rootRef} style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         {process.map(segment)}
         {finalAnswer}
       </div>
     );
   }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+    <div ref={rootRef} style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
       <FoldRow turn={turn} open={open} onToggle={() => setOpen((o) => !o)} />
       {open && (
         <div style={{ borderLeft: "1px solid var(--border)", marginLeft: 5, paddingLeft: 14, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -290,7 +376,15 @@ export const AssistantTurn = memo(function AssistantTurn({ text, turn, done }: {
   );
 });
 
-function ChatPane({ items }: { items: ChatItem[] }) {
+function ChatPane({
+  items,
+  rowLink,
+  locate,
+}: {
+  items: ChatItem[];
+  rowLink?: CrossLink;
+  locate?: { toolCallId: string; nonce: number } | null;
+}) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // 末项的「长度」= 正文长度 + 工具卡数:卡片到达而正文没变的那一帧也要跟着滚到底
   const last = items[items.length - 1];
@@ -311,7 +405,7 @@ function ChatPane({ items }: { items: ChatItem[] }) {
           );
         }
         // R-TOOLCARDS:有工具调用的一轮走 AssistantTurn;没有的与改动前一字不差(任务卡验收 #4)
-        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} />;
+        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} rowLink={rowLink} locate={locate} />;
         return <AssistantMessage key={i} text={item.text} />;
       })}
     </div>
@@ -352,32 +446,84 @@ function EmptyState({ onSuggest }: { onSuggest: (text: string) => void }) {
 }
 
 /**
+ * 输入框随内容增高(画板 2q / 4v:「溢出就自然换行、输入框长到两行,不裁不省略」)。
+ *
+ * 【为什么必须做】R-CROSSLINK 之前输入框里只有访客自己敲的字,一行装得下;
+ * 预填进来的是一整句追问,单行 `<input>` 只会横向滚动、把大半句话藏起来 ——
+ * 而「访客看得见」正是 `docs/security.md` §0 第 10 条的全部兜底。
+ *
+ * 【为什么设上限】不封顶的话,`?ask=` 那条链接最多能塞 1000 字,在 390 宽下是五十来行、
+ * 整个屏幕都成了输入框。到上限后**框内自己滚**,文本一个字都没少 —— 与「不裁不省略」不冲突。
+ */
+function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // clientHeight 含 padding 不含 border,offsetHeight 两者都含 —— 差值就是上下 border。
+    // 盒模型是 border-box,直接把 scrollHeight 写进 height 会一次比一次矮 2px。
+    const borders = el.offsetHeight - el.clientHeight;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + borders}px`;
+  }, [ref, value]);
+}
+
+/**
+ * 桌面输入框的行高(px)与增高上限(行)。
+ *
+ * **19 不是审美,是实测**:改动前那只 `<input>`(font 14 / padding 8 / border 1 / border-box)
+ * 静息高 37px,行盒正好 19。`<textarea>` 在 `line-height: normal` 下的行盒是 20,
+ * 空框会凭空高 1px —— 规则 7 管的就是这种「顺手多出来的一像素」。写死 19 让静息态一字不差,
+ * 折行后的行距也随之定下来(画板 2q 那句 `line-height:1.5` 是画布里两行态的写法,
+ * 照抄会让空框高 4px,取舍与理由记在任务卡)。
+ */
+const INPUT_LINE = 19;
+const INPUT_MAX_LINES = 5;
+
+/**
  * 输入区(画板 1a)。`busy` = 这一轮回复还在生成中:发送按钮换成转圈并禁用。
  *
  * 输入框**不禁用** —— 生成期间照样可以把下一句先打好;真正的拦截在 `send()`
  * 里(streaming 时直接 return),回车与点击走的是同一个出口。
+ *
+ * R-CROSSLINK 把 `<input>` 换成 `<textarea>`(画板 2q 的两行态)。**静息高度一字不改**:
+ * 行高仍取 `normal`(画板 1a 的空框没写 line-height,2q 那句 `line-height:1.5` 是画布里
+ * 两行态的写法;取 1.5 会让空框凭空高 4px,那是规则 7 明确禁止的「动既有页面样式」)。
+ * 回车仍是「发送」而不是换行(`preventDefault` 挡住 textarea 的默认行为),
+ * 与改动前一字不差;换行只会来自自动折行。
  */
 function InputBar({
   value,
   onChange,
   onSend,
   busy,
+  inputRef,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
   busy: boolean;
+  /** R-CROSSLINK:预填之后要把光标停在句尾(画板 2q),所以容器要拿得到这个输入框 */
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
+  useAutoGrow(inputRef, value);
   return (
-    <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "center" }}>
-      <input
+    // align-items 从 center 改成 flex-end(画板 2q 的输入栏就是 flex-end):
+    // 单行时两者一模一样,长到两行时发送按钮跟着底边走,与画板一致
+    <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "flex-end" }}>
+      <textarea
+        ref={inputRef}
+        rows={1}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { onSend(); } }}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSend(); } }}
         placeholder="和 agent 说点什么…(右侧实时显示内核轨迹)"
         style={{
           flex: 1, border: "1px solid var(--border)", borderRadius: 7, padding: "8px 12px",
           fontSize: 14, color: "var(--text)", background: "var(--bg)", outline: "none", font: "inherit",
+          resize: "none", overflowY: "auto", display: "block",
+          lineHeight: `${INPUT_LINE}px`,
+          // 上下 padding 16 + 上下 border 2
+          maxHeight: INPUT_MAX_LINES * INPUT_LINE + 18,
         }}
       />
       <GhostButton
@@ -428,6 +574,24 @@ export function Workbench() {
   // 否则 UI 会被旧会话的消息覆盖(codex review P2)
   const loadSeq = useRef(0);
 
+  // ── R-CROSSLINK:三条联动共用的那一个原语 + 两个方向的定位 ────────────────
+  // 输入框(桌面 InputBar / 移动壳各一份,同一个 ref —— 两套壳同时只挂一套)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  // 「又预填了一次」的信号:同一句话连点两次时文本不变,靠它把光标重新放到句尾
+  const [prefillAt, setPrefillAt] = useState(0);
+  // 受控定位:key / toolCallId 相同的连点也要再滚一次,所以带 nonce
+  const [locateRow, setLocateRow] = useState<{ key: string; nonce: number } | null>(null);
+  const [locateCard, setLocateCard] = useState<{ toolCallId: string; nonce: number } | null>(null);
+  // 移动壳的运行时 Sheet:预填时关(画板 4v)、定位时开到 large(画板 4w)。
+  // 桌面壳没有 Sheet,这个 state 对它是死的。
+  const [sheetRequest, setSheetRequest] = useState<{ action: "open" | "close"; nonce: number } | null>(null);
+  const nonce = useRef(0);
+  /** 两个方向的定位请求一起作废。切会话、开新会话都要调 —— 它们只在一个会话里有意义。 */
+  const clearLocate = useCallback(() => {
+    setLocateRow(null);
+    setLocateCard(null);
+  }, []);
+
   // R-MOBILE:决定挂哪一套壳。状态、取数与两条 SSE 都在本容器里,
   // 所以无论哪一套壳,**全站只有一份订阅**(这正是不用纯 CSS 分流的原因)。
   const isMobile = useIsMobile();
@@ -444,6 +608,126 @@ export function Workbench() {
   const timelineTurns = useMemo(() => toTimelineTurns(events, streaming), [events, streaming]);
   const chain = useMemo(() => toChainView(events), [events]);
   const lifeNodes = useMemo(() => toLifecycleNodes(events, streaming), [events, streaming]);
+
+  /**
+   * R-CROSSLINK C1 / C3 的原语:**把一句预设文本放进输入框,永不自动发送**
+   * (画板 2q / 2r / 4v / 4x;`docs/security.md` §0 第 10 条)。
+   *
+   * 三个入口(Ask why 按钮、章节页链接经 `?ask=`、C3 的落地)走同一条边界:
+   * `sanitizePrefill` 去控制字符、超 1000 字整段丢弃。发不发永远是访客按按钮。
+   *
+   * 【focus 必须同步调用】iOS 只在用户手势**那一个任务**里 focus 才会弹键盘,
+   * 放进 rAF / setTimeout 就只剩一个光标、键盘不出来(画板 4v 要的是键盘弹起)。
+   * 光标落到句尾则要等 value 提交之后,所以拆成下面那个 effect。
+   */
+  const prefill = useCallback((text: string) => {
+    const clean = sanitizePrefill(text);
+    if (!clean) return;
+    setDraft(clean);
+    setPrefillAt((n) => n + 1);
+    // 移动端关掉运行时 Sheet(画板 4v:目标是让访客打字,Sheet 留在屏上只会挡键盘)
+    setSheetRequest({ action: "close", nonce: ++nonce.current });
+    inputRef.current?.focus();
+  }, []);
+
+  // 预填之后把光标停在句尾(画板 2q:光标在句尾、发送按钮常态可点)。
+  // 只认 prefillAt —— 挂 draft 的话每敲一个字都会把光标弹到末尾。
+  useEffect(() => {
+    if (prefillAt === 0) return;
+    const el = inputRef.current;
+    if (!el) return;
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+  }, [prefillAt]);
+
+  /**
+   * R-CROSSLINK C3 的落地:`/?ask=<text>` 读一次即清(任务卡裁定 7 / 派生取舍 1)。
+   *
+   * 【为什么不用 useSearchParams】Next 15 要求它外面套 Suspense,否则整页退化成
+   * CSR bailout —— 为一个只读一次的参数把首屏渲染方式换掉不划算。
+   *
+   * 【为什么先清后填】清掉参数是这条链接的安全兜底之一:刷新不会二次预填、
+   * 地址栏里也不会留着那段文本被顺手复制走。**不写 localStorage、不写 cookie**。
+   */
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const text = readAskParam(url.search);
+    // 【判「有没有 ask」只能问 URLSearchParams,不能在原始串上找 "ask="】(codex 第 1 轮 P2)
+    // `/?%61sk=hello` 里参数名是编码过的:`readAskParam` 经 URLSearchParams 解码后认得它、照常预填,
+    // 而字面匹配认不出 → 参数留在地址栏、刷新再预填一次,「读一次即清」当场失效。
+    if (url.searchParams.has("ask")) {
+      url.searchParams.delete("ask");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    if (!text) return;
+    setDraft(text);
+    setPrefillAt((n) => n + 1);
+    // 这一次不是用户手势(是刚落地),iOS 大概率不弹键盘;桌面与安卓会聚焦,
+    // 与画板 4x「聚焦并弹键盘」尽量对齐,拿不到也不影响文本已经在框里
+    inputRef.current?.focus();
+  }, []);
+
+  /**
+   * 两个方向的定位(画板 2q / 4w)。两张表都随渲染更新、但**回调本身恒等** ——
+   * `AssistantTurn` 是 memo 的(流式期间靠它避免每帧重解析全部 markdown),
+   * 传一个每帧换新的对象进去等于把那层 memo 废掉。所以数据放 ref、闭包只读 ref。
+   *
+   * 代价说清楚:`has` 读的是**上一次渲染时**的表。轨迹事件比会话区的卡晚到几毫秒时,
+   * 那一瞬间链接可能还不渲染 —— 下一次渲染(流式的下一帧、或访客点开卡片本身)就有了,
+   * 而链接只在展开体里出现,展开这个动作本身就会带来一次渲染。
+   */
+  const cardIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of items) {
+      if (item.kind !== "assistant" || !item.turn) continue;
+      for (const call of item.turn.toolCalls) ids.add(call.toolCallId);
+    }
+    return ids;
+  }, [items]);
+  const rowKeyById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const turn of timelineTurns) {
+      for (const row of turn.rows) if (row.toolCallId !== undefined) map.set(row.toolCallId, row.key);
+    }
+    return map;
+  }, [timelineTurns]);
+  const cardIdsRef = useRef(cardIds);
+  const rowKeyRef = useRef(rowKeyById);
+  cardIdsRef.current = cardIds;
+  rowKeyRef.current = rowKeyById;
+
+  /**
+   * Timeline 详情卡的「查看卡片 ↗」:去会话区把那张卡展开并滚进视野。
+   *
+   * 移动端还要**关掉运行时 Sheet**(codex 第 2 轮 P2):这条链接是在 Sheet 里点的,
+   * 而目的地(会话区那张卡)在 Sheet **后面** —— 不关的话卡片确实展开并滚过去了,
+   * 访客却只看见一张没动过的 Sheet。反方向(卡 → 行)本来就要把 Sheet 打开,两边正好互为镜像。
+   */
+  const cardLink = useMemo<CrossLink>(
+    () => ({
+      has: (id) => cardIdsRef.current.has(id),
+      go: (id) => {
+        setLocateCard({ toolCallId: id, nonce: ++nonce.current });
+        setSheetRequest({ action: "close", nonce: ++nonce.current });
+      },
+    }),
+    [],
+  );
+
+  /** 会话区卡片的「在 Timeline 里查看 ↗」:切到 Timeline、展开那一行并滚进视野;移动端顺带把 Sheet 升到 large */
+  const rowLink = useMemo<CrossLink>(
+    () => ({
+      has: (id) => rowKeyRef.current.has(id),
+      go: (id) => {
+        const key = rowKeyRef.current.get(id);
+        if (key === undefined) return;
+        setPanel("timeline");
+        setLocateRow({ key, nonce: ++nonce.current });
+        setSheetRequest({ action: "open", nonce: ++nonce.current });
+      },
+    }),
+    [],
+  );
 
   const refreshSessions = useCallback(() => {
     listSessions()
@@ -478,6 +762,10 @@ export function Workbench() {
       // 目标会话立刻生效:即便加载还没回来,状态也已经指向**这个**会话
       setSessionId(id);
       setItems([]);
+      // 定位请求属于**上一个**会话(codex 第 1 轮 P2):行键是 `s<seq>` 而 seq 每个会话都从 0 起,
+      // 留着它的话,下一次 TimelineView 挂载(移动端关掉再打开 Sheet 就是一次)会拿旧请求去展开
+      // 新会话里同键的**无关行**,还顺手关掉贴底跟随。卡片那侧同理(toolCallId 不跨会话)。
+      clearLocate();
       // 统计条与 items / events 同时作废(codex 第 1 轮 P2):加载期间留着上一个会话的
       // 数字会张冠李戴,加载失败时那个错的数字还会永久留在顶栏
       setUsage(null);
@@ -506,7 +794,7 @@ export function Workbench() {
           if (loadSeq.current === seq) setLoadingHistory(false);
         });
     },
-    [streaming],
+    [streaming, clearLocate],
   );
 
   const startNew = useCallback(() => {
@@ -518,7 +806,8 @@ export function Workbench() {
     setDraft("");
     setPanel("timeline");
     setUsage(null); // 新会话没有累计,统计条回到占位(R-USAGE)
-  }, [streaming]);
+    clearLocate(); // 同 openSession:定位请求不跨会话
+  }, [streaming, clearLocate]);
 
   /**
    * 删除会话(R-VISITOR)。服务端只删得掉本访客自己的,删不到一律 404。
@@ -688,7 +977,10 @@ export function Workbench() {
         onNew={startNew}
         onDelete={removeSession}
         onRefresh={refreshSessions}
-        renderChat={() => <MobileChat items={items} />}
+        // R-CROSSLINK:预填要能聚焦到移动端这只输入框(画板 4v),Sheet 的开关由容器按动作请求
+        inputRef={inputRef}
+        sheetRequest={sheetRequest}
+        renderChat={() => <MobileChat items={items} rowLink={rowLink} locate={locateCard} />}
         renderEmpty={() => <MobileEmptyState onSuggest={setDraft} />}
         // 内核层照搬:Sheet 里装的就是桌面右栏那四个组件本身
         renderPanel={(p, onPanelExpand) =>
@@ -697,7 +989,14 @@ export function Workbench() {
           ) : !active ? (
             <LifecycleMap nodes={lifeNodes} idle compact />
           ) : p === "timeline" ? (
-            <TimelineView turns={timelineTurns} compact onExpand={onPanelExpand} />
+            <TimelineView
+              turns={timelineTurns}
+              compact
+              onExpand={onPanelExpand}
+              onAskWhy={prefill}
+              cardLink={cardLink}
+              locate={locateRow}
+            />
           ) : p === "chain" ? (
             <ChainView chain={chain} compact />
           ) : (
@@ -741,8 +1040,12 @@ export function Workbench() {
         <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
           {/* 中栏:对话 */}
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
-            {active ? <ChatPane items={items} /> : <EmptyState onSuggest={setDraft} />}
-            <InputBar value={draft} onChange={setDraft} onSend={send} busy={streaming} />
+            {active ? (
+              <ChatPane items={items} rowLink={rowLink} locate={locateCard} />
+            ) : (
+              <EmptyState onSuggest={setDraft} />
+            )}
+            <InputBar value={draft} onChange={setDraft} onSend={send} busy={streaming} inputRef={inputRef} />
           </div>
           {/* 右栏:运行时面板 */}
           <div className="runtime-panel" style={{ width: "42%", minWidth: 300, maxWidth: 500, flex: "none", display: "flex", flexDirection: "column" }}>
@@ -772,7 +1075,7 @@ export function Workbench() {
             ) : !active ? (
               <LifecycleMap nodes={lifeNodes} idle />
             ) : shownPanel === "timeline" ? (
-              <TimelineView turns={timelineTurns} />
+              <TimelineView turns={timelineTurns} onAskWhy={prefill} cardLink={cardLink} locate={locateRow} />
             ) : shownPanel === "chain" ? (
               <ChainView chain={chain} />
             ) : (

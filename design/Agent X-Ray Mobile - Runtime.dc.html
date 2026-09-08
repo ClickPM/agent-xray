@@ -427,6 +427,8 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
     <div>· <span style="color:#1a1a1a">横滚</span>:INPUT / EXTENSION RETURNED / DIFF <span style="color:#1a1a1a">三个 payload 盒各自 overflow-x:auto + white-space:pre</span> —— JSON 与 diff 折行就读不出结构。页面与 Sheet 本身永不横滚;Sheet 内容纵向滚动,横滚只发生在盒子里。</div>
     <div>· <span style="color:#1a1a1a">token · 保留</span>:1b 详情块整套(小标题 mono 10/600 #9ca3af 0.08em、值 mono 11/1.6、DIFF 增行 #16a34a、扩展名品牌色)、选中行配色、脱敏标记沿用既有徽标语汇(mono 9/600 #6b7280 on #eeeeee + r4,与 blocked 徽标同族但非红色 —— 脱敏不是错误)。<span style="color:#1a1a1a">换掉</span>:hover 角标 → 同排胶囊;面板 → Sheet;word-break 折行 → 横滚。</div>
     <div>· <span style="color:#1a1a1a">接缝</span>:Sheet 外壳(grabber / 圆角 20 / 分段控件 / 投影 / 背后压暗 0.35)是 iOS;虚线以下的选中行与详情块全是内核层。<span style="color:#1a1a1a">玻璃降级</span>:本屏无玻璃 —— Sheet 升到 large 后功能条被盖住,三处玻璃一处也不露;背后压暗用纯 rgba(0,0,0,.35),不依赖 backdrop-filter。</div>
+    <div>· <span style="color:#1a1a1a">Ask why 胶囊点击 = 三件事,一次做完</span>:关 Sheet(不是降 medium)+ 输入框预填一句追问 + 聚焦弹键盘、光标停句尾。<span style="color:#1a1a1a">不弹层、不自动发送</span>,发送按钮回常态可点;答案是访客自己按下发送后那一轮普通对话。落地态见 <a href="#4v" style="font:400 10px 'JetBrains Mono',monospace">4v</a>。追问文案两种形状:本屏选中的是 context(非工具行)→「在 Turn 2 里 context 这一步做了什么?为什么需要它?」;工具行多带工具名与入参摘要。只用行上拿得到的字段,无行号 / 模型名 / provider 名。</div>
+    <div>· <span style="color:#1a1a1a">tool_call 行还多一条「查看卡片 ↗」</span>,点了会话区对应的卡展开并滚到可见位置(定位 = 既有展开态 + 滚入视野,无新高亮色、无动效)。<span style="color:#1a1a1a">它不做第二枚胶囊</span> —— 详情块内宽只有约 308,两枚胶囊会把 INPUT 挤到 148 读不出命令;改为<span style="color:#1a1a1a">详情块底部一行 mono 11 品牌色链接</span>(44 命中靠上下 padding 补,不改行高),与 <a href="#4w" style="font:400 10px 'JetBrains Mono',monospace">4w</a> 一致。非工具行(本屏)没有这一条;toolCallId 对不上时整条不渲染,不画禁用态、不弹「定位失败」。<span style="color:#1a1a1a">本屏图形不动。</span></div>
   </div>
 </div>
 </div>
@@ -716,6 +718,203 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
   </div>
 </div>
 </div>
+<!-- ━━━━━━━━━━ 4v Runtime · 追问预填(Sheet 已收起 + 键盘弹起) ━━━━━━━━━━ -->
+<div id="4v" style="flex:none;width:390px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4v</span><span style="font-size:12px;font-weight:600;color:#6b7280">Runtime · 追问预填(点了 4f 的 Ask why 胶囊之后)</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 · 键盘态 · 本屏不可双指缩放</span></div>
+<div data-screen-label="4v Runtime追问预填" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+  <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+  <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+      <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+      <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">演示:危险命令拦截</span></div>
+      <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 8px 0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时<span style="font:600 10px 'JetBrains Mono',monospace;color:#ffffff;background:#2563eb;border-radius:9px;padding:2px 6px;font-variant-numeric:tabular-nums">53</span></span></div>
+    </div>
+    <div style="position:absolute;top:0;left:0;right:0;bottom:336px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px;padding:56px 16px 74px">
+      <div style="display:flex;align-items:center;gap:8px;min-height:44px;color:#6b7280;cursor:pointer" style-active="color:#2563eb">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg>
+        <span style="font-size:13px;line-height:1.7;flex:1;min-width:0">处理详情 · 2 次模型往返 · 2 次工具调用 · 0.4s</span>
+        <span style="width:6px;height:6px;border-radius:50%;background:#ef4444;flex:none"></span>
+      </div>
+      <div style="font-size:15px;line-height:1.75;text-wrap:pretty">这条命令被 permission-gate 拦截了——它匹配到了 <span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">sudo sed</span> 写系统文件的模式,所以没有执行。你可以手动改:用编辑器打开 <span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">/etc/hosts</span>,删掉带 legacy 的那两行再保存。</div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:336px;z-index:4;display:flex;align-items:flex-end;gap:10px;padding:8px 16px 10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+      <div style="flex:1;min-width:0;min-height:40px;border-radius:20px;background:rgba(120,120,128,0.12);display:flex;align-items:center;padding:9px 16px;box-sizing:border-box;font-size:15px;line-height:1.5;color:#1a1a1a">在 Turn 2 里 context 这一步做了什么?为什么需要它?<span style="display:inline-block;width:1.5px;height:17px;background:#1a1a1a;vertical-align:-3px;margin-left:1px;flex:none"></span></div>
+      <div style="width:40px;height:40px;flex:none;border-radius:20px;background:#2563eb;color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:336px;z-index:5;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-top:1px dashed #d4d4d4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
+      <span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">iOS 中文键盘 · 不可控 · ≈336(含候选栏 45)</span>
+      <span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af;display:{{noteDisplay}}">Tab Bar 整条隐藏 · 输入栏贴键盘上沿 · 高度取 visualViewport.height</span>
+    </div>
+  </div>
+  <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+</div>
+<div style="width:390px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4v · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">胶囊点击 = 三件事,一次做完</span>:① <a href="#4f" style="font:400 10px 'JetBrains Mono',monospace">4f</a> 的运行时 Sheet <span style="color:#1a1a1a">收起</span>(不是降到 medium —— 目标是让访客打字,Sheet 留在屏上只会挡键盘);② 输入框<span style="color:#1a1a1a">预填</span>那一句追问;③ 输入框<span style="color:#1a1a1a">聚焦</span>、键盘弹起、光标停在句尾。<span style="color:#1a1a1a">不弹层、不自动发送</span>,发送按钮回常态(品牌色实底圆,可点),答案是访客自己按下发送后那一轮普通对话。</div>
+    <div>· <span style="color:#1a1a1a">追问文案两种形状</span>:本板画的是<span style="color:#1a1a1a">非工具行</span>(4f 选中的是 context)—— 「在 Turn 2 里 context 这一步做了什么?为什么需要它?」;工具行多带工具名与入参 —— 「在 Turn 2 里你调用了 web_search,入参是 {"query":"encore bun runtime"}。为什么要这么做?」。只用 Timeline 行拿得到的字段(Turn 标签 + 事件名 + 工具行的工具名 / 入参摘要),没有行号、模型名、provider 名。</div>
+    <div>· <span style="color:#1a1a1a">输入框</span>:文本是真文本不是 placeholder(字色 <span style="color:#1a1a1a">#1a1a1a</span>,placeholder 的 #9ca3af 只属于空框),溢出自然换行、胶囊<span style="color:#1a1a1a">自然增高</span>(min-height 40 → auto,r20 不变,padding 9/16),不裁不省略。光标是 <span style="color:#1a1a1a">1.5×17 #1a1a1a 静态竖条</span> —— 不画闪烁,现有三个动效(omPulseBg / omWaveSweep / omSpin)都是「还在跑」的语义,借来做光标会撒谎。</div>
+    <div>· <span style="color:#1a1a1a">键盘态照 4b 那三条实现规范画</span>:Tab Bar 整条隐藏(不上移、不半透),输入栏贴键盘上沿,消息区高度按可视视口收缩并保持贴底(本板里用户气泡已被顶出视区,只剩折叠行 + 最终回答,这是正常滚动位不是丢内容)。键盘本体按<span style="color:#1a1a1a">「不可控系统件」</span>画法处理 —— 与状态栏 / 微信导航栏同一套斜纹 + mono 标注,不画假键帽。</div>
+    <div>· <span style="color:#1a1a1a">对不上时不出现</span>:4f 那枚 Ask why 胶囊在任何事件行都有;tool_call 行另有的「查看卡片」在 toolCallId 对不上时整条不渲染(见 <a href="#4w" style="font:400 10px 'JetBrains Mono',monospace">4w</a>),不画禁用态、不弹「定位失败」。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 输入胶囊(换行行数随宽度变)、正文段;不变 = 发送 40 圆、左右 16、字号 15、键盘高度(系统给的)。<span style="color:#1a1a1a">横滚</span>:本屏无。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4w Runtime · 卡片定位到 Timeline ━━━━━━━━━━ -->
+<div id="4w" style="flex:none;width:804px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4w</span><span style="font-size:12px;font-weight:600;color:#6b7280">卡片 → Timeline 定位(点击前 / 点击后)</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">两屏并列 · 各 390×845 · 安全 708 · 不可双指缩放</span></div>
+<div style="display:flex;gap:24px">
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">① 卡片展开体底部多一行链接(源 4d)</div>
+    <div data-screen-label="4w① 卡片链接" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+          <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">演示:危险命令拦截</span></div>
+          <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 8px 0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时<span style="font:600 10px 'JetBrains Mono',monospace;color:#ffffff;background:#2563eb;border-radius:9px;padding:2px 6px;font-variant-numeric:tabular-nums">53</span></span></div>
+        </div>
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;gap:14px;padding:56px 16px 128px">
+          <div style="display:flex;align-items:center;gap:8px;min-height:44px;color:#6b7280;cursor:pointer" style-active="color:#2563eb">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <span style="font-size:13px;line-height:1.7;flex:1;min-width:0">处理详情 · 2 次模型往返 · 2 次工具调用 · 0.4s</span>
+            <span style="width:6px;height:6px;border-radius:50%;background:#ef4444;flex:none"></span>
+          </div>
+          <div style="border-left:1px solid #e0e0e0;margin-left:5px;padding-left:14px;display:flex;flex-direction:column;gap:14px">
+            <div style="background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:8px 10px;display:flex;align-items:center;gap:8px;min-height:44px;box-sizing:border-box;cursor:pointer">
+              <span style="font:600 12px 'JetBrains Mono',monospace;color:#16a34a;flex:none">read_file</span>
+              <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"path": "/etc/hosts"}</span>
+              <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums;flex:none">0.3s</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+            <div>
+              <div style="background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.3);border-radius:7px;padding:8px 10px;display:flex;align-items:center;gap:8px;min-height:44px;box-sizing:border-box;cursor:pointer">
+                <span style="font:600 12px 'JetBrains Mono',monospace;color:#ef4444;flex:none">bash</span>
+                <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">sudo sed -i '/legacy/d' /etc/hosts</span>
+                <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums;flex:none">0.1s</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="18 15 12 9 6 15"></polyline></svg>
+              </div>
+              <div style="background:rgba(0,0,0,0.03);border:1px solid rgba(248,113,113,0.3);border-radius:6px;padding:10px 12px;margin-top:4px">
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:3px">INPUT</div>
+                <div style="max-height:106px;overflow-x:auto;overflow-y:hidden"><div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a;white-space:pre">sudo sed -i '/legacy/d' /etc/hosts</div></div>
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin:10px 0 3px">RESULT</div>
+                <div style="max-height:106px;overflow-x:auto;overflow-y:hidden"><div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#ef4444;white-space:pre">permission-gate: blocked — matches rule "sudo sed on system file"</div></div>
+                <div style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:6px">…(已截断)</div>
+                <div style="min-height:44px;box-sizing:border-box;padding:13px 0 10px;display:flex;align-items:center;cursor:pointer"><span style="font:400 11px 'JetBrains Mono',monospace;color:#2563eb;white-space:nowrap" style-active="color:#1d4ed8">在 Timeline 里查看 ↗</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:15px;line-height:1.75;text-wrap:pretty">这条命令被 permission-gate 拦截了——它匹配到了 <span style="font:400 13px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">sudo sed</span> 写系统文件的模式,所以没有执行。</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:49px;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 16px 10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <div style="flex:1;min-width:0;min-height:40px;border-radius:20px;background:rgba(120,120,128,0.12);display:flex;align-items:center;padding:0 16px;font-size:15px;color:#9ca3af">和 agent 说点什么…</div>
+          <div style="width:40px;height:40px;flex:none;border-radius:20px;background:#2563eb;color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+          <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+              <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+  <div style="width:390px;flex:none">
+    <div style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px;display:{{labelDisplay}}">② 点击后 · Sheet 升 LARGE + Timeline + 对应行展开(源 4f)</div>
+    <div data-screen-label="4w② Timeline定位" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+      <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+      <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:#ffffff"></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.35)"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:651px;z-index:6;background:#ffffff;border-radius:20px 20px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,0.18);display:flex;flex-direction:column;overflow:hidden">
+          <div style="flex:none;display:flex;justify-content:center;padding:6px 0 2px"><span style="width:36px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+          <div style="flex:none;display:flex;align-items:center;gap:8px;padding:4px 16px 8px">
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;font-variant-numeric:tabular-nums">12.4k tokens</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af">·</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;font:400 11px 'JetBrains Mono',monospace;color:#9ca3af"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a"></span>ctx 6%</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af">·</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;font-variant-numeric:tabular-nums">53 events</span>
+          </div>
+          <div style="flex:none;margin:0 16px 8px;display:flex;background:rgba(120,120,128,0.12);border-radius:9px;padding:2px;gap:2px">
+            <sc-for list="{{segTimeline}}" as="s" hint-placeholder-count="4">
+              <div style="flex:1;min-width:0;text-align:center;font-size:13px;font-weight:{{s.fw}};color:{{s.color}};background:{{s.bg}};border-radius:7px;padding:6px 0;box-shadow:{{s.shadow}};cursor:pointer">{{s.label}}</div>
+            </sc-for>
+          </div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:0 16px">
+            <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px">Turn 1</div>
+            <sc-for list="{{t1rows}}" as="r" hint-placeholder-count="7">
+              <div style="display:grid;grid-template-columns:8px minmax(0,1fr) 32% 40px;align-items:center;gap:8px;padding:7px 4px">
+                <span style="width:6px;height:6px;border-radius:50%;background:{{r.dot}}"></span>
+                <span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.name}}</span>
+                <div style="min-width:0"><div style="height:10px;border-radius:2px;width:{{r.w}};background:{{r.c}}"></div></div>
+                <span style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</span>
+              </div>
+            </sc-for>
+            <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:14px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px">Turn 2</div>
+            <sc-for list="{{w2before}}" as="r" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:8px minmax(0,1fr) 32% 40px;align-items:center;gap:8px;padding:7px 4px">
+                <span style="width:6px;height:6px;border-radius:50%;background:{{r.dot}}"></span>
+                <span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.name}}</span>
+                <div style="min-width:0"><div style="height:10px;border-radius:2px;width:{{r.w}};background:{{r.c}}"></div></div>
+                <span style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</span>
+              </div>
+            </sc-for>
+            <div style="display:grid;grid-template-columns:8px minmax(0,1fr) 32% 40px;align-items:center;gap:8px;padding:7px 4px;border-radius:4px;background:rgba(37,99,235,0.06)">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              <span style="font:600 11px 'JetBrains Mono',monospace;color:#2563eb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">tool_call · bash</span>
+              <div style="min-width:0"><div style="height:10px;border-radius:2px;width:46%;background:#ef4444"></div></div>
+              <span style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">18ms</span>
+            </div>
+            <div style="position:relative;background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;padding:10px 12px;margin:2px 0 8px 18px">
+              <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
+                <div style="flex:1;min-width:0">
+                  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:3px">INPUT · <span style="color:#1a1a1a">bash</span></div>
+                  <div style="overflow-x:auto"><div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a;white-space:pre">sudo sed -i '/legacy/d' /etc/hosts</div></div>
+                </div>
+                <span style="flex:none;font-size:12px;font-weight:600;color:#2563eb;border-radius:15px;background:rgba(120,120,128,0.12);padding:5px 10px;cursor:pointer" style-active="transform:scale(0.97)">Ask why ↗</span>
+              </div>
+              <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin:10px 0 3px">EXTENSION RETURNED · <span style="color:#2563eb">permission-gate</span></div>
+              <div style="overflow-x:auto"><div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#ef4444;white-space:pre">{ block: true, rule: "sudo sed on system file" }</div></div>
+              <div style="min-height:44px;box-sizing:border-box;padding:13px 0 10px;display:flex;align-items:center;cursor:pointer"><span style="font:400 11px 'JetBrains Mono',monospace;color:#2563eb;white-space:nowrap" style-active="color:#1d4ed8">查看卡片 ↗</span></div>
+            </div>
+            <sc-for list="{{w2after}}" as="r" hint-placeholder-count="5">
+              <div>
+                <div style="display:grid;grid-template-columns:8px minmax(0,1fr) 32% 40px;align-items:center;gap:8px;padding:7px 4px">
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{r.dot}}"></span>
+                  <span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.name}}</span>
+                  <div style="min-width:0"><div style="height:10px;border-radius:2px;width:{{r.w}};background:{{r.c}}"></div></div>
+                  <span style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="position:absolute;right:8px;bottom:659px;z-index:7;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px;font:600 9px 'JetBrains Mono',monospace;display:{{noteDisplay}}">定位 = 既有展开态 + 滚入视野,无新高亮、无动效</div>
+      </div>
+      <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+    </div>
+  </div>
+</div>
+<div style="width:804px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4w · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">语汇来源</span>:两条链接都是桌面 <a href="#4f" style="font:400 10px 'JetBrains Mono',monospace">1b / 2q</a> 里那枚 Ask why 的移动化 —— <span style="color:#1a1a1a">mono 11 品牌色 + 尾部 ↗</span>,按下转 #1d4ed8(移动端没有 hover,所以 hover 露底改 active 变色,与全站一致)。<span style="color:#1a1a1a">命中区靠上下 padding 补到 44</span>(13/10 + 行高 17.6 ≈ 41,加 min-height 44 兜底),<span style="color:#1a1a1a">行高 mono 11/1.6 一字不改</span> —— 展开体里所有正文共用这个行高,单独抬高它会破坏那一栏的节奏。</div>
+    <div>· <span style="color:#1a1a1a">两枚胶囊并排放不下 → 定案:只留 Ask why 胶囊,查看卡片做成详情块底部一行链接</span>。算过:详情块内宽 = 390 − 16×2 左右 − 18 左缩进 − 12×2 内边距 ≈ <span style="color:#1a1a1a">308</span>;Ask why 胶囊约 76,再放一枚「查看卡片」胶囊约 78 + 间距 6 = 160,INPUT 那一行只剩 148 —— 一条 bash 命令连开头都露不出来,而 INPUT 是这一块的主体。<span style="color:#1a1a1a">主次判断</span>:Ask why 是既有元素、位置不该因为新增而动;查看卡片是新增的次动作,下沉到块底部一行,与①屏的「在 Timeline 里查看 ↗」<span style="color:#1a1a1a">互为镜像</span>(两个方向的定位链接长得一样、都在块底部),这对读者反而更好记。</div>
+    <div>· <span style="color:#1a1a1a">定位 = 既有展开态 + 滚入视野</span>,三件事同时发生:Sheet 从收起 / medium 升到 <span style="color:#1a1a1a">large(651)</span>(理由同 4f:详情块加 payload 在 medium 里只剩两行可见)、分段控件切到 <span style="color:#1a1a1a">Timeline</span>、对应 tool_call 行按 4f 画法展开(rgba(37,99,235,.06) 底、箭头 ˅ 品牌色、事件名 600 品牌色)并滚到可见位置。<span style="color:#1a1a1a">不加新高亮色、不加「已定位」徽标、滚动不画动效</span>;Sheet 升档用系统 sheet 自身的物理动画,不属于 omPulseBg / omWaveSweep / omSpin 三个之外的新动效。</div>
+    <div>· <span style="color:#1a1a1a">对不上时链接不出现</span>:①屏那行只在卡片的内部 id 能对上一条 tool_call 事件时渲染;②屏的「查看卡片」只在 tool_call 行、且 toolCallId 能找到那张卡时渲染 —— 非工具行(如 context,见 <a href="#4f" style="font:400 10px 'JetBrains Mono',monospace">4f</a>)只有 Ask why 胶囊。<span style="color:#1a1a1a">对不上就整条不渲染</span>,不画灰掉的禁用态、不弹「定位失败」。</div>
+    <div>· <span style="color:#1a1a1a">Ask why 胶囊 = 预填,不是弹层</span>:点它 → 关 Sheet + 输入框预填 + 聚焦弹键盘(落地态见 <a href="#4v" style="font:400 10px 'JetBrains Mono',monospace">4v</a>),不自动发送。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = INPUT 横滚盒(胶囊定宽,盒子吃剩下的)、事件名列、时长条 32% 列;不变 = 18 左缩进、r6、mono 10 小标题 / mono 11/1.6 正文、胶囊 r15 与 5/10 内边距、两条链接的 44 命中。<span style="color:#1a1a1a">横滚</span>:详情块内两个 payload 盒各自 overflow-x + white-space:pre;链接行不横滚(它短)。<span style="color:#1a1a1a">token</span>:两屏对 4d / 4f 的增量各只有一行链接,其余一字未改。</div>
+  </div>
+</div>
+</div>
+
 </section>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{
@@ -746,6 +945,18 @@ class Component extends DCLogic {
       row('tool_result', 10, '10ms', '#2563eb'),
     ];
     const ctxSel = row('context', 11, '11ms', '#2563eb');
+    // 4w:一轮已完成的 Turn 2(定位态),被展开的 tool_call · bash 行单独画在模板里
+    const w2before = [
+      row('context', 11, '11ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+    ];
+    const w2after = [
+      row('tool_result', 6, '6ms', '#2563eb'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 180, '180ms', '#9ca3af'),
+      row('message_end', 1, '1ms', '#9ca3af'),
+      row('turn_end', 0.4, '0ms', '#9ca3af'),
+    ];
     const t2rest = [
       row('before_provider_request', 4, '4ms', '#2563eb'),
       row('tool_call · bash', 18, '18ms', '#ef4444', { hasNote: true }),
@@ -943,7 +1154,7 @@ class Component extends DCLogic {
 
     return {
       siteName: this.props.siteName ?? 'Agent X-Ray',
-      t1rows, t2rows: [ctxSel, ...t2rest], t2rest, ctxSel,
+      t1rows, t2rows: [ctxSel, ...t2rest], t2rest, ctxSel, w2before, w2after,
       segTimeline: seg('Timeline'), segChain: seg('Chain'), segLife: seg('Lifecycle'), segTools: seg('Tools'),
       tabs: mkTabs('Runtime'), tabsNotes: mkTabs('Notes'), tabsSkills: mkTabs('Skills'), tabsAbout: mkTabs('About'),
       tabs3: mkTabs('Runtime', ['Runtime', 'Notes', 'About']),

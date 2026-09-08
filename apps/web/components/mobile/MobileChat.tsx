@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { AssistantMessage, AssistantTurn } from "@/components/workbench/Workbench";
 import { suggestions } from "@/lib/demo-data";
-import type { ChatItem } from "@/lib/types";
+import type { ChatItem, CrossLink } from "@/lib/types";
 
 /**
  * R-MOBILE 会话区(画板 4b–4d)。
@@ -17,7 +17,18 @@ import type { ChatItem } from "@/lib/types";
  * 【自动滚到底的判据与桌面一致】末项「长度」= 正文长度 + 工具卡数:
  * 卡片到达而正文没变的那一帧也要跟着滚(与桌面 ChatPane 同一个坑)。
  */
-export function MobileChat({ items }: { items: ChatItem[] }) {
+export function MobileChat({
+  items,
+  rowLink,
+  locate,
+}: {
+  items: ChatItem[];
+  /** R-CROSSLINK C2(画板 4w):卡片展开体底部那条「在 Timeline 里查看 ↗」——
+      与桌面同一个组件、同一条链接,移动端只在 globals.css 里补 44 命中区 */
+  rowLink?: CrossLink;
+  /** R-CROSSLINK C2 行 → 卡:详情块底部的「查看卡片」要求定位到某个 toolCallId */
+  locate?: { toolCallId: string; nonce: number } | null;
+}) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const last = items[items.length - 1];
   const tail =
@@ -62,7 +73,7 @@ export function MobileChat({ items }: { items: ChatItem[] }) {
         }
         // 内核层原样复用:有工具调用的一轮走 AssistantTurn(折叠行 + 工具卡),
         // 没有的走 AssistantMessage —— 与桌面同一条渲染路径。
-        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} />;
+        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} rowLink={rowLink} locate={locate} />;
         return <AssistantMessage key={i} text={item.text} />;
       })}
     </div>

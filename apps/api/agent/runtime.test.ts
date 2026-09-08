@@ -381,6 +381,19 @@ describe("系统提示词的通用三条", () => {
     });
   }
 
+  // R-CROSSLINK:Timeline 每一行的 Ask why 会把一句「为什么这么做」预填进访客的输入框。
+  // 那句到服务端就是一条普通访客消息 —— 模型不知道它来自哪一行,所以条款只管「怎么答」:
+  // 如实解释实际做过的调用,别顺着问句编一段没发生的推理。它必须在**底座**里:
+  // 追问在零工具的会话里也会发生。
+  it("追问条款在底座里,且只说「如实解释 / 可读源码 / 不编造」(R-CROSSLINK)", () => {
+    for (const p of [systemPromptFor([]), systemPromptFor(["notes_search"])]) {
+      expect(p).toContain("被追问「为什么这么做」时");
+      expect(p).toContain("实际做过");
+      expect(p).toContain("可以读本站源码再答");
+      expect(p).toContain("不要编造没发生过的步骤");
+    }
+  });
+
   it("底座不点名任何工具(分组用例的前提)", () => {
     const base = systemPromptFor([]);
     for (const name of ["notes_", "web_search", "generate_image", "session_rename", "skill"]) {

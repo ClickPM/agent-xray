@@ -11,7 +11,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 **Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。五个 Tab:Runtime 工作台 / Notes 研习库 / **Skills 技能库(R-SKILLS,2026-09-03 裁定并落地)** / **Source 源码(R-SOURCE,2026-09-08 裁定,分支 `round-source`)** / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。**站点已于 2026-09-02 投产**(https://www.kzgai.cloud/,R11),此后进入运维迭代:**较大迭代依旧延续轮次机制**(命名轮,所有者裁定 2026-09-03),小修补可直接 `main`;**每次生产发版必须记入 [`docs/releases.md`](docs/releases.md)**。
 
-- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2p(共 23 块)+ **移动端**画板 4a–4u(共 21 块,2026-09-07 新增,R-MOBILE)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,2n–2p 于 2026-09-08 新增(R-SOURCE,放新文件 `Agent X-Ray Source.dc.html`),3a–3e 已废弃并于 2026-09-02 从画布删除)。移动端只重排既有功能、不新增,**两套画板的功能范围是同一个**。管理面范围以 ROUNDS.md R6 裁定清单为准。
+- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2r(共 25 块)+ **移动端**画板 4a–4x(共 24 块,2026-09-07 新增 4a–4u,R-MOBILE)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,2n–2p 于 2026-09-08 新增(R-SOURCE,放新文件 `Agent X-Ray Source.dc.html`),2q–2r 与 4v–4x 于 2026-09-08 新增(R-CROSSLINK,桌面两块放新文件 `Agent X-Ray Crosslink.dc.html`),3a–3e 已废弃并于 2026-09-02 从画布删除)。移动端只重排既有功能、不新增,**两套画板的功能范围是同一个**。管理面范围以 ROUNDS.md R6 裁定清单为准。
 - 架构与既定决策:[`docs/architecture.md`](docs/architecture.md)(pi SDK in-process、Encore 类型化 RPC、SSE ×2、Postgres、单机 compose)。
 - 安全强约束:[`docs/security.md`](docs/security.md)——威胁模型、四层沙箱、脱敏、凭据管理;**是约束不是建议**(规则 9)。
 
@@ -88,7 +88,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 5. **`secret()` 只能在 service 目录内声明**(Encore 限制);共享库里不出现 `secret()`,需要密钥的共享代码收「已取好的值」作参数。
 6. **`apps/api` 是 Encore app root,不做 npm workspaces 提升**(规避 encore#1723:app root 下无关 node_modules/.ts 干扰 parser)。web 与 api 不手工共享源码文件;类型经 `encore gen client` 产物(`apps/web/lib/api-client.ts`)流向前端,该文件是生成物,不许手改。
 7. **非必要不得修改前端页面样式,不做视觉 review**。画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。(2026-08-31 修订:3a–3e 废弃,对应 `/admin` 六页按所有者裁定于 R6 整目录删除——属本条允许的结构性改动;同轮的 `next.config.ts` 配图 rewrite 亦然,理由=图片改从 Postgres 供,对外 URL 不变。)
-8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02、2026-09-03、2026-09-07 多次修订)。站点访客功能范围 = `design/` 桌面画板 1a–1g + 2a–2p 与移动端画板 4a–4u + 可交互原型(**两套画板同一个功能范围**,移动端只换呈现);**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
+8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02、2026-09-03、2026-09-07 多次修订)。站点访客功能范围 = `design/` 桌面画板 1a–1g + 2a–2r 与移动端画板 4a–4x + 可交互原型(**两套画板同一个功能范围**,移动端只换呈现);**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
     - **2026-09-02 修订(R-TOOLS)**:所有者裁定新增 **Tools 工具面板**,设计稿随之扩到 12 块(新增 `1f` 列表态 / `1g` 展开态,同日删除废弃的 `3a–3e`)。**扩边界的正确顺序是「先改设计稿、再进轮次」**——本条不是被绕过,是先被改了。面板是访客可见的**只读**能力说明(工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组),**不显示**启停开关、日限额与剩余次数、provider 与 model 名(那些是服务端配置,公开即泄配置面)。
     - **2026-09-03 修订(R-TABS)**:所有者裁定新增**顶部 tab 的呈现开关**(经 MCP 逐个开关三个 tab 露不露)。
       这**是**本条的例外(与 R-VISITOR 的会话删除入口同类,不同于 R-TOOLS 的「先改设计稿」):画板 1a 的导航条
@@ -176,8 +176,8 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       `Agent X-Ray Cards.dc.html`,移动 `4y` / `4z` 追加进 `- Runtime`;并入 `design/` 之后才开 `round-cards`。`docs/security.md` §0 第 11 条(模型输出渲染成 UI 组件)
       按规则 9 先于代码写入。提示词 `rounds/round-cards/design-prompt.md`,拆解 `rounds/round-cards/round-cards.md`。
     - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用;**桌面**新画板从 `2u` 顺延
-      (`1a–1g`、`2a–2p` 已用;`2n–2p` 在单独的 `Agent X-Ray Source.dc.html` 里;**`2q–2r` 预留给 R-CROSSLINK、`2s–2t` 预留给 R-CARDS**,各放新文件,
-      两轮若调换顺序编号也不调换),**移动端**占 `4x` 段(`4a`–`4u` 已用;**`4v–4x` 预留给 R-CROSSLINK、`4y–4z` 预留给 R-CARDS**;`4z` 之后的号段由所有者定,
+      (`1a–1g`、`2a–2p` 已用;`2n–2p` 在单独的 `Agent X-Ray Source.dc.html` 里;**`2q–2r` 已于 2026-09-08 并入(R-CROSSLINK,新文件 `Agent X-Ray Crosslink.dc.html`)、`2s–2t` 预留给 R-CARDS**,各放新文件,
+      两轮若调换顺序编号也不调换),**移动端**占 `4x` 段(`4a`–`4u` 与 `4v`–`4x` 已用;**`4v–4x` 已于 2026-09-08 并入(R-CROSSLINK)、`4y–4z` 预留给 R-CARDS**;`4z` 之后的号段由所有者定,
       建议移动端继续占 `5x` 段从 `5a` 起)。
     - **`design/` 的单文件有 256 KiB 硬上限**(DesignSync `get_file`,2026-09-07 实测撞线):
       超了**静默截断、不报错** —— 表现是文件正好 262,144 字节、`</x-dc>` 与 `</html>` 都没有、`<div>` 开合不配平。
