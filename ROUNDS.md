@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;此后多次修订,逐条见下方「第 N 次修订」,最近一次是 2026-09-08 第十一次)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2p(共 23 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 于 2026-09-08 新增,见第十一次修订)+ **移动端**画板 4a–4u(共 21 块,2026-09-07 新增,见 R-MOBILE)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;此后多次修订,逐条见下方「第 N 次修订」,最近一次是 2026-09-08 第十二次)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2r(共 25 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 与 2q–2r 于 2026-09-08 新增,见第十一、第十二次修订)+ **移动端**画板 4a–4x(共 24 块,2026-09-07 新增 4a–4u 见 R-MOBILE,2026-09-08 追加 4v–4x 见 R-CROSSLINK)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 >
 > **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
 > 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
@@ -121,6 +121,20 @@
 > 读面 `apps/api/source/` 只读;agent 侧新表按第 2 层既定口径显式 `GRANT SELECT` 给 `agent_ro`(仓库本就是公开 MIT,新增的只是「读公开源码」)。
 > 提示词 [`rounds/round-source/design-prompt.md`](rounds/round-source/design-prompt.md),拆解 [`rounds/round-source/round-source.md`](rounds/round-source/round-source.md);
 > 分支 `round-source` 已开,**等设计稿**。
+>
+> **2026-09-08 第十二次修订(R-CROSSLINK)**:所有者裁定把画板 `1b` / `4f` 上一直是死按钮的 `Ask why ↗` **做实**,并加两条联动 ——
+> 会话区工具卡 ↔ Timeline 行**双向定位**、Notes 章节页 → Runtime 的「在 Runtime 里聊这一章」入口。三件事共用**一个原语**:
+> 「把一句预设文本放进输入框,**永不自动发送**」。与 R-TOOLS / R-SKILLS / R-PERF / R-SOURCE 同一顺序、**不是**规则 8 的例外:
+> 设计稿先扩到**桌面 25 块 + 移动 24 块**(桌面 `2q` 追问预填 + 双向定位 / `2r` 章节页入口,放**新文件** `Agent X-Ray Crosslink.dc.html`
+> —— `Workbench` 离 256 KiB 只剩 11 KB;移动 `4v` / `4w` 追加进 `- Runtime`、`4x` 追加进 `- Notes Skills About`;`1b` / `4f` **只加注释、图形不动**),
+> 2026-09-08 并入 `design/` **之后**才开代码。画板定下的实现口径:两条新链接照抄 `Ask why ↗` 的画法;**定位 = 既有展开态 + 滚入视野**
+> (不新增高亮色、不加徽标、滚动不画动效);**`toolCallId` 对不上就整条不渲染**(不画禁用态、不弹「定位失败」);追问文案两种形状
+> (工具行带工具名与入参摘要,非工具行只有 Turn 标签 + 事件名),只用 Timeline 行上拿得到的字段;`2r` / `4x` 入口**取方案 A**
+> (meta 行末尾文本链接,与「原文」同一语汇),Runtime tab 隐藏时整条不渲染;移动端 `4w` 定案**只留 Ask why 胶囊**、
+> 「查看卡片」下沉成详情块底部一行链接(详情块内宽约 308,两枚胶囊会把 INPUT 挤到 148)。**零后端机制**:无新端点 / 无迁移 /
+> MCP 仍 51 / `messages.payload` 与两条 SSE 契约不变,api 侧只有 `runtime.ts` 一句追问条款。
+> 提示词 [`rounds/round-crosslink/design-prompt.md`](rounds/round-crosslink/design-prompt.md),拆解 [`rounds/round-crosslink/round-crosslink.md`](rounds/round-crosslink/round-crosslink.md);
+> 分支 `round-crosslink` 已开、设计稿已并入,**开工中**。
 
 ## 进度表
 
@@ -157,7 +171,7 @@
 | **R-MOBILE** | 移动端呈现层(iOS 26,21 块画板 `4a`–`4u`):桌面三栏 → 一屏 + 两档 Sheet + 左侧会话抽屉 · 底部 Tab Bar · PWA 只取 manifest/standalone/theme-color(不做 SW、不做安装引导)· **桌面零改动** | ✅ **已发版**(生产 `be6c074`,2026-09-08,**迁移 15 不变**;[任务卡](rounds/round-mobile/round-mobile.md) · [设计提示词](rounds/round-mobile/design-prompt.md) · [实现提示词](rounds/round-mobile/impl-prompt.md);分支 `round-mobile` 已 `--no-ff` 合并 `main`)。设计稿 2026-09-07 并入(两份新文件,桌面两份未碰);**首次拉稿撞上 DesignSync `get_file` 的 256 KiB 静默截断**,拆两份后重拉、四项判据全过。**codex 五轮共 17 条 findings:16 条采纳整改、1 条实证不采纳(Sheet 并不被滚动容器裁切 —— containing block 是滚动容器的祖先,CSS 2.1 §11.1.1),high 级为零,末两轮零 findings**;第 4 轮另自查修掉一处 `span > div` 非法嵌套(审查注意到却没报)。收口门禁:`dev.ps1 test` 全绿(api 28 文件 564 用例 + web 21 用例)、`tsc --noEmit` 通过、每屏实测 `body.scrollWidth === innerWidth`、桌面四 tab 逐项零改动。**2026-09-08 所有者裁定「两件都没问题,打包上生产」并自行验收移动端**(两件 = ICP 备案号在移动端的位置、真机流式只能靠真机验),当日发版 `be6c074`:`apps/api` / `runner/` / `deploy/` / `tools/` 相对上一版**四处零改动**,故零迁移、部署资产未 reload。**HTTP 冒烟 33 项 0 失败**,其中 7 项是本轮新增判据、发版前刻意跑过基线并全部 FAIL(manifest 与三枚图标 404、viewport 无 `user-scalable=no`、无 `theme-color` / `rel=manifest`),发版后全部翻 PASS —— 这组正向对照正是 `apps/web/Dockerfile` 那处 `COPY public`(**缺了是静默失败**:图标 404、站点照常起)的唯一探针。**容器复核 22 项 0 失败**(bun 1.4.0 / 无真 node / none 与 egress 两档隔离 / 双向 `network_mismatch` / `docker inspect` 六项)。生产真机比例实测:四 Tab 在 390×845 全部零横向溢出,桌面 1280×800 回归导航条 h44 · 左栏 260 · 右面板 428 · 移动壳未挂载。口径与留证见 [`docs/releases.md`](docs/releases.md) | — |
 | **R-SOURCE** | 第五个顶部 tab「Source」:站点自身源码的只读浏览(目录树 + 逐文件预览,快照按 git SHA 随每次生产发版**自动**发布)+ agent 三个纯函数组只读工具 `source_list` / `source_read` / `source_search`(默认开)· MCP +5(51)· 迁移 016 · **先桌面** | ✅ **已发版 `54f7356`**(2026-09-08 生产上线,迁移 15 → 16;首次发版按预期手动补跑 `dev.ps1 source-publish`,冒烟第 22 条五项全过,见 [`docs/releases.md`](docs/releases.md))。分支 `round-source`,`5dc7ae8` 设计稿 + 安全补记 → `57e890b` 代码 → `6879a6c` 端到端整改 → 四轮审查整改;**codex 五轮共 9 条(1 P1 / 7 P2 / 1 P3)全部采纳、high 级为零、末轮零 findings**:快照一致性与元数据核对 4 条、BIGINT 契约 1 条、链接改写 3 条(以删代码收口)、空文件 1 条;[任务卡](rounds/round-source/round-source.md) · [设计提示词](rounds/round-source/design-prompt.md)):画板 `2n`–`2p`(新文件 72 KB)+ 20 块导航五格 + 原型两屏同日并入 `design/`;`dev.ps1 test` 全绿(api 33 文件 599 用例 + web 24)、`tsc` 过;本机把 HEAD 快照(319 个文件 / 3.36 MB)经本机 MCP 发进库,`/source` 与文件页逐项对照 2n / 2o / 2p,Tools 面板多三张卡,`site_tab_set source false` 藏导航与页面而 `/api/source` 照常;假 provider e2e 一轮 `source_search → source_read → 回答`。踩到并修掉:库默认 collation 的排序、`path` 入参名撞泄露清单、结果正文按整行凑预算、`dev.ps1` 的 BOM 让 sha256 对不上、父子两层 loading 让 404 卡在骨架、catch-all 段不解码 `[series]` | — |
 | **R-LEAK** | 公开轨迹流的配置面泄露修补:`model_select` 派生字段删掉(`data` 只剩 `{type, source}`)+ `web_search` `request` 阶段文案改固定字符串 + **结果 `details` 只留 `citations`(通道 C,探针抓到)** + 同族排查 + 冒烟第 8 条改值级 | ✅ **已发版**(生产 `e8ac83e`,2026-09-08;[任务卡](rounds/round-leak/round-leak.md);codex 一轮零 findings;`test` 608 + web 28 全绿;新增 6 条用例;无迁移、无 MCP 变动、前端零改动;发版当日值级冒烟六值 × 两条流 0 命中) | 2026-09-08 |
-| **R-CROSSLINK** | 跨栏 / 跨页联动:Ask why 预填(1-A)+ 卡片 ↔ Timeline 双向定位 + Notes 章节 → Runtime 入口,共用「预填、永不自动发送」一个原语;桌面 `2q` / `2r`(新文件)+ 移动 `4v`–`4x` + `1b` / `4f` 注释 | 📝 **文档就绪、设计稿待交付、未开工**(所有者裁定 2026-09-08,第二轮;[任务卡](rounds/round-crosslink/round-crosslink.md) · [画板提示词](rounds/round-crosslink/design-prompt.md);`docs/security.md` §0 第 10 条已写;零后端机制,api 侧只有一句提示词) | — |
+| **R-CROSSLINK** | 跨栏 / 跨页联动:Ask why 预填(1-A)+ 卡片 ↔ Timeline 双向定位 + Notes 章节 → Runtime 入口,共用「预填、永不自动发送」一个原语;桌面 `2q` / `2r`(新文件)+ 移动 `4v`–`4x` + `1b` / `4f` 注释 | 🚧 **设计稿已并入、开工中**(所有者裁定 2026-09-08,第二轮;分支 `round-crosslink`;[任务卡](rounds/round-crosslink/round-crosslink.md) · [画板提示词](rounds/round-crosslink/design-prompt.md);设计稿 `2q` / `2r`(新文件 `Agent X-Ray Crosslink.dc.html`)+ `4v` / `4w` / `4x` + `1b` / `4f` 注释于 2026-09-08 并入,四项判据全过;`docs/security.md` §0 第 10 条已写;零后端机制,api 侧只有一句提示词) | — |
 | **R-CARDS** | 会话区信息卡片:内容级 ` ```xray-card ` 围栏块(六种 kind 闭集、声明式交互、非法回落、流式骨架、只在会话区开);桌面 `2s` / `2t`(新文件)+ 移动 `4y` / `4z` | 📝 **文档就绪、设计稿待交付、未开工**(所有者裁定 2026-09-08,第三轮、依赖 R-CROSSLINK 的预填原语;[任务卡](rounds/round-cards/round-cards.md) · [画板提示词](rounds/round-cards/design-prompt.md);`docs/security.md` §0 第 11 条已写;不是 pi 工具、无迁移、MCP 仍 51) | — |
 
 ## 里程碑
@@ -794,11 +808,11 @@ zod 闭集与说明 · 两处测试 · 两处文档。**不交付**:新工具 / 
 静态排查漏它是因为任务卡把范围写成「**字符串模板**」而它是个结构化对象。修法同族(只留 `citations`),与 `generate_image` 那一侧从 R-IMAGEGEN 起的既有写法对齐。
 `dev.ps1 test` 608 passed + web 侧 28 passed,新增 6 条用例;codex 全量审查**一轮零 findings**。验收 1–7 全过,8 与 10 待发版当日。
 
-### R-CROSSLINK — 跨栏 / 跨页联动:Ask why 预填 + 卡片 ↔ Timeline 互相定位 + Notes 章节 → Runtime 入口(命名轮;所有者裁定 2026-09-08;设计稿待交付、未开工)
+### R-CROSSLINK — 跨栏 / 跨页联动:Ask why 预填 + 卡片 ↔ Timeline 互相定位 + Notes 章节 → Runtime 入口(命名轮;所有者裁定 2026-09-08;设计稿 2026-09-08 已并入、开工中)
 
 > 下一阶段三轮里的第二轮。任务卡 [`rounds/round-crosslink/round-crosslink.md`](rounds/round-crosslink/round-crosslink.md),画板提示词 [`design-prompt.md`](rounds/round-crosslink/design-prompt.md)。
 > 与 R-TOOLS / R-PERF / R-TOOLCARDS / R-SOURCE 同一顺序、**不是**规则 8 的例外:桌面 `2q` / `2r` 放新文件 `Agent X-Ray Crosslink.dc.html`,移动 `4v` / `4w` / `4x` 追加,
-> `1b` / `4f` 只加注释;并入 `design/` 之后才开工。
+> `1b` / `4f` 只加注释;并入 `design/` 之后才开工 —— **设计稿已于 2026-09-08 并入**(四项判据全过,见 `design/README.md` 增删记录),分支 `round-crosslink` 开工中。
 
 **问题**:① 画板 `1b` / `4f` 的 `Ask why ↗` 自首版起是死按钮(title 写着「pi 接入后可用」),没画答案态;② 会话区工具卡与 Timeline 的行两边都有 `toolCallId` 却互不可达
 (BACKLOG R-TOOLCARDS);③ Notes 与 Runtime 之间没有任何通路,教程库和 X 光机是两个站。

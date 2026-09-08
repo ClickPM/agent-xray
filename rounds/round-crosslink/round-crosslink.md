@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-crosslink/round-crosslink.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**文档就绪、设计稿待交付、未开工**(所有者裁定 2026-09-08:下一阶段三轮里的第二轮,排在 R-LEAK 之后、R-CARDS 之前)。
+> 状态:**设计稿 2026-09-08 已并入、开工中**(所有者裁定 2026-09-08:下一阶段三轮里的第二轮,排在 R-LEAK 之后、R-CARDS 之前)。分支 `round-crosslink`。
 > 三件事共用**同一个原语**:「把一句预设文本放进 Runtime 的输入框,**不自动发送**」——所以并成一轮。
 > 与 R-TOOLS / R-PERF / R-TOOLCARDS / R-SOURCE 同一顺序、**不是**规则 8 的例外:画板先扩(桌面 `2q` / `2r` 放**新文件**
 > `Agent X-Ray Crosslink.dc.html`,移动端 `4v` / `4w` 追加进 `- Runtime`、`4x` 追加进 `- Notes Skills About`;`1b` / `4f` 只加注释),

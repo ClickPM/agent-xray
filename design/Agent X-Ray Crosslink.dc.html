@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#fafafa}
+a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
+@keyframes omPulseBg{0%,100%{background-color:rgba(37,99,235,0.05)}50%{background-color:rgba(37,99,235,0.16)}}
+@keyframes omWaveSweep{from{background-position:200% 0}to{background-position:-100% 0}}
+@keyframes omSpin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<section style="display:flex;flex-wrap:wrap;gap:48px;padding:48px;align-items:flex-start;width:2976px">
+
+<!-- ━━━ 2q 画板 · 桌面 · 追问预填 + 双向定位 ━━━ -->
+<div id="2q" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2q</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 · 桌面 · 追问预填 + 卡片 ↔ Timeline 双向定位</span></div>
+<div data-screen-label="2q 追问预填与双向定位" style="width:1440px;height:900px;background:#ffffff;border:1px solid #e0e0e0;display:flex;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a">
+  <div style="width:260px;flex:none;background:#f5f5f5;border-right:1px solid #e0e0e0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:15px;font-weight:700;letter-spacing:-0.01em;flex:1">agent-xray</div>
+      <div style="display:flex;align-items:center;gap:6px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;height:28px;padding:0 10px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">+ New</div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+    </div>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{sessions}}" as="s" hint-placeholder-count="5">
+        <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee">
+          <div style="font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{s.title}}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">{{s.time}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:13px;font-weight:600;flex:1">Encore 能不能换成 Bun 跑</div>
+      <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>9.6k tokens</span><span>·</span><span>$0.031</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>ctx 5%</span><span>·</span><span>38 events</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+        <div style="flex:1;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">Encore.ts 现在能用 Bun 当运行时跑吗?</div></div>
+          <div style="display:flex;align-items:center;gap:8px;color:#6b7280;cursor:pointer" style-hover="color:#2563eb">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <span style="font-size:13px;line-height:1.7">处理详情 · 2 次模型往返 · 1 次工具调用 · 1.2s</span>
+          </div>
+          <div style="border-left:1px solid #e0e0e0;margin-left:5px;padding-left:14px;display:flex;flex-direction:column;gap:14px">
+            <div style="font-size:14px;line-height:1.7">这类运行时支持变动很快,我先查一下最新的说法。</div>
+            <div>
+              <div style="background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px">
+                <span style="font:600 12px 'JetBrains Mono',monospace;color:#16a34a">web_search</span>
+                <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"query": "encore bun runtime"}</span>
+                <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">1.1s</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+              </div>
+              <div style="background:rgba(0,0,0,0.03);border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:10px 12px;margin-top:4px">
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:3px">INPUT</div>
+                <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a;max-height:106px;overflow:hidden;word-break:break-all">{"query": "encore bun runtime"}</div>
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin:10px 0 3px">RESULT</div>
+                <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a;max-height:106px;overflow:hidden;word-break:break-all">Encore.ts 官方运行时仍是 Node;Bun 只在本地 encore run 的实验分支里跑通过,生产镜像未支持。来源:6 条…(已截断)</div>
+                <div style="margin-top:10px"><span style="font:400 11px 'JetBrains Mono',monospace;color:#2563eb;border-radius:5px;padding:2px 6px;margin-left:-6px;cursor:pointer" style-hover="background:#eeeeee">在 Timeline 里查看 ↗</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">短答:还不能当生产运行时。Encore.ts 的官方运行时是 Node,<span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">encore run</span> 在实验分支里能挂 Bun,但构建出的生产镜像仍按 Node 打。想用 Bun 的话,现在只适合本地跑单测这类不进镜像的场景。</div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:flex-end">
+          <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;line-height:1.5;color:#1a1a1a">在 Turn 2 里你调用了 web_search,入参是 {"query":"encore bun runtime"}。为什么要这么做?<span style="display:inline-block;width:1.5px;height:16px;background:#1a1a1a;vertical-align:-3px;margin-left:1px"></span></div>
+          <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;flex:none;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+        </div>
+      </div>
+      <div style="width:500px;flex:none;display:flex;flex-direction:column">
+        <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:12px;font-weight:600;padding:8px 14px;background:#ffffff;color:#1a1a1a;border-right:1px solid #e0e0e0">Timeline</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Chain View</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Lifecycle Map</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:10px 14px">
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 1</div>
+          <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px;background:rgba(37,99,235,0.06)">
+            <div style="display:flex;align-items:center;gap:6px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="font:600 11px 'JetBrains Mono',monospace;color:#2563eb">before_agent_start</span></div>
+            <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{startSel.w}}px;background:#2563eb"></div></div>
+            <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">3ms</div>
+          </div>
+          <div style="position:relative;background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;padding:10px 12px;margin:4px 0 8px 20px">
+            <div style="position:absolute;top:6px;right:8px;color:#2563eb;font-size:11px;border-radius:5px;padding:2px 6px;cursor:pointer" style-hover="background:#eeeeee">Ask why ↗</div>
+            <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em;margin-bottom:3px">INPUT</div>
+            <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a">{ systemPrompt: "…", tools: [4] }</div>
+            <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em;margin:10px 0 3px">EXTENSION RETURNED · <span style="color:#2563eb">observer</span></div>
+            <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a">{ subscribe: [34 events] }</div>
+          </div>
+          <sc-for list="{{t1after}}" as="r" hint-placeholder-count="7">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:14px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 2</div>
+          <sc-for list="{{t2before}}" as="r" hint-placeholder-count="2">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+          <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px;background:rgba(37,99,235,0.06)">
+            <div style="display:flex;align-items:center;gap:6px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="font:600 11px 'JetBrains Mono',monospace;color:#2563eb">tool_call · web_search</span></div>
+            <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{callSel.w}}px;background:#ef4444"></div></div>
+            <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">14ms</div>
+          </div>
+          <div style="position:relative;background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;padding:10px 12px;margin:4px 0 8px 20px">
+            <div style="position:absolute;top:6px;right:8px;display:flex;align-items:center;gap:6px">
+              <div style="color:#2563eb;font-size:11px;border-radius:5px;padding:2px 6px;cursor:pointer" style-hover="background:#eeeeee">查看卡片 ↗</div>
+              <div style="color:#2563eb;font-size:11px;border-radius:5px;padding:2px 6px;cursor:pointer" style-hover="background:#eeeeee">Ask why ↗</div>
+            </div>
+            <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em;margin-bottom:3px">INPUT · <span style="color:#1a1a1a">web_search</span></div>
+            <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a">{ "query": "encore bun runtime" }</div>
+            <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em;margin:10px 0 3px">EXTENSION RETURNED · <span style="color:#2563eb">permission-gate</span></div>
+            <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a">{ block: false }</div>
+          </div>
+          <sc-for list="{{t2after}}" as="r" hint-placeholder-count="8">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{noteDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2q · 裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">语汇来源</span>:两条新链接一个像素也没新造 —— 直接复制 <a href="#1b" style="font:400 11px 'JetBrains Mono',monospace">1b</a> 那枚 <span style="color:#1a1a1a">Ask why ↗</span> 的画法(11px 品牌色文本 + r5 + padding 2/6 + hover 露 #eeeeee 底 + 尾部 ↗),并排放在详情块 absolute 右上、间距 <span style="color:#1a1a1a">6</span>、右对齐,<span style="color:#1a1a1a">Ask why 永远在最右</span>(它是既有元素,位置不该因为多了一条链接而移动)。注意 1b 里这枚角标用的是 11px 系统字、不是 mono —— 本板照 1b 抄,不照 token 表里的「mono 11」抄,以免两处漂移;要改就 1b / 2q / 4f 一起改。</div>
+    <div>· <span style="color:#1a1a1a">会话区那条链接</span>:「在 Timeline 里查看 ↗」在卡片展开体内部,那里通篇是 mono,所以它取 <span style="color:#1a1a1a">mono 11 品牌色</span>、左对齐、与 RESULT 段间距 <span style="color:#1a1a1a">10</span>,hover 同样露 #eeeeee 底。它在展开体<span style="color:#1a1a1a">之内</span>而不是卡片下面:出了展开体它就变成会话区的第四种元素(卡 / 折叠行 / 正文之外),而它讲的是这一次调用。</div>
+    <div>· <span style="color:#1a1a1a">「定位」的定义 = 既有展开态 + 滚入视野,没有第三种状态</span>。右栏被定位到的行就是 1b 的展开态(<span style="color:#1a1a1a">rgba(37,99,235,.06)</span> 底、箭头转 ˅ 且换品牌色、事件名 600 品牌色),会话区被定位到的卡就是 <a href="#2m" style="font:400 11px 'JetBrains Mono',monospace">2m</a> 的展开态。<span style="color:#1a1a1a">不新增高亮色、不加闪一下的动效、不加「已定位」徽标</span>;滚动本身也不画动效(现有三个 omPulseBg / omWaveSweep / omSpin 都是「还在跑」的语义,拿来做定位会撒谎)。本板把 tool_call · web_search 行画在右栏可视区中部、上下都还有行,画的就是「刚被滚进视野」的那一刻。</div>
+    <div>· <span style="color:#1a1a1a">追问文案两种形状</span>:工具行 = 「在 Turn 2 里你调用了 web_search,入参是 {"query":"encore bun runtime"}。为什么要这么做?」;非工具行 = 「在 Turn 2 里 context 这一步做了什么?为什么需要它?」(只有 Turn 标签 + 事件名,没有工具名与入参)。两种都只用 Timeline 行上拿得到的字段 —— 没有行号 / 序号、没有模型名、没有 provider 名。入参摘要单行 ≤ 400 字、已脱敏后才进句子。</div>
+    <div>· <span style="color:#1a1a1a">预填不自动发送</span>:输入框里是普通文本(不是 placeholder,字色 #1a1a1a),光标停在句尾,<span style="color:#1a1a1a">发送按钮回常态可点</span>(不是 <a href="#1a" style="font:400 11px 'JetBrains Mono',monospace">1a</a> 的 omSpin 禁用态)。溢出就自然换行、输入框长到两行,不裁不省略。整个交互到此结束:<span style="color:#1a1a1a">不弹层、不出现新面板</span>,答案是访客自己按下发送之后那一轮普通对话。已有内容时按追加处理还是替换,由实现侧定,本板画的是空框场景。</div>
+    <div>· <span style="color:#1a1a1a">非工具行只有一条链接</span>:本板 Turn 1 的 before_agent_start 展开态就是这个形状 —— 右上只有 Ask why ↗,没有「查看卡片」,因为它不对应会话区任何一张卡。</div>
+    <div>· <span style="color:#1a1a1a">对不上时链接不出现</span>:「查看卡片」只在 tool_call 行出现,且只在该行的 toolCallId 能在当前会话里找到那张卡时出现;「在 Timeline 里查看」只在卡片的内部 id 能对上一条 tool_call 事件时出现。<span style="color:#1a1a1a">对不上就整条不渲染</span> —— 不画灰掉的禁用态、不弹「定位失败」提示。会话被截断、事件流断过、旧会话只存了摘要,都会走这一支。</div>
+    <div>· <span style="color:#1a1a1a">本板与 1a 的差量</span>:只有三处 —— 右栏一个展开行多了一条链接、会话区展开体多了一行链接、输入框里有字。左栏 / 顶栏 / 统计条 / 卡片解剖 / 折叠行 / Turn 分组一字未改。本轮已完成,所以全板无动效。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━ 2r 画板 · Notes 章节页 · 在 Runtime 里聊这一章 ━━━ -->
+<div id="2r" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2r</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 · Notes 章节页 · 「在 Runtime 里聊这一章」入口(方案 A)</span></div>
+<div data-screen-label="2r 章节页 Runtime入口" style="width:1440px;min-height:1020px;background:#ffffff;border:1px solid #e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;box-sizing:border-box;position:relative">
+  <div style="position:absolute;top:0;left:0;width:31%;height:2px;background:#2563eb;z-index:2"></div>
+  <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
+    <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
+    <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Runtime</div>
+      <div style="font-size:12px;font-weight:600;padding:4px 14px;border-radius:5px;background:#ffffff;color:#1a1a1a;border:1px solid #e0e0e0">Notes</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Skills</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Source</div><div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">About</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:flex-end"><div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div></div>
+  </div>
+  <div style="width:1000px;margin:0 auto;padding:28px 0 56px;display:grid;grid-template-columns:720px 1fr;gap:56px;align-items:start">
+    <div style="min-width:0">
+      <div style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px"><a href="#2a" style="font-size:12px">Notes</a><span>/</span><a href="#2a" style="font-size:12px">源码拆解</a><span>/</span><a href="#2b" style="font-size:12px">Pi</a><span>/</span><span style="color:#6b7280">第3章</span></div>
+      <div style="font-size:22px;font-weight:650;line-height:1.4;margin-top:18px">第3章:Agent Loop — 让模型转动起来的引擎</div>
+      <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:8px">约 8 分钟 · 更新于 2026-08-25 · <span style="color:#2563eb;cursor:pointer" style-hover="color:#1d4ed8">原文</span> · <span style="color:#2563eb;cursor:pointer" style-hover="color:#1d4ed8">在 Runtime 里聊这一章 ↗</span></div>
+      <div style="border-left:3px solid #b6bac2;border-radius:0 6px 6px 0;background:rgba(0,0,0,0.03);padding:10px 14px;margin-top:22px;font-size:14px;line-height:1.7;color:#6b7280">本章回答一个问题:模型自己不会「连续做事」,是谁在推着它一轮轮转?答案藏在 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.05);border-radius:4px;padding:1px 5px">agent-loop.ts</span> 的一个 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.05);border-radius:4px;padding:1px 5px">while</span> 循环里。</div>
+      <div style="font-size:16px;font-weight:650;margin-top:30px">一、循环在哪里</div>
+      <div style="font-size:14px;line-height:1.7;margin-top:12px">pi 把整个 agent 内核压缩在一个可读的循环里:只要模型还想调用工具,循环就继续;一旦它给出纯文本回答,循环自然停下。没有调度器、没有状态机——<span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">while</span> 就是全部的控制流。</div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;margin-top:14px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+        <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:1">typescript</span><div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="color:#2563eb"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div></div>
+        <pre style="margin:0;padding:12px 14px;font:400 12px/1.7 'JetBrains Mono',monospace;overflow:hidden"><span style="color:#2563eb">while</span> (!stopReason) {
+  <span style="color:#2563eb">const</span> response = <span style="color:#2563eb">await</span> callModel(messages, tools);
+  <span style="color:#2563eb">if</span> (response.toolCalls.length === 0) <span style="color:#2563eb">break</span>;
+  messages.push(<span style="color:#2563eb">await</span> executeTools(response.toolCalls));
+}</pre>
+      </div>
+      <div style="font-size:14px;line-height:1.7;margin-top:14px">你在 Runtime 工作台里看到的每一条 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">before_provider_request</span> 事件,就是这个循环转过一圈的心跳。</div>
+      <div style="font-size:16px;font-weight:650;margin-top:30px">二、一个 turn 的解剖</div>
+      <div style="font-size:14px;line-height:1.7;margin-top:12px">一个 turn 从用户消息入队开始,依次经过四步:组装上下文 → 调用模型 → 执行工具 → 把结果写回消息队列。每一步都会向观测者扩展广播事件,所以右侧面板里 Timeline 的行序,就是这四步的真实执行序。</div>
+      <div style="font-size:14px;line-height:1.7;margin-top:10px">值得注意的是第四步:工具结果不是直接「返回给模型」,而是作为一条新消息追加进队列——模型在下一圈循环里才会看见它。这个细节决定了 pi 的会话可以在任意一圈被分叉(fork)。</div>
+      <div style="display:flex;justify-content:space-between;margin-top:40px">
+        <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">← 第2章 三层架构</div>
+        <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">第4章 模型调用 →</div>
+      </div>
+    </div>
+    <div style="padding-top:60px">
+      <div style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.05em;margin-bottom:8px">本章目录</div>
+      <sc-for list="{{articleToc}}" as="t" hint-placeholder-count="5">
+        <div style="font-size:11px;padding:4px 0 4px 10px;border-left:2px solid {{t.border}};color:{{t.color}};font-weight:{{t.fw}};cursor:pointer" style-hover="color:#2563eb">{{t.label}}</div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{noteDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2r · 裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">取 A:meta 行末尾追加一条文本链接</span>,与「原文」同一语汇(mono 11、品牌色、hover #1d4ed8),整条 meta 行仍是 <a href="#2c" style="font:400 11px 'JetBrains Mono',monospace">2c</a> 的 mono 11 #9ca3af。理由三条:① 它与「原文」是同一类东西 —— <span style="color:#1a1a1a">「这一章还能去哪」</span>,同类信息放同一行,读者不需要学新位置;② B 方案那枚 ghost 按钮(照 <a href="#2g" style="font:400 11px 'JetBrains Mono',monospace">2g</a> 的 GitHub ↗,32 高 r7)会在 h1 右侧形成一个视觉重心,而它<span style="color:#1a1a1a">不是本页的主动作</span> —— 本页的主动作是读,次动作是翻上下章;③ A 不新增任何组件,B 要把 h1 那一行改成两列布局(标题需让宽、长标题会挤按钮),改动面比新增的功能大。</div>
+    <div>· <span style="color:#1a1a1a">B 什么时候翻案</span>:如果这个入口的点击率被证明是本页的主路径(而不是顺手),或者产品要在章节页放第二个动作(例如「导出这一章」),再升级成 2g 那枚 ghost 按钮 —— 那时它才配得上 h1 那一行。本板不画 B 态。</div>
+    <div>· <span style="color:#1a1a1a">点击行为</span>:跳到 <span style="color:#1a1a1a">/</span>(Runtime 工作台),新建一次会话,输入框里已写好模板文本:「我在读本站教程《pi SDK 内核 · 第 3 章 扩展事件》。请用 notes_get_chapter 读这一章,先用三句话概括核心观点,然后等我提问。」—— 与 <a href="#2q" style="font:400 11px 'JetBrains Mono',monospace">2q</a> 是同一个原语:<span style="color:#1a1a1a">把预设文本放进输入框,访客自己按发送</span>,不自动发送、不弹层、发送按钮常态可点。模板里只用章节页拿得到的字段(系列名 / 章节标题 / 章序),不塞字数与更新时间。</div>
+    <div>· <span style="color:#1a1a1a">Runtime tab 被隐藏时,这个入口不出现</span>(整条链接不渲染,连带前面那个「·」一起去掉,meta 行不留悬空分隔点)。理由:它是一条通往 / 的门,门后不存在时不该画门。本板不画那个态。</div>
+    <div>· 本板与 2c 的差量只有 meta 行那一条链接(以及为它补上的「原文」—— 2c 的 meta 行里原文位是可选字段,本章有原文链接)。正文、代码块、引用块、面包屑、进度线、右栏本章目录、上下章按钮全部一字未改;全板无动效。</div>
+  </div>
+</div>
+</div>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;siteName&quot;: {&quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Agent X-Ray&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Site&quot;},
+  &quot;barScale&quot;: {&quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 1, &quot;min&quot;: 0.6, &quot;max&quot;: 2, &quot;step&quot;: 0.1, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Runtime panel&quot;},
+  &quot;boardLabels&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Canvas&quot;},
+  &quot;boardNotes&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Canvas&quot;}
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const scale = this.props.barScale ?? 1;
+    const W = ms => Math.min(198, Math.max(4, Math.round(Math.sqrt(ms) * 11 * scale)));
+    const row = (name, ms, dur, c) => ({ name, dur, c, w: W(ms) });
+    const t1after = [
+      row('context', 12, '12ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('after_provider_response', 2, '2ms', '#9ca3af'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 210, '210ms', '#9ca3af'),
+      row('message_end', 1, '1ms', '#9ca3af'),
+      row('turn_end', 0.4, '0ms', '#9ca3af'),
+    ];
+    const t2before = [
+      row('context', 11, '11ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+    ];
+    const t2after = [
+      row('tool_execution_start', 0.3, '0ms', '#9ca3af'),
+      row('tool_execution_end', 1100, '1.1s', '#9ca3af'),
+      row('tool_result', 7, '7ms', '#2563eb'),
+      row('before_provider_request', 5, '5ms', '#2563eb'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 180, '180ms', '#9ca3af'),
+      row('message_end', 1, '1ms', '#9ca3af'),
+      row('turn_end', 0.4, '0ms', '#9ca3af'),
+    ];
+    const sessions = [
+      { title: 'Encore 能不能换成 Bun 跑', time: '刚刚', bg: '#e8e8e8' },
+      { title: '演示:危险命令拦截', time: '2m ago', bg: 'transparent' },
+      { title: '帮我查上海→东京的低价航线', time: '1h ago', bg: 'transparent' },
+      { title: 'permission-gate 源码解读', time: '3h ago', bg: 'transparent' },
+      { title: 'context 注入前后对比实验', time: '昨天', bg: 'transparent' },
+    ];
+    const articleToc = ['一、循环在哪里', '二、一个 turn 的解剖', '三、流式事件如何冒泡', '四、循环怎么停下来', '五、小结']
+      .map((label, i) => ({
+        label,
+        border: i === 1 ? '#2563eb' : '#e0e0e0',
+        color: i === 1 ? '#2563eb' : '#6b7280',
+        fw: i === 1 ? 600 : 400,
+      }));
+    return {
+      siteName: this.props.siteName ?? 'Agent X-Ray',
+      t1after, t2before, t2after, sessions, articleToc,
+      startSel: { w: W(3) },
+      callSel: { w: W(14) },
+      labelDisplay: (this.props.boardLabels ?? true) ? 'flex' : 'none',
+      noteDisplay: (this.props.boardNotes ?? true) ? 'flex' : 'none',
+    };
+  }
+}
+</script>
+</body>
+</html>

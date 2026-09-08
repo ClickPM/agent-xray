@@ -4,11 +4,12 @@
 
 | 文件 | 角色 |
 |---|---|
-| `Agent Runtime Workbench.dc.html` | **静态画板集(终稿,20 块)**:1a–1e Runtime 工作台(主屏 Timeline / 事件详情 / Chain View / Lifecycle Map / 空状态)、**1f–1g Tools 工具面板**(列表 / 展开 `web_search`;2026-09-02 新增)、2a–2e Notes/About(教程库首页 / 系列目录 / 文章阅读 / RSS 弹层 / 关于页)、**2f–2h Skills 技能库**(首页 / 详情页 SKILL.md 预览态 / 详情页 Python 文件预览态;2026-09-03 新增)、**2i–2k 加载态与错误态**(Skill 详情页加载 / Notes 章节页加载 / 错误态 A 出错 B 找不到;2026-09-03 新增)、**2l–2m 会话区一轮完成态**(处理过程折叠行 / 折叠行展开 + 卡片展开;2026-09-03 新增),实现时逐画板对照 |
+| `Agent Runtime Workbench.dc.html` | **静态画板集(终稿,20 块)**:1a–1e Runtime 工作台(主屏 Timeline / 事件详情 / Chain View / Lifecycle Map / 空状态)、**1f–1g Tools 工具面板**(列表 / 展开 `web_search`;2026-09-02 新增)、2a–2e Notes/About(教程库首页 / 系列目录 / 文章阅读 / RSS 弹层 / 关于页)、**2f–2h Skills 技能库**(首页 / 详情页 SKILL.md 预览态 / 详情页 Python 文件预览态;2026-09-03 新增)、**2i–2k 加载态与错误态**(Skill 详情页加载 / Notes 章节页加载 / 错误态 A 出错 B 找不到;2026-09-03 新增)、**2l–2m 会话区一轮完成态**(处理过程折叠行 / 折叠行展开 + 卡片展开;2026-09-03 新增),实现时逐画板对照。**2026-09-08(R-CROSSLINK)只给 `1b` 加了一块「详情卡链接裁定」注释面板**(图形一个像素没动),画板数仍是 20 |
 | `Agent X-Ray Prototype.dc.html` | **可交互原型**:单页状态机(Runtime/Notes/Series/Article/**Skills/Skill**/About **七**屏 + RSS 弹层 + 运行时面板**四** tab 切换 + Tools 面板逐工具展开/收起 + **Skill 详情页目录树点选切换预览、安装命令与文件两处 copy**),`data-dc-script` 里含全部演示数据与交互逻辑——**主站实现的首要参照** |
-| `Agent X-Ray Mobile - Runtime.dc.html` | **移动端画板集 · Runtime(终稿,10 块)**:`4a` 空状态 / `4b` 对话进行中 / `4c` 一轮完成折叠态 / `4d` 折叠行展开 + 卡片展开 / `4e` 运行时 Sheet · Timeline(medium detent)/ `4f` 事件详情(large)/ `4g` Chain View / `4h` Lifecycle Map / `4i` Tools / `4j` 会话列表 Sheet。2026-09-07 新增(R-MOBILE) |
-| `Agent X-Ray Mobile - Notes Skills About.dc.html` | **移动端画板集 · 其余(终稿,11 块)**:`4k` Notes 首页 / `4l` 系列目录 / `4m` 章节阅读 / `4n` 本章目录 Sheet + RSS Sheet / `4o` Skills 首页 / `4p` Skill 详情 SKILL.md / `4q` 代码文件 + 文件树 Sheet / `4r` About / `4s` 加载骨架 / `4t` 错误态 A·B·断网 / `4u` 载体适配四态。2026-09-07 新增(R-MOBILE) |
+| `Agent X-Ray Mobile - Runtime.dc.html` | **移动端画板集 · Runtime(终稿,12 块)**:`4a` 空状态 / `4b` 对话进行中 / `4c` 一轮完成折叠态 / `4d` 折叠行展开 + 卡片展开 / `4e` 运行时 Sheet · Timeline(medium detent)/ `4f` 事件详情(large)/ `4g` Chain View / `4h` Lifecycle Map / `4i` Tools / `4j` 会话列表 Sheet;**`4v` 追问预填(Sheet 收起 + 输入框带文本 + 键盘弹起)/ `4w` 卡片 ↔ Timeline 双向定位(两屏并列)**,并给 `4f` 加了一块注释面板(图形不动);2026-09-08 新增(R-CROSSLINK)。2026-09-07 新增(R-MOBILE) |
+| `Agent X-Ray Mobile - Notes Skills About.dc.html` | **移动端画板集 · 其余(终稿,12 块)**:`4k` Notes 首页 / `4l` 系列目录 / `4m` 章节阅读 / `4n` 本章目录 Sheet + RSS Sheet / `4o` Skills 首页 / `4p` Skill 详情 SKILL.md / `4q` 代码文件 + 文件树 Sheet / `4r` About / `4s` 加载骨架 / `4t` 错误态 A·B·断网 / `4u` 载体适配四态;**`4x` 章节阅读 · 「在 Runtime 里聊这一章」入口**(2026-09-08 新增,R-CROSSLINK)。2026-09-07 新增(R-MOBILE) |
 | `Agent X-Ray Source.dc.html` | **桌面画板集 · Source 源码 tab(终稿,3 块)**:`2n` Source 首页(`/source` · README 态)/ `2o` 代码文件态(`/source/apps/api/agent/tools.ts`,copy 已按下)/ `2p` 文件加载态(骨架对位 2o)。2026-09-08 新增(R-SOURCE)。**放新文件**是因为 `Agent Runtime Workbench.dc.html` 离 256 KiB 截断线只剩十几 KB;后者本次只改导航条(20 块四格 → 五格) |
+| `Agent X-Ray Crosslink.dc.html` | **桌面画板集 · 跨栏跨页联动(终稿,2 块)**:`2q` 追问预填 + 卡片 ↔ Timeline 双向定位(工具行详情卡右上并排两条链接 / 会话区展开体底部一条链接 / 输入框已带追问文本)/ `2r` Notes 章节页「在 Runtime 里聊这一章」入口(方案 A:meta 行末尾文本链接)。2026-09-08 新增(R-CROSSLINK)。**放新文件**是因为 `Agent Runtime Workbench.dc.html` 离 256 KiB 截断线只剩十几 KB |
 | `support.js` | Claude Design 画布运行时(解析 `<x-dc>` 模板、挂载 React)。仅本地打开 .dc.html 预览时需要,实现不依赖它 |
 
 > **画板增删记录**(画板编号只增不改,与 CLAUDE.md 硬性规则同一约定):
@@ -47,12 +48,29 @@
 >   (`git log -- design/` 最近一次是 R-MOBILE 的纯新增),所以三份直接覆盖,没有三方合并。
 >   提示词 `rounds/round-source/design-prompt.md`;实现轮次:ROUNDS.md R-SOURCE。
 >
+> - **`2q`–`2r`(桌面 · 跨栏跨页联动,2 块)+ `4v`–`4x`(移动端,3 块)于 2026-09-08 新增**:所有者裁定把画板 `1b` / `4f` 上一直是死按钮的
+>   `Ask why ↗` 做实,并加两条联动 —— 会话区工具卡 ↔ Timeline 行**双向定位**、Notes 章节页 →  Runtime 的「在 Runtime 里聊这一章」入口。
+>   三件事共用**一个原语**:「把一句预设文本放进输入框,**永不自动发送**」。桌面两块放**新文件** `Agent X-Ray Crosslink.dc.html`
+>   (`Workbench` 离 256 KiB 上限只剩十几 KB);移动 `4v` / `4w` 追加进 `- Runtime`、`4x` 追加进 `- Notes Skills About`;`1b` / `4f` **只加注释面板、图形不动**。
+>   画板上的裁定:两条新链接**照抄 `Ask why ↗` 的画法**(11px 品牌色 + r5 + padding 2/6 + hover 露 `#eeeeee` 底 + 尾部 `↗`;详情卡右上并排、间距 6、
+>   **Ask why 永远在最右**),会话区那条在**卡片展开体之内**、`RESULT` 段下 10、mono 11 品牌色左对齐;**「定位」= 既有展开态 + 滚入视野**,
+>   不新增高亮色 / 不加「已定位」徽标 / 滚动不画动效;**对不上(`toolCallId` 找不到)就整条不渲染**,不画禁用态、不弹「定位失败」;
+>   追问文案**两种形状**(工具行带工具名与入参摘要,非工具行只有 Turn 标签 + 事件名),只用 Timeline 行上拿得到的字段(无行号 / 模型名 / provider 名);
+>   `2r` / `4x` 的入口**取方案 A**(meta 行末尾文本链接,与「原文」同一语汇)而非 h1 右侧 ghost 按钮 —— 理由是同类信息同行、它不是本页主动作、A 不新增组件;
+>   Runtime tab 被隐藏时整条链接不渲染(连同前面那个「·」)。移动端两处增量:`4x` 的 meta 行行高提到 **1.9** 并允许自然换行(命中区与「原文」同一取舍,不单独升 44);
+>   `4w` 定案**只留 Ask why 胶囊**,「查看卡片」下沉成详情块底部一行链接(详情块内宽约 308,两枚胶囊会把 INPUT 挤到 148),与①屏的「在 Timeline 里查看 ↗」互为镜像。
+>   **拉稿判据**:Crosslink 35,473 B / 2 块;`Mobile - Runtime` 169,125 B / 12 块;`- Notes Skills About` 198,838 B / 12 块;`Workbench` 252,962 B / 20 块(只多了 1b 那块注释);
+>   四份 `</x-dc>` / `</html>` / `<div>` / `<sc-for>` / `<sc-if>` 开合全过;`support.js` md5 未变。**合并口径**:`Workbench` 与 `- Notes Skills About` 的 `diff | grep -c '^<'` 为 0,
+>   `- Runtime` 唯一一处 `<` 是 `renderVals` 返回行被**就地改写**(补 `w2before, w2after` 两个数据源),不是本地行被删,所以四份直接覆盖、没有三方合并。
+>   提示词 `rounds/round-crosslink/design-prompt.md`;实现轮次:ROUNDS.md R-CROSSLINK。
+>
 > **⚠️ 单文件 256 KiB 硬上限(2026-09-07 实测撞线,下次扩画板前必读)**:DesignSync `get_file` 的上限是
 > 262,144 字节,**超了静默截断、不报错**。移动端 21 块最初画在一份文件里,拉下来正好 262,144 字节、
 > 末尾断在属性中间、`</x-dc>` 与 `</html>` 都没有、`<div>` 开合差 7 个 —— `4a–4t` 完整而 `4u` 只到一半。
 > 拆成两份文件后重拉,两份分别 132,859 / 186,339 字节,四项判据(字节数 / 闭合标签 / div 开合 / 画板数)全过。
-> **桌面 `Agent Runtime Workbench.dc.html` 现为 250,586 字节(2026-09-08 导航改五格后),离上限只剩 11 KB —— 下次给桌面加画板前必须先拆文件**
-> (R-SOURCE 的 `2n–2p` 已经是放新文件了)。
+> **桌面 `Agent Runtime Workbench.dc.html` 现为 252,962 字节(2026-09-08 R-CROSSLINK 给 1b 加注释面板后),离上限只剩 9 KB —— 下次给桌面加画板前必须先拆文件**
+> (R-SOURCE 的 `2n–2p`、R-CROSSLINK 的 `2q–2r` 都已经是放新文件了;**连给既有画板加注释都要先算字节数**)。
+> 移动端两份现为 169,125 / 198,838 字节(R-CROSSLINK 追加 `4v` / `4w` / `4x` 后),仍有余量。
 > 拉稿后一律先验那四项,齐了才算拿到稿。
 >
 > **与云端稿的合并口径(2026-09-03 实操记录,下次拉稿照此)**:本地两份 `.dc.html` 在 2026-09-02 之后有三处**本地**优化——Timeline 进行中行的波浪扫光(`omWaveSweep`,提交 `9dd0c89`)、发送按钮生成期间转圈禁用(`omSpin`,同一提交)、文章页阅读进度线的示意注释(`d2a87d0`)——而云端 Claude Design 项目是从更早的 `16a82bd`(R-TOOLS 收 1f–1g 那版)上加的 Skills 画板,**不含这三处**。所以**没有用云端稿覆盖本地**,而是以 `16a82bd` 为 base 做三方合并(`git merge-file`,两份文件零冲突;云端 Workbench 相对 base 是纯增量,Prototype 相对 base 只改了 tab 占位数 / state 初值 / navTabs 三行):本地三处优化全部保留,云端新增(2f–2h、四格 tab、原型 Skills 两屏与交互逻辑)全部并入。`support.js` 两边 md5 一致未动。**同日收尾:合并稿已经 DesignSync 写回云端项目**(两份 `.dc.html`,写回后再拉一次比对 md5 完全一致),**云端从此是正本、与本地一字不差**。之后的口径:本地 `design/` 只拉不改——想改设计稿去画布上改,或改完立刻写回;拉新稿时先跑 `diff "design/<文件>" "<新稿>" | grep -c '^<'`,为 0(新稿没丢本地任何一行)就直接覆盖,不为 0 说明两边又分叉了,才回到上面的「找 base → `merge-file` → 核验」。
