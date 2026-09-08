@@ -184,7 +184,7 @@
    | 5 | 正文配图路由 | `/notes/<系列>/<哈希>.webp` → 200 + `ETag`;带 `If-None-Match` 复请求 → 304;同形的文章页地址不被图片路由劫走 |
    | 6 | RSS | `/rss.xml` 与 `/rss/<分类>.xml` 200,条目里的绝对链接用的是 `SITE_ORIGIN`;未知分类 404 |
    | 7 | **SSE ×2** | `POST /agent/ask` 经 Caddy 流式出字;`GET /trace/stream` 有 15s 心跳、`afterSeq` 断线重连能精确回放;`docker compose stop api` 时客户端**在停机同刻拿到确定的终止**而非挂到超时(R10 修准:**别钉死退出码**——R9 见 curl `18`、R10 见 `0`,差别只在断开落在响应分块的哪个位置;要判的是「+0s 就结束」) |
-   | 8 | SSE 脱敏 | 两条流的原始字节里搜不到明文 key、`Authorization`、`api-key`;`before_provider_headers` 帧只剩 `type` |
+   | 8 | SSE 脱敏(**值级**,R-LEAK 2026-09-08 改) | ① 字面词:两条流的原始字节里搜不到明文 key、`Authorization`、`api-key`;`before_provider_headers` 帧只剩 `type` ② **值级**:先从生产库取当前生效的配置值 —— `llm_providers_list` / `websearch_providers_list` 回的 `provider` / `baseUrl` 的 host / `modelId`(key 只回掩码,不用它)——再拿这几个**值**去两条流的原始字节里 grep,期望 **0 命中**(泄的从来不是 `baseUrl` 这四个字母,而是它的值:R-LEAK 修的三条通道分别是 `model_select` 派生字段、`web_search` 的 request 阶段文案、`web_search` 结果的 `details`)。跑法:抓一轮**含联网搜索**的对话(`curl -N` 收 `/agent/ask` 与 `/trace/stream` 两份原始字节存文件),对每个值 `grep -c`;命中即为回归 |
    | 9 | 配额 | 把 `dailyTokenLimit` / `maxTurnsPerSession` 调小 → `429` + `code`(`daily_tokens` / `turn_limit`),恢复配置后立即可用 |
    | 10 | `agent_ro` 沙箱 | `SET LOCAL ROLE agent_ro` 后写 notes 三张表全部 `permission denied`;读这三张表成功;读其余任何表 `permission denied` |
    | 11 | 容器安全约束 | `docker inspect`:api/web 为 `10001:10001`、`ReadonlyRootfs=true`、`CapDrop=[ALL]`、`PidsLimit`、`Memory`、`no-new-privileges`、tmpfs `noexec` |

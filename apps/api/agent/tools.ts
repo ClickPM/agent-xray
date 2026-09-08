@@ -922,11 +922,11 @@ export function makeWebSearchTool(cfg: ActiveWebSearchConfig): MetaToolDefinitio
         // 头与来源都先算好,正文只拿剩下的额度(理由同上一条注释)。
         const header = webSearchResultHeader(outcome.citations.length);
         const body = capText(outcome.text, Math.max(200, MAX_RESULT_CHARS - header.length - sources.length));
-        return textResult(`${header}${body}${sources}`, {
-          provider: cfg.provider,
-          model: cfg.modelId,
-          citations: outcome.citations.length,
-        });
+        // 【details 里不放 provider / model】(R-LEAK 修补,2026-09-08)它会进 `tool_execution_end`
+        // 的 resultPreview → 公开的 /trace/stream 并落库;R-TOOLS 裁定配置面不公开。
+        // `generate_image` 那一侧一开始就是这么写的(同名注释),这里对齐它 —— 集成探针
+        // `leak-e2e.test.ts` 抓到的正是这一条,不是任务卡列的两条通道之一。
+        return textResult(`${header}${body}${sources}`, { citations: outcome.citations.length });
       });
     },
   };

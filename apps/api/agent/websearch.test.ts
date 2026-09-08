@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { db } from "./db";
 import { reserveSearch } from "./quota";
+import { makeWebSearchTool } from "./tools";
 import {
   buildSearchRequestBody,
   chatCompletionsUrl,
@@ -719,5 +720,70 @@ describe("R-GSEARCH · 正文里抽来源(extractLinkCitations)", () => {
     expect(extractChatText({ choices: [{ message: { content: " 答案 " } }] })).toBe("答案");
     expect(extractChatText({ choices: [{ message: { content: null } }] })).toBe("");
     expect(extractChatText({})).toBe("");
+  });
+});
+
+// ───────────────────── R-LEAK:阶段文案不含配置面(host / model)─────────────────────
+//
+// 这一段是**值级**断言,不是查字面词:泄出去的从来不是 `baseUrl` 这四个字母,而是它的值。
+// 通道:progress → tools.ts 的 onUpdate → pi 的 `tool_execution_update.partialResultPreview`
+// → 公开的 /trace/stream + 落库 trace_events。两条线共用同一个 progress(),各钉一条。
+
+describe("R-LEAK · 阶段文案不含 host / model(docs/security.md §2 R-LEAK 补记)", () => {
+  /** 收全部 progress 文本(phase + detail 一起,免得哪天有人把值塞进 phase)。 */
+  const textOf = (seen: WebSearchProgress[]) => seen.map((p) => `${p.phase} ${p.detail}`).join("\n");
+
+  it("Responses 线:host 与 modelId 的**值**都不出现在任何 progress detail 里", async () => {
+    const c = cfg();
+    const seen: WebSearchProgress[] = [];
+    const f = streamingFetch([
+      sse({ type: "response.created" }),
+      sse({ type: "response.web_search_call.in_progress" }),
+      delta("答"),
+      completed(messageOut("答案")),
+    ]);
+    await runWebSearch("q", c, { fetchImpl: f, onProgress: (p) => seen.push(p) });
+
+    const all = textOf(seen);
+    expect(seen.map((p) => p.phase)).toContain("request"); // 阶段本身还在,不是被删掉了
+    expect(all).not.toContain(new URL(c.baseUrl).hostname);
+    expect(all).not.toContain(c.modelId);
+    expect(all).not.toContain(c.provider);
+  });
+
+  it("google_search 线:同样不含 host 与 modelId 的值", async () => {
+    const c = gcfg();
+    const seen: WebSearchProgress[] = [];
+    const f = streamingFetch([chunk("今天的头条是……"), chunk("", "stop"), "data: [DONE]\n\n"]);
+    await runWebSearch("q", c, { fetchImpl: f, onProgress: (p) => seen.push(p) });
+
+    const all = textOf(seen);
+    expect(seen.map((p) => p.phase)).toContain("request");
+    expect(all).not.toContain(new URL(c.baseUrl).hostname);
+    expect(all).not.toContain(c.modelId);
+    expect(all).not.toContain(c.provider);
+  });
+
+  // 第三条通道:工具**结果**的 details。它经 `tool_execution_end.resultPreview` 出去,
+  // 与阶段文案是两条路 —— 集成探针 leak-e2e.test.ts 抓到的就是这一条(任务卡只列了两条)。
+  it("工具结果的 details 不含 provider / model(tool_execution_end.resultPreview 的出口)", async () => {
+    const c = cfg();
+    const real = globalThis.fetch;
+    globalThis.fetch = streamingFetch([delta("答"), completed(messageOut("答案"))]) as typeof fetch;
+    try {
+      const tool = makeWebSearchTool(c);
+      const out = (await tool.execute("t1", { query: "q" } as never, undefined, undefined, {} as never)) as {
+        details: Record<string, unknown>;
+      };
+      expect(out.details).not.toHaveProperty("provider");
+      expect(out.details).not.toHaveProperty("model");
+      expect(out.details.citations).toBe(0);
+      const s = JSON.stringify(out);
+      expect(s).not.toContain(new URL(c.baseUrl).hostname);
+      expect(s).not.toContain(c.modelId);
+      expect(s).not.toContain(c.provider);
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 });
