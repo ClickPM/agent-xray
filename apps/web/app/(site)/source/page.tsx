@@ -12,6 +12,7 @@ import { MarkdownFile } from "@/components/skills/MarkdownFile";
 import { SourceBrowser } from "@/components/source/SourceBrowser";
 import { isoDate } from "@/lib/time";
 import { safeExternal } from "@/lib/external";
+import { rewriteSourceLinks } from "@/lib/source-links";
 
 // 快照随发版变化,且 docker build 时后端不可达 —— 不允许构建期预渲染
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function SourcePage() {
   }
 
   // 【R-PERF 口径】markdown 只在服务端预渲染当前要显示的那一个;代码文件在客户端由 SourceCodeView 渲染
-  const mdView = file.kind === "markdown" ? <MarkdownFile content={file.content} /> : undefined;
+  const mdView = file.kind === "markdown" ? <MarkdownFile content={rewriteSourceLinks(file.content, file.path)} /> : undefined;
   const s = file.snapshot;
 
   return (

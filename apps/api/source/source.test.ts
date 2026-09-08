@@ -63,6 +63,9 @@ describe("GET /source", () => {
     expect(r.snapshot.sha).toBe(SHA_A);
     expect(r.snapshot.shortSha).toBe("1111111");
     expect(r.snapshot.fileCount).toBe(3);
+    // BIGINT 列要以 number 出去(codex 第 2 轮 P1):不是 bigint、不是字符串
+    expect(typeof r.snapshot.totalBytes).toBe("number");
+    expect(r.snapshot.totalBytes).toBe(FILES.reduce((a, [, , c]) => a + Buffer.byteLength(c, "utf8"), 0));
     expect(r.snapshot.repo).toBe(SOURCE_REPO);
     expect(r.snapshot.repoUrl).toBe(SOURCE_REPO_URL);
     expect(Date.parse(r.snapshot.publishedAt)).toBeGreaterThan(0);

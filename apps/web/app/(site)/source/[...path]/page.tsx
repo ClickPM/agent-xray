@@ -9,6 +9,7 @@ import { MarkdownFile } from "@/components/skills/MarkdownFile";
 import { SourceBrowser } from "@/components/source/SourceBrowser";
 import { isoDate } from "@/lib/time";
 import { safeExternal } from "@/lib/external";
+import { rewriteSourceLinks } from "@/lib/source-links";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function SourceFilePage({ params }: { params: Promise<{ pat
   // 目录地址(/source/apps/api)没有对应文件,同样 404 —— 没有目录页(画板只画了首页与文件页)。
   const file = await api.source.getSourceFile({ path }).catch(notFoundOnBadRoute);
 
-  const mdView = file.kind === "markdown" ? <MarkdownFile content={file.content} /> : undefined;
+  const mdView = file.kind === "markdown" ? <MarkdownFile content={rewriteSourceLinks(file.content, file.path)} /> : undefined;
   const s = file.snapshot;
 
   return (

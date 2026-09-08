@@ -688,6 +688,10 @@ const sourceRead: MetaToolDefinition = {
         const all = row.content === "" ? [] : row.content.split("\n").map((l) => l.replace(/\r$/, ""));
         if (all.length > 1 && row.content.endsWith("\n")) all.pop();
         const total = all.length;
+        if (total === 0) {
+          // 空文件(闭集允许,LICENSE 之类偶尔为空):明说 0 行,不编出一个不存在的 L1(codex 第 2 轮 P3)
+          return textResult(`# ${file} @ ${snap.sha.slice(0, 7)} · ${row.kind} · 空文件(0 行)`, { sha: snap.sha, found: true, file, from: 0, to: 0, total: 0 });
+        }
         const from = Math.max(1, Math.min(startLine ?? 1, Math.max(total, 1)));
         const wantEnd = endLine !== undefined ? Math.max(endLine, from) : from + MAX_SOURCE_READ_LINES - 1;
         const capTo = Math.min(total, wantEnd, from + MAX_SOURCE_READ_LINES - 1);

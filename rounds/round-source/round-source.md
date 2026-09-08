@@ -256,7 +256,17 @@ node tools/source-publish/publish.mjs --sha <ref> --check                       
      两个页面都只打一次后端;首页只有 README.md 不在快照里才退回两步路。`source.test.ts` 断言 `files[]` 与文件同快照
   - 审查推理里顺带看到、没成 finding 的两处也一并处理:`docs/mcp.md` 写成「三个写工具」实为四个(begin / put / commit / delete);
     `source_read` 的输出去掉行尾 `\r`(仓库当前没有 CRLF 文件,防将来混进来)
-- **第 2 轮**:<待回填>
+- **第 2 轮**(2026-09-08,全量,约 12 分钟):**1 P1 + 2 P2 + 1 P3,全部采纳整改**
+  1. [P1] `source_snapshots.total_bytes` 是 BIGINT,驱动可能以 bigint / 字符串交回,进不了 JSON、也不合生成客户端的 `number` 契约 →
+     所有读它的 SELECT 一律 `::double precision`(读面 `currentRow`、写面 commit 行与 `listSnapshots`、`SUM(bytes)`);`source.test.ts` 断言 `typeof === "number"`。
+     本机实测它本来就是 number 出来的,但契约要落在 SQL 上而不是驱动的当前行为上
+  2. [P2] `begin` 按 `(path, sha256)` 从 current 复制内容时,行里的 bytes / lines 写的是本次 manifest 的声明值,绕开了 put 的三项核对 →
+     复制后与库内同哈希行比对,不一致整个 begin 拒(事务回滚、staging 不留),口径与 put 一致;加两条拒绝 + 一条回滚断言
+  3. [P2] README 里的 `[x](docs/security.md)` 在 `/source` 下被浏览器解析成站点的 `/docs/security.md`(404)→ 新增纯函数 `lib/source-links.ts`:
+     渲染前把**仓库内相对链接**改成 `/source/<按当前文件目录解析的路径>`(锚点与 title 保留;绝对地址 / 站内根路径 / 纯锚点 / 图片 / 围栏代码块 / 越出仓库根的不动),
+     copy 仍复制原文;两个页面与客户端回落都走它;`bun test lib` +3
+  4. [P3] 空文件 `source_read` 报 `L1–L1 / 0` → 明说「空文件(0 行)」、details `{from:0,to:0,total:0}`
+- **第 3 轮**(`--base 367378d`,只审整改 diff):<待回填>
 - 结论:<待回填>
 
 ## 失败处理

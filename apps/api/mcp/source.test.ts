@@ -149,6 +149,21 @@ describe("三段式发布(mcp/source-store)", () => {
     expect(row?.t).toBe(real);
   });
 
+  it("从 current 复用内容时,manifest 的 bytes / lines 也要与库内一致,否则 begin 整个拒(codex 第 2 轮 P2)", async () => {
+    await publish(SHA_A, PACK_A);
+    const good = PACK_A.map(entry);
+    // sha256 对(会命中复用)、bytes 错
+    await expect(src.beginSnapshot(SHA_B, good.map((e) => (e.path === "README.md" ? { ...e, bytes: e.bytes + 1 } : e)))).rejects.toThrow(/字节数 \/ 行数/);
+    // sha256 对、lines 错
+    await expect(src.beginSnapshot(SHA_B, good.map((e) => (e.path === "README.md" ? { ...e, lines: e.lines + 2 } : e)))).rejects.toThrow(/字节数 \/ 行数/);
+    // 事务回滚:staging 没留下,current 不变
+    const rows = await db.rawQueryAll<{ sha: string; status: string }>(`SELECT sha, status FROM source_snapshots ORDER BY sha`);
+    expect(rows).toEqual([{ sha: SHA_A, status: "current" }]);
+    // 正确的 manifest 照常复用
+    const b = await src.beginSnapshot(SHA_B, good);
+    expect(b.reused).toBe(3);
+  });
+
   it("put 的拒绝:不在 manifest / sha256 不符 / 一批超量 / NUL / 快照不存在 / 已是 current", async () => {
     await src.beginSnapshot(SHA_A, PACK_A.map(entry));
     await expect(src.putFiles(SHA_A, [{ path: "not/in/manifest.md", content: "x" }])).rejects.toThrow(/不在 manifest/);

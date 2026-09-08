@@ -134,6 +134,14 @@ describe("source_read", () => {
     expect(miss.details).toMatchObject({ found: false });
   });
 
+  it("空文件:明说 0 行,不编出 L1(codex 第 2 轮 P3)", async () => {
+    await seed([["empty.txt", ""]]);
+    const r = await run(SOURCE_READ_TOOL, { file: "empty.txt" });
+    expect(r.text).toContain("空文件(0 行)");
+    expect(r.text).not.toContain("L1");
+    expect(r.details).toMatchObject({ found: true, from: 0, to: 0, total: 0 });
+  });
+
   it("超过 400 行只回前 400 行并提示 startLine 续读", async () => {
     const big = Array.from({ length: 450 }, (_, i) => `L${i + 1}`).join("\n") + "\n";
     await seed([["big.txt", big]]);

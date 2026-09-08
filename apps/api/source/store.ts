@@ -53,8 +53,10 @@ export interface SourceFileRow extends SourceFileMetaRow {
 }
 
 async function currentRow(tx: Transaction): Promise<SnapshotRow | null> {
+  // total_bytes 是 BIGINT(int8):驱动可能以 bigint / 字符串交回,进不了 JSON 也不合生成客户端的 number 契约(codex 第 2 轮 P1)。
+  // 与时间戳同一做法:SQL 侧就 cast 成 double precision(3 MB 量级离 2^53 远得很)
   return tx.rawQueryRow<SnapshotRow>(
-    `SELECT sha, file_count AS "fileCount", total_bytes AS "totalBytes", ${ms("published_at", "publishedAt")}
+    `SELECT sha, file_count AS "fileCount", total_bytes::double precision AS "totalBytes", ${ms("published_at", "publishedAt")}
        FROM source_snapshots
       WHERE status = 'current'`,
   );

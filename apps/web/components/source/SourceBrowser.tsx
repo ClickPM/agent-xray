@@ -16,6 +16,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "@/components/ui";
 import { MarkdownFile } from "@/components/skills/MarkdownFile";
 import { SourceCodeView } from "@/components/source/SourceCodeView";
+import { rewriteSourceLinks } from "@/lib/source-links";
 import { buildSourceTree, dirsOf, fmtLines, fmtSize, type SourceFileMeta, type SourceTreeNode } from "@/lib/source-tree";
 import { mono } from "@/lib/styles";
 
@@ -283,7 +284,7 @@ export function SourceBrowser({
               </span>
               <CopyButton copied={copied} onClick={copy} />
             </div>
-            {file.kind === "markdown" ? (mdView ?? <MarkdownFile content={file.content} />) : <SourceCodeView kind={file.kind} content={file.content} />}
+            {file.kind === "markdown" ? (mdView ?? <MarkdownFile content={rewriteSourceLinks(file.content, file.path)} />) : <SourceCodeView kind={file.kind} content={file.content} />}
           </div>
         </div>
 

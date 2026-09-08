@@ -109,6 +109,26 @@ export async function beginSnapshot(sha: string, files: SourceManifestInput[]): 
         f.lines,
       );
     }
+    // 【复用的文件也要核 bytes / lines】(codex 第 2 轮 P2)上面按 (path, sha256) 复制了 current 的内容,但行里的 bytes / lines
+    // 写的是本次 manifest 的声明值 —— 哈希对、字节数或行数错的 manifest 会绕开 putFiles 的三项核对。库内那份是在它自己那一版 put 时核过的,
+    // 以它为准:有一处不一致就整个 begin 拒掉(事务回滚,staging 不留),口径与 putFiles 一致 —— manifest 三个事实都得是真的。
+    const drift = await tx.rawQueryAll<{ path: string; bytes: number; lines: number; curBytes: number; curLines: number }>(
+      `SELECT n.path, n.bytes, n.lines, c.bytes AS "curBytes", c.lines AS "curLines"
+         FROM source_files n
+         JOIN source_snapshots s ON s.status = 'current'
+         JOIN source_files c ON c.sha = s.sha AND c.path = n.path AND c.sha256 = n.sha256
+        WHERE n.sha = $1 AND n.content IS NOT NULL AND (n.bytes <> c.bytes OR n.lines <> c.lines)
+        ORDER BY n.path COLLATE "C"
+        LIMIT 5`,
+      sha,
+    );
+    if (drift.length > 0) {
+      const d = drift[0];
+      throw new ConflictError(
+        `${d.path}:manifest 声明的字节数 / 行数(${d.bytes} / ${d.lines})与库内同哈希文件(${d.curBytes} / ${d.curLines})不一致` +
+          (drift.length > 1 ? `(另有 ${drift.length - 1} 个同类)` : ""),
+      );
+    }
     const missing = await tx.rawQueryAll<{ path: string }>(
       `SELECT path FROM source_files WHERE sha = $1 AND content IS NULL ORDER BY path COLLATE "C"`,
       sha,
@@ -204,8 +224,9 @@ export interface CommitResult {
 export async function commitSnapshot(sha: string): Promise<CommitResult> {
   return inTransaction(async (tx) => {
     await lockSource(tx);
+    // total_bytes 是 BIGINT:SQL 侧 cast 成 double precision,不让 bigint / 字符串漏进 JSON 响应(codex 第 2 轮 P1)
     const snap = await tx.rawQueryRow<{ status: string; fileCount: number; totalBytes: number; publishedAt: number | null }>(
-      `SELECT status, file_count AS "fileCount", total_bytes AS "totalBytes", ${ms("published_at", "publishedAt")}
+      `SELECT status, file_count AS "fileCount", total_bytes::double precision AS "totalBytes", ${ms("published_at", "publishedAt")}
          FROM source_snapshots WHERE sha = $1 FOR UPDATE`,
       sha,
     );
@@ -215,7 +236,7 @@ export async function commitSnapshot(sha: string): Promise<CommitResult> {
     }
     const counts = await tx.rawQueryRow<{ total: number; missing: number; totalBytes: number }>(
       `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE content IS NULL)::int AS missing,
-              COALESCE(SUM(bytes), 0)::bigint AS "totalBytes"
+              COALESCE(SUM(bytes), 0)::double precision AS "totalBytes"
          FROM source_files WHERE sha = $1`,
       sha,
     );
@@ -272,7 +293,7 @@ export interface SnapshotListRow {
 
 export async function listSnapshots(): Promise<SnapshotListRow[]> {
   return db.rawQueryAll<SnapshotListRow>(
-    `SELECT s.sha, s.status, s.file_count AS "fileCount", s.total_bytes AS "totalBytes",
+    `SELECT s.sha, s.status, s.file_count AS "fileCount", s.total_bytes::double precision AS "totalBytes",
             (SELECT COUNT(*)::int FROM source_files f WHERE f.sha = s.sha AND f.content IS NULL) AS pending,
             ${ms("s.created_at", "createdAt")}, ${ms("s.published_at", "publishedAt")}
        FROM source_snapshots s
