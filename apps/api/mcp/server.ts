@@ -32,7 +32,7 @@ const INSTRUCTIONS =
   "根目录必须有 SKILL.md 且 frontmatter name 等于 skill 名),zip 由服务端打好供 /skills/<name>.zip 下载。" +
   "三组 provider 的 key 任何读回都是掩码;" +
   "搜索与生图 provider 的 baseUrl 各有一份目标域白名单(在代码里),配好 provider 后还要 tool_config_set 打开对应工具。\n" +
-  "site_tab_set 控制顶部四个 tab 各自露不露 —— 那只是**呈现**开关(导航条不渲染 + 该 tab 的页面在站点上不可达)," +
+  "site_tab_set 控制顶部各 tab 各自露不露(清单用 site_tabs_list 读)—— 那只是**呈现**开关(导航条不渲染 + 该 tab 的页面在站点上不可达)," +
   "被隐藏 tab 的后端端点仍在服务;要真的停掉 agent 用 tool_config_set。\n" +
   "agent 使用 skills(R-SKILLS-2)的打开顺序:发版并过生产冒烟 → tool_config_set skill_load true → skills_agent_set <name> true 逐个打开" +
   "(先 skills_agent_status 看 consistency 是 ok:库内展示副本必须与代码副本逐文件一致才会被注入)" +

@@ -20,7 +20,7 @@ This file provides guidance to Claude Code when working in this repository.
 ## 仓库结构
 
 ```
-apps/web      Next.js 15 前端(App Router)。四 Tab 已按画板实现(Skills 的 2f–2h 于 R-SKILLS 落地),接后端只换数据源
+apps/web      Next.js 15 前端(App Router)。五 Tab 已按画板实现(Skills 的 2f–2h 于 R-SKILLS、Source 的 2n–2p 于 R-SOURCE 落地),接后端只换数据源
               (样式零改动,规则 7);/admin 六页已于 R6 整目录删除
 apps/api      Encore.ts 后端 **app root 在这里,不是仓库根**。服务清单与各自边界以
               `apps/api/<服务>/README.md` 为准(about / agent / mcp / metrics / notes / system / trace,
@@ -81,14 +81,14 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 
 **编号只增不改**。1–4 继承自 ticketBookingB2B 项目同机踩过的坑,原样适用。
 
-1. **Windows 上所有 encore 命令必须走 `dev.ps1`**(或手动 `$env:LOCALAPPDATA="D:\encore-data"; $env:APPDATA="D:\encore-data\roaming"; $env:Path += ";$HOME\.encore\bin"`)。原因:encore daemon 的 unix socket 无法绑定在含中文字符的用户名路径(`bind: An invalid argument was supplied`),且 daemon 继承启动进程的 PATH。daemon 常驻且同机与 ticketBookingB2B 共用——用错误 env 启动过后要以正确 env 重跑 `encore daemon` 重启。
-2. **测试只能 `encore test`**(`dev.ps1 test`),禁止裸跑 `vitest`(缺 `ENCORE_RUNTIME_LIB` 会炸)。引入 vitest 时 `apps/api/package.json` 的 test 脚本必须是 `vitest run --passWithNoTests`(不带 `run` 会进 watch 卡死)。
-3. **含中文的 `.ps1` 必须存成 UTF-8 with BOM**。PowerShell 5.1 对无 BOM 的 UTF-8 按 ANSI(936) 解码,中文注释会吞掉行尾换行、把下一行并进注释——`param` 行曾因此被整行注释掉导致参数静默失效。`param` 放首行 + BOM 双保险;改完跑一次带参数命令确认行为正确。
+1. **Windows 上所有 encore 命令必须走 `dev.ps1`**。原因一句话:encore daemon 的 unix socket 绑不到含中文的用户名路径,且 daemon 常驻、同机与 ticketBookingB2B 共用。手动等价的三行 env 在 `dev.ps1` 头部;报错原文、用错 env 后如何重跑 daemon 等机器级细节在本机用户级 `~/.claude/CLAUDE.md`「本机 Windows 环境」(2026-09-03 提升到那里,本条不再重复)。
+2. **api 侧测试只能 `encore test`**(`dev.ps1 test`),禁止裸跑 `vitest`(缺 `ENCORE_RUNTIME_LIB` 会炸)。web 侧的 `bun test lib` 与 runner 的 `dev.ps1 runner-test` 不是 vitest、不在此限(见「本地开发」;2026-09-08 补注)。引入 vitest 时 `apps/api/package.json` 的 test 脚本必须是 `vitest run --passWithNoTests`(不带 `run` 会进 watch 卡死)。
+3. **含中文的 `.ps1` 必须存成 UTF-8 with BOM**,`param` 放首行 + BOM 双保险,改完跑一次带参数命令确认行为正确。原因(PowerShell 5.1 按 ANSI 解码无 BOM 文件、中文注释吞掉下一行,`param` 行曾因此整行失效)与 `xxd` 判据在用户级 CLAUDE.md「本机 Windows 环境」,本条不再重复。
 4. **写 JSONB 一律 `${JSON.stringify(x)}::text::jsonb`,绝不写裸 `::jsonb`,也别改成直接传 JS 值**。`::jsonb` 会让驱动把 JS 字符串再编码一次,库里存成 JSON 字符串标量(`jsonb_typeof` 回 `string`),SQL 侧 `->`/`@>`/GIN 全部失效而 JS 侧读回来看似正常;直接传值则 `COALESCE(${null}, col)` 的裸 null 会被写成 `jsonb 'null'` 而非 SQL NULL。`::text::jsonb` 对 null 与非 null 是同一套语义。R2 建轨迹/消息表起就适用。
 5. **`secret()` 只能在 service 目录内声明**(Encore 限制);共享库里不出现 `secret()`,需要密钥的共享代码收「已取好的值」作参数。
 6. **`apps/api` 是 Encore app root,不做 npm workspaces 提升**(规避 encore#1723:app root 下无关 node_modules/.ts 干扰 parser)。web 与 api 不手工共享源码文件;类型经 `encore gen client` 产物(`apps/web/lib/api-client.ts`)流向前端,该文件是生成物,不许手改。
 7. **非必要不得修改前端页面样式,不做视觉 review**。画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。(2026-08-31 修订:3a–3e 废弃,对应 `/admin` 六页按所有者裁定于 R6 整目录删除——属本条允许的结构性改动;同轮的 `next.config.ts` 配图 rewrite 亦然,理由=图片改从 Postgres 供,对外 URL 不变。)
-8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02、2026-09-03、2026-09-07 多次修订)。站点访客功能范围 = `design/` 桌面画板 1a–1g + 2a–2m 与移动端画板 4a–4u + 可交互原型(**两套画板同一个功能范围**,移动端只换呈现);**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
+8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02、2026-09-03、2026-09-07 多次修订)。站点访客功能范围 = `design/` 桌面画板 1a–1g + 2a–2p 与移动端画板 4a–4u + 可交互原型(**两套画板同一个功能范围**,移动端只换呈现);**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
     - **2026-09-02 修订(R-TOOLS)**:所有者裁定新增 **Tools 工具面板**,设计稿随之扩到 12 块(新增 `1f` 列表态 / `1g` 展开态,同日删除废弃的 `3a–3e`)。**扩边界的正确顺序是「先改设计稿、再进轮次」**——本条不是被绕过,是先被改了。面板是访客可见的**只读**能力说明(工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组),**不显示**启停开关、日限额与剩余次数、provider 与 model 名(那些是服务端配置,公开即泄配置面)。
     - **2026-09-03 修订(R-TABS)**:所有者裁定新增**顶部 tab 的呈现开关**(经 MCP 逐个开关三个 tab 露不露)。
       这**是**本条的例外(与 R-VISITOR 的会话删除入口同类,不同于 R-TOOLS 的「先改设计稿」):画板 1a 的导航条
@@ -96,7 +96,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       备案审核窗口期要求内容可撤下,靠发版则一来一回两次构建 + 传镜像 + 重建容器。
       **边界只到呈现层**:隐藏 = 导航条不渲染 + 该 tab 的页面在 web 侧不可达(`runtime` 落在站点根路径上,
       改为 307 到第一个可见 tab),`/agent/*`、`/trace/*`、`/notes/*`、`/rss.xml` 等后端端点**照常服务**;
-      要真的停掉 agent 用 `tool_config_set`。三个 tab 全部可见时前端与画板 1a 一字不差,不新增画板。
+      要真的停掉 agent 用 `tool_config_set`。全部 tab 可见时前端与画板 1a 一字不差,不新增画板。
       tab 的闭集在 `apps/api/shared/site-tabs.ts`,**新增一个 tab 要改三处**(该文件 + 一条迁移种子 +
       `apps/web/lib/tabs.ts`),缺哪一处的表现各不相同,文件头列了。
     - **2026-09-03 修订(R-SKILLS)**:所有者裁定新增**第四个顶部 tab「Skills」技能库**(分享自研 + 精选第三方的 `SKILL.md` 目录包)。
@@ -168,7 +168,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       现为 250,586 字节(R-SOURCE 导航改五格后),离上限只剩 11 KB —— 下次给桌面加画板前必须先拆文件**(`2n–2p` 已经放新文件)。
       拉稿后一律先验:字节数 / 闭合标签 / div 开合 / 画板数,四项齐了才算拿到稿。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**(执行类能力只能在独立沙箱容器里:容器可常驻,每次运行必须是一次性的进程与工作目录 —— 所有者裁定 2026-09-03,R-SKILLS-2);SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
-    - **工具分四组**(R-WEBSEARCH 2026-09-01 定前两组、R-TITLE 同日补第三组、R-SKILLS-2 2026-09-03 裁定并落地第四组「沙箱执行组」;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。**会话绑定组**(`session_rename`;`generate_image` 同时也是会话绑定的)是「纯函数 / 数据面只读」的**唯一例外**:无网络、无凭据,只经专用 NOLOGIN 角色写**本会话那一行**的限定列(`agent_title` 只改 `sessions.title` 两列;`agent_image` 只 INSERT `generated_images`),会话 id 在建会话时闭包绑死、不是入参。**沙箱执行组**(`skill_run`,R-SKILLS-2 已落地)是第四档:api 进程内同样不碰文件系统 / 子进程,只经 **unix socket** 调独立的 `skill-runner` 容器(默认实例 `network_mode: none`、只读、rlimit;R-WEBFETCH 2026-09-03 裁定加**同一镜像的 egress 实例**,只出公网、不在 `front` / `back`,只跑 `xray.json` 声明 `network: egress` 的 skill,首个是 `web-fetch` —— 它是外呼组「不接受 URL 参数」的唯一例外,SSRF 防线 = 脚本逐地址校验 + 钉 IP 连、容器不在内部网络、宿主 `DOCKER-USER` 过滤;**不维护域名黑白名单**,拒的是固定内网地址段);入参只有 `skill` / `script`(闭集)与 `input`(JSON,过 schema),**可执行的 skill 集合在代码里**(`runner/skills/`,改 = 发版),库里只能在集合之内开关;八条附加约束见 `docs/security.md` §1 R-SKILLS-2 补记,egress 档的第九条见 R-WEBFETCH 补记。完整口径见 `docs/security.md` §1「工具分两组」表与 R-TITLE / R-IMAGEGEN / R-SKILLS-2 补记。
+    - **工具分四组**(R-WEBSEARCH 2026-09-01 定前两组、R-TITLE 同日补第三组、R-SKILLS-2 2026-09-03 裁定并落地第四组「沙箱执行组」;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。**会话绑定组**(`session_rename`;`generate_image` 同时也是会话绑定的)是「纯函数 / 数据面只读」的**唯一例外**:无网络、无凭据,只经专用 NOLOGIN 角色写**本会话那一行**的限定列(`agent_title` 只改 `sessions.title` 两列;`agent_image` 只 INSERT `generated_images`),会话 id 在建会话时闭包绑死、不是入参。**沙箱执行组**(`skill_run`,R-SKILLS-2 已落地)是第四档:api 进程内同样不碰文件系统 / 子进程,只经 **unix socket** 调独立的 `skill-runner` 容器(默认实例 `network_mode: none`、只读、rlimit;R-WEBFETCH 2026-09-03 裁定加**同一镜像的 egress 实例**,只出公网、不在 `front` / `back`,只跑 `xray.json` 声明 `network: egress` 的 skill,首个是 `web-fetch` —— 它是「api 进程内工具不接受访客 URL」这条口径(`docs/security.md` 第 4 层)的唯一例外,且例外只开在沙箱执行组的 egress 档、不在外呼组,SSRF 防线 = 脚本逐地址校验 + 钉 IP 连、容器不在内部网络、宿主 `DOCKER-USER` 过滤;**不维护域名黑白名单**,拒的是固定内网地址段);入参只有 `skill` / `script`(闭集)与 `input`(JSON,过 schema),**可执行的 skill 集合在代码里**(`runner/skills/`,改 = 发版),库里只能在集合之内开关;八条附加约束见 `docs/security.md` §1 R-SKILLS-2 补记,egress 档的第九条见 R-WEBFETCH 补记。完整口径见 `docs/security.md` §1「工具分两组」表(标题是历史名、代码注释仍按它引用,表本身已扩到四组)与 R-TITLE / R-IMAGEGEN / R-SKILLS-2 补记。
 10. **部署方式不混用**:本机开发 = `dev.ps1`(encore run);130 预发与生产 = docker compose(`deploy/`),镜像用 `encore build docker` + Next standalone。禁止在服务器上跑 encore run 当部署、也禁止本机用 compose 起开发环境。**镜像一律本机构建后传输,服务器不构建、不留仓库与工具链**;tag 必须是 git SHA,禁止 `latest`。矩阵与流程见 [`docs/deploy-environments.md`](docs/deploy-environments.md)。
 11. **生产 JS 运行时统一为 bun,且「开实验位」与「换基座」必须成对出现**(所有者裁定 2026-08-29,R-BUN)。开发/测试/预发/生产四个环境的**运行时**都是 bun,**最终运行镜像(final runtime image)里不含 node**。三处配置缺一不可:`apps/api/encore.app` 的 `"experiments": ["bun-runtime"]`、构建时的 `--base oven/bun:<钉住版本>-slim`、`apps/web/Dockerfile` 的 bun 基座。
     - **边界要说清,别理解成「项目已经不依赖 node/npm」**:node 与 npm 仍保留在**构建工具链**里——`apps/web/Dockerfile` 的 builder 阶段装 `nodejs`/`npm` 并用 `npm ci` + `npx next build`,只是这些都不进 runner 阶段。准确表述是「**Node 已从生产 runtime 与最终运行镜像中移除;构建阶段与依赖解析仍用 Node/npm**」。

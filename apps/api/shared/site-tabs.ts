@@ -23,7 +23,7 @@
  *
  * `as const` 不是洁癖:`key` 的字面量类型是 `site_tab_set` 那个 `z.enum` 的取值来源,
  * 写成 `readonly SiteTabMeta[]` 的话 key 会退化成 `string`,enum 就不再向 MCP 客户端
- * 下发「可用的三个值」,管理端只能猜键名。
+ * 下发可用的 key 取值,管理端只能猜键名。
  */
 export const SITE_TABS = [
   { key: "runtime", label: "Runtime 工作台", path: "/" },

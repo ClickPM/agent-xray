@@ -41,14 +41,14 @@ pi agent 需要调用工具(教程库只读查询;后续生图、联网搜索等
 - `createAgentSession({ noTools: 'all', ... })` 关掉 pi 全部内置工具——bash / read / write / edit / glob 一个不留
 - 业务工具逐个注册,注册集合由 `tool_config` 表的启停配置决定(经 MCP 管理面切换,集成与下线走代码发布)
 - 每个工具必须是**纯函数**:不接触文件系统、不 spawn 进程、不读 `process.env`、不做动态 import
-- 执行类内置工具默认**锁定**:开启需「服务器 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1` + MCP 管理面开关」双闸;所有启停操作写审计日志
+- 高危工具(代码里 `DANGEROUS_TOOLS` 按名点名的,现只有沙箱执行组的 `skill_run`)默认**锁定**:开启需「服务器 env `XRAY_UNLOCK_DANGEROUS_TOOLS=1` + MCP 管理面开关」双闸;所有启停操作写审计日志。这道闸**不是**给 pi 内置执行类工具留的口子,那些按下一条永久不进 in-process(措辞 2026-09-08 修准,原文「执行类内置工具默认锁定」与下一条读起来相斥)
 - **明文规则:bash / write / 任意代码执行类工具永久禁止进 in-process 进程。** 确需执行类能力时,必须在**独立沙箱容器**里,不共享本进程;
   容器**可以常驻**,但每次运行必须是**一次性的进程与工作目录**(所有者裁定 2026-09-03,R-SKILLS-2。原文写的是「一次性沙箱容器」,
   改措辞的理由:api 容器不挂 docker.sock,造不出「每次一个容器」;要么给 api 挂 docker.sock —— 那等于 root,与第 3 层直接冲突 ——
   要么上 gVisor / Firecracker,2 vCPU 轻量服务器不现实。代价认下:常驻容器共享内核,两次运行之间没有内核级隔离,
   残余风险是「Python 层面做不到的内核逃逸」;升级路径是给那个容器换 gVisor runtime,协议不变)
 
-**工具分两组:纯函数组 与 外呼组**(R-WEBSEARCH 补,2026-09-01;所有者裁定)。上面那条「纯函数」是**默认**,
+**工具分两组:纯函数组 与 外呼组**(R-WEBSEARCH 补,2026-09-01;所有者裁定。**2026-09-08 修准:此后 R-TITLE 补第三组「会话绑定组」、R-SKILLS-2 补第四组「沙箱执行组」,现为四组;本段标题与「两组」措辞保留为历史名,代码注释仍按它引用,组别口径以 CLAUDE.md 规则 9 与下方各补记为准**)。上面那条「纯函数」是**默认**,
 而第 4 层从一开始就写着「外呼型工具(LLM / 生图 / 搜索)」—— 两处的措辞此前是矛盾的:一个外呼工具必然要持凭据、
 发网络请求。本次把边界写死,而不是让实现去挑一条读:
 
@@ -113,7 +113,7 @@ R7 落地补记(2026-09-01,`apps/api/agent/tools.ts` + `runtime.ts`):
 
 - **三个参数是一组闸**:`noTools:"all"` 起步 + `customTools`(本轮启用工具的实现)+ `tools`(显式白名单)。pi 的取值是 `options.tools ?? (noTools ? [] : 默认内置)`,给了白名单就只有名单里的会被激活。**实测**(faux provider 驱动真实 agent loop):`getActiveToolNames()` 与 `getAllTools()` 都只有我们那三个,内置工具一个不出现;工具全关时两者皆空
 - **`tool_config` 只能开关「已实现的工具」,不能凭名字长出工具**:表里的未知名字在注册阶段被丢弃并记日志。bash / write 这类名字在 `TOOL_REGISTRY` 里**不存在** —— 上面那条「永久禁止」的物理落点是没有实现,不是配置关掉。**实测**:被诱导的模型直接点名 `bash`,pi 回 `Tool bash not found`
-- **`process.env` 的双闸读在注册环节**,不在工具体内:工具本身仍是纯函数。表里 `dangerous=true` 且缺 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` → 不注册(当前注册表没有任何 dangerous 实现,这是给将来准备的闸)
+- **`process.env` 的双闸读在注册环节**,不在工具体内:工具本身仍是纯函数。表里 `dangerous=true` 且缺 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` → 不注册(写下时注册表没有任何 dangerous 实现;R-SKILLS-2 起 `skill_run` 是第一个,且高危身份按工具名判、不按表里那一位,见下方 R-SKILLS-2 补记)
 - **工具集变更 = 会话重建**:工具白名单在 `createAgentSession` 时定格,事后开关对内存里的会话无效。所以它并进 R6 那个 `configFingerprint`,走同一条「配置指纹变了,会话下一轮被重建」的统一规则
 - **工具结果有界**(8000 字符,超出截断并标注)且**异常不外泄**:数据库错误只进服务端日志,给模型的是一句固定文案 —— 工具结果会进模型上下文 → 进轨迹事件 → 经公开的 `/trace/stream` 出去(§2)。**但失败仍要是失败**:固定文案以 `throw` 交给 pi 的错误路径,`tool_result` 的 `isError` 才是 true;`return` 一条普通结果会让轨迹面板把一次超时的查询画成一次成功的查询(codex 复审 P2)
 

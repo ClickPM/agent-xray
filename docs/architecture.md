@@ -7,15 +7,16 @@
    │ HTTPS
    ▼
 Caddy :443(自动 TLS,单机反代)
-   ├── /            → apps/web  Next.js(Runtime 工作台 / Notes / Skills / About;/admin 已于 R6 整目录删除)
+   ├── /            → apps/web  Next.js(Runtime 工作台 / Notes / Skills / Source / About;/admin 已于 R6 整目录删除)
    ├── /notes/**.webp → 按扩展名分流到 api 的 /assets/notes/…(正文配图存 Postgres,R6)
    ├── /skills/*.zip  → 按扩展名分流到 api 的 /assets/skills/…(skill 目录打包下载,R-SKILLS)
    └── /api/*       → apps/api  Encore.ts :4000
                         │
                         ├── agent 服务:createAgentSession(pi SDK in-process)
-                        │     ├── noTools:'all' + 三组业务工具:纯函数组 notes_*(agent_ro 只读角色)
+                        │     ├── noTools:'all' + 四组业务工具:纯函数组 notes_* · source_*(agent_ro 只读角色)
                         │     │   / 外呼组 web_search · generate_image(域白名单 + 双计时器 + 日限额)
                         │     │   / 会话绑定组 session_rename(列级授权;见 security.md 四层沙箱)
+                        │     │   / 沙箱执行组 skill_run(经 unix socket 调下方 skill-runner 容器;R-SKILLS-2)
                         │     ├── 观测者扩展:订阅 34 种内核事件 → 内存事件队列
                         │     ├── 对话 SSE ← session.subscribe();GET /agent/tools 工具目录;GET /agent/images 按访客供图
                         │     └── 访客 cookie 归属过滤 + 3 天保留期(R-VISITOR)
@@ -25,6 +26,7 @@ Caddy :443(自动 TLS,单机反代)
                         ├── mcp 服务:无状态 MCP 管理面 /api/mcp(内容发布 / 附件 / About / LLM·搜索·生图 provider / 工具启停 / 统计查询;静态 token)
                         ├── site 服务:GET /site/tabs(顶部 tab 呈现开关的只读面,R-TABS)
                         ├── skills 服务:GET /skills · GET /skills/:name · GET /assets/skills/:name.zip(技能库只读面;写面在 mcp 的 skills_* 八个工具;R-SKILLS)
+                        ├── source 服务:GET /source · GET /source/file(站点源码快照只读面,永远读 current;写面在 mcp 的 source_* 五个工具,快照随 `dev.ps1 ship` 发布;R-SOURCE)
                         ├── metrics 服务:POST /t 访问打点(不存原始 IP)
                         ├── system 服务:GET /health
                         ├── skill-runner 容器(R-SKILLS-2,已落地):agent 的 `skill_run` 经命名卷里的 unix socket 调它;
