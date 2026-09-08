@@ -1,5 +1,8 @@
-// Source 文件页(R-SOURCE,画板 2o):`/source/<path>`,path 是仓库根相对路径(Next 已按段解码,`(site)` `[series]` 原样到手)。
+// Source 文件页(R-SOURCE,画板 2o):`/source/<path>`,path 是仓库根相对路径。
 // 取数、404 门禁在这里;目录树折叠与 copy 在 components/source/SourceBrowser(客户端)。
+//
+// 【只打一次后端】`GET /source/file` 同时回当前文件与整份目录树元信息(同一个 REPEATABLE READ 事务):
+// 分两次取的话,恰好夹着一次发布 commit 时页头 / 正文是旧版而目录树是新版(codex 首轮 P2)。
 import { api, notFoundOnBadRoute } from "@/lib/api";
 import { requireVisibleTab } from "@/lib/tabs-server";
 import { MarkdownFile } from "@/components/skills/MarkdownFile";
@@ -30,7 +33,6 @@ export default async function SourceFilePage({ params }: { params: Promise<{ pat
   // 路由参数是访客可控的:形状不合法(后端 invalid_argument)与不存在(not_found)都渲染 404,真故障原样抛出。
   // 目录地址(/source/apps/api)没有对应文件,同样 404 —— 没有目录页(画板只画了首页与文件页)。
   const file = await api.source.getSourceFile({ path }).catch(notFoundOnBadRoute);
-  const index = await api.source.getSource().catch(notFoundOnBadRoute);
 
   const mdView = file.kind === "markdown" ? <MarkdownFile content={file.content} /> : undefined;
   const s = file.snapshot;
@@ -46,7 +48,7 @@ export default async function SourceFilePage({ params }: { params: Promise<{ pat
         repo: s.repo,
         repoUrl: safeExternal(s.repoUrl) ?? "https://github.com",
       }}
-      files={index.files}
+      files={file.files}
       file={{ path: file.path, kind: file.kind, content: file.content, bytes: file.bytes, lines: file.lines }}
       mdView={mdView}
       isIndex={false}

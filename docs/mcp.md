@@ -310,7 +310,7 @@
 5. **`source_snapshot_delete`**（写）：删除一份**非 current** 的快照（残留的 staging）；删 current 会拒绝——站点上要换内容就发下一版。
    - 入参：`sha`。
 
-审计：三个写工具每次调用一行 `mcp_audit`（`summary` 只有 sha 前 7 位与文件数，不记正文）。
+审计：四个写工具（`begin` / `put` / `commit` / `delete`）每次调用一行 `mcp_audit`（`summary` 只有 sha 前 7 位与文件数，不记正文）；`put` 对每个文件核 sha256 / bytes / lines 三个事实，`commit` 从实际文件行重算 `totalBytes`。
 
 ---
 

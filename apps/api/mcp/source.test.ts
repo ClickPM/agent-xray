@@ -128,6 +128,27 @@ describe("三段式发布(mcp/source-store)", () => {
     expect(n?.n).toBe(1);
   });
 
+  it("manifest 的 bytes / lines 与内容不符也拒(codex 首轮 P2);commit 后 total_bytes 从实际文件行重算", async () => {
+    // sha256 对、bytes 错
+    const wrongBytes = PACK_A.map(entry).map((e) => (e.path === "README.md" ? { ...e, bytes: e.bytes + 1 } : e));
+    await src.beginSnapshot(SHA_A, wrongBytes);
+    await expect(src.putFiles(SHA_A, [PACK_A[0]])).rejects.toThrow(/字节数/);
+    // sha256 对、lines 错
+    const wrongLines = PACK_A.map(entry).map((e) => (e.path === "README.md" ? { ...e, lines: e.lines + 5 } : e));
+    await src.beginSnapshot(SHA_A, wrongLines);
+    await expect(src.putFiles(SHA_A, [PACK_A[0]])).rejects.toThrow(/行数/);
+    // 正确的 manifest,但 begin 时声明的总量故意多报:commit 后 total_bytes 是实际行的和
+    const good = PACK_A.map(entry);
+    await src.beginSnapshot(SHA_A, good);
+    await db.rawExec(`UPDATE source_snapshots SET total_bytes = 999999 WHERE sha = $1`, SHA_A);
+    await src.putFiles(SHA_A, PACK_A);
+    const c = await src.commitSnapshot(SHA_A);
+    const real = good.reduce((a, e) => a + e.bytes, 0);
+    expect(c.totalBytes).toBe(real);
+    const row = await db.rawQueryRow<{ t: number }>(`SELECT total_bytes::int AS t FROM source_snapshots WHERE sha = $1`, SHA_A);
+    expect(row?.t).toBe(real);
+  });
+
   it("put 的拒绝:不在 manifest / sha256 不符 / 一批超量 / NUL / 快照不存在 / 已是 current", async () => {
     await src.beginSnapshot(SHA_A, PACK_A.map(entry));
     await expect(src.putFiles(SHA_A, [{ path: "not/in/manifest.md", content: "x" }])).rejects.toThrow(/不在 manifest/);

@@ -90,6 +90,11 @@ export interface GetSourceFileResponse {
   content: string;
   bytes: number;
   lines: number;
+  /**
+   * 同一快照里的全部文件元信息(不含内容),按路径码点序 —— 页面的目录树由它长出来。
+   * 与 content 出自同一个 REPEATABLE READ 事务:页面只打这一次后端,页头 / 正文 / 目录树必然是同一个 sha(codex 首轮 P2)。
+   */
+  files: SourceFileEntry[];
 }
 
 export const getSourceFile = api(
@@ -106,7 +111,7 @@ export const getSourceFile = api(
     if (reason) throw APIError.invalidArgument("path 不合法");
     const snap = await store.fileSnapshot(path);
     if (!snap) throw APIError.notFound("没有这个文件");
-    const { snapshot, file } = snap;
+    const { snapshot, file, files } = snap;
     return {
       snapshot: info(snapshot),
       path: file.path,
@@ -114,6 +119,7 @@ export const getSourceFile = api(
       content: file.content,
       bytes: file.bytes,
       lines: file.lines,
+      files,
     };
   },
 );

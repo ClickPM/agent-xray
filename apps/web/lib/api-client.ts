@@ -867,6 +867,11 @@ export namespace source {
 
         bytes: number
         lines: number
+        /**
+         * 同一快照里的全部文件元信息(不含内容),按路径码点序 —— 页面的目录树由它长出来。
+         * 与 content 出自同一个 REPEATABLE READ 事务:页面只打这一次后端,页头 / 正文 / 目录树必然是同一个 sha(codex 首轮 P2)。
+         */
+        files: SourceFileEntry[]
     }
 
     export interface GetSourceResponse {

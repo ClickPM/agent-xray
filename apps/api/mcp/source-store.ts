@@ -158,20 +158,23 @@ export async function putFiles(sha: string, files: Array<{ path: string; content
     if (snap.status === "current") throw new ConflictError(`快照 ${sha.slice(0, 7)} 已经是 current,不接受再上传`);
     for (const f of files) {
       const fx = facts.get(f.path)!;
-      const row = await tx.rawQueryRow<{ sha256: string }>(
-        `SELECT sha256 FROM source_files WHERE sha = $1 AND path = $2`,
+      const row = await tx.rawQueryRow<{ sha256: string; bytes: number; lines: number }>(
+        `SELECT sha256, bytes, lines FROM source_files WHERE sha = $1 AND path = $2`,
         sha,
         f.path,
       );
       if (!row) throw new ConflictError(`${f.path} 不在 manifest 里(source_snapshot_begin 时没有声明它)`);
+      // 【三个内容事实都核,不只核哈希】(codex 首轮 P2)manifest 里的 bytes / lines 会进页面头部条与目录树,
+      // 只核 sha256 的话,一份哈希对、字节数错的 manifest 也能 commit,页面上就是错的体积与行数。
+      // 复用自 current 的文件不在这里过(它们在自己那一版 put 时核过,复制条件又要求 sha256 相等)。
       if (row.sha256 !== fx.sha256) throw new ConflictError(`${f.path}:内容的 sha256 与 manifest 声明的不一致`);
+      if (row.bytes !== fx.bytes) throw new ConflictError(`${f.path}:内容的字节数(${fx.bytes})与 manifest 声明的(${row.bytes})不一致`);
+      if (row.lines !== fx.lines) throw new ConflictError(`${f.path}:内容的行数(${fx.lines})与 manifest 声明的(${row.lines})不一致`);
       await tx.rawExec(
-        `UPDATE source_files SET content = $3, bytes = $4, lines = $5 WHERE sha = $1 AND path = $2`,
+        `UPDATE source_files SET content = $3 WHERE sha = $1 AND path = $2`,
         sha,
         f.path,
         f.content,
-        fx.bytes,
-        fx.lines,
       );
     }
     const pending = await tx.rawQueryRow<{ n: number }>(
@@ -210,14 +213,19 @@ export async function commitSnapshot(sha: string): Promise<CommitResult> {
     if (snap.status === "current") {
       return { sha, fileCount: snap.fileCount, totalBytes: snap.totalBytes, publishedAt: snap.publishedAt ?? 0, replaced: null, unchanged: true };
     }
-    const counts = await tx.rawQueryRow<{ total: number; missing: number }>(
-      `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE content IS NULL)::int AS missing
+    const counts = await tx.rawQueryRow<{ total: number; missing: number; totalBytes: number }>(
+      `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE content IS NULL)::int AS missing,
+              COALESCE(SUM(bytes), 0)::bigint AS "totalBytes"
          FROM source_files WHERE sha = $1`,
       sha,
     );
     if (!counts || counts.total !== snap.fileCount) {
       throw new ConflictError(`快照 ${sha.slice(0, 7)} 的文件行数(${counts?.total ?? 0})与 manifest(${snap.fileCount})不符,重新 begin`);
     }
+    // 【总量从实际文件行重算】(codex 首轮 P2)begin 时记的 total_bytes 来自 manifest 声明;每个文件的 bytes 在 put 时已与内容核过,
+    // 复用的那部分在它自己那一版核过 —— 汇总值就该从这些行来,而不是信 manifest 的加总
+    const totalBytes = Number(counts.totalBytes);
+    await tx.rawExec(`UPDATE source_snapshots SET total_bytes = $2 WHERE sha = $1`, sha, totalBytes);
     if (counts.missing > 0) {
       const sample = await tx.rawQueryAll<{ path: string }>(
         `SELECT path FROM source_files WHERE sha = $1 AND content IS NULL ORDER BY path COLLATE "C" LIMIT 10`,
@@ -241,7 +249,7 @@ export async function commitSnapshot(sha: string): Promise<CommitResult> {
     return {
       sha,
       fileCount: snap.fileCount,
-      totalBytes: snap.totalBytes,
+      totalBytes,
       publishedAt: done?.publishedAt ?? Date.now(),
       replaced: prev?.sha ?? null,
       unchanged: false,

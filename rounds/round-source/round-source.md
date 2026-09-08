@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-source/round-source.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**进行中**(2026-09-08)。所有者八条裁定已落(见下),分支 `round-source` 从 `main`(`ee7d7f5`)开出;
+> 状态:**代码落地、本机验收完成、codex 审查中**(2026-09-08;`5dc7ae8` 设计稿 + 安全补记 → `57e890b` 代码 → `6879a6c` 端到端整改)。所有者八条裁定已落(见下),分支 `round-source` 从 `main`(`ee7d7f5`)开出;
 > 给 Claude Design 的提示词在 [`design-prompt.md`](design-prompt.md)。**设计稿已于 2026-09-08 并入 `design/`**
 > (`2n` / `2o` / `2p` 放新文件 `Agent X-Ray Source.dc.html`,`Workbench` 20 块导航改五格,原型加两屏;四项判据与合并口径记在 `design/README.md`),
 > 与 R-TOOLS / R-SKILLS / R-PERF 同一顺序、**不是**规则 8 的例外。`docs/security.md` 的 R-SOURCE 补记(§1 第 2 层 + §4)已按规则 9 先于代码写入。
@@ -243,9 +243,20 @@ node tools/source-publish/publish.mjs --sha <ref> --check                       
 
 <!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:codex `/codex:review --background`(改动超过两个文件);前两轮全量 `branch diff against main`,第 3 轮起 `--base <上一轮已审提交>` 只审整改 diff
+- 审查方式:codex companion `review --wait --scope branch`(PowerShell `Start-Process` 脱离工具生命周期 + Monitor 看 `.out`,见记忆「codex review 脱离启动」);
+  前两轮全量 `branch diff against main`,第 3 轮起 `--base <上一轮已审提交>` 只审整改 diff
 - 审查要求随附:只判定缺陷与严重级别,不展开设计方案;非严重 findings 不许新增机制类修复
-- findings 处理:<待回填>
+- **第 1 轮**(2026-09-08,全量,50 文件 / +4891 −68,约 12 分钟):**3 条 P2、零 high,全部采纳整改**(整改提交见下一条)
+  1. [P2] `source_files_put` 只核 sha256,manifest 里错的 `bytes` / `lines` 能带着一起 commit,页面显示错的体积与行数 → put 对三个内容事实逐一比对(不符整批拒),
+     commit 从实际文件行 `SUM(bytes)` 重算 `total_bytes`;`mcp/source.test.ts` 加两条拒绝 + 一条重算断言
+  2. [P2] agent 三个工具先 `SELECT current` 再按 sha 查文件,`READ COMMITTED` 下夹着一次发布 commit 会误报「没有这个文件」/ 空列表 →
+     三个工具改成 `JOIN source_snapshots … status = 'current'` 的**单条语句**,只在结果为空时再查快照行区分「没快照 / 没匹配」;
+     不动 ro-db 的隔离级别(那是 notes 工具共用的通道,改它属机制类)
+  3. [P2] 文件页两次请求(文件 + 目录树)在发布并发时会拼出两版 → `GET /source/file` 在同一个 REPEATABLE READ 事务里顺带回 `files[]`,
+     两个页面都只打一次后端;首页只有 README.md 不在快照里才退回两步路。`source.test.ts` 断言 `files[]` 与文件同快照
+  - 审查推理里顺带看到、没成 finding 的两处也一并处理:`docs/mcp.md` 写成「三个写工具」实为四个(begin / put / commit / delete);
+    `source_read` 的输出去掉行尾 `\r`(仓库当前没有 CRLF 文件,防将来混进来)
+- **第 2 轮**:<待回填>
 - 结论:<待回填>
 
 ## 失败处理

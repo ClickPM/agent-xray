@@ -582,10 +582,17 @@ const SOURCE_LIST_META: ToolMeta = {
 };
 
 interface SourceListRow {
+  sha: string;
+  fileCount: number;
   path: string;
   bytes: number;
   lines: number;
 }
+
+// 【current 与内容必须在同一条语句里取】(codex 首轮 P2)ro-db 的事务是 READ COMMITTED,先 SELECT current 的 sha、
+// 再按它查文件是两条语句 —— 恰好夹着一次发布 commit 时,第二条看到的库里旧快照已被删掉,工具就会误报「没有这个文件」/ 空列表。
+// 三个工具一律 JOIN `source_snapshots … status = 'current'` 一次取完;只有结果为空、要区分「没快照」还是「没匹配」时才再查一次快照行
+// (那时错的最多是一句提示文案,不是数据)。读面 source/store.ts 走的是 REPEATABLE READ 事务,同一个问题在那边由隔离级别解决。
 
 const sourceList: MetaToolDefinition = {
   ...SOURCE_LIST_META,
@@ -593,25 +600,26 @@ const sourceList: MetaToolDefinition = {
     const { prefix } = (params ?? {}) as { prefix?: string };
     return guarded(SOURCE_LIST_TOOL, async () =>
       queryAsAgentRo(async (tx: Transaction) => {
-        const snap = await currentSourceSnapshot(tx);
-        if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
-        // 【前缀用 left(path, n) = $2 而不是 LIKE】LIKE 的 % / _ 是通配符,prefix 是模型给的自由文本,
+        // 【前缀用 left(path, n) = $1 而不是 LIKE】LIKE 的 % / _ 是通配符,prefix 是模型给的自由文本,
         // 转义又是一处容易写错的地方;left() 是纯前缀语义,没有元字符
         // ORDER BY … COLLATE "C":码点序,与前端目录树 / 发布脚本的排序同一口径(库的默认 collation 会把大小写混排)
         const all = await tx.rawQueryAll<SourceListRow>(
-          `SELECT path, bytes, lines
-             FROM source_files
-            WHERE sha = $1 AND ($2::text IS NULL OR left(path, length($2)) = $2)
-            ORDER BY path COLLATE "C"
-            LIMIT $3`,
-          snap.sha,
+          `SELECT s.sha, s.file_count AS "fileCount", f.path, f.bytes, f.lines
+             FROM source_snapshots s
+             JOIN source_files f ON f.sha = s.sha
+            WHERE s.status = 'current' AND ($1::text IS NULL OR left(f.path, length($1)) = $1)
+            ORDER BY f.path COLLATE "C"
+            LIMIT $2`,
           prefix && prefix !== "" ? prefix : null,
           MAX_SOURCE_LIST_ROWS + 1,
         );
         const { rows, more: sqlMore } = splitOverflow(all, MAX_SOURCE_LIST_ROWS);
         if (rows.length === 0) {
+          const snap = await currentSourceSnapshot(tx);
+          if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
           return textResult(prefix ? `快照里没有以 ${prefix} 开头的路径。` : NO_SOURCE_TEXT, { sha: snap.sha, count: 0 });
         }
+        const snap = { sha: rows[0].sha, fileCount: rows[0].fileCount };
         const head = `snapshot ${snap.sha.slice(0, 7)} · ${snap.fileCount} files${prefix ? ` · prefix ${prefix}` : ""}`;
         const { taken, cut } = takeLinesWithinBudget(
           rows.map((r) => `${r.path} · ${r.bytes} · ${r.lines}`),
@@ -650,6 +658,7 @@ const SOURCE_READ_META: ToolMeta = {
 };
 
 interface SourceFileRow {
+  sha: string;
   kind: string;
   lines: number;
   content: string;
@@ -661,17 +670,22 @@ const sourceRead: MetaToolDefinition = {
     const { file, startLine, endLine } = params as { file: string; startLine?: number; endLine?: number };
     return guarded(SOURCE_READ_TOOL, async () =>
       queryAsAgentRo(async (tx: Transaction) => {
-        const snap = await currentSourceSnapshot(tx);
-        if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
+        // 单条语句取 current 里的这个文件(理由见 sourceList 上方的注释)
         const row = await tx.rawQueryRow<SourceFileRow>(
-          `SELECT kind, lines, content FROM source_files WHERE sha = $1 AND path = $2 AND content IS NOT NULL`,
-          snap.sha,
+          `SELECT s.sha, f.kind, f.lines, f.content
+             FROM source_snapshots s
+             JOIN source_files f ON f.sha = s.sha
+            WHERE s.status = 'current' AND f.path = $1 AND f.content IS NOT NULL`,
           file,
         );
         if (!row) {
+          const snap = await currentSourceSnapshot(tx);
+          if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
           return textResult(`快照里没有 ${file};先用 source_list 或 source_search 确认路径。`, { sha: snap.sha, found: false });
         }
-        const all = row.content === "" ? [] : row.content.split("\n");
+        const snap = { sha: row.sha };
+        // 行尾的 \r 不进输出(仓库里若混进 CRLF 文件,行号前缀后面不该跟一个看不见的回车)
+        const all = row.content === "" ? [] : row.content.split("\n").map((l) => l.replace(/\r$/, ""));
         if (all.length > 1 && row.content.endsWith("\n")) all.pop();
         const total = all.length;
         const from = Math.max(1, Math.min(startLine ?? 1, Math.max(total, 1)));
@@ -713,6 +727,7 @@ const SOURCE_SEARCH_META: ToolMeta = {
 };
 
 interface SourceHitRow {
+  sha: string;
   path: string;
   line: number;
   text: string;
@@ -724,20 +739,18 @@ const sourceSearch: MetaToolDefinition = {
     const { query, prefix } = params as { query: string; prefix?: string };
     return guarded(SOURCE_SEARCH_TOOL, async () =>
       queryAsAgentRo(async (tx: Transaction) => {
-        const snap = await currentSourceSnapshot(tx);
-        if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
         // 【逐行在 SQL 侧切】regexp_split_to_table + WITH ORDINALITY 给出行号;strpos 是纯子串语义(理由同 notes_search)。
-        // 快照约 3 MB / 8 万行,顺序扫 + statement_timeout(ro-db)足够,不建索引。
+        // 快照约 3 MB / 8 万行,顺序扫 + statement_timeout(ro-db)足够,不建索引。current 与内容同一条语句取(见 sourceList 上方)。
         const all = await tx.rawQueryAll<SourceHitRow>(
-          `SELECT f.path, t.ord::int AS line, left(t.line, $4) AS text
-             FROM source_files f,
+          `SELECT s.sha, f.path, t.ord::int AS line, left(t.line, $3) AS text
+             FROM source_snapshots s
+             JOIN source_files f ON f.sha = s.sha,
                   LATERAL regexp_split_to_table(f.content, E'\\n') WITH ORDINALITY AS t(line, ord)
-            WHERE f.sha = $1
-              AND ($2::text IS NULL OR left(f.path, length($2)) = $2)
-              AND strpos(lower(t.line), lower($3)) > 0
+            WHERE s.status = 'current'
+              AND ($1::text IS NULL OR left(f.path, length($1)) = $1)
+              AND strpos(lower(t.line), lower($2)) > 0
             ORDER BY f.path COLLATE "C", t.ord
-            LIMIT $5`,
-          snap.sha,
+            LIMIT $4`,
           prefix && prefix !== "" ? prefix : null,
           query,
           SOURCE_HIT_CHARS,
@@ -745,8 +758,11 @@ const sourceSearch: MetaToolDefinition = {
         );
         const { rows, more } = splitOverflow(all, MAX_SOURCE_HITS);
         if (rows.length === 0) {
+          const snap = await currentSourceSnapshot(tx);
+          if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
           return textResult(`源码里没有匹配「${query}」的行${prefix ? `(prefix ${prefix})` : ""}。`, { sha: snap.sha, count: 0 });
         }
+        const snap = { sha: rows[0].sha };
         const hits = rows.map((r) => ({ path: r.path, line: r.line, text: r.text.replace(/\r$/, "") }));
         return textResult(jsonList("hits", hits, { query, snapshot: snap.sha.slice(0, 7), ...(more && { more }) }), {
           sha: snap.sha,

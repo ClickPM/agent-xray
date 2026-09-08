@@ -86,9 +86,16 @@ export async function indexSnapshot(): Promise<IndexSnapshot | null> {
 export interface FileSnapshot {
   snapshot: SnapshotRow;
   file: SourceFileRow;
+  /** 同一快照里的全部文件元信息(目录树);与 file 出自同一个 REPEATABLE READ 事务 */
+  files: SourceFileMetaRow[];
 }
 
-/** 文件页:current 快照 + 那一个文件(含内容),同一快照;没有 current 或没有这个文件都回 null */
+/**
+ * 文件页:current 快照 + 那一个文件(含内容)+ 全部文件元信息,**三者同一快照**;没有 current 或没有这个文件都回 null。
+ *
+ * 【为什么目录树也从这里出】(codex 首轮 P2)页面若分两次请求(文件 + 目录树),恰好夹着一次发布 commit 时,
+ * 页头 / 正文是旧版而目录树是新版,树里甚至没有正在显示的文件。一次事务一次取完,整页才真的是「同一个 sha」。
+ */
 export async function fileSnapshot(path: string): Promise<FileSnapshot | null> {
   return readSnapshot(async (tx) => {
     const snapshot = await currentRow(tx);
@@ -101,6 +108,13 @@ export async function fileSnapshot(path: string): Promise<FileSnapshot | null> {
       path,
     );
     if (!file) return null;
-    return { snapshot, file };
+    const files = await tx.rawQueryAll<SourceFileMetaRow>(
+      `SELECT path, kind, bytes, lines
+         FROM source_files
+        WHERE sha = $1
+        ORDER BY path COLLATE "C"`,
+      snapshot.sha,
+    );
+    return { snapshot, file, files };
   });
 }

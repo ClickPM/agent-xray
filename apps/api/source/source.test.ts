@@ -73,7 +73,7 @@ describe("GET /source", () => {
 });
 
 describe("GET /source/file", () => {
-  it("含括号 / 方括号的路径能取;头部与文件属于同一快照", async () => {
+  it("含括号 / 方括号的路径能取;头部、文件与目录树元信息属于同一快照(页面只打这一次)", async () => {
     await seed(SHA_A, "current", FILES);
     const r = await getSourceFile({ path: ROUTE });
     expect(r.path).toBe(ROUTE);
@@ -81,6 +81,10 @@ describe("GET /source/file", () => {
     expect(r.content).toBe("export default 1;\n");
     expect(r.lines).toBe(1);
     expect(r.snapshot.sha).toBe(SHA_A);
+    // 目录树元信息随文件一起回(codex 首轮 P2:分两次取会在发布并发时拼出两版),码点序、不含内容
+    expect(r.files.map((f) => f.path)).toEqual([...FILES.map((f) => f[0])].sort());
+    expect(r.files.find((f) => f.path === ROUTE)).toEqual({ path: ROUTE, kind: "typescript", bytes: 18, lines: 1 });
+    expect(JSON.stringify(r.files)).not.toContain("const a = 1");
   });
 
   it("形状不合法 → invalid_argument;不存在 → not_found;staging 里的文件不可见;content 为 NULL 的不可见", async () => {
