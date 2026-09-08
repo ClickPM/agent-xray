@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-leak/round-leak.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**实现完成、待审查**(2026-09-08 开工于分支 `round-leak`;所有者裁定同日:下一阶段拆三轮,本轮第一、先于 R-CROSSLINK / R-CARDS)。
+> 状态:**审查通过(codex 一轮零 findings),待合并 `main` 与发版**(2026-09-08 开工于分支 `round-leak`;所有者裁定同日:下一阶段拆三轮,本轮第一、先于 R-CROSSLINK / R-CARDS)。
 > 它是修补不是功能,**不涉及设计稿**(规则 8 不触发);但改的是脱敏面,所以不走「小修补直接 `main`」——
 > 分支 `round-leak`,完整 codex 循环(缺陷门禁),发版记 `docs/releases.md`。
 > 规则 9「先改文档」:`docs/security.md` §2 的 R-LEAK 补记已随本任务卡写入,§1 2026-09-07 补记里「记 BACKLOG 等裁定」那句同步改指向本轮。
@@ -61,18 +61,18 @@
 
 ## 验收
 
-| # | 检查 | 命令 / 期望 |
-|---|---|---|
-| 1 | 编译与测试 | `dev.ps1 check` / `dev.ps1 test` 全绿;新增用例 ≥ 4 条(A 一条、B 两条、集成一条) |
-| 2 | 通道 A 深度断言 | `events.test.ts`:完整 `Model` 对象进、`{type, source}` 出;`JSON.stringify(out)` 不含 provider / id / name / baseUrl 的**值** |
-| 3 | 通道 B 值级断言 | `websearch.test.ts`:两条线的全部 progress `detail` 都不含 host / modelId |
-| 4 | 集成探针 | faux e2e:轨迹事件全量 JSON 与 `trace_events.data` 都 0 命中 |
-| 5 | `/agent/ask` 不受影响 | 同一轮的对话流帧形状与 R-TOOLCARDS 契约一致(`ask.test.ts` 既有用例全过) |
-| 6 | 前端零改动 | `git diff --stat main -- apps/web` 为空;本机 Timeline 上 `model_select` 行仍出现,详情为 `{type, source}` 或该行不可展开 |
-| 7 | 同族排查清单 | 「本轮实测」列出核过的文件与模板,每条标「改」或「干净」 |
-| 8 | 冒烟第 8 条 | 文档已改成值级;**发版当日在生产实跑一次**:两条流 0 命中,留证 `docs/releases.md` |
-| 9 | 文档同步 | `docs/security.md` §2 R-LEAK 补记与 §1 2026-09-07 补记那句已改;BACKLOG 两条标关闭;`docs/mcp.md` 不动(仍 51) |
-| 10 | 发版 | 迁移版本不变(16);`docs/releases.md` 加一行;回滚 = 换回上一个镜像 tag |
+| # | 检查 | 命令 / 期望 | 结果 |
+|---|---|---|---|
+| 1 | 编译与测试 | `dev.ps1 check` / `dev.ps1 test` 全绿;新增用例 ≥ 4 条(A 一条、B 两条、集成一条) | ✅ check 绿;test 608 passed(34 文件)+ web `bun test lib` 28 passed;新增 **6** 条 |
+| 2 | 通道 A 深度断言 | `events.test.ts`:完整 `Model` 对象进、`{type, source}` 出;`JSON.stringify(out)` 不含 provider / id / name / baseUrl 的**值** | ✅ 键集合 `["source","type"]`;`model` 的五个值(含 `apiKey`)与 `previousModel.id` 深度都搜不到 |
+| 3 | 通道 B 值级断言 | `websearch.test.ts`:两条线的全部 progress `detail` 都不含 host / modelId | ✅ 两条线各一条;顺带断言不含 `cfg.provider` |
+| 4 | 集成探针 | faux e2e:轨迹事件全量 JSON 与 `trace_events.data` 都 0 命中 | ✅ 五个探针值 × 两份载体 0 命中;另钉两把 key 与假 LLM 地址。**第一次跑抓出通道 C** |
+| 5 | `/agent/ask` 不受影响 | 同一轮的对话流帧形状与 R-TOOLCARDS 契约一致(`ask.test.ts` 既有用例全过) | ✅ 全量 608 passed 含 `ask.test.ts` / `turn-recorder.test.ts`,零改动 |
+| 6 | 前端零改动 | `git diff --stat main -- apps/web` 为空;本机 Timeline 上 `model_select` 行仍出现,详情为 `{type, source}` 或该行不可展开 | ✅ diff 为空;`hasDetail` 因 `source` 键为真 → 行仍可展开、详情显示 `{ source: "set" }`(既有行为)。另跑 `apps/web` 的 `tsc --noEmit` 通过 |
+| 7 | 同族排查清单 | 「本轮实测」列出核过的文件与模板,每条标「改」或「干净」 | ✅ 10 行,3 改 7 干净 |
+| 8 | 冒烟第 8 条 | 文档已改成值级;**发版当日在生产实跑一次**:两条流 0 命中,留证 `docs/releases.md` | 文档✅;**生产实跑待发版当日** |
+| 9 | 文档同步 | `docs/security.md` §2 R-LEAK 补记与 §1 2026-09-07 补记那句已改;BACKLOG 两条标关闭;`docs/mcp.md` 不动(仍 51) | 补记✅(并补了通道 C);`docs/mcp.md` 未动;**BACKLOG 两条按其自身口径「发版后关闭」,待发版** |
+| 10 | 发版 | 迁移版本不变(16);`docs/releases.md` 加一行;回滚 = 换回上一个镜像 tag | **待所有者裁定是否发版** |
 
 ## 禁止
 
@@ -85,10 +85,13 @@
 
 <!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:codex `/codex:review --background`(前两轮全量;第 3 轮起 `--base <上一轮已审提交>`)。
+- 审查方式:codex-companion `review --background --scope branch`(全量:branch diff against main),2026-09-08 对提交 `8a74add`。
   带给审查者的要求:只判定缺陷与严重级别,不展开设计方案;本轮是脱敏修补,**值级探针是否真的覆盖两条流**是重点。
-- findings 处理:<逐条:采纳整改 / 不采纳及理由>
-- 结论:<PASS | 整改后 PASS>
+- **第 1 轮:零 findings**。审查者结论原文:三条轨迹通道的 provider / model 元数据被一致地移除,事件与工具行为保持不变;
+  新增的单元与端到端覆盖符合仓库的安全约束,未见阻塞性回归。它逐项核过的点包括:测试库隔离与 `tool_config` 复原、
+  事件 `source` 字段的来源、`tool.execute` 的类型、限额预留在测试里的副作用、剩余的 provider / model 泄露路径。
+- findings 处理:无(零 findings,不触发「有采纳整改 → 再发一轮复审」)。
+- 结论:**PASS**(一轮收口;复审收口标准要求的「无阻塞性问题或明显 bug / 漏洞类 findings」自动满足)。
 
 ## 失败处理
 
