@@ -235,7 +235,7 @@ export function Markdown({
   children: string;
   headingIds?: boolean;
   /**
-   * R-SOURCE:改写 **link / definition 节点**目标地址的钩子(纯增量,不传时管线一字不变)。
+   * R-SOURCE:改写 **link 节点**目标地址的钩子(纯增量,不传时管线一字不变;image / definition 不碰)。
    * Source tab 用它把仓库内相对链接指到 `/source/...`;在 mdast 上做而不是改正文字符串,
    * code span / 围栏代码里长得像链接的文本才不会被误伤(codex 第 3 轮 P2)。回 null = 不动。
    */

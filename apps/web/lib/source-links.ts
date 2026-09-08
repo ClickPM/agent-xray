@@ -2,8 +2,9 @@
 //
 // README / docs 里的 `[x](docs/security.md)` `[y](../rounds/BACKLOG.md#z)` 是**仓库内**相对路径;页面地址是 `/source`(首页)或
 // `/source/docs/a.md`,浏览器会把它们解析成 `/docs/security.md` 这种站点 404。这里给出「一个链接目标 → 改写后的 href」的纯函数,
-// 由 `lib/remark-link-href.ts` 的 remark 插件在 **mdast 的 link / definition 节点**上调用 —— code span / 围栏代码 / 普通文本里
-// 长得像链接的字符串不会被碰(第 2 轮那版逐行正则会误伤 `` `X[name](ctx)` ``,第 3 轮被点掉了)。
+// 由 `lib/remark-link-href.ts` 的 remark 插件在 **mdast 的 link 节点**上调用 —— code span / 围栏代码 / 普通文本里
+// 长得像链接的字符串不会被碰(第 2 轮那版逐行正则会误伤 `` `X[name](ctx)` ``,第 3 轮被点掉了);
+// 引用式的 `definition` 也不碰(引用式图片共用它,第 4 轮被点掉了)—— 引用式链接因此保持原样,仓库里的 README / docs 用的都是行内链接。
 // copy 按钮复制的仍是原文;图片节点(image)不在改写之列(指到源码页也显示不了,原样留着与改前一样 404,不更坏)。
 //
 // **必须是纯的**:被 Server Component(page.tsx)与 Client Component(SourceBrowser 的客户端回落)同时 import。

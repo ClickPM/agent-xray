@@ -273,7 +273,14 @@ node tools/source-publish/publish.mjs --sha <ref> --check                       
      (code span / 围栏 / 文本天然不碰);`Markdown` 与 `MarkdownFile` 各加一个可选的 `linkHref` 钩子(纯增量,不传时管线一字不变,
      Notes / Skills 零行为变化);`lib/source-links.ts` 收成「一个目标 → href」的纯函数 `sourceLinkHref(filePath)`。
      两份 `bun test lib` 用例(插件只改 link / definition、code 节点原样;目标解析的各种形态)
-- **第 4 轮**(`--base 061c92d`,只审第 3 轮整改 diff):<待回填>
+- **第 4 轮**(2026-09-08,`--base 061c92d` 只审第 3 轮整改 diff,约 5 分钟):**1 条 P2,采纳(删代码)**
+  1. [P2] 插件连 `definition` 节点一起改写,而引用式图片 `![alt][img]` + `[img]: assets/x.png` 与引用式链接共用同一种 `definition`,
+     改了它图片就指到源码页。**链接改写这块连续第三轮被点**(第 2 轮引入正则 → 第 3 轮换 AST → 第 4 轮 definition):按「审查循环不是设计」
+     不再长「这条定义被谁引用」的追踪,**删掉 `definition` 分支**,只改 `link` 节点;引用式链接保持原样(与改前一样 404,不更坏;
+     仓库里 README / docs 用的都是行内链接)。用例改成断言 image / definition / linkReference 原样。
+     **给所有者的一句话**:链接改写本身不在画板里,是审查第 2 轮以「预览里的相对链接全是站点 404」点出来的渲染缺陷修补;
+     若裁定「源码预览不改写链接、忠实原文」,去掉 `lib/remark-link-href.ts` + `lib/source-links.ts` 与两处 `linkHref` 即可,不影响别的
+- **第 5 轮**(`--base 5bcb36f`,只审第 4 轮整改 diff):<待回填>
 - 结论:<待回填>
 
 ## 失败处理
