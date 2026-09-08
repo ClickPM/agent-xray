@@ -311,7 +311,11 @@ export async function runWebSearch(
     }
   };
 
-  progress("request", `向 ${new URL(cfg.baseUrl).hostname} 发起搜索请求(model=${cfg.modelId})`);
+  // 【文案里不带 host / model】R-LEAK 修补(2026-09-08):这一条经 tools.ts 的 onUpdate 变成
+  // `tool_execution_update.partialResultPreview`,随公开的 /trace/stream 出去并落库 —— 原文案拼了
+  // `hostname(cfg.baseUrl)` 与 `cfg.modelId`,与 R-TOOLS「provider 与 model 名是配置面,不公开」相反。
+  // imagegen.ts 的同位文案(「向生图网关发起请求」)一开始就是这么写的,这里对齐它。
+  progress("request", "已向搜索网关发起请求");
 
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();

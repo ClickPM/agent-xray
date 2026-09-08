@@ -55,3 +55,38 @@ describe("派生字段 handlers(R-SKILLS-2:谁裁决谁记录)", () => {
     expect(JSON.stringify(tc).length).toBeLessThanOrEqual(8_192);
   });
 });
+
+describe("R-LEAK · model_select 不带 provider / model(docs/security.md §2 R-LEAK 补记)", () => {
+  // 值级断言:泄的从来不是 `provider` 这个键名,而是它的**值**。
+  // 这里给一个比 pi 的 `Model` 更「胖」的对象(多带 baseUrl / apiKey),白名单之外一个都不许出去。
+  const model = {
+    provider: "LEAK-PROVIDER-1",
+    id: "LEAK-MODEL-ID-2",
+    name: "LEAK-MODEL-NAME-3",
+    baseUrl: "https://LEAK-HOST-4.example",
+    apiKey: "sk-LEAK-KEY-5-0123456789",
+  };
+
+  it("键集合恰为 {type, source};四个配置值深度都找不到", () => {
+    const out = sanitizeEvent("model_select", {
+      type: "model_select",
+      model,
+      previousModel: { ...model, id: "LEAK-PREV-ID-6" },
+      source: "set",
+    }) as Record<string, unknown>;
+
+    expect(Object.keys(out).sort()).toEqual(["source", "type"]);
+    expect(out.source).toBe("set");
+    const s = JSON.stringify(out);
+    for (const leaked of [...Object.values(model), "LEAK-PREV-ID-6"]) {
+      expect(s, `泄了 ${leaked}`).not.toContain(leaked);
+    }
+  });
+
+  it("source 是闭集(set / cycle / restore),仍照原样透出 —— 事件行本身没被删掉", () => {
+    for (const source of ["set", "cycle", "restore"]) {
+      const out = sanitizeEvent("model_select", { type: "model_select", model, source }) as Record<string, unknown>;
+      expect(out).toEqual({ type: "model_select", source });
+    }
+  });
+});

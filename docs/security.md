@@ -406,8 +406,12 @@ R-LEAK 补记(2026-09-08,所有者裁定「修」;规则 9「先改文档」—�
   `model_select` 的 `data` 只剩白名单 `{type, source}`(Timeline 仍有这一行,详情不可展开是既有行为)。
 - **工具阶段文案**:`websearch.ts` 的 `request` 阶段把 `hostname(cfg.baseUrl)` 与 `cfg.modelId` 拼进 `partialResultPreview`。修法是固定文案「已向搜索网关发起请求」
   (BACKLOG 三档取 ①;② 保留 model 名与两次裁定相反;③ 值级 sanitize 是新机制,非阻塞性 findings 下不许,留作备选)。
+- **工具结果的 `details`**(第三条,落地时由集成探针 `agent/leak-e2e.test.ts` 抓到,不在任务卡列的两条里):`web_search` 的 `textResult(…, {provider, model, citations})`
+  经 pi 的 `tool_execution_end.resultPreview` 出去。修法与前两条同族 —— 只留 `citations`。`generate_image` 那一侧从 R-IMAGEGEN 起就写着「details 里不放 provider / model」,
+  是这条口径的既有落点;**新增外呼工具时,阶段文案与结果 details 两处都要照它写**。
 - **判据改成值级**:`docs/deploy-environments.md` 冒烟第 8 条原来只查字面词 `baseUrl`,而泄的是它的**值**;改为拿当前 provider 配置的 host 与 modelId
-  去两条流的原始字节里 grep,`events.test.ts` / `websearch.test.ts` 与 faux e2e 各钉一条同样的值级断言。
+  去两条流的原始字节里 grep,`events.test.ts` / `websearch.test.ts` 与 faux e2e 各钉一条同样的值级断言。**探针的价值正是在这里被证伪过一次**:
+  两条通道各自的单元测试都绿,而端到端的值级 grep 立刻抓出了第三条。
 - **同族排查是交付项**:`agent/` 下所有进 `onUpdate` / `progress` / 事件 `data` / 工具结果的字符串模板逐个核(至少 `websearch.ts` 四个 phase、
   `imagegen.ts` 的 `ImageGenPhase`、`skill-runner.ts` 失败文案、`tools.ts` 固定文案、`events.ts` 其余派生项),清单回填任务卡。
 - **存量不回填**:既有 `trace_events` 行随 3 天保留期清掉(§6 R-VISITOR);发版后 3 天内旧会话回放仍见旧值,所有者已知。

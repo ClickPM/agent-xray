@@ -9,6 +9,10 @@
 //   notify   = 纯通知,无影响流程的 result
 // 实测计数 notify 19 / veto 6 / chain 7 / takeover 2 = 34;
 // docs/architecture.md 原记 notify 18(合计 33)已按本清单回改(CLAUDE.md 规则:以实测为准)。
+//
+// 【provider 名 / model id / model name 不进轨迹流】(R-LEAK,2026-09-08)——
+// 与 R-TOOLS「配置面不公开」、R-TOOLCARDS「会话区不显示模型名」同一口径:白名单不放行它们,
+// 派生项(EVENT_DERIVED)也不许把它们并回来。轨迹流是公开的(/trace/stream 无鉴权)。
 
 import { previewText, sanitizeValue } from "../shared/redact";
 
@@ -151,12 +155,6 @@ function summarizeMessage(m: unknown): unknown {
   };
 }
 
-function summarizeModel(m: unknown): unknown {
-  if (typeof m !== "object" || m === null) return undefined;
-  const model = m as { provider?: unknown; id?: unknown; name?: unknown };
-  return { provider: model.provider, id: model.id, name: model.name };
-}
-
 /** 流式增量事件只透出 type/contentIndex/delta(delta 过 previewText)。 */
 function summarizeAssistantEvent(v: unknown): unknown {
   if (typeof v !== "object" || v === null) return undefined;
@@ -179,7 +177,9 @@ const EVENT_DERIVED: Record<string, (e: Record<string, unknown>) => Record<strin
   message_start: (e) => ({ message: summarizeMessage(e.message) }),
   message_end: (e) => ({ message: summarizeMessage(e.message) }),
   message_update: (e) => ({ assistantMessageEvent: summarizeAssistantEvent(e.assistantMessageEvent) }),
-  model_select: (e) => ({ model: summarizeModel(e.model), previousModel: summarizeModel(e.previousModel) }),
+  // model_select 【没有派生项】(R-LEAK):`model` / `previousModel` 是 `{provider, id, name, …}`,
+  // 曾由 summarizeModel 并回白名单之外,随公开的 /trace/stream 推给访客并落库。事件本身仍记录,
+  // `data` 只剩白名单的 `{type, source}`(source = set|cycle|restore,不含配置值)。
   tool_execution_start: (e) => ({ argsPreview: previewText(e.args) }),
   tool_execution_update: (e) => ({ partialResultPreview: previewText(e.partialResult) }),
   tool_execution_end: (e) => ({ resultPreview: previewText(e.result) }),
