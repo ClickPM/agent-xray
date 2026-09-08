@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#fafafa}
+a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
+@keyframes omPulseBg{0%,100%{background-color:rgba(37,99,235,0.05)}50%{background-color:rgba(37,99,235,0.16)}}
+@keyframes omWaveSweep{from{background-position:200% 0}to{background-position:-100% 0}}
+@keyframes omSpin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+<section style="display:flex;flex-wrap:wrap;gap:48px;padding:48px;align-items:flex-start;width:2976px">
+
+<!-- ━━━ 2n 画板 S · Source 首页(/source · README 态) ━━━
+     裁定记录
+     · 目录树宽度 264(2g 是 240)。树最深 8 层、缩进 12/层,末层名字仍要留得下 `[chapter]/`:264 − 8 − 7×12 = 172px 给名字,够放两级模板段;再宽会挤掉预览卡里代码的可读宽度。
+     · 折叠规则:默认只展开「当前文件所在的那条路径」,其余目录一律收起。README.md 在仓库根,所以直达 /source 时六个根目录全收起。
+       本画板画的是访客手动把 apps 一路点开之后的定格(apps › web › app › (site) › notes),用来把「收起」与「展开到五层」两种画法在同一张板上交代清楚;api/、[series]/ 与另外五个根目录留在收起态做对照。
+     · 「本页目录」不要。2g 里它成立是因为 SKILL.md 有四个固定小节而 FILES 只有 7 行;这里反过来 —— README 只有四个小节而目录树有 294 个文件的规模,再叠一块导航会把粘性左栏撑过一屏。
+     · meta 行内容与顺序:快照 SHA(短 7 位)→ 发布日期 → 文件数 → 总字节。全部是第 1 节允许的字段,不含 commit 数 / 作者 / star。
+     · GitHub ↗ 指向 github.com/ClickPM/agent-xray/tree/<40 位 sha> —— 钉在快照那次提交上,不是 HEAD。
+     · 动效:无。此页没有等待,不用 omPulseBg / omSpin。
+━━━ -->
+<div id="2n" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2n</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 S · Source 首页(/source · README 态)</span></div>
+<div data-screen-label="S Source首页" style="width:1440px;min-height:1020px;background:#ffffff;border:1px solid #e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;box-sizing:border-box">
+  <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
+    <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
+    <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Runtime</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Notes</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Skills</div>
+      <div style="font-size:12px;font-weight:600;padding:4px 14px;border-radius:5px;background:#ffffff;color:#1a1a1a;border:1px solid #e0e0e0">Source</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">About</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:flex-end"><div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div></div>
+  </div>
+  <div style="width:1100px;margin:0 auto;padding:30px 0 64px">
+    <div style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px"><span style="color:#6b7280">Source</span></div>
+    <div style="display:flex;align-items:flex-start;gap:16px;margin-top:22px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font:650 22px 'JetBrains Mono',monospace;letter-spacing:-0.01em">ClickPM/agent-xray</span><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;border:1px solid currentColor;border-radius:4px;padding:1px 5px;line-height:1.4;flex:none">MIT</span></div>
+        <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-top:6px;max-width:640px">本站自己的源码,只读浏览:左边点文件,右边看内容。</div>
+        <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:10px">快照 be6c074 · 发布 2026-09-08 · 294 个文件 · 3.1 MB</div>
+      </div>
+      <!-- GitHub ↗:首页指向 /tree/be6c074…(整仓在该 sha 的树),文件页改指 /blob/<sha>/<path>,见 2o。 -->
+      <div style="display:flex;gap:8px;flex:none;padding-top:2px"><div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer;white-space:nowrap" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">GitHub ↗</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:264px minmax(0,1fr);gap:32px;margin-top:26px;align-items:start">
+      <div style="position:sticky;top:0">
+        <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">FILES</div>
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">apps/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">api/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">web/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">app/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">(site)/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 56px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">notes/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 68px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">[series]/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 68px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">page.tsx</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">4.1 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 56px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">layout.tsx</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">2.7 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">api/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">components/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">next.config.mjs</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">1.2 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">deploy/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">docs/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">rounds/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">runner/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">tools/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">CLAUDE.md</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">9.4 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:600 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:#e8e8e8"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">README.md</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">3.8 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">ROUNDS.md</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">21.7 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">dev.ps1</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">6.2 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">LICENSE</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">1.1 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">package.json</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">1.8 KB</span></div>
+        </div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03);min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280">README.md</span>
+          <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1">markdown · 3.8 KB · 96 行</span>
+          <div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="color:#2563eb;background:#eeeeee"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div>
+        </div>
+        <div style="padding:4px 24px 24px">
+          <div style="font-size:18px;font-weight:650;margin-top:26px">agent-xray</div>
+          <div style="font-size:14px;line-height:1.8;margin-top:12px;text-wrap:pretty">一个把 agent loop 摊开给人看的站点。访客在左边和 agent 对话,右边像 DevTools 一样实时显示这一轮的事件流、工具调用、上下文占用与耗时。它不是 SDK,也不是框架——就是一份跑得起来、读得完的内核参照。</div>
+          <div style="font-size:16px;font-weight:650;margin-top:30px">它由什么组成</div>
+          <div style="font-size:14px;line-height:1.8;margin-top:12px;text-wrap:pretty">仓库是一个 monorepo。站点在 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">apps/web</span>(Next.js App Router),服务在 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">apps/api</span>(Encore.ts)——agent loop、工具注册表、权限闸都在后者里,一共不到三千行。</div>
+          <div style="font-size:14px;line-height:1.8;margin-top:12px;display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;gap:10px"><span style="color:#9ca3af;flex:none">·</span><span><span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">apps/api/agent</span> —— 循环本体、工具表、事件流编码</span></div>
+            <div style="display:flex;gap:10px"><span style="color:#9ca3af;flex:none">·</span><span><span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">runner</span> —— 命令执行的沙箱容器,与 API 分离部署</span></div>
+            <div style="display:flex;gap:10px"><span style="color:#9ca3af;flex:none">·</span><span><span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">deploy</span> / <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">tools</span> —— compose 编排与发版脚本(镜像 tag 就是 git SHA)</span></div>
+            <div style="display:flex;gap:10px"><span style="color:#9ca3af;flex:none">·</span><span><span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">docs</span> / <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">rounds</span> —— 设计决策与每一轮的任务卡</span></div>
+          </div>
+          <div style="font-size:16px;font-weight:650;margin-top:30px">本地跑起来</div>
+          <div style="font-size:14px;line-height:1.8;margin-top:12px;text-wrap:pretty">需要 Node 20、pnpm 9 和一份 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">.env.local</span>(至少一个模型 API key)。三条命令起全栈:</div>
+          <div style="border:1px solid #e0e0e0;border-radius:7px;margin-top:14px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+            <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:1">powershell</span><div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="color:#2563eb"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div></div>
+            <pre style="margin:0;padding:12px 14px;font:400 12px/1.7 'JetBrains Mono',monospace;overflow:hidden">pnpm i
+./dev.ps1 up      <span style="color:#9ca3af"># 起 api + web + runner</span>
+./dev.ps1 check   <span style="color:#9ca3af"># 类型 / lint / 测试一把过</span></pre>
+          </div>
+          <div style="font-size:16px;font-weight:650;margin-top:30px">这一页的源码是怎么来的</div>
+          <div style="border-left:3px solid #b6bac2;border-radius:0 6px 6px 0;background:rgba(0,0,0,0.03);padding:10px 14px;margin-top:22px;font-size:14px;line-height:1.7;color:#6b7280">你现在看到的每个文件都是<span style="font-weight:650">线上正在跑的那一版</span>的快照:发版时按 git SHA 打包成只读文件表,和镜像一起送上服务器。所以页头那个 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.05);border-radius:4px;padding:1px 5px">be6c074</span> 既是这堆文件的版本,也是当前进程的版本。</div>
+          <div style="font-size:16px;font-weight:650;margin-top:30px">许可</div>
+          <div style="font-size:14px;line-height:1.8;margin-top:12px;text-wrap:pretty">MIT。拿去改、拿去讲课、拿去当自己项目的起点都行;只求别把「看得见的内核」这件事做丢了。</div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:22px;line-height:1.9">这是本站自己的源码,与线上运行的版本一致;快照随每次发版更新。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━ 2o 画板 T · Source 代码文件态(/source/apps/api/agent/tools.ts) ━━━
+     裁定记录
+     · 目录树宽度 264,与 2n 同一根:同一页的两个状态,左栏不换宽度。
+     · 折叠规则:默认展开态 = 当前文件所在的那条路径,这里是 apps › api › agent(三层全开,tools.ts 选中);同级的 routes/、components/ 与另外五个根目录保持收起。这正是 2n 注释里那条默认规则的正例。
+     · 「本页目录」不要 —— 代码文件本来就没有小节;2g 里只有 markdown 态才有那块,这里连 markdown 都不是。
+     · meta 行内容与顺序:与 2n 一字不差(快照 SHA → 发布日期 → 文件数 → 总字节)。它描述的是仓库快照,不是当前文件;文件级的 路径 · 类型 · 大小 · 行数 全部落在预览卡头部条上,两者不重复。
+     · GitHub ↗ 指向 github.com/ClickPM/agent-xray/blob/be6c074…/apps/api/agent/tools.ts —— 按当前文件 + 当前 sha 拼,不带行号锚点(第 1 节里没有行号深链这件事)。
+     · 长行策略:每一行代码自己 overflow-x:auto(照 2h 原样)。第 24 行故意超宽,横向滚动发生在该行内部;36px 行号列与 1440 页面都不动。不做卡内竖向滚动 —— 文件长就整页长,左栏粘性。
+     · copy 处于 copied 态:成功色 #16a34a + 对勾,1.5s 后回落成 copy(与 2h 同一条)。
+━━━ -->
+<div id="2o" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2o</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 T · Source 代码文件态(目录树点选 apps/api/agent/tools.ts · copy 已按下)</span></div>
+<div data-screen-label="T Source代码文件" style="width:1440px;min-height:1020px;background:#ffffff;border:1px solid #e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;box-sizing:border-box">
+  <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
+    <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
+    <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Runtime</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Notes</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Skills</div>
+      <div style="font-size:12px;font-weight:600;padding:4px 14px;border-radius:5px;background:#ffffff;color:#1a1a1a;border:1px solid #e0e0e0">Source</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">About</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:flex-end"><div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div></div>
+  </div>
+  <div style="width:1100px;margin:0 auto;padding:30px 0 64px">
+    <div style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px"><a href="#2n" style="font-size:12px">Source</a><span>/</span><a href="#2n" style="font-size:12px">apps</a><span>/</span><a href="#2n" style="font-size:12px">api</a><span>/</span><a href="#2n" style="font-size:12px">agent</a></div>
+    <div style="display:flex;align-items:flex-start;gap:16px;margin-top:22px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font:650 22px 'JetBrains Mono',monospace;letter-spacing:-0.01em">tools.ts</span><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;border:1px solid currentColor;border-radius:4px;padding:1px 5px;line-height:1.4;flex:none">MIT</span></div>
+        <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-top:6px;max-width:640px">本站自己的源码,只读浏览:左边点文件,右边看内容。</div>
+        <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:10px">快照 be6c074 · 发布 2026-09-08 · 294 个文件 · 3.1 MB</div>
+      </div>
+      <div style="display:flex;gap:8px;flex:none;padding-top:2px"><div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer;white-space:nowrap" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">GitHub ↗</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:264px minmax(0,1fr);gap:32px;margin-top:26px;align-items:start">
+      <div style="position:sticky;top:0">
+        <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">FILES</div>
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">apps/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">api/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">agent/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">loop.ts</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">34.2 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">prompts.ts</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">12.6 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;border-radius:5px;font:600 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:#e8e8e8"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">tools.ts</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">81.4 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">types.ts</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">5.3 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">routes/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">runtime/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">encore.service.ts</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">0.4 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">web/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">deploy/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">docs/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">rounds/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">runner/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">tools/</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">CLAUDE.md</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">9.4 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">README.md</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">3.8 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">ROUNDS.md</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">21.7 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">dev.ps1</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">6.2 KB</span></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 8px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box;background:transparent" style-hover="background:#eeeeee"><span style="width:12px;flex:none"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">LICENSE</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">1.1 KB</span></div>
+        </div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03);min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280">apps/api/agent/tools.ts</span>
+          <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1">typescript · 81.4 KB · 1,930 行</span>
+          <div style="display:flex;align-items:center;gap:4px;color:#16a34a;font-size:11px;border-radius:5px;padding:2px 6px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>copied</div>
+        </div>
+        <div style="display:flex;font:400 12px/1.7 'JetBrains Mono',monospace;padding:12px 0">
+          <!-- 行号列在滚动容器之外:长行横滚时它钉住不动。行高写死 20.4px(=12×1.7),让 11px 的号码与代码行严格同格。 -->
+          <div style="flex:none;width:36px;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">1</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">2</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">3</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">4</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">5</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">6</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">7</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">8</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">9</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">10</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">11</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">12</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">13</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">14</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">15</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">16</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">17</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">18</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">19</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">20</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">21</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">22</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">23</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">24</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">25</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">26</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">27</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">28</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">29</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">30</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">31</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">32</span>
+            <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">33</span>
+          </div>
+          <!-- 唯一一处 overflow-x:auto:整个代码列一条滚动条,落在卡片下沿。不做逐行滚动 —— 20px 行盒里塞不下滚动条,会把那一行的字盖掉。 -->
+          <div style="flex:1;min-width:0;overflow-x:auto">
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><span style="color:#9ca3af">// tools.ts —— 工具注册表:schema、权限闸、执行体三件事在这里收口。</span></div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><span style="color:#9ca3af">// 新增工具只改这一处;agent loop 不认识任何具体工具,只认识这张表。</span></div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><span style="color:#2563eb">import</span> { z } <span style="color:#2563eb">from</span> <span style="color:#16a34a">"zod"</span>;</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><span style="color:#2563eb">import</span> { runShell } <span style="color:#2563eb">from</span> <span style="color:#16a34a">"../runtime/sandbox"</span>;</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><span style="color:#2563eb">import type</span> { ToolContext, ToolResult } <span style="color:#2563eb">from</span> <span style="color:#16a34a">"./types"</span>;</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"> </div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><span style="color:#9ca3af">/** 高危模式:命中即拒,不进沙箱。 */</span></div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><span style="color:#2563eb">const</span> HIGH_RISK = /rm\s+-rf|sudo|mkfs|dd\s+if=/;</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"> </div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><span style="color:#2563eb">export const</span> tools = {</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">  notes_search: {</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    label: <span style="color:#16a34a">"教程库检索"</span>,</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    group: <span style="color:#16a34a">"read"</span>,</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    schema: z.object({</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">      query: z.string().min(2).max(300),</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">      limit: z.number().int().min(1).max(20).default(5),</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    }),</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    <span style="color:#9ca3af">// 只读工具不过权限闸,直接打库。</span></div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    <span style="color:#2563eb">async</span> run({ query, limit }, ctx: ToolContext): Promise&lt;ToolResult&gt; {</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">      <span style="color:#2563eb">const</span> hits = <span style="color:#2563eb">await</span> ctx.db.search(query, limit);</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">      <span style="color:#2563eb">return</span> { ok: <span style="color:#2563eb">true</span>, text: JSON.stringify({ hits }) };</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    },</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">  },</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">  bash: {</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    label: <span style="color:#16a34a">"命令执行"</span>, group: <span style="color:#16a34a">"write"</span>,</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    schema: z.object({ cmd: z.string().min(1).max(2000) }),</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    <span style="color:#2563eb">async</span> run({ cmd }, ctx: ToolContext): Promise&lt;ToolResult&gt; {</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">      <span style="color:#9ca3af">// permission-gate:拒绝理由原样回给模型,让它自己改写命令 —— 下面这一行故意留得很长,用来交代长行的处理:它在本行内横向滚动,行号列与页面都不动。</span></div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">      <span style="color:#2563eb">if</span> (HIGH_RISK.test(cmd)) <span style="color:#2563eb">return</span> { ok: <span style="color:#2563eb">false</span>, text: <span style="color:#16a34a">`permission-gate returned deny: 命令 ${cmd} 命中高危模式 ${HIGH_RISK.source},已拒绝执行;如确需该操作请改写为只读命令,或由维护者在服务端手工执行。`</span> };</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">      <span style="color:#2563eb">return</span> runShell(cmd, { cwd: ctx.workdir, timeoutMs: 30_000 });</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">    },</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">  },</div>
+            <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box">};</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:22px;line-height:1.9">这是本站自己的源码,与线上运行的版本一致;快照随每次发版更新。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━ 2p 画板 U · Source 文件加载态(对位 2o) ━━━
+     裁定记录
+     · 骨架规则照 2i:填充 #eeeeee;叠在 #f5f5f5 / #eeeeee 灰面上的块降一档到 #e0e0e0;圆角 4 文本条 / 5 小节标题条 / 6 大标题条 / 7 按钮块与卡片。
+     · 44px 导航条、预览卡外壳、头部条底色、36px 行号列的 1px 右边框全部是实体 —— 它们是容器不是内容,而且导航条是访客改主意时唯一的出口。
+     · 目录树 12 行 26px,缩进沿用 8 / 20 / 32 / 44;12px 箭头位留白(还不知道哪几行是目录),文件树到达时行高与缩进不动。
+     · 「正在取 apps/api/agent/tools.ts…」压在面包屑行右侧:路径来自 URL,是加载时唯一已知的真信息;omSpin 0.8s。
+     · omPulseBg 只给两块锚点:22px 标题条与代码区第一行 —— 一处在页头、一处在读者眼睛要落下的地方,别处不动。
+     · 目录树宽度 264、栏间距 32 与 2o 完全一致:内容到达时零跳版。
+     · 不画空态:没有快照时走既有 2k-B「找不到」。
+━━━ -->
+<div id="2p" style="flex:none">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2p</span><span style="font-size:12px;font-weight:600;color:#6b7280;font-family:-apple-system,'Segoe UI',Roboto,sans-serif">画板 U · Source 文件加载态(骨架对位 <a href="#2o" style="font-size:12px">2o</a>)</span></div>
+<div data-screen-label="U Source文件 加载态" style="width:1440px;min-height:1020px;background:#ffffff;border:1px solid #e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;box-sizing:border-box">
+  <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
+    <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
+    <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Runtime</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Notes</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">Skills</div>
+      <div style="font-size:12px;font-weight:600;padding:4px 14px;border-radius:5px;background:#ffffff;color:#1a1a1a;border:1px solid #e0e0e0">Source</div>
+      <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:#6b7280;border:1px solid transparent;cursor:pointer" style-hover="color:#2563eb">About</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:flex-end"><div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div></div>
+  </div>
+  <div style="width:1100px;margin:0 auto;padding:30px 0 64px">
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9ca3af;min-height:17px">
+      <a href="#2n" style="font-size:12px">Source</a><span>/</span>
+      <div style="width:38px;height:10px;border-radius:4px;background:#eeeeee"></div><span>/</span>
+      <div style="width:28px;height:10px;border-radius:4px;background:#eeeeee"></div><span>/</span>
+      <div style="width:44px;height:10px;border-radius:4px;background:#eeeeee"></div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:6px;color:#9ca3af;font:600 10px 'JetBrains Mono',monospace;letter-spacing:0.08em">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>正在取 apps/api/agent/tools.ts…
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:16px;margin-top:22px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;height:29px">
+          <div style="width:150px;height:22px;border-radius:6px;background:#eeeeee;animation:omPulseBg 1.8s ease-in-out infinite"></div>
+          <div style="width:34px;height:16px;border-radius:4px;background:#eeeeee"></div>
+        </div>
+        <div style="max-width:640px;margin-top:6px">
+          <div style="height:21px;display:flex;align-items:center"><div style="width:420px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        </div>
+        <div style="height:15px;display:flex;align-items:center;margin-top:10px"><div style="width:330px;height:10px;border-radius:4px;background:#eeeeee"></div></div>
+      </div>
+      <div style="display:flex;gap:8px;flex:none;padding-top:2px">
+        <div style="display:flex;align-items:center;justify-content:center;width:90px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;border-radius:7px;box-sizing:border-box"><div style="width:52px;height:10px;border-radius:4px;background:#e0e0e0"></div></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:264px minmax(0,1fr);gap:32px;margin-top:26px;align-items:start">
+      <div>
+        <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">FILES</div>
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:64px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:52px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:70px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:60px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:82px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 44px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:66px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 32px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:58px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 20px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:46px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:74px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:56px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:96px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+          <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;box-sizing:border-box"><span style="width:12px;flex:none"></span><div style="width:68px;height:11px;border-radius:4px;background:#eeeeee"></div></div>
+        </div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03);min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0;height:31px;box-sizing:border-box">
+          <div style="width:150px;height:11px;border-radius:4px;background:#e0e0e0"></div>
+          <div style="width:132px;height:10px;border-radius:4px;background:#e0e0e0"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:36px minmax(0,1fr);padding:12px 0;font:400 12px/1.7 'JetBrains Mono',monospace">
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:62%;height:11px;border-radius:4px;background:#eeeeee;animation:omPulseBg 1.8s ease-in-out infinite"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:54%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:30%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:38%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:44%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:12%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:48%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:36%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:26%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:58%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:64%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:41%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:33%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:70%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:22%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:50%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:46%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:29%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:15%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+          <span style="border-right:1px solid #e0e0e0;height:20px"></span><span style="padding:0 24px 0 14px;height:20px;display:flex;align-items:center"><div style="width:40%;height:11px;border-radius:4px;background:#eeeeee"></div></span>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:22px;line-height:1.9">这是本站自己的源码,与线上运行的版本一致;快照随每次发版更新。</div>
+  </div>
+</div>
+</div>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;siteName&quot;: {&quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Agent X-Ray&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Site&quot;},
+  &quot;boardLabels&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Canvas&quot;}
+}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      siteName: this.props.siteName ?? 'Agent X-Ray',
+      labelDisplay: (this.props.boardLabels ?? true) ? 'flex' : 'none',
+    };
+  }
+}
+</script>
+</body>
+</html>

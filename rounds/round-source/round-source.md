@@ -2,10 +2,10 @@
 
 <!-- 保存为 rounds/round-source/round-source.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**设计稿待交付**(2026-09-08)。所有者八条裁定已落(见下),分支 `round-source` 已从 `main`(`ee7d7f5`)开出,
-> 给 Claude Design 的提示词在 [`design-prompt.md`](design-prompt.md)。**等画板 `2n` / `2o` / `2p` + 20 块导航五格 + 原型两屏并入 `design/` 之后才开代码**
-> (CLAUDE.md 规则 8:先改设计稿、再进轮次,与 R-TOOLS / R-SKILLS / R-PERF 同一顺序,**不是**例外)。
-> 代码的第一步是按规则 9 先写 `docs/security.md` 的 R-SOURCE 补记(草案在本卡「安全口径」段)。
+> 状态:**进行中**(2026-09-08)。所有者八条裁定已落(见下),分支 `round-source` 从 `main`(`ee7d7f5`)开出;
+> 给 Claude Design 的提示词在 [`design-prompt.md`](design-prompt.md)。**设计稿已于 2026-09-08 并入 `design/`**
+> (`2n` / `2o` / `2p` 放新文件 `Agent X-Ray Source.dc.html`,`Workbench` 20 块导航改五格,原型加两屏;四项判据与合并口径记在 `design/README.md`),
+> 与 R-TOOLS / R-SKILLS / R-PERF 同一顺序、**不是**规则 8 的例外。`docs/security.md` 的 R-SOURCE 补记(§1 第 2 层 + §4)已按规则 9 先于代码写入。
 
 ## 目标
 

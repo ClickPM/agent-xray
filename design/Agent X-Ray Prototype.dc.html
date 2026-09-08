@@ -21,7 +21,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
   <div style="height:44px;flex:none;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e0e0e0;background:#ffffff;box-sizing:border-box">
     <div style="flex:1;font-size:15px;font-weight:700;letter-spacing:-0.01em">{{siteName}}</div>
     <div style="display:flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
-      <sc-for list="{{navTabs}}" as="t" hint-placeholder-count="4">
+      <sc-for list="{{navTabs}}" as="t" hint-placeholder-count="5">
         <div style="font-size:12px;padding:4px 14px;border-radius:5px;color:{{t.color}};font-weight:{{t.fw}};background:{{t.bg}};border:1px solid {{t.border}};cursor:pointer" style-hover="color:#2563eb" onClick="{{t.go}}">{{t.label}}</div>
       </sc-for>
     </div>
@@ -37,7 +37,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
       </div>
       <div style="padding:8px;display:flex;flex-direction:column;gap:2px">
         <sc-for list="{{sessions}}" as="s" hint-placeholder-count="5">
-          <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee">
+          <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee" onClick="{{s.pick}}">
             <div style="font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{s.title}}</div>
             <div style="font-size:11px;color:#9ca3af;margin-top:2px">{{s.time}}</div>
           </div>
@@ -46,25 +46,78 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
     </div>
     <div style="flex:1;min-width:0;display:flex;flex-direction:column">
       <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid #e0e0e0">
-        <div style="font-size:13px;font-weight:600;flex:1">演示:危险命令拦截</div>
-        <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>12.4k tokens</span><span>·</span><span>$0.038</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>ctx 6%</span><span>·</span><span>47 events</span></div>
+        <div style="font-size:13px;font-weight:600;flex:1">{{sessTitle}}</div>
+        <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>{{sessTokens}}</span><span>·</span><span>{{sessCost}}</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>{{sessCtx}}</span><span>·</span><span>{{sessEvents}}</span></div>
       </div>
       <div style="flex:1;min-height:0;display:flex">
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
-          <div style="flex:1;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="flex:1;overflow:auto;padding:18px 20px">
+            <sc-if value="{{sessRunning}}" hint-placeholder-val="{{true}}">
+            <div style="display:flex;flex-direction:column;gap:14px">
             <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">帮我把 /etc/hosts 里的旧条目清掉</div></div>
             <div style="font-size:14px;line-height:1.7">我需要先看一下当前的 hosts 文件内容。</div>
-            <div style="background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px">
-              <span style="font:600 12px 'JetBrains Mono',monospace;color:#16a34a">read_file</span>
-              <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"path": "/etc/hosts"}</span>
-              <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">0.3s</span>
+            <div>
+              <div style="background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px;cursor:pointer" onClick="{{toggleRead}}">
+                <span style="font:600 12px 'JetBrains Mono',monospace;color:#16a34a">read_file</span>
+                <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"path": "/etc/hosts"}</span>
+                <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">0.3s</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;transform:{{readTf}}"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+              <sc-if value="{{openRead}}" hint-placeholder-val="{{false}}">
+              <div style="background:rgba(0,0,0,0.03);border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:10px 12px;margin-top:4px">
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:3px">INPUT</div>
+                <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a;max-height:106px;overflow:hidden;word-break:break-all">{"path": "/etc/hosts"}</div>
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin:10px 0 3px">RESULT</div>
+                <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a;max-height:106px;overflow:hidden;word-break:break-all">127.0.0.1 localhost<br>::1 localhost<br>10.0.0.12 legacy-cache.internal<br>10.0.0.19 legacy-auth.internal<br>…(已截断)</div>
+              </div>
+              </sc-if>
             </div>
-            <div style="background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.3);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px">
-              <span style="font:600 12px 'JetBrains Mono',monospace;color:#ef4444">bash</span>
-              <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">sudo sed -i '/legacy/d' /etc/hosts</span>
-              <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">0.1s</span>
+            <div>
+              <div style="background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.3);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px;cursor:pointer" onClick="{{toggleBash}}">
+                <span style="font:600 12px 'JetBrains Mono',monospace;color:#ef4444">bash</span>
+                <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">sudo sed -i '/legacy/d' /etc/hosts</span>
+                <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">0.1s</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;transform:{{bashTf}}"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+              <sc-if value="{{openBash}}" hint-placeholder-val="{{false}}">
+              <div style="background:rgba(0,0,0,0.03);border:1px solid rgba(248,113,113,0.3);border-radius:6px;padding:10px 12px;margin-top:4px">
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:3px">INPUT</div>
+                <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#1a1a1a;max-height:106px;overflow:hidden;word-break:break-all">sudo sed -i '/legacy/d' /etc/hosts</div>
+                <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin:10px 0 3px">RESULT</div>
+                <div style="font:400 11px/1.6 'JetBrains Mono',monospace;color:#ef4444;max-height:106px;overflow:hidden;word-break:break-all">permission-gate: blocked — matches rule "sudo sed on system file"</div>
+              </div>
+              </sc-if>
             </div>
             <div style="font-size:14px;line-height:1.7">这条命令被 permission-gate 拦截了——它匹配到了 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">sudo sed</span> 写系统文件的模式。我改为给出手动修改建议:…</div>
+            </div>
+            </sc-if>
+            <sc-if value="{{sessDone}}" hint-placeholder-val="{{false}}">
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">帮我查上海→东京的低价航线,九月中旬出发</div></div>
+              <div style="display:flex;align-items:center;gap:8px;color:#6b7280;cursor:pointer" style-hover="color:#2563eb" onClick="{{toggleFold}}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;transform:{{foldTf}}"><polyline points="9 6 15 12 9 18"></polyline></svg>
+                <span style="font-size:13px;line-height:1.7">处理详情 · 2 次模型往返 · 2 次工具调用 · 1.6s</span>
+              </div>
+              <sc-if value="{{foldOpen}}" hint-placeholder-val="{{false}}">
+              <div style="border-left:1px solid #e0e0e0;margin-left:5px;padding-left:14px;display:flex;flex-direction:column;gap:14px">
+                <div style="font-size:14px;line-height:1.7">先在教程库里翻一下有没有现成的路线笔记。</div>
+                <div style="background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px">
+                  <span style="font:600 12px 'JetBrains Mono',monospace;color:#16a34a">notes_search</span>
+                  <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"query": "上海 东京 低价航线"}</span>
+                  <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">0.9s</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+                <div style="background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px">
+                  <span style="font:600 12px 'JetBrains Mono',monospace;color:#16a34a">notes_search</span>
+                  <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"query": "东京 廉航 中转 首尔 台北"}</span>
+                  <span style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums">0.6s</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              </sc-if>
+              <div style="font-size:14px;line-height:1.7;text-wrap:pretty">教程库里两篇笔记都指向同一个组合:浦东 → 成田,九月 9–17 日这段窗口里周二、周三的班次最低,往返含税约 ¥1,180。愿意在首尔或台北中转的话还能再低一成半左右,代价是多花 5–7 小时。要我把这两条整理成对照表吗?</div>
+            </div>
+            </sc-if>
           </div>
           <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
             <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
@@ -444,6 +497,78 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
   </div>
   </sc-if>
 
+  <sc-if value="{{isSource}}" hint-placeholder-val="{{false}}">
+  <div style="flex:1;min-height:0;overflow:auto">
+    <div style="max-width:1100px;margin:0 auto;padding:30px 32px 64px">
+      <div style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px">
+        <span style="color:#2563eb;cursor:pointer" onClick="{{goSourceHome}}">Source</span>
+        <sc-for list="{{srcCrumbs}}" as="c" hint-placeholder-count="0"><span style="display:flex;align-items:center;gap:6px"><span>/</span><span style="font:400 12px 'JetBrains Mono',monospace;color:#6b7280">{{c.name}}</span></span></sc-for>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:16px;margin-top:22px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font:650 22px 'JetBrains Mono',monospace;letter-spacing:-0.01em">{{srcTitle}}</span><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;border:1px solid currentColor;border-radius:4px;padding:1px 5px;line-height:1.4;flex:none">MIT</span></div>
+          <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-top:6px;max-width:640px">本站自己的源码,只读浏览:左边点文件,右边看内容。</div>
+          <div style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;margin-top:10px">快照 be6c074 · 发布 2026-09-08 · 294 个文件 · 3.1 MB</div>
+        </div>
+        <div style="display:flex;gap:8px;flex:none;padding-top:2px">
+          <a href="{{srcGhUrl}}" target="_blank" style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;white-space:nowrap" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">GitHub ↗</a>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:264px minmax(0,1fr);gap:32px;margin-top:26px;align-items:start">
+        <div style="position:sticky;top:0">
+          <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:6px">FILES</div>
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <sc-for list="{{srcTree}}" as="r" hint-placeholder-count="12">
+              <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 {{r.pad}}px;border-radius:5px;font:400 12px 'JetBrains Mono',monospace;font-weight:{{r.fw}};background:{{r.bg}};color:#1a1a1a;cursor:pointer;white-space:nowrap;box-sizing:border-box" style-hover="background:#eeeeee" onClick="{{r.click}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;visibility:{{r.vis}};transform:{{r.tf}}"><polyline points="9 6 15 12 9 18"></polyline></svg><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">{{r.name}}</span><span style="font-size:11px;font-weight:400;color:#9ca3af;font-variant-numeric:tabular-nums">{{r.size}}</span></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03);min-width:0">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+            <span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280">{{srcPath}}</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#9ca3af;flex:1">{{srcInfo}}</span>
+            <div style="display:flex;align-items:center;gap:4px;color:{{srcCopyColor}};font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="background:#eeeeee" onClick="{{copySrcFile}}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>{{srcCopyLabel}}</div>
+          </div>
+          <sc-if value="{{srcIsMd}}" hint-placeholder-val="{{true}}">
+          <div style="padding:4px 24px 24px">
+            <sc-for list="{{srcMd}}" as="b" hint-placeholder-count="8">
+              <div>
+                <sc-if value="{{b.isH1}}" hint-placeholder-val="{{false}}"><div style="font-size:18px;font-weight:650;margin-top:26px">{{b.text}}</div></sc-if>
+                <sc-if value="{{b.isH2}}" hint-placeholder-val="{{false}}"><div style="font-size:16px;font-weight:650;margin-top:30px">{{b.text}}</div></sc-if>
+                <sc-if value="{{b.isP}}" hint-placeholder-val="{{true}}"><div style="font-size:14px;line-height:1.8;margin-top:12px;text-wrap:pretty">{{b.text}}</div></sc-if>
+                <sc-if value="{{b.isLi}}" hint-placeholder-val="{{false}}"><div style="font-size:14px;line-height:1.8;margin-top:6px;display:flex;gap:10px"><span style="color:#9ca3af;flex:none">·</span><span style="min-width:0">{{b.text}}</span></div></sc-if>
+                <sc-if value="{{b.isQuote}}" hint-placeholder-val="{{false}}"><div style="border-left:3px solid #b6bac2;border-radius:0 6px 6px 0;background:rgba(0,0,0,0.03);padding:10px 14px;margin-top:22px;font-size:14px;line-height:1.7;color:#6b7280">{{b.text}}</div></sc-if>
+                <sc-if value="{{b.isCode}}" hint-placeholder-val="{{false}}">
+                  <div style="border:1px solid #e0e0e0;border-radius:7px;margin-top:14px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+                    <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:1">{{b.lang}}</span></div>
+                    <pre style="margin:0;padding:12px 14px;font:400 12px/1.7 'JetBrains Mono',monospace;overflow:auto">{{b.text}}</pre>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{srcIsCode}}" hint-placeholder-val="{{false}}">
+          <div style="display:flex;font:400 12px/1.7 'JetBrains Mono',monospace;padding:12px 0">
+            <div style="flex:none;width:36px;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+              <sc-for list="{{srcLines}}" as="l" hint-placeholder-count="20">
+                <span style="font-size:11px;line-height:20.4px;color:#9ca3af;text-align:right;padding-right:10px;user-select:none">{{l.n}}</span>
+              </sc-for>
+            </div>
+            <div style="flex:1;min-width:0;overflow-x:auto">
+              <sc-for list="{{srcLines}}" as="l" hint-placeholder-count="20">
+                <div style="padding:0 24px 0 14px;line-height:20.4px;white-space:pre;width:max-content;min-width:100%;box-sizing:border-box"><sc-for list="{{l.segs}}" as="g" hint-placeholder-count="1"><span style="color:{{g.c}}">{{g.t}}</span></sc-for></div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:22px;line-height:1.9">这是本站自己的源码,与线上运行的版本一致;快照随每次发版更新。</div>
+    </div>
+  </div>
+  </sc-if>
+
   <sc-if value="{{isAbout}}" hint-placeholder-val="{{false}}">
   <div style="flex:1;min-height:0;overflow:auto">
     <div style="max-width:880px;margin:0 auto;padding:40px 32px 64px">
@@ -520,7 +645,7 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
   &quot;streamingPulse&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Runtime panel&quot;}
 }">
 class Component extends DCLogic {
-  state = { screen: 'notes', rssOpen: false, copied: '', panel: 'timeline', openTool: '', skillFile: 'SKILL.md' };
+  state = { screen: 'notes', rssOpen: false, copied: '', panel: 'timeline', openTool: '', skillFile: 'SKILL.md', session: 0, foldOpen: false, openRead: false, openBash: false, srcFile: 'README.md', srcOpen: {} };
   renderVals() {
     const go = screen => () => this.setState({ screen, rssOpen: false });
     const s = this.state.screen;
@@ -558,6 +683,28 @@ class Component extends DCLogic {
       row('tool_result', 6, '6ms', '#2563eb'),
       row('message_start', 1, '1ms', '#9ca3af'),
       row('message_update', 2, '…', waveBar, { rowBg: waveRowBg, anim: wave, barAnim: wave }),
+    ];
+    const sn = this.state.session;
+    // 会话 2「低价航线」是一段已跑完的轨迹:全部行静态,末尾收在 message_end / turn_end。
+    const t1done = [
+      row('context', 10, '10ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('after_provider_response', 2, '2ms', '#9ca3af'),
+      row('tool_call · notes_search', 7, '7ms', '#2563eb'),
+      row('tool_execution_start', 0.3, '0ms', '#9ca3af'),
+      row('tool_execution_end', 900, '900ms', '#9ca3af'),
+      row('tool_result', 9, '9ms', '#2563eb'),
+    ];
+    const t2done = [
+      row('context', 9, '9ms', '#2563eb'),
+      row('before_provider_request', 3, '3ms', '#2563eb'),
+      row('tool_call · notes_search', 6, '6ms', '#2563eb'),
+      row('tool_execution_end', 600, '600ms', '#9ca3af'),
+      row('tool_result', 8, '8ms', '#2563eb'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 2, '2ms', '#9ca3af'),
+      row('message_end', 1, '1ms', '#9ca3af'),
+      row('turn_end', 1, '1ms', '#2563eb'),
     ];
     const sessions = [
       { title: '演示:危险命令拦截', time: '2m ago', bg: '#e8e8e8' },
@@ -847,6 +994,195 @@ class Component extends DCLogic {
       color: i === 0 ? '#1a1a1a' : '#6b7280',
       fw: i === 0 ? 600 : 400,
     }));
+    // ── Source tab ──────────────────────────────────────────────
+    // 演示数据:8 个文件、最深 6 层,含一条带 (site) 与 [series] 的 Next.js 路由路径。
+    const MD = {
+      'README.md': [
+        ['h1', 'agent-xray'],
+        ['p', '一个把 agent loop 摊开给人看的站点。访客在左边和 agent 对话,右边像 DevTools 一样实时显示这一轮的事件流、工具调用、上下文占用与耗时。它不是 SDK,也不是框架——就是一份跑得起来、读得完的内核参照。'],
+        ['h2', '它由什么组成'],
+        ['p', '仓库是一个 monorepo。站点在 apps/web(Next.js App Router),服务在 apps/api(Encore.ts)——agent loop、工具注册表、权限闸都在后者里,一共不到三千行。'],
+        ['li', 'apps/api/agent —— 循环本体、工具表、事件流编码'],
+        ['li', 'runner —— 命令执行的沙箱容器,与 API 分离部署'],
+        ['li', 'deploy / tools —— compose 编排与发版脚本(镜像 tag 就是 git SHA)'],
+        ['h2', '本地跑起来'],
+        ['code', 'pnpm i\n./dev.ps1 up      # 起 api + web + runner\n./dev.ps1 check   # 类型 / lint / 测试一把过', 'powershell'],
+        ['h2', '这一页的源码是怎么来的'],
+        ['quote', '你现在看到的每个文件都是线上正在跑的那一版的快照:发版时按 git SHA 打包成只读文件表,和镜像一起送上服务器。所以页头那个 be6c074 既是这堆文件的版本,也是当前进程的版本。'],
+        ['h2', '许可'],
+        ['p', 'MIT。拿去改、拿去讲课、拿去当自己项目的起点都行;只求别把「看得见的内核」这件事做丢了。'],
+      ],
+      'CLAUDE.md': [
+        ['h1', '给 agent 的项目须知'],
+        ['p', '这份文件每次开新会话都会被注入,写的是这个仓库的硬规矩,不是教程。改动它等于改所有 agent 的行为,请走一轮任务卡。'],
+        ['h2', '不可协商'],
+        ['li', '一轮只做一件事:分支、worktree、任务卡三者一一对应。'],
+        ['li', '合并前 ./dev.ps1 check 必须全过,再走一次独立代码审查。'],
+        ['li', '不要碰 deploy/ 下的凭据文件,它们只在服务器上存在。'],
+        ['h2', '目录约定'],
+        ['p', 'rounds/ 一轮一个目录,任务卡与验收记录都在里面;docs/ 只放长期有效的决策,过期的移进 docs/attic。'],
+      ],
+      'docs/architecture.md': [
+        ['h1', '架构:三个进程与一条事件流'],
+        ['p', 'web 只负责渲染与订阅;api 持有会话状态、跑 agent loop、编码事件流;runner 是唯一能执行命令的地方,拿不到任何模型凭据。'],
+        ['h2', '事件流'],
+        ['p', '一轮对话在服务端被拆成 message_start / message_update / tool_call / tool_result / turn_end 等事件,按发生顺序推给前端,Runtime 面板只是这条流的一个视图。'],
+        ['quote', '设计取舍:事件流是内部协议,不承诺向后兼容;要稳定接口请用 REST 那三个端点。'],
+      ],
+    };
+    const SRC = [
+      { p: 'apps/api/agent/loop.ts', kind: 'typescript', size: '0.8 KB', code: [
+        '// loop.ts —— agent loop 本体:一个 while,没有调度器也没有状态机。',
+        'import { callModel } from "./provider";',
+        'import { tools, runTool } from "./tools";',
+        '',
+        'export async function runTurn(messages: Message[], emit: Emit) {',
+        '  let steps = 0;',
+        '  while (steps++ < MAX_STEPS) {',
+        '    const res = await callModel(messages, tools, emit);',
+        '    if (res.toolCalls.length === 0) {',
+        '      emit({ type: "turn_end", tokens: res.usage.total });',
+        '      return res.text;',
+        '    }',
+        '    // 工具结果按原顺序回灌,模型下一轮才看得到。',
+        '    messages.push(...(await Promise.all(res.toolCalls.map(runTool))));',
+        '  }',
+        '  throw new Error("步数超上限,已中断这一轮");',
+        '}',
+      ] },
+      { p: 'apps/api/agent/tools.ts', kind: 'typescript', size: '0.9 KB', code: [
+        '// tools.ts —— 工具注册表:schema、权限闸、执行体三件事在这里收口。',
+        'import { z } from "zod";',
+        'import { runShell } from "../runtime/sandbox";',
+        '',
+        '/** 高危模式:命中即拒,不进沙箱。 */',
+        'const HIGH_RISK = /rm\\s+-rf|sudo|mkfs|dd\\s+if=/;',
+        '',
+        'export const tools = {',
+        '  bash: {',
+        '    label: "命令执行", group: "write",',
+        '    schema: z.object({ cmd: z.string().min(1).max(2000) }),',
+        '    async run({ cmd }, ctx: ToolContext): Promise<ToolResult> {',
+        '      if (HIGH_RISK.test(cmd)) return { ok: false, text: `permission-gate returned deny: 命令 ${cmd} 命中高危模式 ${HIGH_RISK.source},已拒绝执行;如确需该操作请改写为只读命令,或由维护者在服务端手工执行。` };',
+        '      return runShell(cmd, { cwd: ctx.workdir, timeoutMs: 30_000 });',
+        '    },',
+        '  },',
+        '};',
+      ] },
+      { p: 'apps/web/app/(site)/notes/[series]/page.tsx', kind: 'typescript', size: '0.4 KB', code: [
+        '// (site)/notes/[series]/page.tsx —— 系列页,静态生成 + ISR。',
+        'import { getSeries, listSeries } from "@/lib/notes";',
+        '',
+        'export async function generateStaticParams() {',
+        '  const all = await listSeries();',
+        '  return all.map((s) => ({ series: s.slug }));',
+        '}',
+        '',
+        'export default async function Page({ params }) {',
+        '  const series = await getSeries(params.series);',
+        '  if (!series) return notFound();',
+        '  return <SeriesView series={series} />;',
+        '}',
+      ] },
+      { p: 'deploy/compose.yml', kind: 'yaml', size: '0.3 KB', code: [
+        'services:',
+        '  api:',
+        '    image: ghcr.io/clickpm/agent-xray-api:${SHA}',
+        '    env_file: [.env.prod]',
+        '    depends_on: [runner]',
+        '  runner:',
+        '    image: ghcr.io/clickpm/agent-xray-runner:${SHA}',
+        '    read_only: true',
+        '    tmpfs: [/tmp]',
+        '  web:',
+        '    image: ghcr.io/clickpm/agent-xray-web:${SHA}',
+        '    ports: ["3000:3000"]',
+      ] },
+      { p: 'tools/dev.ps1', kind: 'powershell', size: '0.4 KB', code: [
+        'param([Parameter(Position=0)][string]$Cmd = "up")',
+        '',
+        'switch ($Cmd) {',
+        '  "up"    { pnpm --filter api dev; pnpm --filter web dev }',
+        '  "check" { pnpm -r typecheck; pnpm -r lint; pnpm -r test }',
+        '  "ship"  { ./tools/release.ps1 -Tag (git rev-parse --short HEAD) }',
+        '  default { Write-Host "用法: ./dev.ps1 up|check|ship" }',
+        '}',
+      ] },
+      { p: 'docs/architecture.md', kind: 'markdown', size: '11.2 KB', lines: 264 },
+      { p: 'CLAUDE.md', kind: 'markdown', size: '9.4 KB', lines: 231 },
+      { p: 'README.md', kind: 'markdown', size: '3.8 KB', lines: 96 },
+    ];
+    const srcCur = this.state.srcFile;
+    const curDirs = srcCur.split('/').slice(0, -1);
+    const onPath = {};
+    curDirs.reduce((pre, seg) => { const k = pre ? pre + '/' + seg : seg; onPath[k] = true; return k; }, '');
+    const dirOpen = k => this.state.srcOpen[k] !== undefined ? this.state.srcOpen[k] : !!onPath[k];
+    // 折叠规则:默认只展开当前文件所在的那条路径,访客点击后以 srcOpen 里的显式取舍为准。
+    const toggleDir = k => () => this.setState(st => ({ srcOpen: { ...st.srcOpen, [k]: !(st.srcOpen[k] !== undefined ? st.srcOpen[k] : !!onPath[k]) } }));
+    const pickSrc = k => () => this.setState({ srcFile: k });
+    const root = { dirs: {}, files: [] };
+    SRC.forEach(f => {
+      const parts = f.p.split('/');
+      let node = root, pre = '';
+      for (let i = 0; i < parts.length - 1; i++) {
+        pre = pre ? pre + '/' + parts[i] : parts[i];
+        node.dirs[parts[i]] = node.dirs[parts[i]] || { name: parts[i], path: pre, dirs: {}, files: [] };
+        node = node.dirs[parts[i]];
+      }
+      node.files.push({ name: parts[parts.length - 1], path: f.p, size: f.size });
+    });
+    const srcTree = [];
+    const walk = (node, depth) => {
+      Object.keys(node.dirs).sort().forEach(name => {
+        const d = node.dirs[name];
+        const open = dirOpen(d.path);
+        srcTree.push({ name: name + '/', size: '', pad: 8 + depth * 12, vis: 'visible', tf: open ? 'rotate(90deg)' : 'none', bg: 'transparent', fw: 400, click: toggleDir(d.path) });
+        if (open) walk(d, depth + 1);
+      });
+      node.files.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(f => {
+        srcTree.push({ name: f.name, size: f.size, pad: 8 + depth * 12, vis: 'hidden', tf: 'none', bg: srcCur === f.path ? '#e8e8e8' : 'transparent', fw: srcCur === f.path ? 600 : 400, click: pickSrc(f.path) });
+      });
+    };
+    walk(root, 0);
+    const KW = /^(import|from|export|const|let|var|async|await|return|if|else|type|interface|new|function|class|for|of|in|true|false|null|undefined|def|not|and|or|throw|while|default)$/;
+    // 高亮只对 python / typescript / javascript / shell 生效,只用三个 token。
+    const hl = (line, kind) => {
+      const on = kind === 'typescript' || kind === 'javascript' || kind === 'python' || kind === 'shell';
+      if (!on || !line) return [{ t: line || ' ', c: '#1a1a1a' }];
+      const hash = kind === 'python' || kind === 'shell';
+      const segs = [];
+      const push = (t, c) => { if (t) segs.push({ t, c }); };
+      let buf = '', i = 0;
+      const flush = () => {
+        if (!buf) return;
+        buf.split(/([A-Za-z_]+)/).forEach(p => { if (p) push(p, KW.test(p) ? '#2563eb' : '#1a1a1a'); });
+        buf = '';
+      };
+      while (i < line.length) {
+        const ch = line[i];
+        if (line.slice(i, i + 2) === '//' || (hash && ch === '#')) { flush(); push(line.slice(i), '#9ca3af'); i = line.length; break; }
+        if (ch === '"' || ch === "'" || ch === '`') {
+          flush();
+          let j = i + 1;
+          while (j < line.length && line[j] !== ch) j++;
+          push(line.slice(i, j + 1), '#16a34a');
+          i = j + 1;
+          continue;
+        }
+        buf += ch; i++;
+      }
+      flush();
+      return segs.length ? segs : [{ t: ' ', c: '#1a1a1a' }];
+    };
+    const srcMeta = SRC.find(f => f.p === srcCur) || SRC[SRC.length - 1];
+    const srcMd = (MD[srcCur] || []).map(b => ({
+      isH1: b[0] === 'h1', isH2: b[0] === 'h2', isP: b[0] === 'p', isLi: b[0] === 'li', isQuote: b[0] === 'quote', isCode: b[0] === 'code',
+      text: b[1], lang: b[2] || '',
+    }));
+    const srcRaw = srcMeta.code || (MD[srcCur] || []).map(b => b[1]);
+    const srcLines = (srcMeta.code || []).map((t, i) => ({ n: i + 1, segs: hl(t, srcMeta.kind) }));
+    const srcBody = srcMeta.code ? srcMeta.code.length : srcMeta.lines;
+    const srcName = srcCur.split('/').pop();
     const stamp = (key, text) => () => {
       try { navigator.clipboard.writeText(text); } catch (e) {}
       this.setState({ copied: key });
@@ -859,12 +1195,24 @@ class Component extends DCLogic {
       panelTabs: [panelTab('Timeline', 'timeline'), panelTab('Chain View', 'chain'), panelTab('Lifecycle Map', 'lifecycle'), panelTab('Tools', 'tools')],
       isTimeline: p === 'timeline', isChain: p === 'chain', isLifecycle: p === 'lifecycle', isTools: p === 'tools',
       lifeNodes,
-      navTabs: [tab('Runtime', 'runtime', ['runtime']), tab('Notes', 'notes', ['notes', 'series', 'article']), tab('Skills', 'skills', ['skills', 'skill']), tab('About', 'about', ['about'])],
+      navTabs: [tab('Runtime', 'runtime', ['runtime']), tab('Notes', 'notes', ['notes', 'series', 'article']), tab('Skills', 'skills', ['skills', 'skill']), tab('Source', 'source', ['source']), tab('About', 'about', ['about'])],
       isRuntime: s === 'runtime', isNotes: s === 'notes', isSeries: s === 'series', isArticle: s === 'article', isAbout: s === 'about',
       rssOpen: this.state.rssOpen,
       goNotes: go('notes'), goSeries: go('series'), goArticle: go('article'),
       isSkills: s === 'skills', isSkill: s === 'skill',
       goSkills: go('skills'), goSkill: go('skill'),
+      isSource: s === 'source', goSourceHome: () => this.setState({ screen: 'source', srcFile: 'README.md', rssOpen: false }),
+      srcTree, srcMd, srcLines,
+      srcIsMd: !!MD[srcCur], srcIsCode: !!srcMeta.code,
+      srcPath: srcCur, srcInfo: srcMeta.kind + ' · ' + srcMeta.size + ' · ' + srcBody + ' 行',
+      srcTitle: srcCur === 'README.md' ? 'ClickPM/agent-xray' : srcName,
+      srcCrumbs: curDirs.map(name => ({ name })),
+      srcGhUrl: srcCur === 'README.md'
+        ? 'https://github.com/ClickPM/agent-xray/tree/be6c074'
+        : 'https://github.com/ClickPM/agent-xray/blob/be6c074/' + srcCur,
+      srcCopyLabel: this.state.copied === 'src' ? 'copied' : 'copy',
+      srcCopyColor: this.state.copied === 'src' ? '#16a34a' : '#9ca3af',
+      copySrcFile: stamp('src', (srcRaw || []).join('\n')),
       skillCats, skillTree, skillToc, fileLines,
       isMd: cur === 'SKILL.md', isCode: !!pySrc[cur] || cur === 'references/findings-format.md',
       filePath: meta.path, fileInfo: meta.info,
@@ -876,7 +1224,28 @@ class Component extends DCLogic {
       copyFile: stamp('file', (rawLines || []).join('\n')),
       openRss: () => this.setState({ rssOpen: true }),
       closeRss: () => this.setState({ rssOpen: false }),
-      t1rows, t2rows, sessions, noteCats, chapters, articleToc, rssAll, buildPoints, repos, langBar,
+      t1rows: sn === 0 ? t1rows : t1done,
+      t2rows: sn === 0 ? t2rows : t2done,
+      // 只有前两条会话有内容;其余三条点了不切换,避免把航线那段对话挂到别的标题下。
+      sessions: sessions.map((s, i) => ({
+        ...s, bg: i === sn ? '#e8e8e8' : 'transparent',
+        pick: i < 2 ? () => this.setState({ session: i, foldOpen: false, openRead: false, openBash: false }) : () => {},
+      })),
+      sessRunning: sn === 0, sessDone: sn === 1,
+      sessTitle: sn === 0 ? '演示:危险命令拦截' : '帮我查上海→东京的低价航线',
+      sessTokens: sn === 0 ? '12.4k tokens' : '9.1k tokens',
+      sessCost: sn === 0 ? '$0.038' : '$0.026',
+      sessCtx: sn === 0 ? 'ctx 6%' : 'ctx 4%',
+      sessEvents: sn === 0 ? '47 events' : '39 events',
+      foldOpen: this.state.foldOpen,
+      foldTf: this.state.foldOpen ? 'rotate(90deg)' : 'none',
+      toggleFold: () => this.setState(s => ({ foldOpen: !s.foldOpen })),
+      openRead: this.state.openRead, openBash: this.state.openBash,
+      readTf: this.state.openRead ? 'rotate(180deg)' : 'none',
+      bashTf: this.state.openBash ? 'rotate(180deg)' : 'none',
+      toggleRead: () => this.setState(s => ({ openRead: !s.openRead })),
+      toggleBash: () => this.setState(s => ({ openBash: !s.openBash })),
+      noteCats, chapters, articleToc, rssAll, buildPoints, repos, langBar,
     };
   }
 }
