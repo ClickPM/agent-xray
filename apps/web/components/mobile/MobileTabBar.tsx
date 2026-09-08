@@ -81,12 +81,15 @@ const ICONS: Record<TabKey, string> = {
   runtime: "M22 12h-4l-3 9L9 3l-3 9H2",
   notes: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z",
   skills: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
+  // R-SOURCE:穷举类型要求它在这里有一项(否则 tsc 报错),但 Source 是 desktopOnly、下面的过滤永远不会渲染它
+  source: "M16 18l6-6-6-6M8 6l-6 6 6 6",
   about: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1",
 };
 
 export function MobileTabBar({ visible }: { visible: readonly TabKey[] }) {
   const pathname = usePathname() ?? "/";
-  const tabs = TABS.filter((t) => visible.includes(t.key));
+  // R-SOURCE(所有者裁定「先桌面」):desktopOnly 的 tab 不进 Tab Bar —— 四格照旧,与画板 4a 一致
+  const tabs = TABS.filter((t) => visible.includes(t.key) && !t.desktopOnly);
   // Runtime(站点根路径)不启用随滚动隐藏,理由见 useHideOnScroll 的注释
   const hidden = useHideOnScroll(pathname !== "/");
 

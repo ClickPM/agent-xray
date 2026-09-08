@@ -24,7 +24,7 @@
 | `endpoint.ts` | `api.raw` 入口。**先认证再交给 SDK**:未认证的请求不该有机会让服务端构造 server 实例、解析 JSON-RPC |
 | `auth.ts` | bearer 校验。服务端只存 sha256,比较走定长摘要的常数时间比较;失败一律同一句 `unauthorized` |
 | `server.ts` | `createMcpHandler` 装配(每请求一个 `McpServer` 实例)+ `toNodeHandler` 适配 |
-| `tools.ts` | 46 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
+| `tools.ts` | 51 个工具的入参 schema(zod)与结果整形;写工具统一过审计外壳 |
 | `store.ts` | 全部 SQL。**明文 LLM key 不出本文件** |
 | `content.ts` | 入库前的派生:字数、章节内容哈希 |
 | `audit.ts` | `mcp_audit` 写入;永不 reject(审计是旁路,不能让已完成的写操作变成 500) |
@@ -33,7 +33,13 @@
 加解密原语在 `apps/api/shared/crypto.ts`——mcp(写)与 agent(读)两个服务都要用,
 按规则 5 由各自的 service 取好 secret 值再传进去,共享库里不出现 `secret()`。
 
-## 工具(46)
+## 工具(51)
+
+- **Source 源码快照(R-SOURCE,五个)**:`source_snapshot_begin`(带 manifest 建 staging,从 current 复制未变的文件,回 `missing`)/
+  `source_files_put`(分批补内容,≤ 512 KB / ≤ 200 个一批,sha256 与 manifest 不符整批拒)/ `source_snapshot_commit`(单事务核完翻 current、
+  只保留一份)/ `source_snapshots_list` / `source_snapshot_delete`(只删非 current)。调用方是 `tools/source-publish/publish.mjs`
+  (随 `dev.ps1 ship` 自动跑;只从 git 树取文件),不是人手。判据在 `shared/source-pack.ts`(只收文本、kind 闭集、路径规则、单文件 256 KB),
+  写路径在 `source-store.ts`(与 `store.ts` 分文件,advisory lock 串行化三段)。契约全文见 `docs/mcp.md` §6.8
 
 - notes 三张表 CRUD:分类 / 系列 / 章节。**入参即标准 markdown,server 只校验不改写**
 - 附件:`notes_asset_put` / `notes_asset_delete` / `notes_assets_list`。存 Postgres,

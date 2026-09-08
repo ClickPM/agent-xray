@@ -152,7 +152,7 @@ node tools/source-publish/publish.mjs --sha <ref> --check                       
 | 工具 | 入参 | 行为 | 输出 |
 |---|---|---|---|
 | `source_list` | `prefix?`(≤ 300) | `agent_ro` READ ONLY 事务读 current 快照下以 prefix 开头的路径,≤ 400 条(超出提示收窄 prefix);首行 `snapshot <sha7> · N files` | 每行 `path · bytes · lines` |
-| `source_read` | `path` · `startLine?` · `endLine?` | 读一个文件;默认整文件,超 `capText` 上限截断并提示用行区间续读;每行带行号前缀(便于回答时引用) | 首行 `# <path> @ <sha7> (L<a>–L<b> / N)` + 正文 |
+| `source_read` | `file` · `startLine?` · `endLine?` | 读一个文件;一次 ≤ 400 行且按整行凑在结果正文上限内,超出提示用 `startLine` 续读;每行带行号前缀(便于回答时引用)。入参叫 `file`:`path` 字段名被 catalog.test 的泄露清单点名禁止(沙箱执行组的验收),不给「某个工具接受 path」留先例 | 首行 `# <file> @ <sha7> · <kind> · L<a>–L<b> / N` + 正文 |
 | `source_search` | `q`(2–100)· `prefix?` | SQL 侧逐行:`regexp_split_to_table(content, E'\n') WITH ORDINALITY` + `ILIKE`(`%` `_` 转义),`LIMIT 41` 判「还有更多」;`statement_timeout` 沿用 ro-db | ≤ 40 行 `path:line: <行内容截 160 字>` |
 
 - 三者都**不接受 sha**:永远读 current。会话中途发版了快照换版,下一次调用读到新版,与 notes 内容被改是同一件事。
@@ -268,3 +268,10 @@ findings 连续两轮落在同一块自建机制上(比如快照三段式写入)
 
 - 2026-09-08 开卡时的收录集合基线(按裁定 2 的闭集从 `git ls-files` 算):**294 个文件 / 3,153,856 字节 / 最大文件 `ROUNDS.md` 109 KB / 最深 8 层**;
   12 个 Next 路由文件的路径含 `()` 与 `[]`;无扩展名的文本文件只有 `Caddyfile` / `Dockerfile` ×2 / `LICENSE` ×4;扩展名闭集见「发布脚本」段。
+- 设计稿拉回(2026-09-08):`Agent X-Ray Source.dc.html` 72,151 B / 3 块;`Workbench` 248,815 → **250,586 B**(五格导航,+1,771 B,离上限 11 KB);
+  Prototype 79,545 → 107,457 B;`support.js` md5 未变。差异判据:Workbench 11 处全是导航行、Prototype 17 处是五格 + Source 两屏 + 会话区数据驱动;
+  本地自 2026-09-03 写回云端后零改动,直接覆盖(记 `design/README.md`)。
+- 发布脚本 `--check` 对 HEAD(`5dc7ae8`,含本轮文档但不含本轮代码):**295 个文件 / 3,194,609 字节 / 最大 `ROUNDS.md` 114,404 B / 最深 8 层**。
+  首跑抓到一处闭集外情形:`apps/api/notes/notes.test.ts` 的夹具**故意带 NUL**(按扩展名是文本、按内容不是)—— 加进 `rules.mjs` 的 `EXCLUDE_PATHS`
+  逐个点名跳过,不放宽服务端「无 NUL」判据。`execFileSync` 一开始误传 `encoding: "buffer"`(node 24 报 `ERR_UNKNOWN_ENCODING`),改为不给 encoding、一律拿 Buffer。
+- `dev.ps1 check` 过;`apps/web` `tsc --noEmit` 过;`bun test lib` 24 个用例全过(本轮 +3:目录树顺序 / 折叠集合 / 体积文案)。

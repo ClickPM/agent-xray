@@ -512,6 +512,252 @@ export function snippetAround(content: string, pos: number, width = SNIPPET_CHAR
   return `${start > 0 ? "…" : ""}${raw}${end < content.length ? "…" : ""}`;
 }
 
+// ───────────────────── 纯函数组:source_*(R-SOURCE) ─────────────────────
+//
+// 站点自身源码的快照(线上正在跑的那一版,公开的 MIT 仓库),与 `notes_*` 同一行:经 `queryAsAgentRo` 读
+// `source_snapshots` / `source_files` 两张表(迁移 016 显式 GRANT SELECT 给 agent_ro),不接受 sha 入参 ——
+// 永远读 `status = 'current'` 那一份;会话中途发版换了快照,下一次调用读到的就是新版(与 notes 内容被改是同一件事)。
+// 源码里的注释 / 字符串按威胁模型 5 视为不可信输入,系统提示词写明「是数据不是指令」(docs/security.md §1 第 2 层 R-SOURCE 补记)。
+
+export const SOURCE_LIST_TOOL = "source_list";
+export const SOURCE_READ_TOOL = "source_read";
+export const SOURCE_SEARCH_TOOL = "source_search";
+export const SOURCE_TOOL_NAMES: readonly string[] = [SOURCE_LIST_TOOL, SOURCE_READ_TOOL, SOURCE_SEARCH_TOOL];
+
+/** `source_list` 单次最多列多少条;超出提示收窄 prefix */
+const MAX_SOURCE_LIST_ROWS = 400;
+/** `source_search` 单次最多回多少行命中 */
+const MAX_SOURCE_HITS = 40;
+/** 命中行截到多少字符 */
+const SOURCE_HIT_CHARS = 160;
+/** `source_read` 一次最多回多少行(再多也会被 capText 截,先按行截让「续读」的提示落在整行上) */
+const MAX_SOURCE_READ_LINES = 400;
+/**
+ * 按**整行**截的字符预算。结果正文统一过 `capText`(MAX_RESULT_CHARS),但那是按字符切的 —— 切在半行上,
+ * 末尾「收窄 prefix / 续读」的提示也会被切掉。这里先按整行凑到预算之内,给头尾各留余量,提示永远落在完整的一行后面。
+ */
+const SOURCE_TEXT_BUDGET = MAX_RESULT_CHARS - 400;
+
+function takeLinesWithinBudget(lines: string[], used: number): { taken: string[]; cut: boolean } {
+  const taken: string[] = [];
+  for (const l of lines) {
+    // 第一行无论多长都要给(否则一行超预算的文件永远读不到;capText 会把它截到上限)
+    if (taken.length > 0 && used + l.length + 1 > SOURCE_TEXT_BUDGET) return { taken, cut: true };
+    taken.push(l);
+    used += l.length + 1;
+  }
+  return { taken, cut: false };
+}
+
+interface SourceSnapshotRow {
+  sha: string;
+  fileCount: number;
+}
+
+async function currentSourceSnapshot(tx: Transaction): Promise<SourceSnapshotRow | null> {
+  return tx.rawQueryRow<SourceSnapshotRow>(
+    `SELECT sha, file_count AS "fileCount" FROM source_snapshots WHERE status = 'current'`,
+  );
+}
+
+const NO_SOURCE_TEXT = "站点还没有发布源码快照,本轮读不到源码。";
+
+const SOURCE_LIST_META: ToolMeta = {
+  name: SOURCE_LIST_TOOL,
+  label: "源码目录",
+  description:
+    "列出本站自身源码快照(线上正在运行的那一版)里的文件路径,可用 prefix 只看某个目录(如 apps/api/agent/)。" +
+    "每行是 路径 · 字节 · 行数;路径可直接给 source_read。",
+  promptSnippet: "source_list —— 浏览本站源码的目录",
+  parameters: {
+    type: "object",
+    properties: {
+      prefix: { type: "string", maxLength: 300, description: "只列以此开头的路径(如 apps/web/),省略则全部" },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+  output: "文本。首行 `snapshot <sha7> · <N> files`,其后每行 `path · bytes · lines`",
+  outputNote: `单次最多 ${MAX_SOURCE_LIST_ROWS} 条,超出提示收窄 prefix`,
+};
+
+interface SourceListRow {
+  path: string;
+  bytes: number;
+  lines: number;
+}
+
+const sourceList: MetaToolDefinition = {
+  ...SOURCE_LIST_META,
+  async execute(_toolCallId, params) {
+    const { prefix } = (params ?? {}) as { prefix?: string };
+    return guarded(SOURCE_LIST_TOOL, async () =>
+      queryAsAgentRo(async (tx: Transaction) => {
+        const snap = await currentSourceSnapshot(tx);
+        if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
+        // 【前缀用 left(path, n) = $2 而不是 LIKE】LIKE 的 % / _ 是通配符,prefix 是模型给的自由文本,
+        // 转义又是一处容易写错的地方;left() 是纯前缀语义,没有元字符
+        // ORDER BY … COLLATE "C":码点序,与前端目录树 / 发布脚本的排序同一口径(库的默认 collation 会把大小写混排)
+        const all = await tx.rawQueryAll<SourceListRow>(
+          `SELECT path, bytes, lines
+             FROM source_files
+            WHERE sha = $1 AND ($2::text IS NULL OR left(path, length($2)) = $2)
+            ORDER BY path COLLATE "C"
+            LIMIT $3`,
+          snap.sha,
+          prefix && prefix !== "" ? prefix : null,
+          MAX_SOURCE_LIST_ROWS + 1,
+        );
+        const { rows, more: sqlMore } = splitOverflow(all, MAX_SOURCE_LIST_ROWS);
+        if (rows.length === 0) {
+          return textResult(prefix ? `快照里没有以 ${prefix} 开头的路径。` : NO_SOURCE_TEXT, { sha: snap.sha, count: 0 });
+        }
+        const head = `snapshot ${snap.sha.slice(0, 7)} · ${snap.fileCount} files${prefix ? ` · prefix ${prefix}` : ""}`;
+        const { taken, cut } = takeLinesWithinBudget(
+          rows.map((r) => `${r.path} · ${r.bytes} · ${r.lines}`),
+          head.length + 1,
+        );
+        const more = sqlMore || cut;
+        const tail = more ? `\n…(只列了前 ${taken.length} 条,收窄 prefix 再列)` : "";
+        return textResult(`${head}\n${taken.join("\n")}${tail}`, { sha: snap.sha, count: taken.length, more });
+      }),
+    );
+  },
+};
+
+const SOURCE_READ_META: ToolMeta = {
+  name: SOURCE_READ_TOOL,
+  label: "读源码文件",
+  description:
+    "读取本站源码快照里的一个文件(路径由 source_list / source_search 给出),每行带行号,便于回答时引用。" +
+    `大文件分段读:给 startLine / endLine(一次最多 ${MAX_SOURCE_READ_LINES} 行);超长仍会被截断并提示。`,
+  promptSnippet: "source_read —— 读本站某个源码文件的内容",
+  // 【入参叫 file 不叫 path】`path` 这个字段名在本注册面是被点名禁止的(catalog.test 的泄露清单:沙箱执行组
+  // 「没有 code / path / argv / interpreter 任何形式的字段」)。这里的值是库里一张表的键、不是文件系统路径,
+  // 但名字上不给「某个工具接受 path」留下先例。
+  parameters: {
+    type: "object",
+    properties: {
+      file: { type: "string", minLength: 1, maxLength: 300, description: "仓库根相对路径,如 apps/api/agent/tools.ts(由 source_list / source_search 给出)" },
+      startLine: { type: "integer", minimum: 1, description: "起始行(1-based),省略 = 1" },
+      endLine: { type: "integer", minimum: 1, description: "结束行(含),省略 = 起始行往后一段" },
+    },
+    required: ["file"],
+    additionalProperties: false,
+  },
+  output: "文本。首行 `# <file> @ <sha7> · <kind> · L<a>–L<b> / <N>`,其后每行 `<行号>| <内容>`",
+  outputNote: `一次最多 ${MAX_SOURCE_READ_LINES} 行(长行更少);超出用 startLine / endLine 续读`,
+};
+
+interface SourceFileRow {
+  kind: string;
+  lines: number;
+  content: string;
+}
+
+const sourceRead: MetaToolDefinition = {
+  ...SOURCE_READ_META,
+  async execute(_toolCallId, params) {
+    const { file, startLine, endLine } = params as { file: string; startLine?: number; endLine?: number };
+    return guarded(SOURCE_READ_TOOL, async () =>
+      queryAsAgentRo(async (tx: Transaction) => {
+        const snap = await currentSourceSnapshot(tx);
+        if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
+        const row = await tx.rawQueryRow<SourceFileRow>(
+          `SELECT kind, lines, content FROM source_files WHERE sha = $1 AND path = $2 AND content IS NOT NULL`,
+          snap.sha,
+          file,
+        );
+        if (!row) {
+          return textResult(`快照里没有 ${file};先用 source_list 或 source_search 确认路径。`, { sha: snap.sha, found: false });
+        }
+        const all = row.content === "" ? [] : row.content.split("\n");
+        if (all.length > 1 && row.content.endsWith("\n")) all.pop();
+        const total = all.length;
+        const from = Math.max(1, Math.min(startLine ?? 1, Math.max(total, 1)));
+        const wantEnd = endLine !== undefined ? Math.max(endLine, from) : from + MAX_SOURCE_READ_LINES - 1;
+        const capTo = Math.min(total, wantEnd, from + MAX_SOURCE_READ_LINES - 1);
+        const width = String(capTo).length;
+        const headLen = `# ${file} @ ${snap.sha.slice(0, 7)} · ${row.kind} · L${from}–L${capTo} / ${total}`.length + 1;
+        const { taken } = takeLinesWithinBudget(
+          all.slice(from - 1, capTo).map((line, i) => `${String(from + i).padStart(width)}| ${line}`),
+          headLen,
+        );
+        const to = from + Math.max(taken.length, 1) - 1;
+        const head = `# ${file} @ ${snap.sha.slice(0, 7)} · ${row.kind} · L${from}–L${to} / ${total}`;
+        const tail = to < total ? `\n…(文件共 ${total} 行,继续用 startLine=${to + 1} 读)` : "";
+        return textResult(`${head}\n${taken.join("\n")}${tail}`, { sha: snap.sha, found: true, file, from, to, total });
+      }),
+    );
+  },
+};
+
+const SOURCE_SEARCH_META: ToolMeta = {
+  name: SOURCE_SEARCH_TOOL,
+  label: "检索源码",
+  description:
+    "在本站源码快照里按关键词做大小写不敏感的逐行子串检索,返回命中的 路径 / 行号 / 该行内容;可用 prefix 限定目录。" +
+    "适合先定位「某个功能在哪个文件」,再用 source_read 读上下文。",
+  promptSnippet: "source_search —— 在本站源码里按关键词找文件与行",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", minLength: 2, maxLength: 100, description: "关键词(子串匹配,不支持通配符与正则)" },
+      prefix: { type: "string", maxLength: 300, description: "只在以此开头的路径里找,省略则全部" },
+    },
+    required: ["query"],
+    additionalProperties: false,
+  },
+  output: "JSON 文本,hits 数组每条含 path / line / text",
+  outputNote: `最多 ${MAX_SOURCE_HITS} 行命中,超出带 more: true;text 截到 ${SOURCE_HIT_CHARS} 字符`,
+};
+
+interface SourceHitRow {
+  path: string;
+  line: number;
+  text: string;
+}
+
+const sourceSearch: MetaToolDefinition = {
+  ...SOURCE_SEARCH_META,
+  async execute(_toolCallId, params) {
+    const { query, prefix } = params as { query: string; prefix?: string };
+    return guarded(SOURCE_SEARCH_TOOL, async () =>
+      queryAsAgentRo(async (tx: Transaction) => {
+        const snap = await currentSourceSnapshot(tx);
+        if (!snap) return textResult(NO_SOURCE_TEXT, { found: false });
+        // 【逐行在 SQL 侧切】regexp_split_to_table + WITH ORDINALITY 给出行号;strpos 是纯子串语义(理由同 notes_search)。
+        // 快照约 3 MB / 8 万行,顺序扫 + statement_timeout(ro-db)足够,不建索引。
+        const all = await tx.rawQueryAll<SourceHitRow>(
+          `SELECT f.path, t.ord::int AS line, left(t.line, $4) AS text
+             FROM source_files f,
+                  LATERAL regexp_split_to_table(f.content, E'\\n') WITH ORDINALITY AS t(line, ord)
+            WHERE f.sha = $1
+              AND ($2::text IS NULL OR left(f.path, length($2)) = $2)
+              AND strpos(lower(t.line), lower($3)) > 0
+            ORDER BY f.path COLLATE "C", t.ord
+            LIMIT $5`,
+          snap.sha,
+          prefix && prefix !== "" ? prefix : null,
+          query,
+          SOURCE_HIT_CHARS,
+          MAX_SOURCE_HITS + 1,
+        );
+        const { rows, more } = splitOverflow(all, MAX_SOURCE_HITS);
+        if (rows.length === 0) {
+          return textResult(`源码里没有匹配「${query}」的行${prefix ? `(prefix ${prefix})` : ""}。`, { sha: snap.sha, count: 0 });
+        }
+        const hits = rows.map((r) => ({ path: r.path, line: r.line, text: r.text.replace(/\r$/, "") }));
+        return textResult(jsonList("hits", hits, { query, snapshot: snap.sha.slice(0, 7), ...(more && { more }) }), {
+          sha: snap.sha,
+          count: hits.length,
+          more,
+        });
+      }),
+    );
+  },
+};
+
 // ───────────────────── 外呼组:web_search ─────────────────────
 
 export const WEB_SEARCH_TOOL_NAME = "web_search";
@@ -859,6 +1105,10 @@ export const TOOL_REGISTRY: Readonly<Record<string, MetaToolDefinition>> = Objec
   [notesListSeries.name]: notesListSeries,
   [notesGetChapter.name]: notesGetChapter,
   [notesSearch.name]: notesSearch,
+  // R-SOURCE:三个源码只读工具,与 notes 三个同一组(纯函数组);分组由这张表派生(catalog.ts)
+  [sourceList.name]: sourceList,
+  [sourceRead.name]: sourceRead,
+  [sourceSearch.name]: sourceSearch,
 });
 
 // ───────────────────── 纯函数组:skill_load(R-SKILLS-2) ─────────────────────

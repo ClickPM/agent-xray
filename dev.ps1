@@ -27,6 +27,8 @@
 #                           带 egress = 起 egress 档实例(127.0.0.1:8001,有公网;R-WEBFETCH)
 #       .\dev.ps1 runner-test
 #                           在 runner 镜像里跑 runner\tests(web-fetch 单元测试 + 病态输入夹具,--network none;R-WEBFETCH)
+#       .\dev.ps1 source-publish <host|local> [sha]
+#                           把 <sha>(默认 HEAD)的源码快照经该 host 的 MCP 发进库(R-SOURCE;ship 会自动调,这条给首次发版 / 补发 / 本机)
 #       .\dev.ps1 wt-clean [名字|all] [--force]
 #                           清理 .claude\worktrees 残留(不带参数 = 只列不动;坑的说明见函数注释)
 
@@ -65,7 +67,27 @@ function Warn-BunDrift {
 #    metrics 与 about 于 R8、site 于 R-TABS、skills 于 R-SKILLS 补入),漏补的表现是该服务端点 404,R9 冒烟会抓到。
 #    site 漏补的后果比 404 更重:web 的 layout 每次渲染都调 /site/tabs 且取数失败不兜底
 #    (apps/web/lib/tabs-server.ts「原样抛」),整站每一页 500 —— 构建与健康检查全绿。
-$hostedServices = "agent,trace,notes,mcp,metrics,about,system,site,skills"
+$hostedServices = "agent,trace,notes,mcp,metrics,about,system,site,skills,source"
+
+# —— R-SOURCE:源码快照发布(所有者裁定 5 / 8:随每次生产发版自动发,从源头保证「展示的 = 正在跑的」)——
+# host → 管理面地址与 token 环境变量,与 .mcp.json 的三个 server 同一分工;token 从用户环境变量读、不进命令行
+# (publish.mjs 按 --token-env 自己取)。脚本只从 git 树取文件,不读工作树。
+$sourceTargets = @{
+    "agent-xray-prod-deploy" = @{ url = "https://www.kzgai.cloud/api/mcp"; tokenEnv = "XRAY_MCP_TOKEN_PROD" }
+    "agent-xray-prod"        = @{ url = "https://www.kzgai.cloud/api/mcp"; tokenEnv = "XRAY_MCP_TOKEN_PROD" }
+    "130"                    = @{ url = "http://192.168.100.130/api/mcp";  tokenEnv = "XRAY_MCP_TOKEN_130" }
+    "local"                  = @{ url = "http://127.0.0.1:4000/mcp";       tokenEnv = "XRAY_MCP_TOKEN" }
+}
+function Publish-SourceSnapshot([string]$targetHost, [string]$sha) {
+    $t = $sourceTargets[$targetHost]
+    if (-not $t) {
+        Write-Warning "dev.ps1 的 `$sourceTargets 里没有 $targetHost 的管理面地址,跳过源码快照发布"
+        return $false
+    }
+    Write-Host "==> 源码快照 $sha → $($t.url)(token 取自环境变量 $($t.tokenEnv))"
+    & node "$repoRoot\tools\source-publish\publish.mjs" --sha $sha --mcp $t.url --token-env $t.tokenEnv
+    return ($LASTEXITCODE -eq 0)
+}
 
 # —— runner 镜像的本机构建(runner / runner-test 共用)——
 # 先核对 skills 清单生成物与 runner\skills 一致(漂移 = api 与容器两份清单不同源,skill_run 一律 hash_mismatch)。
@@ -213,6 +235,11 @@ switch ($Cmd) {
         & node "$repoRoot\tools\skills-manifest\generate.mjs" --check
         if ($LASTEXITCODE -ne 0) { throw "skills 清单已漂移,先跑 .\dev.ps1 skills-gen 并提交" }
 
+        # R-SOURCE:源码快照的收录闭集 / 单文件 256 KB / 文本性在构建期就拦(只读 git 树,不联网)。
+        # 漏了这一步的表现是 ship 末尾发快照时才报「派生不出文件种类」,镜像已经传完了。
+        & node "$repoRoot\tools\source-publish\publish.mjs" --check --sha HEAD
+        if ($LASTEXITCODE -ne 0) { throw "源码快照校验未过(闭集外扩展名 / 超 256 KB / 非文本),见上方输出;改 tools\source-publish\rules.mjs 或排除该文件" }
+
         Write-Host "==> api  $apiTag  (bun 基座 $bunBase, 服务 $hostedServices)"
         & $encore build docker `
             --config "$repoRoot\deploy\infra-config.json" `
@@ -290,6 +317,13 @@ switch ($Cmd) {
         if ($LASTEXITCODE -ne 0) { throw "远端 docker load 失败(tar 已保留在 ~/xray-$sha.tar 供排查)" }
         Remove-Item $tar -Force
 
+        # R-SOURCE:快照随发版自动发(所有者裁定 8)。发到的是**正在跑的旧 api**的 MCP,几分钟的「旧代码 + 新快照」窗口无害
+        # (快照是内容,任一版代码都能展示)。首次发版旧 api 没有 source_* 工具,脚本报 -32601 —— 只警告不中止:
+        # 镜像已经送达,快照在 compose up 之后补发。
+        if (-not (Publish-SourceSnapshot $shipHost $sha)) {
+            Write-Warning "源码快照未发布。compose up 起新版之后补发:.\dev.ps1 source-publish $shipHost $sha"
+        }
+
         Write-Host ""
         Write-Host "已送达。接下来在 $shipHost 上(顺序不能颠倒,见 docs/deploy-environments.md):"
         Write-Host "  cd ~/deploy"
@@ -301,6 +335,15 @@ switch ($Cmd) {
         Write-Host "  sudo ./egress-filter.sh --install-unit && sudo ./egress-filter.sh --status   # R-WEBFETCH:egress 出网过滤(幂等;需 sudo 用户)"
         Write-Host ""
         Write-Host "发版后:docs/releases.md 加一行(日期 / SHA / 迁移版本 / 内容 / .env 变更)。生产发版必记(CLAUDE.md 项目定位)。"
+    }
+    "source-publish" {
+        # R-SOURCE:手动发源码快照 —— 首次发版(旧 api 没有 source_* 工具、ship 里那一步会跳过)、补发、以及本机
+        # (`.\dev.ps1 source-publish local` 把 HEAD 的快照发进本机开发库,token 取 XRAY_MCP_TOKEN)。
+        # sha 可以是任何 ref;脚本只从 git 树取文件,与当前 checkout 无关。
+        $targetHost = $args[0]
+        if (-not $targetHost) { throw "用法:.\dev.ps1 source-publish <host|local> [sha];host 见本文件的 `$sourceTargets" }
+        $sha = if ($args[1]) { $args[1] } else { "HEAD" }
+        if (-not (Publish-SourceSnapshot $targetHost $sha)) { throw "源码快照发布失败" }
     }
     "skills" {
         # 把 .claude\skills 镜像到 .agents\skills。
