@@ -21,6 +21,9 @@ import type { ChatItem, ToolCallView, TraceEvent, TurnView } from "@/lib/types";
 import { GhostButton } from "@/components/ui";
 import { Markdown } from "@/components/Markdown";
 import { mono } from "@/lib/styles";
+import { useIsMobile } from "@/lib/use-mobile";
+import { MobileWorkbench } from "@/components/mobile/MobileWorkbench";
+import { MobileChat, MobileEmptyState } from "@/components/mobile/MobileChat";
 import { TimelineView } from "./TimelineView";
 import { ChainView } from "./ChainView";
 import { LifecycleMap } from "./LifecycleMap";
@@ -235,7 +238,7 @@ function FoldRow({ turn, open, onToggle }: { turn: TurnView; open: boolean; onTo
  * (ChatPane 是 flex column,子项默认 min-width:auto)。
  * md-chat 见 globals.css:只抹掉首个块的上外边距,气泡间距由 ChatPane 的 gap 给。
  */
-const AssistantMessage = memo(function AssistantMessage({ text }: { text: string }) {
+export const AssistantMessage = memo(function AssistantMessage({ text }: { text: string }) {
   return (
     <div className="md-chat" style={{ minWidth: 0 }}>
       <Markdown headingIds={false}>{text}</Markdown>
@@ -254,7 +257,7 @@ const AssistantMessage = memo(function AssistantMessage({ text }: { text: string
  * 每个文本段各自过 memo 的 `AssistantMessage`:流式期间只有正在长的那一段重新解析 markdown(R9 的 O(n) 性质保住)。
  * 外层 gap 14 与 ChatPane 的 gap 相同,所以内联态的段间距与它们直接躺在会话列里时一样。
  */
-const AssistantTurn = memo(function AssistantTurn({ text, turn, done }: { text: string; turn: TurnView; done: boolean }) {
+export const AssistantTurn = memo(function AssistantTurn({ text, turn, done }: { text: string; turn: TurnView; done: boolean }) {
   const [open, setOpen] = useState(false);
   const [openCards, setOpenCards] = useState<Record<number, boolean>>({});
   const { process, final } = useMemo(() => splitTurn(text, turn.toolCalls), [text, turn.toolCalls]);
@@ -424,6 +427,10 @@ export function Workbench() {
   // 会话切换的请求序号:连点两个会话时,先发后到的历史加载必须被丢弃,
   // 否则 UI 会被旧会话的消息覆盖(codex review P2)
   const loadSeq = useRef(0);
+
+  // R-MOBILE:决定挂哪一套壳。状态、取数与两条 SSE 都在本容器里,
+  // 所以无论哪一套壳,**全站只有一份订阅**(这正是不用纯 CSS 分流的原因)。
+  const isMobile = useIsMobile();
 
   const active = sessionId !== null || items.length > 0;
   const title = sessions.find((s) => s.id === sessionId)?.title || "";
@@ -660,8 +667,52 @@ export function Workbench() {
       });
   }, [draft, streaming, loadingHistory, sessionId, refreshSessions]);
 
+  // ── R-MOBILE:移动壳 ─────────────────────────────────────────────────
+  // 桌面壳一行没动,原样留在下面。这里是**并列的第二种呈现**,不是改造。
+  if (isMobile) {
+    return (
+      <MobileWorkbench
+        sessions={sessions}
+        sessionId={sessionId}
+        draft={draft}
+        streaming={streaming}
+        active={active}
+        title={title}
+        usage={usage}
+        eventCount={events.length}
+        shownPanel={shownPanel}
+        onPanel={setPanel}
+        onDraft={setDraft}
+        onSend={send}
+        onSelect={openSession}
+        onNew={startNew}
+        onDelete={removeSession}
+        onRefresh={refreshSessions}
+        renderChat={() => <MobileChat items={items} />}
+        renderEmpty={() => <MobileEmptyState onSuggest={setDraft} />}
+        // 内核层照搬:Sheet 里装的就是桌面右栏那四个组件本身
+        renderPanel={(p, onPanelExpand) =>
+          p === "tools" ? (
+            <ToolsPanel />
+          ) : !active ? (
+            <LifecycleMap nodes={lifeNodes} idle compact />
+          ) : p === "timeline" ? (
+            <TimelineView turns={timelineTurns} compact onExpand={onPanelExpand} />
+          ) : p === "chain" ? (
+            <ChainView chain={chain} compact />
+          ) : (
+            <LifecycleMap nodes={lifeNodes} compact />
+          )
+        }
+      />
+    );
+  }
+
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+    // `m-hide-narrow`:窄屏下桌面壳整块不渲染出来。与上面的 `isMobile` 分支成对 ——
+    // JS 保证只挂一份 SSE,CSS 保证水合首帧那一瞬不会把三栏画到 390 宽的屏上
+    // (理由见 lib/use-mobile.ts)。桌面上这个类名不产生任何效果。
+    <div className="m-hide-narrow" style={{ flex: 1, minHeight: 0, display: "flex" }}>
       <SessionSidebar
         sessions={sessions}
         selected={sessionId}

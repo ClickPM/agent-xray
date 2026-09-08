@@ -14,6 +14,7 @@
 // 行距按 2c 对位(段内 14×1.7=23.8px、段间 12–14px、小节标题前 30px、列表 gap 4)。
 import { Bar, Line, LoadingNote, SkeletonScreen } from "@/components/Skeleton";
 import { mono } from "@/lib/styles";
+import { MobilePageBar } from "@/components/mobile/MobilePageBar";
 
 /** 上/下一章按钮:章节名未知,与 2i 右上两枚同一裁定 —— 骨架块,不做禁用态(禁用态要编假文案) */
 function NavBlock() {
@@ -48,13 +49,20 @@ export default function ChapterLoading() {
           maxWidth: 1000, margin: "0 auto", padding: "26px 32px 64px",
           display: "grid", gridTemplateColumns: "minmax(0,720px) 1fr", gap: 56, alignItems: "start",
         }}
+        className="m-page-wrap m-chapter"
       >
+        {/* R-MOBILE(画板 4s):加载期就要有返回控件 —— 它在路由层已知,画成骨架是撒谎;
+            也避免内容到达时才插入一条 44 高的 sticky 栏、把整页顶一下
+            (本轮 codex 第 2 轮 P2)。`loading.tsx` 拿不到 params,
+            所以回面包屑第一级 /notes(画板点名它是已知层级)。 */}
+        <MobilePageBar backHref="/notes" backLabel="Notes" center={<LoadingNote />} />
         <div style={{ minWidth: 0 }}>
           {/* 面包屑:四级都来自数据(分类 / 系列 / 章节),整条骨架 */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 17 }}>
             <Bar w={240} h={10} />
             <div style={{ flex: 1 }} />
-            <LoadingNote />
+            {/* 移动端这句移到功能条中间(画板 4s),这里不重复 */}
+            <LoadingNote className="m-hide-narrow" />
           </div>
 
           {/* 大标题条:31px 行高对上 2c 的 22px/1.4;omPulseBg 全页只给它一处 */}
@@ -111,8 +119,10 @@ export default function ChapterLoading() {
           </div>
         </div>
 
-        {/* 本章目录:标题是固定文案,真实渲染;条目来自正文,骨架 */}
-        <div style={{ paddingTop: 60 }}>
+        {/* 本章目录:标题是固定文案,真实渲染;条目来自正文,骨架。
+            R-MOBILE:窄屏整列不渲染 —— 内容侧的悬浮目录同样隐藏(改由功能条的
+            「目录」按钮开 Sheet),骨架跟着隐藏才不会在内容到达时掉一整列(画板 4s)。 */}
+        <div className="m-hide-narrow" style={{ paddingTop: 60 }}>
           <div style={{ ...mono(11, 600), color: "var(--text-dim)", letterSpacing: "0.05em", marginBottom: 8 }}>本章目录</div>
           <div style={{ padding: "4px 0 4px 10px", borderLeft: "2px solid transparent" }}><Bar w={64} h={10} /></div>
           <div style={{ padding: "4px 0 4px 10px", borderLeft: "2px solid transparent" }}><Bar w={88} h={10} /></div>

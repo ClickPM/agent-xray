@@ -70,6 +70,9 @@ export function ReadingProgress() {
   return (
     <div
       ref={ref}
+      // R-MOBILE:移动端把它停到功能条底缘(top:44 + z-index 提到玻璃之上),
+      // 否则会被 sticky 的功能条整条盖住。桌面拿不到 `.m-progress` 的规则,行为不变。
+      className="m-progress"
       style={{
         position: "sticky", top: 0, left: 0, width: "100%", height: 2,
         background: "var(--accent)", zIndex: 2,

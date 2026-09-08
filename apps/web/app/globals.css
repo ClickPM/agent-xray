@@ -103,6 +103,18 @@ code {
   margin-top: 0 !important;
 }
 
+/* R-MOBILE:移动端会话区的助手正文 15/1.75(画板 4b;15 是禁缩放后的正文下限)。
+   `components/Markdown` 的排版是**内联样式**写的(与画板逐条对齐),盖过它只能 !important
+   —— 与上面 `.md-chat > :first-child` 是同一条既有例外,不是新开的口子。
+   作用域三重限定:仅 `.m-chat` 内、仅 `.md-chat` 的段落、仅 ≤768px,桌面拿不到这条规则。
+   只覆盖段落:列表 / 引用 / 代码块属内核层排版,照搬桌面(画板「两层语言」)。 */
+@media (max-width: 768px) {
+  .m-chat .md-chat p {
+    font-size: 15px !important;
+    line-height: 1.75 !important;
+  }
+}
+
 /* KaTeX 行间公式(components/Markdown 的 remark-math + rehype-katex)。
    KaTeX 自带样式给 .katex-display 下的公式挂了 white-space: nowrap,长公式会把
    整页顶出横向滚动条 —— 与正文宽表同一个处理:在自己的盒子里横向滚动。
@@ -172,4 +184,610 @@ code {
   * {
     animation: none !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   R-MOBILE —— 移动端外壳层(iOS 26)。画板 4a–4u。
+
+   【为什么是新增而不是改既有规则】规则 7:桌面零改动。本段里凡是可能影响桌面的,
+   一律锁在 `@media (max-width: 768px)` 内;只有两条是全局的,且都不产生视觉差异
+   (`-webkit-text-size-adjust` 只在 iOS 生效;`--safe-*` 在没有 env() 的浏览器回落 0px)。
+
+   【按普通 H5 做,不为微信单独优化】所有者 2026-09-07 二次裁定。画板是以微信 webview
+   为主场景画的(每屏画着「微信导航栏 44 · 不可控」占位),但那些占位**只是画布示意、
+   代码从不渲染**,所以画板不作废。被砍掉的是 UA 判定与「在微信中不可用」这类专项提示;
+   玻璃的 @supports 降级保留 —— 它对任何 H5 都成立,不是微信专项。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 安全区。`viewport-fit=cover`(layout.tsx 的 viewport 导出)是它们非零的前提。
+     top 在浏览器里通常是 0(地址栏已占掉状态栏那一段),bottom 在带 Home Indicator
+     的机型上是 34 —— 所以 Tab Bar 必须按变量留白,不能写死 34。 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* iOS 26 外壳层 token。画板 4a「裁定」段给的值,4u 给的降级值。
+     ⚠️ 默认值写的是**降级态**(不透明 0.94 + 一条 1px 分隔线),支持 backdrop-filter
+     的浏览器再由下面的 @supports 覆盖成玻璃。这个方向不能反 —— 老 Android WebView
+     对 backdrop-filter 支持不确定,把玻璃当默认会在那里退化成「半透明但不模糊」,
+     文字压在内容上直接读不清;而降级态在任何内核上都是安全的。 */
+  --m-glass: rgba(255, 255, 255, 0.94);
+  --m-glass-blur: none;
+  --m-glass-sep: 1px;
+  --m-glass-highlight: rgba(255, 255, 255, 0.5);
+
+  --m-fill: rgba(120, 120, 128, 0.12); /* 次按钮 / 输入框 / chip 底 */
+  --m-fill-soft: rgba(120, 120, 128, 0.1); /* 建议胶囊行底 */
+  --m-fill-active: rgba(120, 120, 128, 0.18); /* 按下态 */
+  --m-sep: rgba(0, 0, 0, 0.06);
+  --m-chevron: #c7c7cc;
+  --m-grabber: rgba(120, 120, 128, 0.4);
+
+  --m-topbar-h: 44px;
+  --m-tabbar-h: 49px;
+
+  /* 顶栏 / 底栏**连同安全区**的总占位。
+     ⚠️ 这两条是本轮 codex 审查两条 P1 的根因:Tab Bar 的实际高度是
+     `49 + safe-bottom`,而输入栏当初钉在 `bottom: 49px`、内容只预留 107px ——
+     在 34px Home Indicator 机型上两者重叠 34px,且 Tab Bar 的 z-index:5
+     会盖住输入框和发送按钮下半部分。凡是要给这两条栏让位的地方,
+     **一律用下面两个变量,不许再写裸的 44 / 49**。 */
+  --m-top-inset: calc(var(--m-topbar-h) + var(--safe-top));
+  --m-bottom-inset: calc(var(--m-tabbar-h) + var(--safe-bottom));
+}
+
+html.dark {
+  --m-glass: rgba(28, 28, 30, 0.94);
+  --m-glass-highlight: rgba(255, 255, 255, 0.12);
+  --m-sep: rgba(255, 255, 255, 0.08);
+  --m-chevron: #48484a;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --m-glass: rgba(255, 255, 255, 0.72);
+    --m-glass-blur: blur(24px) saturate(180%);
+    /* 有模糊时不需要那条分隔线:模糊本身已经把玻璃与内容分开了 */
+    --m-glass-sep: 0px;
+  }
+  html.dark {
+    --m-glass: rgba(28, 28, 30, 0.72);
+  }
+}
+
+html {
+  /* iOS 横竖屏切换时会自动放大文本,禁掉 —— 与禁缩放同一诉求 */
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (max-width: 768px) {
+  /* 页面本身不滚动,滚动一律交给内部容器。
+     少了这条,移动端整页下拉会把固定的功能条 / Tab Bar 一起拽动(iOS 橡皮筋),
+     在内嵌 webview 里还会露出宿主自己的背景。 */
+  body {
+    overscroll-behavior: none;
+  }
+
+  /* 桌面壳在窄屏永不可见。与 `lib/use-mobile.ts` 的 JS 分流是**一对**:
+     JS 决定挂哪一套(保证只有一份 SSE 与一份取数),CSS 保证水合首帧那一瞬
+     不会把三栏桌面版画到 390 宽的屏上。只留其中一条都不对,理由见那个文件的注释。 */
+  .m-hide-narrow {
+    display: none !important;
+  }
+
+  /* 双击放大在 iOS 上靠它禁(viewport 的 user-scalable=no 拦不住);
+     顺带消掉移动端 300ms 点击延迟。捏合由 layout.tsx 的 gesturestart 拦截负责。 */
+  a,
+  button,
+  [role="button"],
+  .m-tap {
+    touch-action: manipulation;
+  }
+
+  /* 横屏降级(画板 4u 第 4 态)。**网页锁不了屏幕方向** ——
+     screen.orientation.lock() 在 webview 与 iOS Safari 都拿不到,manifest 的
+     orientation:portrait 只在 standalone 启动时生效。所以横屏只能这样兜:
+     维持竖屏版式、最大宽 430 居中、两侧留白,不另做一套布局。 */
+  @media (orientation: landscape) {
+    .m-shell {
+      /* ⚠️ `width:100%` 不能省:给 flex 子项设 `margin-left/right:auto` 会**关掉
+         交叉轴 stretch**,元素退化成按内容定宽 —— 实测 740×390 横屏下只有 359,
+         比竖屏基准 390 还窄,正文反被压缩(与画板 4u「维持竖屏版式」相反)。 */
+      width: 100%;
+      max-width: 430px;
+      margin: 0 auto;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+  }
+}
+
+/* 移动端专属元素在桌面不渲染出来。与 `.m-hide-narrow` 成对:
+   前者管「桌面的东西别在窄屏露」,这条管「移动端的东西别在桌面露」。
+   默认 none、窄屏才 flex —— 方向不能反,否则桌面首帧会闪一下 Tab Bar。 */
+.m-show-narrow {
+  display: none;
+}
+@media (max-width: 768px) {
+  .m-show-narrow {
+    display: flex;
+  }
+}
+
+/* 玻璃条。三处用它:顶部功能条 / 输入栏 / Tab Bar(画板 4a 裁定)。
+   `-top` 与 `-bottom` 的差别只在投影方向与降级分隔线落在哪一边。 */
+.m-glass-top,
+.m-glass-bottom {
+  background: var(--m-glass);
+  backdrop-filter: var(--m-glass-blur);
+  -webkit-backdrop-filter: var(--m-glass-blur);
+}
+.m-glass-top {
+  /* standalone 启动时 `safe-area-inset-top` 非零:顶栏必须把状态栏那一段
+     算进自己的高度并用内边距顶开内容,否则文字落到刘海 / 状态栏下面。
+     浏览器里 safe-top 通常是 0,这两行等于没写(审查 P2-4)。 */
+  padding-top: var(--safe-top);
+  height: calc(var(--m-topbar-h) + var(--safe-top));
+  box-sizing: border-box;
+  box-shadow:
+    inset 0 1px 0 var(--m-glass-highlight),
+    0 1px 12px rgba(0, 0, 0, 0.06);
+  border-bottom: var(--m-glass-sep) solid var(--m-sep);
+}
+.m-glass-bottom {
+  box-shadow:
+    inset 0 1px 0 var(--m-glass-highlight),
+    0 -1px 12px rgba(0, 0, 0, 0.06);
+  border-top: var(--m-glass-sep) solid var(--m-sep);
+}
+
+/* 按下态(画板:hover → active,底色加深一档 + scale 0.97)。
+   移动端没有 hover,`:active` 是唯一的触觉反馈。 */
+.m-tap {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-tap:active {
+  transform: scale(0.97);
+}
+.m-tap-fill:active {
+  background: var(--m-fill-active);
+}
+
+/* 内核层密集行的命中区外扩(画板 4e 裁定)。事件行 26 高是刻意的密度 ——
+   照搬桌面,不为触控把它撑大;命中区改用 ::after 上下各外扩 9px 补到 44,
+   **不参与布局、不改变任何可见尺寸**。视觉密度与触控尺寸分开算,
+   是内核层在移动端唯一的适配手段。 */
+@media (max-width: 768px) {
+  .m-row-tap {
+    position: relative;
+  }
+  .m-row-tap::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -9px;
+    bottom: -9px;
+  }
+}
+
+/* ── 内容页(Notes / Skills / About)的移动端版式 ────────────────────────────
+   画板 4k–4r。这些页是 Server Component 渲染的静态内容,**用 CSS 重构而不是
+   渲染两套 DOM**:章节页正文很长,两套会把 RSC 载荷翻倍 —— 那正是 R-PERF 刚
+   治过的问题。代价是要用 `!important` 盖内联样式(那些内联样式与桌面画板逐条对齐,
+   不能改),作用域全部锁在 `max-width:768px` 内,桌面拿不到任何一条。 */
+@media (max-width: 768px) {
+  /* 外层容器:去掉桌面的 maxWidth 居中与 32 左右留白,改成满宽 + 16 */
+  .m-page-wrap {
+    max-width: none !important;
+    /* 底部必须让开整条 Tab Bar(49 + 安全区)再加一点呼吸,否则最后一段文字
+       / 最后一枚按钮永远滚不出遮挡 —— 滚到底时 `useHideOnScroll` 还会主动把
+       Tab Bar 显示回来,所以不能指望「滚动时它藏着」。画板给的内容底部空间约 60。 */
+    padding: 0 16px calc(var(--m-bottom-inset) + 16px) !important;
+  }
+
+  /* 一级页大标题(iOS Large Title)。桌面 20/650 → 34/700;副标题 13 → 15 */
+  .m-h1 {
+    font-size: 34px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
+    margin-top: 8px;
+  }
+  .m-sub {
+    font-size: 15px !important;
+    line-height: 1.6;
+  }
+
+  /* 卡片网格 → iOS inset grouped 列表。
+     分类标题留在卡外当组头(画板 4k:iOS 分组列表的组头本来就在卡外),
+     所以这里只把 `.m-cards` 这一层变成分组卡。 */
+  .m-cards {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--bg-panel);
+  }
+  .m-cards > a {
+    /* ⚠️ 行是**透明**的,卡的 `--bg-panel` 才是可见底色(画板 4k:卡 #f5f5f5、行不设背景)。
+       把行做成白底等于把卡整个盖住 —— 单行分组时会完全看不出卡的边界。 */
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 12px 16px !important;
+    min-height: 56px;
+    display: flex !important;
+    flex-direction: column;
+    justify-content: center;
+  }
+  /* 组内 1px 分隔线**从左内边距 16 起、不通栏** —— iOS inset grouped 的标志,
+     画板 4l 裁定写死了这一点。
+     ⚠️ 不能用 `box-shadow: inset 0 1px 0`:那条线一定是通栏的,左边内缩不了;
+     也不能用 `border-top` + `margin-left`(会把行的背景一起缩进去)。只能靠伪元素。 */
+  .m-cards > a + a {
+    position: relative;
+  }
+  .m-cards > a + a::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+  /* 行内三段:13→15 / 12→13 / mono 11 不变。
+     **桌面卡片那条 min-height:38 的描述留白要取消** —— 列表行按内容高度长,
+     固定高在移动端只会造成参差的空隙(画板 4k 裁定)。 */
+  .m-cards > a > :first-child {
+    font-size: 15px !important;
+  }
+  .m-card-desc {
+    font-size: 13px !important;
+    min-height: 0 !important;
+  }
+
+  /* 分组之间的间距:桌面 32 在移动端偏大 */
+  .m-group {
+    margin-top: 22px !important;
+  }
+
+  /* ── 系列目录页(画板 4l)────────────────────────────────────────────── */
+
+  /* 系列头:桌面是「左信息 + 右 ghost 按钮」一行,移动端拆成上下两块 ——
+     「从第 1 章开始读」是这一页唯一的动作,值得一个满宽命中区 */
+  .m-series-head {
+    flex-direction: column;
+    /* ⚠️ 必须显式 stretch:这一层的**内联** style 是 `alignItems:"flex-start"`
+       (桌面要它把右侧 ghost 按钮顶到顶端)。改成 column 之后 flex-start 会让
+       子项收缩到内容宽,整宽主按钮就只有 129px —— 实测踩到过。 */
+    align-items: stretch !important;
+    gap: 14px !important;
+    margin-top: 8px !important;
+  }
+  .m-h2 {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+  }
+  /* ghost 按钮 → 整宽胶囊主按钮。`!important` 是因为 GhostButton 的尺寸与配色
+     全在内联 style 里(与桌面画板逐条对齐,不能改那份) */
+  .m-cta {
+    width: 100% !important;
+    height: 44px !important;
+    border-radius: 22px !important;
+    background: var(--accent) !important;
+    border-color: transparent !important;
+    color: #ffffff !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+  }
+
+  /* 章节列表:1px 描边 + r7 的容器 → 分组卡 r16 + 组内内缩分隔线 */
+  .m-list {
+    border: none !important;
+    border-radius: 16px !important;
+    margin-top: 18px !important;
+    background: var(--bg-panel);
+  }
+  .m-list > a {
+    position: relative;
+    min-height: 56px;
+    padding: 12px 16px !important;
+    /* 内联的 borderTop 是通栏的,移动端一律抹掉,改用下面的伪元素内缩 16 */
+    border-top: none !important;
+  }
+  .m-list > a + a::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+  /* 置顶徽标:方角 r4 → 胶囊 r9(画板 4l) */
+  .m-badge {
+    border-radius: 9px !important;
+    padding: 2px 8px !important;
+  }
+
+  /* ── 运行时 Sheet · 事件详情(画板 4f)────────────────────────────────── */
+
+  /* INPUT / EXTENSION RETURNED / DIFF 三个 payload 盒各自横滚。
+     **不能折行**:JSON 与 diff 折了就读不出结构(画板 4f 裁定)。
+     横滚只发生在盒子里 —— 页面与 Sheet 本身永不横滚。 */
+  .m-payload {
+    white-space: pre;
+  }
+
+  /* ── 错误态 A / B / 断网(画板 4t)──────────────────────────────────── */
+
+  /* 桌面 460px 单列居中 → 满宽单列(左右 16),垂直居中不变 */
+  .m-status {
+    width: 100% !important;
+  }
+  /* 桌面 16px 标题 → 20/650 */
+  .m-status-title {
+    font-size: 20px !important;
+  }
+  /* 出口按钮:32 高 r7 → 44 高整宽胶囊。
+     这是**全站唯一的实心按钮层级**(2k 定的出口层级),移动端也只出现在这里
+     与 4l 的「从第 1 章开始读」。 */
+  .m-status-btn {
+    width: 100%;
+    height: 44px !important;
+    border-radius: 22px !important;
+    justify-content: center;
+    font-size: 15px !important;
+  }
+
+  /* 键盘弹起时 Tab Bar 让位(iOS 惯例,画板 4b 标注)。
+     `body.m-keyboard` 由 `lib/use-keyboard-inset.ts` 挂 —— Tab Bar 在 layout 里
+     比 Runtime 壳高两层,拿不到键盘状态,只能这样往上传(与 `m-errored` 同一手法)。
+     用位移而不是 display:none:走合成器,且收键盘时有一段自然的滑回。 */
+  body.m-keyboard nav.m-show-narrow {
+    transform: translateY(100%);
+  }
+
+  /* 出错 / 404 时 Tab Bar 四格都不高亮(画板 4t)。
+     `body.m-errored` 由 `components/StatusScreen.tsx` 在挂载时加、卸载时移除 ——
+     Tab Bar 在 layout 里比错误屏高两层,拿不到「本页出错了」,只能这样往上传。
+     选择器同时压住文字与图标:图标是 `stroke="currentColor"`,盖掉 color 就一起灰了。 */
+  body.m-errored nav.m-show-narrow a {
+    color: var(--text-muted) !important;
+  }
+  body.m-errored nav.m-show-narrow span {
+    font-weight: 400 !important;
+  }
+
+  /* ── 加载骨架(画板 4s)────────────────────────────────────────────────
+     骨架的外形必须等于内容到达后的外形,否则到达那一刻整页跳版。
+     内容侧已经在移动端变成了分组卡 / 胶囊 / 单列,骨架的容器也要跟着变 ——
+     下面这几条复用的正是内容侧的同名类(`.m-page-wrap` / `.m-skill-grid` /
+     `.m-install` 等),所以两边天然同形,不需要第二套尺寸表。 */
+
+  /* ── Skill 详情(画板 4p / 4q)────────────────────────────────────────── */
+
+  /* 240px 粘性树 + 预览的双栏 → 单列。树移到功能条右侧按钮开的 Sheet 里,
+     文件切换由 chip 条承担(chip 条是切换器,树是浏览器)。 */
+  .m-skill-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+    margin-top: 18px !important;
+  }
+
+  /* 头部:标题信息 + 右侧两枚按钮 → 上下两块,按钮各占一半 */
+  .m-skill-head {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 14px !important;
+    margin-top: 8px !important;
+  }
+  .m-skill-actions {
+    padding-top: 0 !important;
+    gap: 10px !important;
+  }
+  .m-skill-actions > a {
+    flex: 1;
+    justify-content: center;
+    height: 44px !important;
+    border-radius: 22px !important;
+    font-size: 14px !important;
+    background: var(--m-fill) !important;
+    border-color: transparent !important;
+    color: var(--accent) !important;
+  }
+  /* 最后一枚(下载 zip)是这一页的默认动作,升为品牌色实底主按钮 */
+  .m-skill-actions > a:last-child {
+    background: var(--accent) !important;
+    color: #ffffff !important;
+  }
+
+  /* INSTALL:外框 r7 + 描边 → 分组卡 r16 无描边;内层命令行 r6 → r10 */
+  .m-install {
+    border: none !important;
+    border-radius: 16px !important;
+    padding: 12px 16px !important;
+  }
+  .m-install-cmd {
+    border-radius: 10px !important;
+  }
+  /* 安装命令**横滚**而不是省略号截断:命令要能被完整读到才有意义
+     (画板 4p:INSTALL 命令行 white-space:pre 横滚)。 */
+  .m-install-text {
+    white-space: pre !important;
+    overflow-x: auto !important;
+    text-overflow: clip !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 文件 chip 条:横向滚动的胶囊。chip 本身不缩,靠横滚吸收宽度差 */
+  .m-chips {
+    gap: 8px;
+    padding: 8px 0;
+    align-items: center;
+    /* **吸附在功能条下方**。画板 4p 把「滚动时吸附」写成了 chip 条能取代
+       240px 粘性目录树的前提 —— 不吸附的话读长文件时它会滚走,
+       想切文件得先滚回页顶(审查 P2-8)。
+       实底而不是玻璃:全站只有功能条 / 输入栏 / Tab Bar 三处玻璃。 */
+    position: sticky;
+    top: var(--m-top-inset);
+    z-index: 3;
+    background: var(--bg);
+    /* 负外边距抵消 `.m-page-wrap` 的左右 16,让吸附时的实底铺满整宽 */
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* 预览框保持内核层的 r7 与 1px 描边 —— 它装的是 markdown 与代码,不是 iOS 卡片 */
+  .m-preview {
+    border-radius: 7px !important;
+  }
+
+  /* ── Skills 首页(画板 4o)与 About(画板 4r)────────────────────────── */
+
+  /* skill 名是标识符,必须等宽;mono 13 → 14/600(等宽字在 15px 正文旁不显小的最低值) */
+  .m-skill-name {
+    font-size: 14px !important;
+  }
+  /* 来源微徽标:方角 r4 → 胶囊 r9。**保留描边式**(border: 1px solid currentColor)——
+     它是全站唯一的描边徽标,用来和实底的 blocked / 修改 / 追加 区分:
+     那些是运行时事实,这个是来源标注(画板 4o 裁定)。 */
+  .m-badge {
+    border-radius: 9px !important;
+    padding: 2px 8px !important;
+  }
+
+  /* About 头像行:桌面「头像 + 简介 + GitHub 按钮」三段并排,
+     358 宽里会把简介压成一列窄字 —— 收成上下两块 */
+  .m-about-head {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 14px !important;
+  }
+  /* iOS 头像不描边 */
+  .m-avatar {
+    border: none !important;
+  }
+  /* 「本站如何构建」五条:裸列表 → 分组卡里的五行,行首 · 保留(2e 的语汇) */
+  .m-points {
+    background: var(--bg-panel);
+    border-radius: 16px;
+    padding: 4px 16px !important;
+    gap: 0 !important;
+  }
+  .m-points > div {
+    position: relative;
+    padding: 12px 0 !important;
+  }
+  .m-points > div + div::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+  /* 技术栈条形图:去掉桌面那圈 1px 描边 —— 白底上 8px 的条加描边会显脏(画板 4r) */
+  .m-langbar {
+    border: none !important;
+  }
+
+  /* ── 章节阅读页(画板 4m)──────────────────────────────────────────────
+     桌面是 `minmax(0,720px) 1fr` 的双栏(正文 + 右侧悬浮目录)。
+     358 的正文宽里塞不下第二列,而且读长文时目录是「偶尔要用」的东西,
+     不该常占一栏 —— 收成单列,目录改由功能条右侧的按钮开 Sheet。 */
+  .m-chapter {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+
+  /* 阅读进度线贴在功能条底缘。
+     它自己是 `sticky top:0 z-index:2`,而功能条是 `sticky top:0 z-index:4` ——
+     不动的话进度线会被玻璃盖住、完全看不见。改成停在 44(功能条高度)那一行,
+     正好落在玻璃下边缘;z 提到 5 压住玻璃,因为它必须在任何滚动位置都可见
+     (画板 4m:全站唯一贴在玻璃上的实色元素)。 */
+  .m-progress {
+    top: var(--m-top-inset) !important;
+    z-index: 5 !important;
+  }
+
+  /* 正文排版 15/1.75(苹方与 SF 都站得住的中文行距);小标题 16 → 17/650。
+     引用块、代码块、行内 mono 属**内核层,照搬桌面**,不在这里动。 */
+  .m-chapter-body h1 {
+    font-size: 24px !important;
+    line-height: 1.35 !important;
+  }
+  /* `components/Markdown` **不套容器类**,正文元素直接落在 `.m-chapter-body` 下,
+     所以这里按元素选。h1 是页面自己渲染的章节标题,不归 Markdown 管。 */
+  .m-chapter-body p,
+  .m-chapter-body li {
+    font-size: 15px !important;
+    line-height: 1.75 !important;
+  }
+  .m-chapter-body h2 {
+    font-size: 19px !important;
+  }
+  .m-chapter-body h3 {
+    font-size: 17px !important;
+  }
+
+  /* 上一章 / 下一章:两枚 ghost 按钮 → 两枚等宽胶囊(次 + 主,下一章是默认动作)。
+     桌面用 `justify-content: space-between` + 一个空 `<span/>` 占位来把单侧按钮
+     推到对边;移动端两个都 flex:1,那个空 span 也要占位否则单侧按钮会占满整行。 */
+  .m-prevnext {
+    gap: 10px !important;
+    margin-top: 28px !important;
+  }
+  .m-prevnext > * {
+    flex: 1;
+    min-width: 0;
+  }
+  .m-prevnext a {
+    display: block;
+  }
+  .m-prevnext button {
+    width: 100% !important;
+    height: 44px !important;
+    border-radius: 22px !important;
+    font-size: 14px !important;
+    background: var(--m-fill) !important;
+    border-color: transparent !important;
+    color: var(--accent) !important;
+  }
+  /* 最后一枚是「下一章」= 默认动作,升为品牌色实底主按钮 */
+  .m-prevnext > *:last-child button {
+    background: var(--accent) !important;
+    color: #ffffff !important;
+  }
+}
+
+/* iOS inset grouped 列表里的行分隔线:**从左内边距 16 起、不通栏**。
+   与 `.m-cards`/`.m-list` 里那两处是同一条规则,这里抽出来给 Sheet 内的列表用
+   (那两处要 `!important` 盖内联样式,这里的行是新写的、不需要)。 */
+.m-sep-row {
+  position: relative;
+}
+.m-sep-row + .m-sep-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+}
+
+/* 内核层的横滚盒子。禁缩放之后,宽内容唯一的出路就是在自己的盒子里横滚 ——
+   页面本身永不横滚(画板每屏都标注了「本屏哪些盒子可横滚」)。 */
+.m-xscroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }

@@ -15,6 +15,8 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { requireVisibleTab } from "@/lib/tabs-server";
 import { mono } from "@/lib/styles";
+import { MobilePageBar } from "@/components/mobile/MobilePageBar";
+import { MobileThemeRow } from "@/components/mobile/MobileThemeRow";
 
 // 内容随 MCP 写入变化,且 docker build 时后端不可达 —— 不允许构建期预渲染。
 export const dynamic = "force-dynamic";
@@ -59,12 +61,14 @@ export default async function AboutPage() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-      <div style={{ maxWidth: 880, margin: "0 auto", padding: "40px 32px 64px" }}>
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "40px 32px 64px" }} className="m-page-wrap">
+        {/* R-MOBILE(画板 4r):About 是一级页,功能条两侧都空 */}
+        <MobilePageBar />
         {/* 头部 — 仅 GitHub 公开信息,无姓名/公司/经历。
             三项任一有值就渲染:about_set 的每个字段都可省略,只配了 originUrl 的
             库行是合法状态,漏掉它会让那条链接**永远不出现**(codex 第 1 轮 P2)。 */}
         {(gh || origin || about.intro) && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 18 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 18 }} className="m-about-head">
             {gh && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -72,6 +76,7 @@ export default async function AboutPage() {
                 alt="GitHub avatar"
                 width={64}
                 height={64}
+                className="m-avatar"
                 style={{ width: 64, height: 64, borderRadius: "50%", border: "1px solid var(--border)", flex: "none" }}
               />
             )}
@@ -102,7 +107,7 @@ export default async function AboutPage() {
         {about.buildPoints.length > 0 && (
           <div style={{ marginTop: 42 }}>
             <div style={{ fontSize: 13, fontWeight: 600, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>本站如何构建</div>
-            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 2 }} className="m-points">
               {about.buildPoints.map((p) => (
                 <div key={p} style={{ display: "flex", gap: 10, padding: "5px 0", fontSize: 13, lineHeight: 1.7 }}>
                   <span style={{ color: "var(--text-dim)", flex: "none" }}>·</span>
@@ -112,6 +117,11 @@ export default async function AboutPage() {
             </div>
           </div>
         )}
+
+        {/* R-MOBILE(画板 4r):主题切换从导航条搬到这里。
+            桌面 GlobalNav 在窄屏整条 display:none,不搬过来移动端就没有切主题的入口。
+            组件自带 m-show-narrow,桌面不渲染。 */}
+        <MobileThemeRow />
 
         {/* 公开仓库 */}
         {gh && about.repos.length > 0 && (
@@ -166,7 +176,7 @@ export default async function AboutPage() {
         <div style={{ marginTop: 42 }}>
           {about.langBar.length > 0 && (
             <>
-              <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", border: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", border: "1px solid var(--border)" }} className="m-langbar">
                 {about.langBar.map((l) => (
                   <div key={l.name} style={{ height: 8, background: l.color, width: `${l.pct}%` }} />
                 ))}

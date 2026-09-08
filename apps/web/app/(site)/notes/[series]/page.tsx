@@ -3,6 +3,7 @@ import Link from "next/link";
 import { api, notFoundOnBadRoute } from "@/lib/api";
 import { requireVisibleTab } from "@/lib/tabs-server";
 import { GhostButton } from "@/components/ui";
+import { MobilePageBar } from "@/components/mobile/MobilePageBar";
 import { mono } from "@/lib/styles";
 import { relTime, tenThousand } from "@/lib/time";
 
@@ -31,10 +32,12 @@ export default async function SeriesPage({ params }: { params: Promise<{ series:
     : "";
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-      <div style={{ maxWidth: 880, margin: "0 auto", padding: "30px 32px 64px" }}>
+    <div style={{ flex: 1, minHeight: 0, overflow: "auto" }} className="m-page">
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "30px 32px 64px" }} className="m-page-wrap">
+        {/* R-MOBILE(画板 4l):二级页,左位子是带文字的返回(iOS 惯例:返回带上一级的名字) */}
+        <MobilePageBar backHref="/notes" backLabel="Notes" />
         {/* 面包屑 */}
-        <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }} className="m-hide-narrow">
           <Link href="/notes" style={{ color: "var(--accent)" }}>Notes</Link>
           <span>/</span>
           <Link href="/notes" style={{ color: "var(--accent)" }}>{data.categoryName}</Link>
@@ -42,21 +45,21 @@ export default async function SeriesPage({ params }: { params: Promise<{ series:
           <span style={{ color: "var(--text-muted)" }}>{data.name}</span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginTop: 22 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginTop: 22 }} className="m-series-head">
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 22, fontWeight: 650 }}>{data.name}</div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>{data.description}</div>
+            <div style={{ fontSize: 22, fontWeight: 650 }} className="m-h2">{data.name}</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }} className="m-sub">{data.description}</div>
             <div style={{ ...mono(11), color: "var(--text-dim)", marginTop: 10 }}>{meta}</div>
           </div>
           {firstChapter && (
             <Link href={`/notes/${series}/${firstChapter.slug}`} style={{ textDecoration: "none" }}>
-              <GhostButton>从第 1 章开始读</GhostButton>
+              <GhostButton className="m-cta">从第 1 章开始读</GhostButton>
             </Link>
           )}
         </div>
 
         {hasChapters ? (
-          <div style={{ marginTop: 26, border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }}>
+          <div style={{ marginTop: 26, border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }} className="m-list">
             {pinned && (
               <Link
                 href={`/notes/${series}/${pinned.slug}`}
@@ -67,7 +70,7 @@ export default async function SeriesPage({ params }: { params: Promise<{ series:
               >
                 <span style={{ ...mono(12, 600), color: "var(--text-muted)", width: 52, flex: "none" }}>{pinned.label}</span>
                 <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{pinned.title}</span>
-                <span style={{ ...mono(10, 600), color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }}>置顶</span>
+                <span style={{ ...mono(10, 600), color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }} className="m-badge">置顶</span>
               </Link>
             )}
             {rest.map((ch, i) => (

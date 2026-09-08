@@ -54,9 +54,18 @@ export function Line({ h, children, style }: { h: number; children?: ReactNode; 
  * 「正在取…」。骨架说的是「这里会有东西」,这一行说的是「已经收到你的点击、在取了」——
  * 画板 2i / 2j 都把它放在面包屑行的最右,是全页唯一一处明说。
  */
-export function LoadingNote() {
+export function LoadingNote({ className }: {
+  /**
+   * R-MOBILE:纯增量。移动端把这句移进功能条中间(画板 4s),面包屑那处要隐藏 ——
+   * **不能用 `<span className="m-hide-narrow">` 去包它**:本组件返回的是 `<div>`,
+   * `span > div` 是非法嵌套(span 是 phrasing content),也是水合隐患。
+   * 直接把类名传进来,不加包裹层。不传时行为与从前一字不差。
+   */
+  className?: string;
+} = {}) {
   return (
     <div
+      className={className}
       style={{
         display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)",
         ...mono10, letterSpacing: "0.08em",

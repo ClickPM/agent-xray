@@ -20,6 +20,26 @@ export const EV = {
 export const barWidth = (ms: number) =>
   Math.min(198, Math.max(4, Math.round(Math.sqrt(ms) * 11)));
 
+/**
+ * R-MOBILE:移动端的耗时色条宽度(画板 4e 裁定)。
+ *
+ * 桌面 `barWidth` 是像素式 `min(198, max(4, √ms×11))`,198 的上限对应 **ms ≈ 324**。
+ * 移动端的轨道是一列 32% 的弹性列,像素上限没有意义 —— 改写成同一条 √ 曲线的比例式:
+ *
+ *   条宽 = min(100%, max(3px, √(ms/324) × 轨道宽))
+ *
+ * **曲线与满格点都与桌面一致**,只把「198px 满格」换成「轨道 100% 满格」。
+ * 于是 310ms 那行在 320 / 390 / 430 三种宽度下都是 ≈98% 轨道宽 ——
+ * 比例不变,读者跨机型看到的相对长短一致(这正是换公式的目的,不是为了省地方)。
+ *
+ * 返回 CSS 长度字符串而不是数字:`max()` 里要混用 px 与 %,只能交给 CSS 算。
+ */
+export const barWidthPct = (ms: number) => {
+  const safe = Number.isFinite(ms) && ms > 0 ? ms : 0;
+  const pct = Math.min(100, Math.round(Math.sqrt(safe / 324) * 100));
+  return `max(3px, ${pct}%)`;
+};
+
 const MAX_PREVIEW = 400;
 
 /** 毫秒 → 设计稿口径的时长文本(`12ms` / `1.2s`)。 */
@@ -286,7 +306,25 @@ const LIFE_NODES: Array<{ name: string; event?: string }> = [
   { name: "turn_end", event: "turn_end" },
   { name: "agent_end", event: "agent_end" },
   { name: "session_shutdown", event: "session_shutdown" },
-];
+]
+
+/**
+ * R-MOBILE(画板 4h):Lifecycle 在移动端的四段分组。
+ *
+ * 桌面是 12 个节点一列纵排 + 11 段竖线(整列 900 高放得下);移动端可用高度只有 ~500,
+ * 改成四组纵向、每组内 2 列。**分组不是新信息** —— 上面 `LIFE_NODES` 的顺序本来就
+ * 隐含这四段,这里只是把它写出来当组标题。
+ *
+ * 【为什么按数量切而不是按名字映射】切片直接跟着 `LIFE_NODES` 的顺序走,
+ * 增删节点时 `counts` 之和与 `LIFE_NODES.length` 对不上会被下面的断言拦住,
+ * 而名字映射漏一个只会静默掉队。
+ */
+export const LIFE_GROUPS: readonly { title: string; count: number }[] = [
+  { title: "会话级 · 一次会话一次", count: 2 },
+  { title: "每轮", count: 3 },
+  { title: "工具", count: 3 },
+  { title: "收尾", count: 4 },
+];;
 
 export function toLifecycleNodes(events: TraceEvent[], streaming = false): LifeNode[] {
   const counts = new Map<string, number>();

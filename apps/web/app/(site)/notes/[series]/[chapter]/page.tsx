@@ -4,6 +4,7 @@ import Link from "next/link";
 import { api, notFoundOnBadRoute } from "@/lib/api";
 import { requireVisibleTab } from "@/lib/tabs-server";
 import { GhostButton } from "@/components/ui";
+import { MobileChapterBar } from "@/components/mobile/MobileChapterBar";
 import { mono } from "@/lib/styles";
 import { isoDate, readingMinutes } from "@/lib/time";
 import { Markdown, extractToc } from "@/components/Markdown";
@@ -44,14 +45,25 @@ export default async function ArticlePage({
     <div style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative" }}>
       {/* 阅读进度线。画板 2c 里是写死的 31%(静态画板只能定格一帧),这里接真实滚动 */}
       <ReadingProgress />
+      {/* R-MOBILE:章节页功能条 + 本章目录 Sheet(画板 4m / 4n)。窄屏才渲染。 */}
       <div
         style={{
           maxWidth: 1000, margin: "0 auto", padding: "26px 32px 64px",
           display: "grid", gridTemplateColumns: "minmax(0,720px) 1fr", gap: 56, alignItems: "start",
         }}
+        className="m-page-wrap m-chapter"
       >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        {/* 功能条必须在 `.m-page-wrap` **内部**:它靠 `margin: 0 -16px` 抵消这一层的
+            左右内边距把自己顶到屏幕边缘。移动端这层 grid 收成单列,它占第一行。
+            中间放的是章序(轻量信息,不是标题 —— 标题是正文里的 h1)。 */}
+        <MobileChapterBar
+          backHref={`/notes/${data.seriesSlug}`}
+          backLabel={data.seriesName}
+          order={crumb(data.label, pinned)}
+          toc={toc}
+        />
+        <div style={{ minWidth: 0 }} className="m-chapter-body">
+          <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }} className="m-hide-narrow">
             <Link href="/notes" style={{ color: "var(--accent)" }}>Notes</Link>
             <span>/</span>
             <Link href="/notes" style={{ color: "var(--accent)" }}>{data.categoryName}</Link>
@@ -79,7 +91,7 @@ export default async function ArticlePage({
 
           <Markdown>{data.contentMd}</Markdown>
 
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 40 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 40 }} className="m-prevnext">
             {data.prev ? (
               <Link href={`/notes/${data.seriesSlug}/${data.prev.slug}`} style={{ textDecoration: "none" }}>
                 <GhostButton><span style={navLabel}>← {data.prev.title}</span></GhostButton>
@@ -98,7 +110,7 @@ export default async function ArticlePage({
         </div>
 
         {/* 悬浮目录 */}
-        <div style={{ paddingTop: 60, position: "sticky", top: 0 }}>
+        <div style={{ paddingTop: 60, position: "sticky", top: 0 }} className="m-hide-narrow">
           <div style={{ ...mono(11, 600), color: "var(--text-dim)", letterSpacing: "0.05em", marginBottom: 8 }}>本章目录</div>
           {toc.map((h) => (
             <a

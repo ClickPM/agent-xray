@@ -5,6 +5,11 @@
 
 ## 工程
 
+- [ ] R-MOBILE **既有:`/skills/[name]` 在本机 dev 下卡在加载骨架不散**。表现:服务端 200(309ms)、`getSkill` 也 ok,页面真实内容**已经渲染进 DOM**,但 React 把它留在一个 `display:none` 的子树里、可见的始终是 `loading.tsx` 的骨架(「正在取…」),等 20s 不解。**已确证与 R-MOBILE 无关**:①把 `SkillDetail.tsx` 的改动 stash 掉后复现;②桌面宽度(1280)下复现;③**把 `apps/web` 整个 `git checkout main --` 还原成 main 版之后,`/notes/pi/01` 同样卡在骨架**(桌面导航条已渲染,确认是 main 版)—— 这条是决定性的,挂起是 main 上就有的。疑与 R-PERF 的详情页预渲染 + Suspense 边界在 dev 下的交互有关(R-PERF 任务卡里 `ppt-master` 白屏 + React #418 可能是同一族)。本轮为验证 4p/4q 版式,用 JS 临时把那棵隐藏子树显出来测量,量到的值全部正确。**需确认生产是否同样**,若是则是真 bug (2026-09-07)
+- [ ] R-MOBILE **既有缺陷:全站 ghost 按钮字号是 14 不是设计稿的 12**。`components/ui.tsx` 的 `GhostButton` style 对象里 `font: "inherit"` 写在 `fontSize: 12` **之后**,简写把长写冲掉 —— 浏览器实测:`{fontSize:12, font:"inherit"}` → 14px,反过来 → 12px;线上真实按钮(32 高 r7)取到 `fontSize: 14px`。影响面是**所有** GhostButton(Notes RSS / Sessions 刷新 / Skills 两枚 / 上下章 …),属设计稿保真度问题,不是功能缺陷。**本轮不顺手改**:它是桌面既有渲染,一改就是全站按钮视觉变化,该由所有者确认「按设计稿收到 12」还是「就认现在的 14」。同类简写覆盖在本轮新写的 `SegmentedControl` 上出现过一次、已修 (2026-09-07)
+- [ ] R-MOBILE 各页 `generateMetadata`(浏览器标签 / 分享标题现在全站都是 "Agent X-Ray")。原本作为微信导航栏标题的配套项列进 R-MOBILE,所有者 2026-09-07 裁定「不为微信单独优化」后从本轮移出;它对普通 H5 仍有价值(标签页、书签、分享),待裁定 (2026-09-07)
+- [ ] R-MOBILE 移动端 SSE 断线重连:切后台再回前台当前只会掉进 `onError` 兜底文案。属新机制,所有者裁定本轮不做 (2026-09-07)
+
 - [ ] R-WEBSEARCH **门禁不做全量类型检查**:`dev.ps1 check`(`encore check`)与 `dev.ps1 test`(`bun --bun vitest`)都不跑 `tsc --noEmit`。R-WEBSEARCH 复审第 1 轮实测:两者全绿而 `tsc --noEmit` 报两条 TS2367(闭包赋值不参与 narrowing)。**不是构建阻塞**(Encore 自己的构建不跑 tsc),但意味着类型错误只能靠 IDE 或人工发现。修法是给 `dev.ps1` 加一个 typecheck 入口或并进 test —— 属新增机制,不在本轮整改范围,记此待所有者裁定 (2026-09-02)
 - [ ] R0 CI(GitHub Actions:web build + api check)——未在任何轮次内,需要时由所有者决定加在哪轮 (2026-08-28)
 - [ ] R0 encore CLI 有更新 v1.57.13 → v1.58.4;升级前先确认对 ticketBookingB2B 项目无影响(同机共用 daemon) (2026-08-28)

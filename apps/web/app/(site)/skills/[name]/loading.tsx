@@ -13,6 +13,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { Bar, Line, LoadingNote, SkeletonScreen } from "@/components/Skeleton";
 import { mono } from "@/lib/styles";
+import { MobilePageBar } from "@/components/mobile/MobilePageBar";
 
 /** 与 SkillDetail 的 sectionLabel 同一份(INSTALL / FILES) */
 const sectionLabel: CSSProperties = {
@@ -66,7 +67,12 @@ function TocLine({ w }: { w: number }) {
 export default function SkillLoading() {
   return (
     <SkeletonScreen>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 32px 64px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 32px 64px" }} className="m-page-wrap">
+        {/* R-MOBILE(画板 4s):**返回控件在路由层就已知,画成骨架是撒谎** ——
+            加载期必须有返回路径,内容到达时也不会再插入一条 44 高的栏造成跳版
+            (本轮 codex 第 2 轮 P2)。`loading.tsx` 拿不到 params,所以只能回
+            面包屑第一级 /skills —— 画板点名它是已知层级。 */}
+        <MobilePageBar backHref="/skills" backLabel="Skills" center={<LoadingNote />} />
         {/* 面包屑:Skills 是真实链接(层级已知,也是访客改主意时的出口),后两级骨架 */}
         <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6, minHeight: 17 }}>
           <Link href="/skills" style={{ color: "var(--accent)" }}>Skills</Link>
@@ -75,7 +81,8 @@ export default function SkillLoading() {
           <span>/</span>
           <Bar w={108} h={10} />
           <div style={{ flex: 1 }} />
-          <LoadingNote />
+          {/* 移动端这句移到功能条中间(画板 4s),这里不重复 */}
+          <LoadingNote className="m-hide-narrow" />
         </div>
 
         {/* 头部 */}
@@ -98,17 +105,30 @@ export default function SkillLoading() {
         </div>
 
         {/* INSTALL —— 小标题是固定文案,真实渲染;命令未到,不画 copy(复制只会拿到空串) */}
-        <div style={{ marginTop: 22, background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "12px 14px" }}>
+        <div style={{ marginTop: 22, background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "12px 14px" }} className="m-install">
           <div style={sectionLabel}>INSTALL</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px" }} className="m-install-cmd">
             <Bar w={420} h={12} pulse />
           </div>
           <Line h={17} style={{ marginTop: 8 }}><Bar w={330} h={10} tone="onGrey" /></Line>
         </div>
 
         {/* 目录树 / 文件预览 */}
-        <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0,1fr)", gap: 32, marginTop: 26, alignItems: "start" }}>
-          <div>
+        <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0,1fr)", gap: 32, marginTop: 26, alignItems: "start" }} className="m-skill-grid">
+          {/* R-MOBILE:桌面的 240px 树列在窄屏不渲染 —— 内容侧同样隐藏它(改由 chip 条 +
+              树 Sheet 承担),骨架必须跟着隐藏,否则内容到达那一刻会掉一整列(画板 4s)。 */}
+          {/* chip 条骨架:三枚 32 高胶囊 —— 内容到达后这里就是横滚的文件 chip 条,
+              外形一致才不会跳版(画板 4s) */}
+          <div className="m-show-narrow m-chips" aria-hidden>
+            {/* ⚠️ 用**百分比**不用像素:三枚固定宽(90+132+108+16 间距 = 346)在 320 视口下
+                超出 288 的内容宽,会把整页顶出横向滚动条 —— 而画板 4s 明写「加载态里
+                没有真实内容,横滚容器留到内容到达后再出现」,不能靠给骨架加横滚兜底。
+                百分比之和 94% + 两道 8px 间距,320 与 430 下都收得住。 */}
+            <Bar w="26%" h={32} radius={16} />
+            <Bar w="38%" h={32} radius={16} />
+            <Bar w="30%" h={32} radius={16} />
+          </div>
+          <div className="m-hide-narrow">
             <div style={sectionLabel}>FILES</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <TreeLine indent={8} w={118} />
@@ -130,7 +150,7 @@ export default function SkillLoading() {
           </div>
 
           {/* 预览卡:边框 / 圆角 / 头部条是容器,保留实体;只有文件名、元信息与正文是骨架 */}
-          <div style={{ border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 0 rgba(0,0,0,0.03)", minWidth: 0 }}>
+          <div style={{ border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 0 rgba(0,0,0,0.03)", minWidth: 0 }} className="m-preview">
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", height: 31, boxSizing: "border-box" }}>
               <Bar w={68} tone="onGrey" />
               <Bar w={150} h={10} tone="onGrey" />

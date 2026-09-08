@@ -18,6 +18,7 @@ export function GhostButton({
   style,
   disabled = false,
   title,
+  className,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -25,12 +26,15 @@ export function GhostButton({
   style?: CSSProperties;
   disabled?: boolean;
   title?: string;
+  /** R-MOBILE:纯增量,供移动端用 `m-hide-narrow` 之类的类名控制显隐;不传时行为与从前一字不差 */
+  className?: string;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
+      className={className}
       style={{
         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
         height, padding: "0 12px", background: "var(--bg-hover)",
@@ -64,9 +68,12 @@ export function GhostButton({
 }
 
 /** 描边微徽标(来源/风险/ADMIN 等,mono 10px,4px 圆角) */
-export function Badge({ color, children, width }: { color: string; children: ReactNode; width?: number }) {
+export function Badge({ color, children, width, className }: { color: string; children: ReactNode; width?: number;
+  /** R-MOBILE:纯增量,移动端用 `m-badge` 把方角 r4 改成胶囊 r9;不传时行为与从前一字不差 */
+  className?: string }) {
   return (
     <span
+      className={className}
       style={{
         font: "600 10px var(--font-mono)", color, border: `1px solid ${color}`,
         borderRadius: 4, padding: "1px 5px", flex: "none", boxSizing: "border-box",

@@ -42,6 +42,12 @@ export function GlobalNav({ visible }: { visible: readonly TabKey[] }) {
   const tabs = TABS.filter((t) => visible.includes(t.key));
   return (
     <div
+      // R-MOBILE:桌面导航条在 ≤768px 整条不渲染(`display:none`)——
+      // 移动端的导航由底部 Tab Bar + 每屏自己的顶部功能条承担(画板 4a)。
+      // **这是本组件相对画板 1a 的第二处改动,且只加了一个类名**:
+      // `.m-hide-narrow` 的规则整条锁在 `@media (max-width:768px)` 里,
+      // 桌面渲染逐字节不变(规则 7)。
+      className="m-hide-narrow"
       style={{
         height: 44, flex: "none", display: "flex", alignItems: "center",
         padding: "0 20px", borderBottom: "1px solid var(--border)",

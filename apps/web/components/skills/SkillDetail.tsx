@@ -9,6 +9,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "@/components/ui";
+import { MobileBarButton, MobilePageBar } from "@/components/mobile/MobilePageBar";
+import { CONTENT_SHEET_HEIGHTS, Sheet, type Detent } from "@/components/mobile/Sheet";
 import { CodeView } from "@/components/skills/CodeView";
 import { MarkdownFile } from "@/components/skills/MarkdownFile";
 import { mono } from "@/lib/styles";
@@ -198,6 +200,9 @@ export function SkillDetail({
 }) {
   const [cur, setCur] = useState(initialPath);
   const [copied, setCopied] = useState<"" | "install" | "file">("");
+  // R-MOBILE(画板 4q):完整目录树在移动端收进 Sheet —— chip 条是切换器,树是浏览器
+  const [treeOpen, setTreeOpen] = useState(false);
+  const [treeDetent, setTreeDetent] = useState<Detent>("medium");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const file = files.find((f) => f.path === cur) ?? files[0];
@@ -243,11 +248,70 @@ export function SkillDetail({
       ),
     );
 
+  /**
+   * 移动端文件树(画板 4q)。与桌面 `renderTree` 同一份 `tree`,差别只有三处:
+   * 行高 26 → 44(纯触控目标)、目录行不可点只作层级标签、当前文件用品牌色淡底 + 600
+   * (与 4n 目录 Sheet 同一套选中语汇)。
+   */
+  const renderMobileTree = (nodes: TreeNode[], depth: number): React.ReactNode =>
+    nodes.map((n) =>
+      n.path !== undefined ? (
+        <button
+          key={n.path}
+          onClick={() => {
+            pick(n.path!);
+            setTreeOpen(false);
+          }}
+          className="m-tap m-sep-row"
+          style={{
+            display: "flex", alignItems: "center", gap: 8, width: "100%",
+            minHeight: 44, padding: "8px 16px", paddingLeft: 16 + depth * 14,
+            background: n.path === cur ? "rgba(37,99,235,0.06)" : "transparent",
+            border: "none", textAlign: "left",
+          }}
+        >
+          <span style={{ ...mono(13, n.path === cur ? 600 : 400), color: n.path === cur ? "var(--accent)" : "var(--text)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {n.name}
+          </span>
+          <span style={{ ...mono(11), color: "var(--text-dim)", flex: "none" }}>{fmtKB(n.sizeBytes ?? 0)}</span>
+        </button>
+      ) : (
+        <div key={`d-${depth}-${n.name}`}>
+          {/* 目录行:带 ▾ 的层级标签,不可点 */}
+          <div
+            className="m-sep-row"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              minHeight: 44, padding: "8px 16px", paddingLeft: 16 + depth * 14,
+            }}
+          >
+            <span style={{ fontSize: 9, color: "var(--text-dim)", flex: "none" }}>▾</span>
+            <span style={{ ...mono(13, 600), color: "var(--text-muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {n.name}/
+            </span>
+          </div>
+          {renderMobileTree(n.children, depth + 1)}
+        </div>
+      ),
+    );
+
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 32px 64px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 32px 64px" }} className="m-page-wrap">
+        {/* R-MOBILE(画板 4p/4q):二级页,左返回;右侧「文件」按钮开完整目录树 Sheet */}
+        <MobilePageBar
+          backHref="/skills"
+          backLabel="Skills"
+          right={
+            <MobileBarButton label="文件树" onClick={() => setTreeOpen(true)}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+            </MobileBarButton>
+          }
+        />
         {/* 面包屑 */}
-        <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
+        <div className="m-hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
           <Link href="/skills" style={{ color: "var(--accent)" }}>Skills</Link>
           <span>/</span>
           <Link href="/skills" style={{ color: "var(--accent)" }}>{skill.categoryName}</Link>
@@ -256,11 +320,11 @@ export function SkillDetail({
         </div>
 
         {/* 头部 */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginTop: 22 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginTop: 22 }} className="m-skill-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ ...mono(22, 650), letterSpacing: "-0.01em" }}>{skill.name}</span>
-              <Badge color={BADGE_COLOR[skill.sourceType]}>{BADGE_TEXT[skill.sourceType]}</Badge>
+              <Badge color={BADGE_COLOR[skill.sourceType]} className="m-badge">{BADGE_TEXT[skill.sourceType]}</Badge>
             </div>
             <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, marginTop: 6, maxWidth: 640 }}>{skill.summary}</div>
             <div style={{ ...mono(11), color: "var(--text-dim)", marginTop: 10 }}>
@@ -280,7 +344,7 @@ export function SkillDetail({
               )}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flex: "none", paddingTop: 2 }}>
+          <div style={{ display: "flex", gap: 8, flex: "none", paddingTop: 2 }} className="m-skill-actions">
             {skill.repoUrl && (
               <a href={skill.repoUrl} target="_blank" rel="noreferrer noopener" style={ghostLink} onMouseEnter={ghostEnter} onMouseLeave={ghostLeave}>
                 GitHub ↗
@@ -294,10 +358,10 @@ export function SkillDetail({
         </div>
 
         {/* INSTALL */}
-        <div style={{ marginTop: 22, background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "12px 14px" }}>
+        <div style={{ marginTop: 22, background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "12px 14px" }} className="m-install">
           <div style={sectionLabel}>INSTALL</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px" }}>
-            <span style={{ ...mono(12), flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px" }} className="m-install-cmd">
+            <span className="m-install-text" style={{ ...mono(12), flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               npx skills add {skill.repo} <span style={{ color: "var(--text-dim)" }}>--skill</span> {skill.name}
             </span>
             <CopyButton copied={copied === "install"} onClick={() => stamp("install", installCmd)} />
@@ -308,8 +372,8 @@ export function SkillDetail({
         </div>
 
         {/* 目录树 / 文件预览 */}
-        <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0,1fr)", gap: 32, marginTop: 26, alignItems: "start" }}>
-          <div style={{ position: "sticky", top: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0,1fr)", gap: 32, marginTop: 26, alignItems: "start" }} className="m-skill-grid">
+          <div className="m-hide-narrow" style={{ position: "sticky", top: 0 }}>
             <div style={sectionLabel}>FILES</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <TreeRow name={`${skill.name}/`} depth={0} isDir selected={false} bold />
@@ -335,8 +399,38 @@ export function SkillDetail({
             )}
           </div>
 
+          {/* R-MOBILE(画板 4p):240px 粘性目录树 → 顶部横向滚动的文件 chip 条。
+              一个 skill 通常 3–8 个文件,chip 条比开关 Sheet 少一层操作;
+              **完整目录树留给功能条右侧的「文件」按钮** —— chip 条是切换器,树是浏览器。
+              这一条就是本屏的「接缝」:容器是 iOS(胶囊、横滚),内容是 mono 文件名。 */}
+          <div className="m-show-narrow m-chips m-xscroll">
+            {files.map((f) => {
+              const on = f.path === cur;
+              return (
+                <button
+                  key={f.path}
+                  onClick={() => pick(f.path)}
+                  className="m-tap"
+                  style={{
+                    ...mono(13, on ? 600 : 400),
+                    flex: "none",
+                    height: 32,
+                    padding: "0 14px",
+                    borderRadius: 16,
+                    border: "none",
+                    background: on ? "var(--accent)" : "var(--m-fill)",
+                    color: on ? "#ffffff" : "var(--text)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {f.path}
+                </button>
+              );
+            })}
+          </div>
+
           {file && (
-            <div style={{ border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 0 rgba(0,0,0,0.03)", minWidth: 0 }}>
+            <div style={{ border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 0 rgba(0,0,0,0.03)", minWidth: 0 }} className="m-preview">
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--bg-panel)", borderBottom: "1px solid var(--border)" }}>
                 <span style={{ ...mono(11, 650), color: "var(--text-muted)" }}>{file.path}</span>
                 <span style={{ ...mono(11), color: "var(--text-dim)", flex: 1 }}>
@@ -355,6 +449,31 @@ export function SkillDetail({
           )}
         </div>
       </div>
+
+      {/* R-MOBILE(画板 4q):完整目录树 Sheet。树行 44 高(桌面 26)——
+          树是纯触控目标,不是数据密度区;当前文件用品牌色淡底 + 600,
+          与 4n 目录 Sheet 同一套选中语汇。 */}
+      <Sheet
+        open={treeOpen}
+        onClose={() => setTreeOpen(false)}
+        detent={treeDetent}
+        onDetentChange={setTreeDetent}
+        label="文件树"
+        heights={CONTENT_SHEET_HEIGHTS}
+        header={
+          <div style={{ flex: "none", padding: "4px 16px 10px" }}>
+            <span style={{ ...mono(11, 600), color: "var(--text-dim)", letterSpacing: "0.05em" }}>FILES</span>
+          </div>
+        }
+      >
+        {/* ⚠️ **必须画出目录节点**,不能只把扁平的 `files` 映射成缩进的 basename ——
+            带嵌套目录的 skill 里 `scripts/run.py` 与 `references/run.py` 会双双显示成
+            无法区分的 `run.py`(本轮 codex 第 2 轮 P2)。这里复用桌面同一份
+            `buildTree` 产物,只把行高换成触控尺寸:树是纯触控目标,不是数据密度区。 */}
+        <div style={{ margin: "0 16px 16px", borderRadius: 16, background: "var(--bg-panel)", overflow: "hidden" }}>
+          {renderMobileTree(tree, 0)}
+        </div>
+      </Sheet>
     </div>
   );
 }
