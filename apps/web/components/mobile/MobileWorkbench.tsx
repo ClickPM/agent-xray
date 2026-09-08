@@ -43,7 +43,7 @@ export interface MobileWorkbenchProps {
    * R-CROSSLINK(画板 4v):预填之后要聚焦这只输入框并把光标停在句尾。
    * ref 由容器持有 —— 两套壳同时只挂一套,所以桌面 `InputBar` 与这里共用同一个。
    */
-  inputRef?: RefObject<HTMLInputElement | null>;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
   /**
    * R-CROSSLINK:容器对运行时 Sheet 的动作请求。`close` = 预填(让位给键盘,画板 4v);
    * `open` = 卡片定位到 Timeline(升到 large,画板 4w)。`nonce` 让「同一个动作再来一次」也生效。
@@ -81,8 +81,12 @@ const PANEL_ITEMS = [
 /** 输入栏自身高度(8 + 40 + 10)。上下两条栏的**总占位**(含安全区)走 CSS 变量
     `--m-top-inset` / `--m-bottom-inset` —— 别再在这里写裸的 44 / 49:
     Tab Bar 的实际高度是 `49 + safe-bottom`,写死会在带 Home Indicator 的机型上
-    与输入栏重叠(本轮 codex 审查的 P1)。 */
+    与输入栏重叠(R-MOBILE codex 审查的 P1)。
+    R-CROSSLINK:输入胶囊会随内容增高(画板 4v),多出来的高度由 `grown` 补进来 ——
+    它是绝对定位的浮层,不补的话最后一条消息会被长出来的输入栏盖住。 */
 const INPUTBAR = 58;
+/** 输入胶囊的静息高度(画板 4v 的 min-height 40) */
+const INPUT_MIN = 40;
 
 export function MobileWorkbench(props: MobileWorkbenchProps) {
   const {
@@ -94,12 +98,25 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
   // 键盘占掉的高度。iOS 只缩 visualViewport、不改布局视口 —— 不跟这个值走的话
   // 输入栏会被键盘整条盖住(审查 P1)。
   const keyboard = useKeyboardInset();
+  // 输入胶囊比静息态高出多少(画板 4v 的「自然增高」);内容区的底部让位跟着它走
+  const [grown, setGrown] = useState(0);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const [runtimeDetent, setRuntimeDetent] = useState<Detent>("medium");
   const [sessionsOpen, setSessionsOpen] = useState(false);
 
   // R-CROSSLINK:容器的 Sheet 动作请求。开 = 升到 large(画板 4w:详情块在 medium 里只剩两行可见);
   // 关 = 预填(画板 4v:Sheet 留在屏上只会挡键盘)。**不是**受控 open —— 访客自己的开合照旧。
+  // 输入胶囊随内容增高(画板 4v:min-height 40 → auto,r20 与 padding 9/16 不变)。
+  // 与桌面 `useAutoGrow` 同一套算法,多一步:把长出来的高度报给上面的内容区。
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const borders = el.offsetHeight - el.clientHeight;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + borders}px`;
+    setGrown(Math.max(0, el.offsetHeight - INPUT_MIN));
+  }, [inputRef, draft]);
+
   useEffect(() => {
     if (!sheetRequest) return;
     if (sheetRequest.action === "close") {
@@ -125,7 +142,10 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
           paddingTop: "var(--m-top-inset)",
           // 键盘弹起时 Tab Bar 让位(见 globals.css 的 `body.m-keyboard`),
           // 这时底部只需让开「输入栏 + 键盘」;否则让开「输入栏 + Tab Bar + 安全区」
-          paddingBottom: keyboard > 0 ? INPUTBAR + keyboard : `calc(${INPUTBAR}px + var(--m-bottom-inset))`,
+          paddingBottom:
+            keyboard > 0
+              ? INPUTBAR + grown + keyboard
+              : `calc(${INPUTBAR + grown}px + var(--m-bottom-inset))`,
         }}
       >
         {active ? renderChat() : renderEmpty()}
@@ -216,24 +236,33 @@ export function MobileWorkbench(props: MobileWorkbenchProps) {
           display: "flex", alignItems: "center", gap: 10, padding: "8px 16px 10px",
         }}
       >
-        <input
+        <textarea
           ref={inputRef}
+          rows={1}
           value={draft}
           onChange={(e) => onDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            // textarea 的回车默认是换行:一律挡掉,行为与改动前一字不差
+            // (回车发送、shift+回车什么也不做),换行只来自自动折行
+            if (e.key === "Enter") {
               e.preventDefault();
-              onSend();
+              if (!e.shiftKey) onSend();
             }
           }}
           placeholder="和 agent 说点什么…"
           style={{
-            flex: 1, minWidth: 0, minHeight: 40, borderRadius: 20,
-            background: "var(--m-fill)", border: "none", padding: "0 16px",
+            flex: 1, minWidth: 0, minHeight: INPUT_MIN, borderRadius: 20,
+            background: "var(--m-fill)", border: "none",
+            // 画板 4v:padding 9/16 + 行高 1.375 —— 9 + 16×1.375 + 9 = 40,
+            // 正好是静息高度,所以换成 textarea 之后单行态与改动前一个像素不差
+            padding: "9px 16px", lineHeight: 1.375,
             // ⚠️ 16 是下限不是审美:小于 16 时 iOS 聚焦会强行放大整页,
             // 而 viewport 的 user-scalable=no 拦不住它。桌面那份仍是 14(规则 7)。
             fontSize: 16,
             color: "var(--text)", outline: "none", fontFamily: "inherit",
+            resize: "none", overflowY: "auto", display: "block",
+            // 五行封顶,再多框内自己滚(文本不裁不省略,见桌面 useAutoGrow 的注释)
+            maxHeight: 5 * 22 + 18,
           }}
         />
         <button

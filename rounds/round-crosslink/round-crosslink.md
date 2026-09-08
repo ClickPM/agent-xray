@@ -126,8 +126,20 @@
 
 - 审查方式:codex `/codex:review --background`(前两轮全量;第 3 轮起 `--base <上一轮已审提交>`)。
   带给审查者的要求:只判定缺陷与严重级别,不展开设计方案;重点是预填的边界(长度 / 控制字符 / 读一次即清)与 `toolCallId` 对不上时的兜底。
-- findings 处理:<逐条>
-- 结论:<PASS | 整改后 PASS>
+
+**第 1 轮**(全量 `branch diff against main`,提交 `fd8276a`):3 条 findings,**全部 P2、无 high**,**三条全部采纳整改**。
+
+| # | finding | 处理 |
+|---|---|---|
+| 1 | **预填输入框不换行**(`MobileWorkbench.tsx` / `InputBar`):画板 `2q` / `4v` 要求「溢出自然换行、输入框长到两行 / 胶囊自然增高」,而两处都还是单行 `<input>` —— 长句只会横向滚动、把大半句藏起来 | **采纳**。两处换成 `<textarea rows=1>` + 自动增高(`height:auto` → `scrollHeight + border`),回车仍是发送(`preventDefault` 挡掉换行),**静息高度一像素不差**(桌面把行高钉成 19px 复刻原 `<input>` 的行盒;移动端取画板 4v 的 `padding 9/16 + line-height 1.375`,9+22+9=40 正好是原 min-height)。五行封顶后框内滚动 —— 文本不裁不省略。移动端输入栏是绝对定位浮层,长高后由 `grown` 把内容区的底部让位一起顶上去,否则最后一条消息会被盖住 |
+| 2 | **`/?%61sk=hello` 不会被清除**:`readAskParam` 经 `URLSearchParams` 解码后认得它、照常预填,而清除那一步在**原始串**上找 `"ask="` → 认不出 → 参数留在地址栏、刷新再预填一次,违反 `docs/security.md` §0 第 10 条的「读一次即清」 | **采纳**。判据改成 `url.searchParams.has("ask")`(与读取侧同一套解码),删完再 `replaceState` |
+| 3 | **定位请求跨会话残留**:行键是 `s<seq>` 而 seq 每个会话从 0 起;在 A 定位后切到 B,`TimelineView` 下次挂载(移动端关掉再打开 Sheet)会拿旧请求展开 B 里**同键的无关行**,还顺手关掉贴底跟随 | **采纳**。`clearLocate()` 在 `openSession` / `startNew` 里作废两个方向的请求 |
+
+三条的整改都在本机复验过:① 桌面空框 37px = 改动前 `<input>` 的 37px、追问句长到两行(56px)、1000 字封顶 113px 且框内可滚;
+移动端空框正好 40px、追问句 84px(三行)、内容区底部让位 107 → 151 同步跟上;② `/?%61sk=…` 预填后地址栏干净;
+③ 在 A 定位 `s18` 后切到 B(94 行、含同键行)再让 `TimelineView` 重新挂载 —— **零行展开**。
+
+- 结论:**整改后待复审**(第 2 轮仍全量)。
 
 ## 失败处理
 

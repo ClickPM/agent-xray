@@ -446,10 +446,50 @@ function EmptyState({ onSuggest }: { onSuggest: (text: string) => void }) {
 }
 
 /**
+ * 输入框随内容增高(画板 2q / 4v:「溢出就自然换行、输入框长到两行,不裁不省略」)。
+ *
+ * 【为什么必须做】R-CROSSLINK 之前输入框里只有访客自己敲的字,一行装得下;
+ * 预填进来的是一整句追问,单行 `<input>` 只会横向滚动、把大半句话藏起来 ——
+ * 而「访客看得见」正是 `docs/security.md` §0 第 10 条的全部兜底。
+ *
+ * 【为什么设上限】不封顶的话,`?ask=` 那条链接最多能塞 1000 字,在 390 宽下是五十来行、
+ * 整个屏幕都成了输入框。到上限后**框内自己滚**,文本一个字都没少 —— 与「不裁不省略」不冲突。
+ */
+function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // clientHeight 含 padding 不含 border,offsetHeight 两者都含 —— 差值就是上下 border。
+    // 盒模型是 border-box,直接把 scrollHeight 写进 height 会一次比一次矮 2px。
+    const borders = el.offsetHeight - el.clientHeight;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + borders}px`;
+  }, [ref, value]);
+}
+
+/**
+ * 桌面输入框的行高(px)与增高上限(行)。
+ *
+ * **19 不是审美,是实测**:改动前那只 `<input>`(font 14 / padding 8 / border 1 / border-box)
+ * 静息高 37px,行盒正好 19。`<textarea>` 在 `line-height: normal` 下的行盒是 20,
+ * 空框会凭空高 1px —— 规则 7 管的就是这种「顺手多出来的一像素」。写死 19 让静息态一字不差,
+ * 折行后的行距也随之定下来(画板 2q 那句 `line-height:1.5` 是画布里两行态的写法,
+ * 照抄会让空框高 4px,取舍与理由记在任务卡)。
+ */
+const INPUT_LINE = 19;
+const INPUT_MAX_LINES = 5;
+
+/**
  * 输入区(画板 1a)。`busy` = 这一轮回复还在生成中:发送按钮换成转圈并禁用。
  *
  * 输入框**不禁用** —— 生成期间照样可以把下一句先打好;真正的拦截在 `send()`
  * 里(streaming 时直接 return),回车与点击走的是同一个出口。
+ *
+ * R-CROSSLINK 把 `<input>` 换成 `<textarea>`(画板 2q 的两行态)。**静息高度一字不改**:
+ * 行高仍取 `normal`(画板 1a 的空框没写 line-height,2q 那句 `line-height:1.5` 是画布里
+ * 两行态的写法;取 1.5 会让空框凭空高 4px,那是规则 7 明确禁止的「动既有页面样式」)。
+ * 回车仍是「发送」而不是换行(`preventDefault` 挡住 textarea 的默认行为),
+ * 与改动前一字不差;换行只会来自自动折行。
  */
 function InputBar({
   value,
@@ -462,20 +502,28 @@ function InputBar({
   onChange: (v: string) => void;
   onSend: () => void;
   busy: boolean;
-  /** R-CROSSLINK:预填之后要把光标停在句尾(画板 2q),所以容器要拿得到这个 input */
-  inputRef?: React.RefObject<HTMLInputElement | null>;
+  /** R-CROSSLINK:预填之后要把光标停在句尾(画板 2q),所以容器要拿得到这个输入框 */
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
+  useAutoGrow(inputRef, value);
   return (
-    <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "center" }}>
-      <input
+    // align-items 从 center 改成 flex-end(画板 2q 的输入栏就是 flex-end):
+    // 单行时两者一模一样,长到两行时发送按钮跟着底边走,与画板一致
+    <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "flex-end" }}>
+      <textarea
         ref={inputRef}
+        rows={1}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { onSend(); } }}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSend(); } }}
         placeholder="和 agent 说点什么…(右侧实时显示内核轨迹)"
         style={{
           flex: 1, border: "1px solid var(--border)", borderRadius: 7, padding: "8px 12px",
           fontSize: 14, color: "var(--text)", background: "var(--bg)", outline: "none", font: "inherit",
+          resize: "none", overflowY: "auto", display: "block",
+          lineHeight: `${INPUT_LINE}px`,
+          // 上下 padding 16 + 上下 border 2
+          maxHeight: INPUT_MAX_LINES * INPUT_LINE + 18,
         }}
       />
       <GhostButton
@@ -528,7 +576,7 @@ export function Workbench() {
 
   // ── R-CROSSLINK:三条联动共用的那一个原语 + 两个方向的定位 ────────────────
   // 输入框(桌面 InputBar / 移动壳各一份,同一个 ref —— 两套壳同时只挂一套)
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   // 「又预填了一次」的信号:同一句话连点两次时文本不变,靠它把光标重新放到句尾
   const [prefillAt, setPrefillAt] = useState(0);
   // 受控定位:key / toolCallId 相同的连点也要再滚一次,所以带 nonce
@@ -538,6 +586,11 @@ export function Workbench() {
   // 桌面壳没有 Sheet,这个 state 对它是死的。
   const [sheetRequest, setSheetRequest] = useState<{ action: "open" | "close"; nonce: number } | null>(null);
   const nonce = useRef(0);
+  /** 两个方向的定位请求一起作废。切会话、开新会话都要调 —— 它们只在一个会话里有意义。 */
+  const clearLocate = useCallback(() => {
+    setLocateRow(null);
+    setLocateCard(null);
+  }, []);
 
   // R-MOBILE:决定挂哪一套壳。状态、取数与两条 SSE 都在本容器里,
   // 所以无论哪一套壳,**全站只有一份订阅**(这正是不用纯 CSS 分流的原因)。
@@ -597,10 +650,12 @@ export function Workbench() {
    * 地址栏里也不会留着那段文本被顺手复制走。**不写 localStorage、不写 cookie**。
    */
   useEffect(() => {
-    const search = window.location.search;
-    const text = readAskParam(search);
-    if (search.includes("ask=")) {
-      const url = new URL(window.location.href);
+    const url = new URL(window.location.href);
+    const text = readAskParam(url.search);
+    // 【判「有没有 ask」只能问 URLSearchParams,不能在原始串上找 "ask="】(codex 第 1 轮 P2)
+    // `/?%61sk=hello` 里参数名是编码过的:`readAskParam` 经 URLSearchParams 解码后认得它、照常预填,
+    // 而字面匹配认不出 → 参数留在地址栏、刷新再预填一次,「读一次即清」当场失效。
+    if (url.searchParams.has("ask")) {
       url.searchParams.delete("ask");
       window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
     }
@@ -698,6 +753,10 @@ export function Workbench() {
       // 目标会话立刻生效:即便加载还没回来,状态也已经指向**这个**会话
       setSessionId(id);
       setItems([]);
+      // 定位请求属于**上一个**会话(codex 第 1 轮 P2):行键是 `s<seq>` 而 seq 每个会话都从 0 起,
+      // 留着它的话,下一次 TimelineView 挂载(移动端关掉再打开 Sheet 就是一次)会拿旧请求去展开
+      // 新会话里同键的**无关行**,还顺手关掉贴底跟随。卡片那侧同理(toolCallId 不跨会话)。
+      clearLocate();
       // 统计条与 items / events 同时作废(codex 第 1 轮 P2):加载期间留着上一个会话的
       // 数字会张冠李戴,加载失败时那个错的数字还会永久留在顶栏
       setUsage(null);
@@ -726,7 +785,7 @@ export function Workbench() {
           if (loadSeq.current === seq) setLoadingHistory(false);
         });
     },
-    [streaming],
+    [streaming, clearLocate],
   );
 
   const startNew = useCallback(() => {
@@ -738,7 +797,8 @@ export function Workbench() {
     setDraft("");
     setPanel("timeline");
     setUsage(null); // 新会话没有累计,统计条回到占位(R-USAGE)
-  }, [streaming]);
+    clearLocate(); // 同 openSession:定位请求不跨会话
+  }, [streaming, clearLocate]);
 
   /**
    * 删除会话(R-VISITOR)。服务端只删得掉本访客自己的,删不到一律 404。
