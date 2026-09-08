@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-leak/round-leak.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**审查通过(codex 一轮零 findings),待合并 `main` 与发版**(2026-09-08 开工于分支 `round-leak`;所有者裁定同日:下一阶段拆三轮,本轮第一、先于 R-CROSSLINK / R-CARDS)。
+> 状态:**已完成并发版**(2026-09-08 生产 `e8ac83e`,`docs/releases.md` 已记;codex 一轮零 findings)(2026-09-08 开工于分支 `round-leak`;所有者裁定同日:下一阶段拆三轮,本轮第一、先于 R-CROSSLINK / R-CARDS)。
 > 它是修补不是功能,**不涉及设计稿**(规则 8 不触发);但改的是脱敏面,所以不走「小修补直接 `main`」——
 > 分支 `round-leak`,完整 codex 循环(缺陷门禁),发版记 `docs/releases.md`。
 > 规则 9「先改文档」:`docs/security.md` §2 的 R-LEAK 补记已随本任务卡写入,§1 2026-09-07 补记里「记 BACKLOG 等裁定」那句同步改指向本轮。
@@ -70,9 +70,9 @@
 | 5 | `/agent/ask` 不受影响 | 同一轮的对话流帧形状与 R-TOOLCARDS 契约一致(`ask.test.ts` 既有用例全过) | ✅ 全量 608 passed 含 `ask.test.ts` / `turn-recorder.test.ts`,零改动 |
 | 6 | 前端零改动 | `git diff --stat main -- apps/web` 为空;本机 Timeline 上 `model_select` 行仍出现,详情为 `{type, source}` 或该行不可展开 | ✅ diff 为空;`hasDetail` 因 `source` 键为真 → 行仍可展开、详情显示 `{ source: "set" }`(既有行为)。另跑 `apps/web` 的 `tsc --noEmit` 通过 |
 | 7 | 同族排查清单 | 「本轮实测」列出核过的文件与模板,每条标「改」或「干净」 | ✅ 10 行,3 改 7 干净 |
-| 8 | 冒烟第 8 条 | 文档已改成值级;**发版当日在生产实跑一次**:两条流 0 命中,留证 `docs/releases.md` | 文档✅;**生产实跑待发版当日** |
-| 9 | 文档同步 | `docs/security.md` §2 R-LEAK 补记与 §1 2026-09-07 补记那句已改;BACKLOG 两条标关闭;`docs/mcp.md` 不动(仍 51) | 补记✅(并补了通道 C);`docs/mcp.md` 未动;**BACKLOG 两条按其自身口径「发版后关闭」,待发版** |
-| 10 | 发版 | 迁移版本不变(16);`docs/releases.md` 加一行;回滚 = 换回上一个镜像 tag | **待所有者裁定是否发版** |
+| 8 | 冒烟第 8 条 | 文档已改成值级;**发版当日在生产实跑一次**:两条流 0 命中,留证 `docs/releases.md` | ✅ 文档已改;生产实跑:一轮真实含 `web_search` 的对话(ask 5,221 B + trace 23,486 B),六个当前配置值(`api.64-186-228-154.sslip.io` / `64-186-228-154` / `gemini-3.8-flash-high` / `cliproxy-dmit` / `cliproxy-gemini` / `gpt-5.6-terra`)× 两条流 **0 命中**;字面词四项同样 0;该轮确实走了搜索(`web_search` 9 次、新文案在流里) |
+| 9 | 文档同步 | `docs/security.md` §2 R-LEAK 补记与 §1 2026-09-07 补记那句已改;BACKLOG 两条标关闭;`docs/mcp.md` 不动(仍 51) | ✅ 补记已补通道 C;`docs/mcp.md` 未动(仍 51);BACKLOG 两条已 `[x]` 并注明发版关闭;`docs/releases.md` 的既存泄露那一节加了闭环句 |
+| 10 | 发版 | 迁移版本不变(16);`docs/releases.md` 加一行;回滚 = 换回上一个镜像 tag | ✅ 生产 `e8ac83e`(所有者 2026-09-08 裁定直接发生产,不过 130);`migrate.sh` 确认 16 无待执行;五 Tab + 源码快照 + bun 1.4.0 + MCP 2026-07-28 全过;回滚点 `54f7356` |
 
 ## 禁止
 

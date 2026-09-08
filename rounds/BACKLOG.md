@@ -383,16 +383,16 @@
       而目录仍写着基名,锚点点了不跳**。修法二选一 —— ①`extractToc` 也跳过引用块内的 `##`(与渲染侧仍不一致,
       但目录与 id 的对应关系不受影响);②渲染侧不给引用块内的 h2 挂 id(改 `rehypeHeadingIds`,判父节点是不是
       `blockquote`)。②更贴近「目录 = 正文骨架」的语义。按「跨轮次发现的问题不当场顺手改」记这里 (2026-09-03)
-- [ ] 提示词加固 **`model_select` 事件的派生字段把 provider / model id / name 送进公开轨迹流**:`agent/events.ts` 的 `EVENT_DERIVED.model_select`
+- [x] 提示词加固 **`model_select` 事件的派生字段把 provider / model id / name 送进公开轨迹流**:`agent/events.ts` 的 `EVENT_DERIVED.model_select`
       经 `summarizeModel` 透出 `{provider, id, name}`,随 `/trace/stream` 推给访客、也落库(前端 detail 卡是否原样渲染未逐一核对,但数据已经出了服务端)。
       与规则 8 两次裁定(R-TOOLS「provider 与 model 名公开即泄配置面」、R-TOOLCARDS「会话区不显示模型名 / provider 名」)口径相反。
       2026-09-07 给系统提示加了「不透露底层模型」条款,但这条通道不归提示词管。修法是派生字段只留 `source`、或把 id / name 换成占位
       (`events.test.ts` 的白名单用例要跟);轨迹面板「像 DevTools」的定位要不要保留这一项属所有者裁定,不当场顺手改 (2026-09-07)
-      → **2026-09-08 所有者裁定「修」,落为 R-LEAK**(派生项整个删掉,`data` 只剩 `{type, source}`;与下一条同轮)。任务卡 [`rounds/round-leak/round-leak.md`](round-leak/round-leak.md);发版后关闭本条
+      → **2026-09-08 所有者裁定「修」,落为 R-LEAK**(派生项整个删掉,`data` 只剩 `{type, source}`;与下一条同轮)。任务卡 [`rounds/round-leak/round-leak.md`](round-leak/round-leak.md)。**已于 2026-09-08 `e8ac83e` 发版关闭**:派生项与 `summarizeModel` 整个删掉,`data` 只剩 `{type, source}`;`events.test.ts` 加了值级用例(完整 `Model` 对象进、键集合恰为 `{type, source}` 出)
 - [ ] 修补 2026-09-07 **系统提示的【时间基准】按轮刷新**:这一行定格在会话创建时(pi 的 resource loader 只在 reload 时算一次
       override),持续活跃的会话不回收、它会旧几小时(codex 复审第 2 轮 P2)。措辞已改成「真正的现在不早于它、晚于它的先查证」兜住;
       精确做法是在 before_agent_start 注入时每轮重写(xray-skills 注入器已经在那个事件上追加 systemPrompt,可顺路),属机制,等所有者裁定 (2026-09-07)
-- [ ] 发版 `d9fefb4` **`web_search` 的 `[request]` 阶段文案把搜索网关 hostname 与模型名送进公开轨迹流**:
+- [x] 发版 `d9fefb4` **`web_search` 的 `[request]` 阶段文案把搜索网关 hostname 与模型名送进公开轨迹流**:
       `agent/websearch.ts:314` 的 `progress("request", …)` 直接拼 `new URL(cfg.baseUrl).hostname` 与 `cfg.modelId`,
       经 `tool_execution_update` 的 `partialResultPreview` 随 `/trace/stream` 推给访客 —— 触发过一次搜索的一轮里,
       访客在 Timeline 就能读到 `向 api.<网关地址>.sslip.io 发起搜索请求(model=gemini-3.8-flash-high)`。
@@ -403,7 +403,7 @@
       只查字面词 `baseUrl` 而泄的是它的**值**。修法三档待裁定:①阶段文案删掉 host 与 model(改成「已向搜索网关发起请求」);
       ②只保留 model、去掉 host;③给 sanitize 加**值级**白名单(拿当前 provider 配置的 host / modelId 做遮蔽,
       比①贵但能一次覆盖同族通道)。属跨轮次发现,按规矩不当场顺手改 (2026-09-07)
-      → **2026-09-08 所有者裁定「修」,落为 R-LEAK,取 ①**(固定文案「已向搜索网关发起请求」;③ 是新机制,留作备选);同轮把冒烟第 8 条改成值级、同族排查列为交付项。发版后关闭本条
+      → **2026-09-08 所有者裁定「修」,落为 R-LEAK,取 ①**(固定文案「已向搜索网关发起请求」;③ 是新机制,留作备选);同轮把冒烟第 8 条改成值级、同族排查列为交付项。**已于 2026-09-08 `e8ac83e` 发版关闭**:发版当日的值级冒烟六个配置值 × 两条流 0 命中(`docs/releases.md`)。**同族还抓出第三条**:`tools.ts` 里 `web_search` 结果的 `details` 带 `{provider, model}`,同轮一并修掉(只留 `citations`)——它是集成探针 `agent/leak-e2e.test.ts` 第一次跑抓到的,静态排查没照出来
 - [ ] R-SOURCE **`agent/source-tools.test.ts` 与 `agent/sandbox.test.ts` 在同一个测试库里抢 `tool_config`**:前者有一条用例断言
       「迁移 016 的种子行 `source_list` / `source_read` / `source_search` 默认开」,直接从库里 `SELECT`;而后者的多个用例
       `DELETE FROM tool_config` 后自己重新种。`encore test` 下两个文件由 vitest 并行跑、共用同一个库,于是这条用例是**竞态**:
