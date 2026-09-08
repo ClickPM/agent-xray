@@ -2,7 +2,9 @@
 
 <!-- 保存为 rounds/round-source/round-source.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**代码落地、本机验收完成、codex 审查中**(2026-09-08;`5dc7ae8` 设计稿 + 安全补记 → `57e890b` 代码 → `6879a6c` 端到端整改)。所有者八条裁定已落(见下),分支 `round-source` 从 `main`(`ee7d7f5`)开出;
+> 状态:**审查收口(五轮,整改后 PASS),已合并 `main`,待所有者裁定发版**(2026-09-08;`5dc7ae8` 设计稿 + 安全补记 → `57e890b` 代码 → `6879a6c` 端到端整改 →
+> `367378d` / `061c92d` / `5bcb36f` / `303b44d` 四轮审查整改)。**发版顺序**:`dev.ps1 build` → `ship agent-xray-prod-deploy` → 服务器 停 / 迁移 016 / 起 →
+> **首次要手动 `dev.ps1 source-publish agent-xray-prod-deploy <sha>`**(旧 api 没有 `source_*` 工具,ship 里那步会跳过)→ 冒烟第 22 条 → `docs/releases.md` 加一行。所有者八条裁定已落(见下),分支 `round-source` 从 `main`(`ee7d7f5`)开出;
 > 给 Claude Design 的提示词在 [`design-prompt.md`](design-prompt.md)。**设计稿已于 2026-09-08 并入 `design/`**
 > (`2n` / `2o` / `2p` 放新文件 `Agent X-Ray Source.dc.html`,`Workbench` 20 块导航改五格,原型加两屏;四项判据与合并口径记在 `design/README.md`),
 > 与 R-TOOLS / R-SKILLS / R-PERF 同一顺序、**不是**规则 8 的例外。`docs/security.md` 的 R-SOURCE 补记(§1 第 2 层 + §4)已按规则 9 先于代码写入。
@@ -280,8 +282,10 @@ node tools/source-publish/publish.mjs --sha <ref> --check                       
      仓库里 README / docs 用的都是行内链接)。用例改成断言 image / definition / linkReference 原样。
      **给所有者的一句话**:链接改写本身不在画板里,是审查第 2 轮以「预览里的相对链接全是站点 404」点出来的渲染缺陷修补;
      若裁定「源码预览不改写链接、忠实原文」,去掉 `lib/remark-link-href.ts` + `lib/source-links.ts` 与两处 `linkHref` 即可,不影响别的
-- **第 5 轮**(`--base 5bcb36f`,只审第 4 轮整改 diff):<待回填>
-- 结论:<待回填>
+- **第 5 轮**(2026-09-08,`--base 5bcb36f` 只审第 4 轮整改 diff,约 4 分钟):**零 findings**(原话:「目标测试全部通过,且当前仓库不存在受此变更影响的引用式链接定义」)
+- 结论:**整改后 PASS**。五轮共 9 条(1 P1 / 7 P2 / 1 P3),**全部采纳、high 级为零**;没有一条走「不采纳」。分布:快照一致性与元数据核对 4 条(第 1–2 轮)、
+  BIGINT 契约 1 条、链接改写 3 条(第 2–4 轮,最后以删代码收口)、空文件 1 条。收口门禁:`dev.ps1 test` 全绿(api 33 文件 602 用例 + web 28)、
+  `tsc --noEmit` 过、本机端到端逐项对照画板通过、真实 MCP 路径发布快照通过。
 
 ## 失败处理
 
