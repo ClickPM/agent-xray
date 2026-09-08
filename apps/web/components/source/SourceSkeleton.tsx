@@ -1,4 +1,9 @@
-// Source 页的加载态(设计稿画板 2p,骨架对位 2o)。两个 `loading.tsx`(/source 与 /source/[...path])共用。
+// Source 文件页的加载态(设计稿画板 2p,骨架对位 2o),只给 `/source/[...path]/loading.tsx` 用。
+//
+// 【首页 /source 刻意没有 loading.tsx】(2026-09-08 本机实测)父级 `source/loading.tsx` 与子级 `[...path]/loading.tsx`
+// 叠成两层 Suspense 边界之后,文件页里的 `notFound()`(目录地址 / 不存在的文件 / 藏起来的 tab)在浏览器里**永远停在骨架**,
+// 服务端明明已经流出了 not-found 段;去掉父级那份就恢复正常。Notes / Skills 的首页本来也没有 loading.tsx(只有详情页有),
+// 画板 2p 画的也只是文件页 —— 口径一致,不是缺一块。
 //
 // 骨架规则照 2i(components/Skeleton.tsx 文件头):填充 `--bg-hover`,压在灰面上降一档 `--border`;
 // 圆角 4 文本条 / 6 大标题条 / 7 按钮块与卡片;`omPulseBg` 只给两块锚点(22px 标题条与代码区第一行)。

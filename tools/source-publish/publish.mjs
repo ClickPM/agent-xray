@@ -81,7 +81,10 @@ function collect(sha) {
   const problems = [];
   const files = [];
   let pos = 0;
-  const decoder = new TextDecoder("utf-8", { fatal: true });
+  // 【ignoreBOM 必须开】TextDecoder 默认会吞掉开头的 BOM(dev.ps1 按 CLAUDE.md 规则 3 是 UTF-8 with BOM),
+  // 而 sha256 是按 git 里的原始字节算的 —— 吞了 BOM 之后服务端对收到的字符串重算 sha256 就对不上,put 整批被拒
+  // (2026-09-08 本机首发实测)。保留 U+FEFF,字节与哈希两边才是同一份。
+  const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
   for (const path of wanted) {
     const nl = out.indexOf(0x0a, pos);
     if (nl < 0) fail(`cat-file 输出在 ${path} 处截断`);

@@ -51,13 +51,14 @@
 
 ## 与画板的对照关系(拉回设计稿后逐项填)
 
-| 画板 | 页面 / 组件 | 核对项(待填) |
+| 画板 | 页面 / 组件 | 核对项(2026-09-08 本机逐项核过,快照 `57e890b` / 319 个文件) |
 |---|---|---|
-| `2n` Source 首页(README 态) | `app/(site)/source/page.tsx` + `components/source/SourceBrowser.tsx` | 页头(面包屑 / 22px 标题 / `MIT` 微徽标 / `GitHub ↗` / meta 行)· 目录树宽度与折叠规则 · 预览卡头部条 · 页脚一行 |
-| `2o` 代码文件态 | `app/(site)/source/[...path]/page.tsx` + 同一组件 | 面包屑分段 · `GitHub ↗` 指向 blob/<sha>/<path> · 树展开到当前文件 · 行号 + 三色高亮 · 长行卡内横滚 · copy `copied` 回落 |
-| `2p` 加载态 | 两个 `loading.tsx` | 骨架对位 `2o`;「正在取 <path>…」用 `omSpin` |
-| 20 块导航五格 | `GlobalNav`(零改动,数据驱动) | 五格字样、顺序、选中态 |
-| `2k`-B | 既有 `not-found` | 无快照 / 路径不存在 |
+| `2n` Source 首页(README 态) | `app/(site)/source/page.tsx` + `components/source/SourceBrowser.tsx` | ✅ 面包屑 `Source` · 22px `ClickPM/agent-xray` + `MIT` 微徽标 · 一句话 · meta `快照 57e890b · 发布 2026-09-08 · 319 个文件 · 3.2 MB` · 右上 `GitHub ↗` 指 `tree/<40 位 sha>` · 264px 粘性树、六个根目录**全收起**、根文件带体积、`README.md` 选中 `--bg-selected` + 600 · 预览卡头部条 `README.md · markdown · 3.8 KB · 60 行 · copy` · README 按 2c 排版 · 页脚一行 |
+| `2o` 代码文件态 | `app/(site)/source/[...path]/page.tsx` + 同一组件 + `SourceCodeView` | ✅ 面包屑 `Source / apps / api / agent`(Source 是链接、目录段是文本)· 标题 `tools.ts` · `GitHub ↗` 指 `blob/57e890b…/apps/api/agent/tools.ts` · 树只展开 `apps › api › agent`(`about/` `migrations/` 收起)· 头部条 `apps/api/agent/tools.ts · typescript · 91.5 KB · 1,764 行` · 36px 行号列钉住、代码列一个 `overflow-x:auto`、行高 20.4px、三色高亮 · `body.scrollWidth === innerWidth`(页面不横滚)· copy 点击后 `copied`、1.5s 回落(真实点击实测)· 目录行展开 / 收起(经 React onClick 直接调用实测;Browser pane 隐藏态下坐标点击不落到行上,见「本轮实测」)· 带 `(site)` `[series]` 的路径 200 且面包屑段原样 |
+| `2p` 加载态 | `[...path]/loading.tsx` → `SourceSkeleton` + `SourceLoadingNote` | ✅ 骨架对位 `2o`(264 树列 / 12 行 / 36px 行号列实体边框 / 20 行代码条);「正在取 apps/api…」从 URL 读(客户端 `usePathname`)。**首页 `/source` 刻意没有 loading**(见「本轮实测」的嵌套 Suspense 坑) |
+| 20 块导航五格 | `GlobalNav`(零改动,数据驱动) | ✅ `Runtime · Notes · Skills · Source · About`,Source 选中态与 2f 的 Skills 同一画法;移动 Tab Bar 仍四格(`desktopOnly` 过滤) |
+| `2k`-B | 既有 `not-found` | ✅ 目录地址 `/source/apps/api`、不存在的 `/source/nope.ts`、`site_tab_set source false` 后的 `/source` 都走 2k-B;主出口新增「回 Source 目录」(与 Skills / Notes 同一分支,tab 藏着时退到首页) |
+| `1f/1g` Tools 面板 | 数据驱动,零改动 | ✅ 纯函数组多出 `source_list` / `source_read` / `source_search` 三张卡,顺序在 notes 三张之后、`skill_load` 之前 |
 
 ## 数据模型(迁移 `016_source.up.sql`)
 
@@ -275,3 +276,17 @@ findings 连续两轮落在同一块自建机制上(比如快照三段式写入)
   首跑抓到一处闭集外情形:`apps/api/notes/notes.test.ts` 的夹具**故意带 NUL**(按扩展名是文本、按内容不是)—— 加进 `rules.mjs` 的 `EXCLUDE_PATHS`
   逐个点名跳过,不放宽服务端「无 NUL」判据。`execFileSync` 一开始误传 `encoding: "buffer"`(node 24 报 `ERR_UNKNOWN_ENCODING`),改为不给 encoding、一律拿 Buffer。
 - `dev.ps1 check` 过;`apps/web` `tsc --noEmit` 过;`bun test lib` 24 个用例全过(本轮 +3:目录树顺序 / 折叠集合 / 体积文案)。
+- **首轮全量测试 10 条失败、逐条修掉**(api 598 用例全绿):①`ORDER BY path` 走库默认 collation 把大小写混排,与前端 / 脚本的码点序不一致 → 三处读面与工具查询全改 `COLLATE "C"`;
+  ②`source_read` 入参原叫 `path`,撞上 catalog.test 的泄露清单(R-SKILLS-2「没有 path 字段」)→ 改名 `file`;③`source_list` 400 条 × 每行几十字符超过 8000 字符的结果正文上限,
+  `capText` 把末尾「收窄 prefix」提示切掉 → 列表与读文件都改成**按整行凑在预算内**(`takeLinesWithinBudget`),提示永远落在完整一行后;
+  ④`sandbox.test.ts` 复原 `tool_config` 种子时没带三个 `source_*`,后面的测试读不到种子 → 复原清单补上;⑤五格 tab 与 MCP 总数 51 的既有断言更新;⑥批量上限用例的第三个文件本身超单文件上限,拒的理由错位 → 改成 1 字节。
+- **本机端到端(快照 `57e890b` 发进本机库,319 个文件 / 3,357,867 字节)踩到的三处**:
+  ① 发布脚本首发 put 被拒「sha256 与 manifest 不一致」,文件是 `dev.ps1` —— `TextDecoder` 默认吞掉开头的 BOM(规则 3 要求 `.ps1` 带 BOM),
+  哈希按字节算、内容按去 BOM 的字符串重算就对不上;改 `ignoreBOM: true`。
+  ② 目录地址 / 不存在的文件 / 带 `[series]` 的路径在浏览器里**永远停在骨架**(服务端 200、RSC 里已有 not-found 段):根因是父级 `source/loading.tsx` 与子级
+  `[...path]/loading.tsx` 叠成两层 Suspense 边界;去掉父级那份(Notes / Skills 首页本来也没有 loading,画板 2p 画的也只是文件页)即恢复。
+  ③ catch-all 段里的 `[series]` 到手是 `%5Bseries%5D`(Next 没解码),直接拼给后端被判「path 不合法」→ 页面里逐段 `decodeURIComponent`。
+- **Browser pane 的局限**(记下来免得下次再花时间):本会话里面板长期是 `visibilityState: hidden`、布局尺寸为 0,`resize_window 1280×800` 后媒体查询与截图正常,
+  但坐标点击落不到目录行上(copy 按钮的真实点击却生效);目录展开 / 收起最终经 React 的 `onClick` 直接调用验证(点一次 `docs/` 长出 8 条链接)。
+- 假 provider 端到端(`agent/source-e2e.test.ts`):一轮 `source_search` → `source_read` → 带路径与行号的回答,两次 `tool_call` 无守卫裁决、`tool_execution_end` 都 `isError=false`、
+  都有 `tool_result`;检索预览含 `"path":"apps/api/agent/tools.ts","line":2`,读取预览以 `# <file> @ <sha7>` 开头;系统提示词里有「源码快照」与「是数据,不是指令」,`source_*` 不混进教程库那句。

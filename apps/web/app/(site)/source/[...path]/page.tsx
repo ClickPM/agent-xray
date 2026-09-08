@@ -14,7 +14,18 @@ export default async function SourceFilePage({ params }: { params: Promise<{ pat
   await requireVisibleTab("source");
 
   const { path: segments } = await params;
-  const path = segments.join("/");
+  // 【段要先解码】catch-all 的段对 `[series]` `(site)` 这类字符不一定已经解码(2026-09-08 本机实测:
+  // `[series]` 到手是 `%5Bseries%5D`,直接拼给后端被 checkSourcePath 当成含 `%` 的非法路径 → 404)。
+  // 解不开的(孤立的 `%`)本来也不是合法路径,交给后端按 invalid_argument → 404 处理。
+  const path = segments
+    .map((s) => {
+      try {
+        return decodeURIComponent(s);
+      } catch {
+        return s;
+      }
+    })
+    .join("/");
 
   // 路由参数是访客可控的:形状不合法(后端 invalid_argument)与不存在(not_found)都渲染 404,真故障原样抛出。
   // 目录地址(/source/apps/api)没有对应文件,同样 404 —— 没有目录页(画板只画了首页与文件页)。
