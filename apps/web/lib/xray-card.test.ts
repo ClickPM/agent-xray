@@ -405,7 +405,7 @@ describe("会进消息的字段在解析期去不可见字符(codex 第 1 轮 P2
   const RLO = String.fromCharCode(0x202e); // bidi 覆盖
   const ZWSP = String.fromCharCode(0x200b);
   it("choice:prompt / label 里的 U+202E、零宽空格、控制字符都在解析期去掉;note 不动(不进消息)", () => {
-    const c = parseCard(json(choice({ prompt: `你更想${RLO}从哪条线入手?`, options: [{ label: `纯函数${ZWSP}组`, note: `n${ZWSP}` }, { label: "b" }] }))) as ChoiceBody;
+    const c = parseCard(json(choice({ prompt: `你更想${RLO}从哪条线入手?`, options: [{ label: `纯函数${ZWSP}组`, note: `n${ZWSP}` }, { label: "b" }] }))) as ChoiceBody;
     assert.equal(c.prompt, "你更想从哪条线入手?");
     assert.deepEqual(c.options.map((o) => o.label), ["纯函数组", "b"]);
     assert.equal(c.options[0].note, `n${ZWSP}`);
