@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-cards/round-cards.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**文档就绪、设计稿待交付、未开工**(所有者裁定 2026-09-08:下一阶段三轮里的第三轮,排在 R-LEAK / R-CROSSLINK 之后)。
+> 状态:**设计稿 2026-09-09 已并入、开工中**(所有者裁定 2026-09-08:下一阶段三轮里的第三轮,排在 R-LEAK / R-CROSSLINK 之后;两者已分别发版 `e8ac83e` / `995dc49`)。分支 `round-cards`。
 > 所有者原话:「增加一个 UI 组件工具,支持 agent 在回复结果中插入现场写好的数据,以信息卡片形式进行展示(甚至可以在里面加一些交互)」。
 > 形态裁定为 **2-A 内容级**(不是工具级 2-B,理由见下),所以名字里的「工具」不是 pi 工具:它是回复正文里的一个围栏块。
 > 与 R-TOOLS / R-PERF / R-TOOLCARDS / R-SOURCE 同一顺序、**不是**规则 8 的例外:画板先扩(桌面 `2s` / `2t` 放**新文件**
@@ -73,6 +73,7 @@ F5 前后会话区 `innerHTML` 的 sha256 一致(R-TOOLCARDS 验收同款);`git 
 ## 前置
 
 - **设计稿**:`2s` / `2t`(新文件 `Agent X-Ray Cards.dc.html`)+ `4y` / `4z`(追加进 `Mobile - Runtime`),并入 `design/`(四项判据全过)。
+  ✅ 2026-09-09 并入:Cards 55,339 B / 2 块;`Mobile - Runtime` 234,371 B / 14 块(**离 256 KiB 只剩 27 KB**,下次给移动 Runtime 加画板要先拆文件);`- Runtime` 的 `diff | grep -c '^<'` 为 0,直接覆盖;Prototype 与 `support.js` md5 未变。
 - R-CROSSLINK 已落地(`action.ask` 依赖它的预填原语;**没有它 `action` 字段整个不渲染**,其余五种交互不依赖)。
 - R-PERF 的骨架语汇(`2i`)、R-MOBILE 的 `m-xscroll` / `SegmentedControl`。无新凭据、无新依赖(不引入图表库 / 表格库)、无新容器、无迁移、MCP 仍 51。
 

@@ -915,6 +915,415 @@ a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
 </div>
 </div>
 
+<!-- ━━━━━━━━━━ 4y 移动 · 正文里的六种信息卡片 ━━━━━━━━━━ -->
+<div id="4y" style="flex:none;width:1218px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4y</span><span style="font-size:12px;font-weight:600;color:#6b7280">移动 · 助手正文里的六种信息卡片(底 = 4c 一轮完成折叠态)</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 ×3 · 卡宽 358 · 页面不横滚</span></div>
+<div style="display:flex;gap:24px">
+
+  <!-- ①屏 stat(两列)+ kv(收起)+ table(横滚) -->
+  <div style="width:390px;flex:none">
+  <div data-screen-label="4y-1 stat kv table" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+    <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+    <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+    <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+      <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+        <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">选型:pi SDK 还是 Claude Agent SDK</span></div>
+        <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 8px 0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时<span style="font:600 10px 'JetBrains Mono',monospace;color:#ffffff;background:#2563eb;border-radius:9px;padding:2px 6px;font-variant-numeric:tabular-nums">61</span></span></div>
+      </div>
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;gap:14px;padding:56px 16px 128px">
+        <div style="display:flex;align-items:center;gap:8px;min-height:44px;color:#6b7280;cursor:pointer" style-active="color:#2563eb">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg>
+          <span style="font-size:13px;line-height:1.7;flex:1;min-width:0">处理详情 · 3 次模型往返 · 4 次工具调用 · 2.1s</span>
+        </div>
+        <div style="font-size:15px;line-height:1.75;text-wrap:pretty">先看 pi 这一侧的量级:</div>
+        <!-- stat 改两列网格:第 2 格左分隔、第 3 格上分隔(桌面是三格一排 + 两条竖线) -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="padding:9px 12px 8px"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI 内核规模 · v0.9.2</span></div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr)">
+            <sc-for list="{{cStat}}" as="c" hint-placeholder-count="3">
+              <div style="padding:8px 12px 12px;border-left:{{c.bl}};border-top:{{c.bt}};box-sizing:border-box">
+                <div style="display:flex;align-items:baseline;gap:5px">
+                  <span style="font:650 22px 'JetBrains Mono',monospace;color:#1a1a1a;letter-spacing:-0.01em;font-variant-numeric:tabular-nums">{{c.n}}</span>
+                  <span style="font-size:12px;color:#6b7280">{{c.u}}</span>
+                </div>
+                <div style="font-size:12px;color:#1a1a1a;margin-top:3px">{{c.l}}</div>
+                <div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:2px;text-wrap:pretty">{{c.note}}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <!-- kv · collapsed:整行 min-height 44 命中(桌面靠 hover) -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="display:flex;align-items:center;gap:8px;padding:0 12px;min-height:44px;box-sizing:border-box;cursor:pointer" style-active="background:rgba(0,0,0,0.02)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="9 6 15 12 9 18"></polyline></svg>
+            <span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">CLAUDE AGENT SDK · 接入参数(6 项)</span>
+          </div>
+        </div>
+        <!-- table 进横滚容器:内容定宽 480,超出卡片右缘直接裁切(与 4d / 4f 的 payload 盒同一画法) -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="padding:9px 12px 8px"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK · 内置工具的入参约束</span></div>
+          <div style="overflow-x:auto;overflow-y:hidden;border-top:1px solid #e0e0e0">
+            <div style="width:480px">
+              <div style="display:grid;grid-template-columns:180px 110px 70px 120px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+                <div style="font-size:13px;font-weight:600;padding:8px 12px;white-space:nowrap">工具</div>
+                <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;color:#2563eb;white-space:nowrap">入参上限<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+                <div style="font-size:13px;font-weight:600;padding:8px 12px;white-space:nowrap">入参数</div>
+                <div style="font-size:13px;font-weight:600;padding:8px 12px;white-space:nowrap">分组</div>
+              </div>
+              <sc-for list="{{cTblDesc}}" as="r" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:180px 110px 70px 120px;border-top:{{r.sep}}">
+                  <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;white-space:nowrap">{{r.tool}}</div>
+                  <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;white-space:nowrap;font-variant-numeric:tabular-nums">{{r.cap}}</div>
+                  <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;white-space:nowrap;font-variant-numeric:tabular-nums">{{r.args}}</div>
+                  <div style="font-size:13px;padding:8px 12px;color:#1a1a1a;white-space:nowrap">{{r.group}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:49px;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 16px 10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <div style="flex:1;min-width:0;min-height:40px;border-radius:20px;background:rgba(120,120,128,0.12);display:flex;align-items:center;padding:0 16px;font-size:15px;color:#9ca3af">和 agent 说点什么…</div>
+        <div style="width:40px;height:40px;flex:none;border-radius:20px;background:#2563eb;color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+            <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+  </div>
+  </div>
+
+  <!-- ②屏 compare 堆叠(规则触发例子) -->
+  <div style="width:390px;flex:none">
+  <div data-screen-label="4y-2 compare堆叠" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+    <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+    <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+    <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+      <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+        <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">选型:pi SDK 还是 Claude Agent SDK</span></div>
+        <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 8px 0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时<span style="font:600 10px 'JetBrains Mono',monospace;color:#ffffff;background:#2563eb;border-radius:9px;padding:2px 6px;font-variant-numeric:tabular-nums">61</span></span></div>
+      </div>
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;gap:14px;padding:56px 16px 128px">
+        <div style="font-size:15px;line-height:1.75;text-wrap:pretty">按你关心的六项摊开对比:</div>
+        <!-- compare 堆叠态:390 下 A / B 列各只有 112 < 160,触发上下堆叠。列名降级成行内 mono 10 小标题(与 INPUT / RESULT 同一枚) -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="padding:9px 12px 8px"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK / CLAUDE AGENT SDK</span></div>
+          <div style="padding:0 12px 12px">
+            <sc-for list="{{cCmp}}" as="r" hint-placeholder-count="6">
+              <div style="padding:8px 0;border-top:{{r.sep}}">
+                <div style="font-size:13px;line-height:1.6;color:#6b7280">{{r.dim}}</div>
+                <div style="display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;margin-top:3px">
+                  <span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;line-height:1.9">PI SDK</span>
+                  <span style="font-size:13px;line-height:1.6;color:#1a1a1a;text-wrap:pretty">{{r.a}}</span>
+                </div>
+                <div style="display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;margin-top:1px">
+                  <span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;line-height:1.9">CLAUDE SDK</span>
+                  <span style="font-size:13px;line-height:1.6;color:#1a1a1a;text-wrap:pretty">{{r.b}}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:49px;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 16px 10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <div style="flex:1;min-width:0;min-height:40px;border-radius:20px;background:rgba(120,120,128,0.12);display:flex;align-items:center;padding:0 16px;font-size:15px;color:#9ca3af">和 agent 说点什么…</div>
+        <div style="width:40px;height:40px;flex:none;border-radius:20px;background:#2563eb;color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+            <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+  </div>
+  </div>
+
+  <!-- ③屏 list + tabs(SegmentedControl)+ 卡底胶囊 -->
+  <div style="width:390px;flex:none">
+  <div data-screen-label="4y-3 list tabs卡底" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+    <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+    <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+    <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+      <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+        <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">选型:pi SDK 还是 Claude Agent SDK</span></div>
+        <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 8px 0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时<span style="font:600 10px 'JetBrains Mono',monospace;color:#ffffff;background:#2563eb;border-radius:9px;padding:2px 6px;font-variant-numeric:tabular-nums">61</span></span></div>
+      </div>
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;gap:14px;padding:56px 16px 128px">
+        <div style="font-size:15px;line-height:1.75;text-wrap:pretty">如果你选 pi,接入顺序是固定的:</div>
+        <!-- list:序号列 22 定宽,note 11 弱化,与桌面一字不改 -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="padding:9px 12px 8px"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">把 PI 嵌进 ENCORE.TS 后端的五步</span></div>
+          <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:7px">
+            <sc-for list="{{cList}}" as="i" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:22px minmax(0,1fr);align-items:baseline;gap:2px">
+                <span style="font:400 13px 'JetBrains Mono',monospace;color:#9ca3af;font-variant-numeric:tabular-nums">{{i.num}}</span>
+                <div>
+                  <div style="font-size:13px;line-height:1.7;color:#1a1a1a;text-wrap:pretty">{{i.text}}</div>
+                  <sc-if value="{{i.hasNote}}" hint-placeholder-val="{{false}}"><div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:1px;text-wrap:pretty">{{i.note}}</div></sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <!-- tabs → SegmentedControl(照 4e);卡底动作按钮改胶囊(44 命中) -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="padding:9px 12px 8px"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK · 运行环境约束</span></div>
+          <div style="margin:0 12px 8px;display:flex;background:rgba(120,120,128,0.12);border-radius:9px;padding:2px;gap:2px">
+            <sc-for list="{{cSegNode}}" as="s" hint-placeholder-count="3">
+              <div style="flex:1;min-width:0;text-align:center;font-size:13px;font-weight:{{s.fw}};color:{{s.color}};background:{{s.bg}};border-radius:7px;padding:8px 0;box-shadow:{{s.shadow}};cursor:pointer">{{s.label}}</div>
+            </sc-for>
+          </div>
+          <div style="padding:0 12px 12px;display:flex;flex-direction:column">
+            <sc-for list="{{cEnv}}" as="r" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;padding:5px 0;border-top:{{r.sep}}">
+                <div style="font-size:13px;line-height:1.6;color:#6b7280">{{r.k}}</div>
+                <div style="font-size:13px;line-height:1.6;color:#1a1a1a;text-wrap:pretty">{{r.v}}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:10px 12px;border-top:1px solid #e0e0e0;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;flex-wrap:wrap;gap:16px">
+              <a href="#4y" style="font-size:13px;min-height:32px;display:inline-flex;align-items:center">pi · 第3章 Agent Loop</a>
+              <a href="#4y" style="font-size:13px;min-height:32px;display:inline-flex;align-items:center">pi SDK 仓库 ↗</a>
+            </div>
+            <div style="align-self:flex-start;display:inline-flex;align-items:center;min-height:44px;border-radius:22px;background:rgba(120,120,128,0.12);color:#2563eb;font-size:13px;font-weight:600;padding:0 16px;cursor:pointer" style-active="transform:scale(0.97)">帮我按这五步写一份接入清单</div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:49px;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 16px 10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <div style="flex:1;min-width:0;min-height:40px;border-radius:20px;background:rgba(120,120,128,0.12);display:flex;align-items:center;padding:0 16px;font-size:15px;color:#9ca3af">和 agent 说点什么…</div>
+        <div style="width:40px;height:40px;flex:none;border-radius:20px;background:#2563eb;color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+            <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+  </div>
+  </div>
+
+</div>
+<div style="width:1218px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4y · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">源 2s</span>:卡片外框(r6 + rgba(0,0,0,.03) 底 + 1px #e0e0e0)、标题行(mono 10/600 #9ca3af 0.08em)、六种主体的字号 / 行高 / 颜色<span style="color:#1a1a1a">一字未改</span>。移动端只动三处:触控、换行、横滚。三屏是同一段回答的滚动区截取(按 <a href="#4c" style="font:400 10px 'JetBrains Mono',monospace">4c</a> 的折叠态外壳),不是三张不同的卡片集。</div>
+    <div>· <span style="color:#1a1a1a">六种主体的解剖与上限(与桌面同一份)</span>:stat 2–4 格、kv ≤ 20 行、table ≤ 6 列 × 20 行、list 每项一行正文 + 可选一行 note、compare 3 列 ≤ 20 行、tabs ≤ 5 页且不能再套 tabs;所有字段都是字符串 ≤ 200 字、<span style="color:#1a1a1a">不解析 markdown</span>。<span style="color:#1a1a1a">标题行与卡底都可选</span>,唯一例外是 collapsed 卡的标题行 —— 它是收起态唯一的把手。</div>
+    <div>· <span style="color:#1a1a1a">横滚:只有 table 一处</span>。容器内容定宽 480(180/110/70/120,四列都 white-space:nowrap),超出<span style="color:#1a1a1a">卡片右缘直接裁切</span>,不加渐隐 —— 与 4d / 4f 的 payload 盒同一画法,渐隐会是这一层新造的第四种边缘语汇。<span style="color:#1a1a1a">页面与卡片本身永不横滚</span>,横滚只发生在这个盒子里。</div>
+    <div>· <span style="color:#1a1a1a">compare 的堆叠规则(②屏是触发例子)</span>:390 下卡内宽 = 390 − 16×2 − 2 边框 − 12×2 内边距 = <span style="color:#1a1a1a">332</span>;三列按桌面比例摊开 A / B 各只有 <span style="color:#1a1a1a">112 < 160</span>,一句「in-process,会话对象需常驻管理」会折成四行 —— 所以改上下堆叠:维度名一行(13px #6b7280)+ A / B 各一行。<span style="color:#1a1a1a">列名降级成行内 mono 10/600 #9ca3af 0.08em 小标题</span>(与 INPUT / RESULT 同一枚),不另造表头。规则边界:两列各 ≥ 160(即卡内宽 ≥ 480)时改走 table 那套横滚,不堆叠。</div>
+    <div>· <span style="color:#1a1a1a">stat 改两列网格</span>:三格排成 2+1,第 2 格加左分隔、第 3 格加上分隔,分隔线仍是表格那条 1px #e0e0e0(桌面是三格一排 + 两条竖线)。<span style="color:#1a1a1a">数字仍是 mono 22/650 tabular</span> —— 它是这张卡的主体,不因为屏窄而降号。</div>
+    <div>· <span style="color:#1a1a1a">tabs → SegmentedControl</span>(<a href="#4e" style="font:400 10px 'JetBrains Mono',monospace">4e</a> 那一枚:容器 rgba(120,120,128,.12) + r9 + 2px 内边距,内项 r7,选中 = 白底 + 投影 + 600 #1a1a1a)。<span style="color:#1a1a1a">选中态不套桌面的品牌色</span>:iOS 分段控件的选中语义由白底 + 投影承担,再加品牌色会和卡底胶囊的品牌色字撞。内项 padding 8/0 → 34 高,命中区靠上下各 5px 透明外扩补到 44(与 4e 的事件行同一手法)。tab 页从三格缩成 Node 20 / Bun 1.2 / 容器 —— 标签在 390 下必须单行不省略。</div>
+    <div>· <span style="color:#1a1a1a">卡底</span>:链接仍是 13px 品牌色文本(↗ 只给站外),各自 min-height 32 + 行间 16 保证指头点得中;<span style="color:#1a1a1a">动作按钮从 ghost 方按钮改胶囊</span>(rgba(120,120,128,.12) 底 + 品牌色 600 字 + r22 + 44 命中,与 4f 的 Ask why 同一枚),并<span style="color:#1a1a1a">换到链接下方独占一行</span> —— 卡内宽只有 332,一句「帮我按这五步写一份接入清单」与两条链接同排会把链接挤成两行。点了只做一件事:把这句话放进输入框、<span style="color:#1a1a1a">不发送</span>。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 卡片整宽、compare 的值列、list 正文列、table 横滚盒的可视窗口;<span style="color:#1a1a1a">不变</span> = 序号列 22、compare 与 kv 的键列 104、mono 22 数字、table 的 480 内容宽与四列定宽(它是内容宽度,跟屏宽无关)、卡内边距 12、卡间距 14。</div>
+    <div>· <span style="color:#1a1a1a">卡片留在最终回答里</span>:三屏都是一轮已完成态 —— 折叠行收起在最上面,卡片在折叠行<span style="color:#1a1a1a">下面</span>的最终回答里。本轮没有失败的工具调用,折叠行行尾不画 6px 红点(2l / 4c 规则原样生效)。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━━━━━━━━ 4z 移动 · 骨架 / 回落 / 交互态 ━━━━━━━━━━ -->
+<div id="4z" style="flex:none;width:1218px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">4z</span><span style="font-size:12px;font-weight:600;color:#6b7280">移动 · 流式骨架 / 回落 / 交互态三连(对位 2t)</span><span style="font:400 9px 'JetBrains Mono',monospace;color:#9ca3af">390×845 ×3 · 本屏不可双指缩放</span></div>
+<div style="display:flex;gap:24px">
+
+  <!-- ①屏 流式骨架 -->
+  <div style="width:390px;flex:none">
+  <div data-screen-label="4z-1 卡片流式骨架" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+    <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+    <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+    <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+      <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+        <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;color:#6b7280">生成中</span></div>
+        <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 8px 0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时<span style="font:600 10px 'JetBrains Mono',monospace;color:#ffffff;background:#2563eb;border-radius:9px;padding:2px 6px;font-variant-numeric:tabular-nums">57</span></span></div>
+      </div>
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;gap:14px;padding:56px 16px 128px">
+        <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border-radius:18px;padding:9px 14px;font-size:15px;line-height:1.75;text-wrap:pretty">pi SDK 和 Claude Agent SDK 该怎么选?</div></div>
+        <div style="font-size:15px;line-height:1.75;text-wrap:pretty">两个 SDK 都能把 agent 内核嵌进你自己的进程里。按你关心的六项摊开对比:</div>
+        <!-- 正在到达的卡:围栏未闭合。卡框先立住 + 一条标题骨架条(r6)+ 三条正文骨架条(r4);骨架色叠在灰面上降一档到 #e0e0e0,omPulseBg 只挂标题条 -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="padding:9px 12px 8px"><div style="width:196px;height:12px;border-radius:6px;background:#e0e0e0;animation:omPulseBg 1.8s ease-in-out infinite"></div></div>
+          <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:9px">
+            <div style="width:100%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+            <div style="width:100%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+            <div style="width:58%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:49px;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 16px 10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <div style="flex:1;min-width:0;min-height:40px;border-radius:20px;background:rgba(120,120,128,0.12);display:flex;align-items:center;padding:0 16px;font-size:15px;color:#9ca3af">和 agent 说点什么…</div>
+        <div style="width:40px;height:40px;flex:none;border-radius:20px;background:rgba(120,120,128,0.12);color:#9ca3af;display:flex;align-items:center;justify-content:center;cursor:default"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite;transform-origin:50% 50%"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+            <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+  </div>
+  </div>
+
+  <!-- ②屏 回落成普通代码块 -->
+  <div style="width:390px;flex:none">
+  <div data-screen-label="4z-2 回落代码块" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+    <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+    <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+    <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+      <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+        <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">选型:pi SDK 还是 Claude Agent SDK</span></div>
+        <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 8px 0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时<span style="font:600 10px 'JetBrains Mono',monospace;color:#ffffff;background:#2563eb;border-radius:9px;padding:2px 6px;font-variant-numeric:tabular-nums">61</span></span></div>
+      </div>
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;gap:14px;padding:56px 16px 128px">
+        <div style="font-size:15px;line-height:1.75;text-wrap:pretty">按你关心的六项摊开对比:</div>
+        <!-- 回落:JSON 写坏 / 超限 / 未知 kind → 普通代码块(2c 画法),语言标签就是围栏名。没有错误提示。 -->
+        <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;flex:none">
+          <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:1">xray-card</span><div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;min-height:32px;padding:0 4px;cursor:pointer" style-active="color:#2563eb"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div></div>
+          <div style="overflow-x:auto;overflow-y:hidden"><pre style="margin:0;padding:12px 14px;font:400 12px/1.7 'JetBrains Mono',monospace;white-space:pre">{
+  "kind": "compare",
+  "title": "pi SDK / Claude Agent SDK",
+  "rows": [
+    { "dim": "内核事件", "a": "34 种,全量可订阅" },
+    { "dim": "嵌入形态", "a": "in-process,无 sidecar", }
+  ]</pre></div>
+        </div>
+        <div style="font-size:15px;line-height:1.75;text-wrap:pretty">要看得见内核就选 pi,要开箱的审批流就选另一边。</div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:49px;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 16px 10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <div style="flex:1;min-width:0;min-height:40px;border-radius:20px;background:rgba(120,120,128,0.12);display:flex;align-items:center;padding:0 16px;font-size:15px;color:#9ca3af">和 agent 说点什么…</div>
+        <div style="width:40px;height:40px;flex:none;border-radius:20px;background:#2563eb;color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+            <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+  </div>
+  </div>
+
+  <!-- ③屏 交互态三连 -->
+  <div style="width:390px;flex:none">
+  <div data-screen-label="4z-3 交互态三连" style="width:390px;height:845px;box-sizing:border-box;background:#ffffff;outline:1px solid #e0e0e0;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a1a">
+    <div style="height:59px;flex:none;box-sizing:border-box;background:#f5f5f5;border-bottom:1px dashed #d4d4d4;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 7px"><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">9:41</span><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">状态栏 59 · 不可控</span><span style="font:600 11px 'JetBrains Mono',monospace;color:#9ca3af">▂▄ ⌁</span></div>
+    <div style="height:44px;flex:none;box-sizing:border-box;background:repeating-linear-gradient(45deg,#f5f5f5 0 6px,#eeeeee 6px 12px);border-bottom:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.06em">微信导航栏 · 不可控 · 44</span></div>
+    <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+      <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:4;display:flex;align-items:center;gap:4px;padding:0 6px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 12px rgba(0,0,0,0.06)">
+        <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:#2563eb;cursor:pointer" style-active="transform:scale(0.97)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">选型:pi SDK 还是 Claude Agent SDK</span></div>
+        <div style="min-height:44px;flex:none;display:flex;align-items:center;padding:0 4px;cursor:pointer" style-active="transform:scale(0.97)"><span style="display:flex;align-items:center;gap:6px;height:30px;border-radius:15px;background:rgba(120,120,128,0.12);padding:0 8px 0 12px;font-size:13px;font-weight:600;color:#2563eb">运行时<span style="font:600 10px 'JetBrains Mono',monospace;color:#ffffff;background:#2563eb;border-radius:9px;padding:2px 6px;font-variant-numeric:tabular-nums">61</span></span></div>
+      </div>
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;gap:14px;padding:56px 16px 128px">
+        <!-- ① tabs 切到第二个 tab:只换主体,标题行 / SegmentedControl 位置不动 -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="padding:9px 12px 8px"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK · 运行环境约束</span></div>
+          <div style="margin:0 12px 8px;display:flex;background:rgba(120,120,128,0.12);border-radius:9px;padding:2px;gap:2px">
+            <sc-for list="{{cSegBun}}" as="s" hint-placeholder-count="3">
+              <div style="flex:1;min-width:0;text-align:center;font-size:13px;font-weight:{{s.fw}};color:{{s.color}};background:{{s.bg}};border-radius:7px;padding:8px 0;box-shadow:{{s.shadow}};cursor:pointer">{{s.label}}</div>
+            </sc-for>
+          </div>
+          <div style="padding:0 12px 12px;display:flex;flex-direction:column">
+            <sc-for list="{{cEnv2}}" as="r" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;padding:5px 0;border-top:{{r.sep}}">
+                <div style="font-size:13px;line-height:1.6;color:#6b7280">{{r.k}}</div>
+                <div style="font-size:13px;line-height:1.6;color:#1a1a1a;text-wrap:pretty">{{r.v}}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <!-- ② table 第二列升序:箭头转 ˄,当前列仍是品牌色,列宽与横滚盒一字不动 -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="padding:9px 12px 8px"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK · 内置工具的入参约束</span></div>
+          <div style="overflow-x:auto;overflow-y:hidden;border-top:1px solid #e0e0e0">
+            <div style="width:480px">
+              <div style="display:grid;grid-template-columns:180px 110px 70px 120px;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+                <div style="font-size:13px;font-weight:600;padding:8px 12px;white-space:nowrap">工具</div>
+                <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;color:#2563eb;white-space:nowrap">入参上限<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg></div>
+                <div style="font-size:13px;font-weight:600;padding:8px 12px;white-space:nowrap">入参数</div>
+                <div style="font-size:13px;font-weight:600;padding:8px 12px;white-space:nowrap">分组</div>
+              </div>
+              <sc-for list="{{cTblAsc}}" as="r" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:180px 110px 70px 120px;border-top:{{r.sep}}">
+                  <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;white-space:nowrap">{{r.tool}}</div>
+                  <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;white-space:nowrap;font-variant-numeric:tabular-nums">{{r.cap}}</div>
+                  <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;white-space:nowrap;font-variant-numeric:tabular-nums">{{r.args}}</div>
+                  <div style="font-size:13px;padding:8px 12px;color:#1a1a1a;white-space:nowrap">{{r.group}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <!-- ③ collapsed 卡点开:箭头转 ˅,与 4y ①屏那张收起态成对 -->
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;flex:none">
+          <div style="display:flex;align-items:center;gap:8px;padding:0 12px;min-height:44px;box-sizing:border-box;cursor:pointer" style-active="background:rgba(0,0,0,0.02)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">CLAUDE AGENT SDK · 接入参数(6 项)</span>
+          </div>
+          <div style="padding:0 12px 12px;display:flex;flex-direction:column">
+            <sc-for list="{{cSdk}}" as="r" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;padding:5px 0;border-top:{{r.sep}}">
+                <div style="font-size:13px;line-height:1.6;color:#6b7280">{{r.k}}</div>
+                <div style="font-size:13px;line-height:1.6;color:#1a1a1a;text-wrap:pretty">{{r.v}}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:49px;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 16px 10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <div style="flex:1;min-width:0;min-height:40px;border-radius:20px;background:rgba(120,120,128,0.12);display:flex;align-items:center;padding:0 16px;font-size:15px;color:#9ca3af">和 agent 说点什么…</div>
+        <div style="width:40px;height:40px;flex:none;border-radius:20px;background:#2563eb;color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="background:#1d4ed8;transform:scale(0.97)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:49px;z-index:5;display:flex;background:rgba(255,255,255,0.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 -1px 12px rgba(0,0,0,0.06)">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer" style-active="transform:scale(0.97)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.color}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.d}}"></path></svg>
+            <span style="font-size:10px;font-weight:{{t.fw}};color:{{t.color}}">{{t.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="height:34px;flex:none;box-sizing:border-box;background:#f5f5f5;border-top:1px dashed #d4d4d4;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font:600 9px 'JetBrains Mono',monospace;color:#9ca3af">Home Indicator 34</span><span style="width:100px;height:5px;border-radius:2.5px;background:rgba(120,120,128,0.4)"></span></div>
+  </div>
+  </div>
+
+</div>
+<div style="width:1218px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">4z · 裁定</div>
+  <div style="font:400 10px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">流式骨架的显示条件</span>(①屏,对位 <a href="#4b" style="font:400 10px 'JetBrains Mono',monospace">4b</a> 的进行中态):正文流到 ```xray-card 这一行、<span style="color:#1a1a1a">围栏还没闭合</span>的那段时间显示;闭合的瞬间整块换成卡,或换成回落代码块。骨架<span style="color:#1a1a1a">不预测行数</span> —— 固定一条标题条(r6)+ 三条正文条(r4),因为 kind 与行数都还没读到。骨架色叠在 rgba(0,0,0,.03) 灰面上<span style="color:#1a1a1a">降一档到 #e0e0e0</span>(2i / 4 系同一条规则),<span style="color:#1a1a1a">omPulseBg 只挂标题条一处锚点</span>。功能条中间转「生成中」、发送按钮换 omSpin 灰底禁用态,与 4b 一致 —— 这三处是同一时刻的三个视图。</div>
+    <div>· <span style="color:#1a1a1a">回落规则</span>(②屏):JSON 解析失败 / 超限(行、列、字数、tabs 数)/ 未知 kind,<span style="color:#1a1a1a">一律渲染成普通代码块</span>,语言标签就是围栏名 xray-card,正文是原始文本。<span style="color:#1a1a1a">没有错误提示</span> —— 不画红条、不写「渲染失败」、不给重试。对访客而言这就是一段正常的 markdown 代码块;原文还在,足够我排查。代码块继承 2c 的既有画法(r7 + #f5f5f5 头部条 + mono 11/650 语言标签 + mono 12/1.7 正文)与它本来就有的 copy(<span style="color:#1a1a1a">这不是「复制卡片」,是代码块的既有能力</span>,移动端把命中区补到 32 + hover 改 active)。<span style="color:#1a1a1a">移动端唯一增量</span>:正文 overflow-x:auto + white-space:pre,与 4d / 4f 的 payload 盒同理 —— JSON 折行就读不出结构。</div>
+    <div>· <span style="color:#1a1a1a">交互态三连</span>(③屏,一屏三张):① tabs 切到第二页 = SegmentedControl 白色滑块移到 Bun 1.2,<span style="color:#1a1a1a">只换主体</span>,标题行与控件位置不动;② 表头升序 = 10px 箭头由 ˅ 转 ˄,当前排序列仍整格品牌色,<span style="color:#1a1a1a">列宽 480 与横滚位置一字不动</span>(排序只换行序);③ collapsed 卡点开 = 箭头 › → ˅,主体在标题行下方展开,标题行自身的字号 / 颜色 / 44 命中不变 —— 与 <a href="#4y" style="font:400 10px 'JetBrains Mono',monospace">4y</a> ①屏那张收起态成对。<span style="color:#1a1a1a">三种都不做动画</span>:现有三个动效(omPulseBg / omWaveSweep / omSpin)语义都是「还在跑」,拿来做切换会撒谎。</div>
+    <div>· <span style="color:#1a1a1a">collapsed 是卡片级状态,与 kind 无关</span> —— 六种主体都能带 collapsed,收起态一律是「标题行 + › 箭头」这一行,所以不再逐种画一遍。</div>
+    <div>· <span style="color:#1a1a1a">卡片留在最终回答里</span>:①屏的骨架长在最终回答的正文里,不在折叠段里;这一轮跑完后折叠行收起、卡片留在原位(见 4y)。②③ 两屏都是一轮已完成态。</div>
+    <div>· <span style="color:#1a1a1a">320 / 430</span>:吸收差值 = 骨架条宽(标题条 196 是定值,三条正文条按 100% / 100% / 58%)、代码块横滚窗口、三张卡整宽;不变 = 骨架条高 12 / 11 与 r6 / r4、代码块 r7 与头部条、480 内容宽、卡内边距 12、卡间距 14。<span style="color:#1a1a1a">横滚</span>:①屏无;②屏代码块正文;③屏 table 盒。页面与卡片本身永不横滚。<span style="color:#1a1a1a">玻璃降级</span>:同 4a。</div>
+  </div>
+</div>
+</div>
+
 </section>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{
@@ -1152,8 +1561,65 @@ class Component extends DCLogic {
       { name: 'dsh-acp-interactive', lang: 'TypeScript', dot: '#3178c6', stars: 1, desc: '面向 Zed 等编辑器的 DeepSeek Harness 交互式 ACP 插件', pushed: '2026-08-27', sep: 'block' },
     ];
 
+    // ── 4y / 4z:正文里的信息卡片(内核 token 照搬桌面 2s / 2t,只做触控与换行适配)
+    const cSep = arr => arr.map((r, i) => ({ ...r, sep: i === 0 ? 'none' : '1px solid #e0e0e0' }));
+    // stat 改两列网格:第 2 格加左分隔,第 3 格加上分隔(桌面是三格一排 + 两条竖线)
+    const cStat = [
+      { n: '4.2k', u: '行', l: '内核代码量', note: 'agent-loop、事件总线、扩展系统三部分' },
+      { n: '34', u: '种', l: '内核事件', note: '观测者扩展可一次性全量订阅' },
+      { n: '0', u: '个', l: '额外常驻进程', note: 'in-process 嵌入,无 sidecar' },
+    ].map((c, i) => ({ ...c, bl: i % 2 === 1 ? '1px solid #e0e0e0' : 'none', bt: i >= 2 ? '1px solid #e0e0e0' : 'none' }));
+    const cTblRows = [
+      { tool: 'web_search', cap: '300 字符', args: '1', group: '外呼' },
+      { tool: 'notes_get_chapter', cap: '128 字符', args: '2', group: '纯函数' },
+      { tool: 'notes_search', cap: '120 字符', args: '2', group: '纯函数' },
+      { tool: 'notes_list_series', cap: '64 字符', args: '2', group: '纯函数' },
+      { tool: 'session_rename', cap: '60 字符', args: '1', group: '会话绑定' },
+    ];
+    const cTblDesc = cSep(cTblRows);
+    const cTblAsc = cSep(cTblRows.slice().reverse());
+    const cList = [
+      { text: '在服务启动时创建一个 Agent 实例,与 Encore 的 service 生命周期同寿。', note: '不要每次请求新建 —— 会话状态会跟着请求一起消失。' },
+      { text: '给每个工具写一份 JSON Schema,additionalProperties 一律 false。', note: '' },
+      { text: '挂一个观测者扩展,一次订阅全部 34 种内核事件。', note: '这一步决定之后能不能画出 Timeline;漏挂要重跑整轮才能补齐。' },
+      { text: '把对话流与事件轨迹分成两条 SSE 通道推给前端。', note: '' },
+      { text: '加一道 permission-gate 扩展,在 tool_call 落地前拦危险入参。', note: '' },
+    ].map((i, idx) => ({ ...i, num: (idx + 1) + '.', hasNote: !!i.note }));
+    // compare 堆叠态:390 下 A / B 列各只有 112 < 160,触发上下堆叠(维度一行 + A / B 各一行)
+    const cCmp = cSep([
+      { dim: '内核事件', a: '34 种,全量可订阅', b: '未公开,按回调暴露' },
+      { dim: '嵌入形态', a: 'in-process,无 sidecar', b: 'in-process,会话对象需常驻管理' },
+      { dim: '会话分叉', a: '任意一圈可 fork', b: '无对应接口' },
+      { dim: '扩展点', a: '事件订阅 + 中间件两类', b: '钩子式回调,6 个' },
+      { dim: '权限模型', a: '由扩展自行 fail-closed', b: '内置审批流' },
+      { dim: '源码', a: '4.2k 行,可整读', b: '发行包,不含源码' },
+    ]);
+    const cEnv = cSep([
+      { k: '最低版本', v: '20.11 LTS' },
+      { k: '原生依赖', v: '无' },
+      { k: '常驻进程', v: '0 个(与后端同进程)' },
+      { k: '会话存储', v: '由宿主提供,SDK 不落盘' },
+    ]);
+    const cEnv2 = cSep([
+      { k: '最低版本', v: '1.2.4' },
+      { k: '原生依赖', v: '无' },
+      { k: '已知差异', v: 'SSE 背压行为与 Node 不同' },
+    ]);
+    const cSdk = cSep([
+      { k: '最低运行时', v: 'Node 20 LTS' },
+      { k: '凭据', v: '环境变量,单一 API key' },
+      { k: '会话对象', v: '由 SDK 创建并持有' },
+      { k: '回调', v: '6 个,不含内核事件' },
+    ]);
+    // tabs → SegmentedControl(照 4e:容器 r9 + 内 r7,选中白底 + 投影 + 600)
+    const cSeg = active => ['Node 20', 'Bun 1.2', '容器'].map(label => label === active
+      ? { label, fw: 600, color: '#1a1a1a', bg: '#ffffff', shadow: '0 1px 3px rgba(0,0,0,0.08)' }
+      : { label, fw: 400, color: '#6b7280', bg: 'transparent', shadow: 'none' });
+
     return {
       siteName: this.props.siteName ?? 'Agent X-Ray',
+      cStat, cTblDesc, cTblAsc, cList, cCmp, cEnv, cEnv2, cSdk,
+      cSegNode: cSeg('Node 20'), cSegBun: cSeg('Bun 1.2'),
       t1rows, t2rows: [ctxSel, ...t2rest], t2rest, ctxSel, w2before, w2after,
       segTimeline: seg('Timeline'), segChain: seg('Chain'), segLife: seg('Lifecycle'), segTools: seg('Tools'),
       tabs: mkTabs('Runtime'), tabsNotes: mkTabs('Notes'), tabsSkills: mkTabs('Skills'), tabsAbout: mkTabs('About'),

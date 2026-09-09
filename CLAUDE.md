@@ -11,7 +11,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 **Agent X-Ray**:「Agent 运行时」网站——访客与 AI agent 对话的同时,右侧面板像 DevTools 一样实时展示 agent loop 内核轨迹(34 种扩展事件)。五个 Tab:Runtime 工作台 / Notes 研习库 / **Skills 技能库(R-SKILLS,2026-09-03 裁定并落地)** / **Source 源码(R-SOURCE,2026-09-08 裁定,分支 `round-source`)** / About;站点内容与配置由所有者经**无状态 MCP 管理服务**维护(`/api/mcp`,R6 已落地;原 `/admin` 后台与画板 3a–3e 于 2026-08-31 裁定废弃)。**站点已于 2026-09-02 投产**(https://www.kzgai.cloud/,R11),此后进入运维迭代:**较大迭代依旧延续轮次机制**(命名轮,所有者裁定 2026-09-03),小修补可直接 `main`;**每次生产发版必须记入 [`docs/releases.md`](docs/releases.md)**。
 
-- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2r(共 25 块)+ **移动端**画板 4a–4x(共 24 块,2026-09-07 新增 4a–4u,R-MOBILE)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,2n–2p 于 2026-09-08 新增(R-SOURCE,放新文件 `Agent X-Ray Source.dc.html`),2q–2r 与 4v–4x 于 2026-09-08 新增(R-CROSSLINK,桌面两块放新文件 `Agent X-Ray Crosslink.dc.html`),3a–3e 已废弃并于 2026-09-02 从画布删除)。移动端只重排既有功能、不新增,**两套画板的功能范围是同一个**。管理面范围以 ROUNDS.md R6 裁定清单为准。
+- **功能范围的唯一边界是设计稿**:[`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2t(共 27 块)+ **移动端**画板 4a–4z(共 26 块,2026-09-07 新增 4a–4u,R-MOBILE)+ 可交互原型(规则 8;1f–1g 于 2026-09-02 新增,2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,2n–2p 于 2026-09-08 新增(R-SOURCE,放新文件 `Agent X-Ray Source.dc.html`),2q–2r 与 4v–4x 于 2026-09-08 新增(R-CROSSLINK,桌面两块放新文件 `Agent X-Ray Crosslink.dc.html`),2s–2t 与 4y–4z 于 2026-09-09 新增(R-CARDS,桌面两块放新文件 `Agent X-Ray Cards.dc.html`),3a–3e 已废弃并于 2026-09-02 从画布删除)。移动端只重排既有功能、不新增,**两套画板的功能范围是同一个**。管理面范围以 ROUNDS.md R6 裁定清单为准。
 - 架构与既定决策:[`docs/architecture.md`](docs/architecture.md)(pi SDK in-process、Encore 类型化 RPC、SSE ×2、Postgres、单机 compose)。
 - 安全强约束:[`docs/security.md`](docs/security.md)——威胁模型、四层沙箱、脱敏、凭据管理;**是约束不是建议**(规则 9)。
 
@@ -88,7 +88,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 5. **`secret()` 只能在 service 目录内声明**(Encore 限制);共享库里不出现 `secret()`,需要密钥的共享代码收「已取好的值」作参数。
 6. **`apps/api` 是 Encore app root,不做 npm workspaces 提升**(规避 encore#1723:app root 下无关 node_modules/.ts 干扰 parser)。web 与 api 不手工共享源码文件;类型经 `encore gen client` 产物(`apps/web/lib/api-client.ts`)流向前端,该文件是生成物,不许手改。
 7. **非必要不得修改前端页面样式,不做视觉 review**。画板已是终稿且前端已实现:接后端只许换数据源(demo-data → API/SSE),不许动样式、布局、className、design token、动画参数。确因接线需要改结构时,任务卡写明理由与影响范围,且不得偏离 `design/` 对应画板。(2026-08-31 修订:3a–3e 废弃,对应 `/admin` 六页按所有者裁定于 R6 整目录删除——属本条允许的结构性改动;同轮的 `next.config.ts` 配图 rewrite 亦然,理由=图片改从 Postgres 供,对外 URL 不变。)
-8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02、2026-09-03、2026-09-07 多次修订)。站点访客功能范围 = `design/` 桌面画板 1a–1g + 2a–2r 与移动端画板 4a–4x + 可交互原型(**两套画板同一个功能范围**,移动端只换呈现);**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
+8. **严禁实现设计稿没有的功能**(所有者裁定 2026-08-28;2026-08-31、2026-09-02、2026-09-03、2026-09-07 多次修订)。站点访客功能范围 = `design/` 桌面画板 1a–1g + 2a–2t 与移动端画板 4a–4z + 可交互原型(**两套画板同一个功能范围**,移动端只换呈现);**3a–3e(/admin)已废弃**,管理功能由无状态 MCP 管理服务承担,其范围以 ROUNDS.md R6 裁定清单为准;`docs/` 的安全与部署要求是约束不是功能。新功能想法进 `rounds/BACKLOG.md` 等所有者裁定,不进任何轮次任务卡。
     - **2026-09-02 修订(R-TOOLS)**:所有者裁定新增 **Tools 工具面板**,设计稿随之扩到 12 块(新增 `1f` 列表态 / `1g` 展开态,同日删除废弃的 `3a–3e`)。**扩边界的正确顺序是「先改设计稿、再进轮次」**——本条不是被绕过,是先被改了。面板是访客可见的**只读**能力说明(工具名 / 中文标签 / 描述 / 入参 JSON Schema / 输出形态 / 工具分组),**不显示**启停开关、日限额与剩余次数、provider 与 model 名(那些是服务端配置,公开即泄配置面)。
     - **2026-09-03 修订(R-TABS)**:所有者裁定新增**顶部 tab 的呈现开关**(经 MCP 逐个开关三个 tab 露不露)。
       这**是**本条的例外(与 R-VISITOR 的会话删除入口同类,不同于 R-TOOLS 的「先改设计稿」):画板 1a 的导航条
@@ -168,7 +168,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       移动 `4v` / `4w` 追加进 `- Runtime`、`4x` 追加进 `- Notes Skills About`,`1b` / `4f` 只加注释;并入 `design/` 之后才开 `round-crosslink`。
       **零后端机制**(api 侧只有 `runtime.ts` 一句追问条款);`docs/security.md` §0 第 10 条(经链接预填的诱导)按规则 9 先于代码写入。
       提示词 `rounds/round-crosslink/design-prompt.md`,拆解 `rounds/round-crosslink/round-crosslink.md`。
-    - **2026-09-08 修订(R-CARDS,文档就绪、设计稿待交付)**:所有者裁定让 agent 在回复里嵌**信息卡片**(所有者原话「UI 组件工具」),形态取 **2-A 内容级**:
+    - **2026-09-08 修订(R-CARDS;设计稿 2026-09-09 并入 `design/`,分支 `round-cards` 开工)**:所有者裁定让 agent 在回复里嵌**信息卡片**(所有者原话「UI 组件工具」),形态取 **2-A 内容级**:
       模型在正文里写 ` ```xray-card ` + JSON,`Markdown.tsx` 识别 `language-xray-card` 画卡;**不是 pi 工具**(工具级要给 `tool_end` 帧与 `payload` 加结构字段、
       还得给 `2l` 折叠规则加例外)。六种 `kind` 闭集(kv / table / list / stat / compare / tabs);交互**只允许声明式**(tabs / 折叠 / 排序 / 单选),
       动作按钮唯一动作 = R-CROSSLINK 的预填;所有值纯文本、上限闭合、任一不符整卡回落成代码块;流式期间围栏未闭合先画骨架;**只在会话区开**(Notes 不开);
@@ -176,13 +176,14 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       `Agent X-Ray Cards.dc.html`,移动 `4y` / `4z` 追加进 `- Runtime`;并入 `design/` 之后才开 `round-cards`。`docs/security.md` §0 第 11 条(模型输出渲染成 UI 组件)
       按规则 9 先于代码写入。提示词 `rounds/round-cards/design-prompt.md`,拆解 `rounds/round-cards/round-cards.md`。
     - **画板编号只增不改**,与本节硬性规则同一约定:`3x` 号段作废后不复用;**桌面**新画板从 `2u` 顺延
-      (`1a–1g`、`2a–2p` 已用;`2n–2p` 在单独的 `Agent X-Ray Source.dc.html` 里;**`2q–2r` 已于 2026-09-08 并入(R-CROSSLINK,新文件 `Agent X-Ray Crosslink.dc.html`)、`2s–2t` 预留给 R-CARDS**,各放新文件,
-      两轮若调换顺序编号也不调换),**移动端**占 `4x` 段(`4a`–`4u` 与 `4v`–`4x` 已用;**`4v–4x` 已于 2026-09-08 并入(R-CROSSLINK)、`4y–4z` 预留给 R-CARDS**;`4z` 之后的号段由所有者定,
+      (`1a–1g`、`2a–2t` 已用;`2n–2p` 在单独的 `Agent X-Ray Source.dc.html` 里;**`2q–2r` 已于 2026-09-08 并入(R-CROSSLINK,新文件 `Agent X-Ray Crosslink.dc.html`)、`2s–2t` 已于 2026-09-09 并入(R-CARDS,新文件 `Agent X-Ray Cards.dc.html`)**,各放新文件,
+      两轮若调换顺序编号也不调换),**移动端**占 `4x` 段(`4a`–`4z` **已全部用完**;**`4v–4x` 已于 2026-09-08 并入(R-CROSSLINK)、`4y–4z` 已于 2026-09-09 并入(R-CARDS)**;`4z` 之后的号段由所有者定,
       建议移动端继续占 `5x` 段从 `5a` 起)。
     - **`design/` 的单文件有 256 KiB 硬上限**(DesignSync `get_file`,2026-09-07 实测撞线):
       超了**静默截断、不报错** —— 表现是文件正好 262,144 字节、`</x-dc>` 与 `</html>` 都没有、`<div>` 开合不配平。
       移动端 21 块画板首次拉稿就是这么废掉的,所以才拆成两份文件。**桌面 `Agent Runtime Workbench.dc.html`
-      现为 250,586 字节(R-SOURCE 导航改五格后),离上限只剩 11 KB —— 下次给桌面加画板前必须先拆文件**(`2n–2p` 已经放新文件)。
+      现为 252,962 字节(R-CROSSLINK 给 1b 加注释后),离上限只剩 9 KB —— 下次给桌面加画板前必须先拆文件**(`2n–2p` / `2q–2r` / `2s–2t` 已经各放新文件);
+      **移动 `Agent X-Ray Mobile - Runtime.dc.html` 在 R-CARDS 追加 `4y` / `4z` 后为 234,371 字节,只剩 27 KB —— 下次给移动 Runtime 加画板同样要先拆文件**。
       拉稿后一律先验:字节数 / 闭合标签 / div 开合 / 画板数,四项齐了才算拿到稿。
 9. **`docs/security.md` 是强约束**,改动先改文档并说明理由。红线速记:`noTools:'all'` 起步、**bash/write/任意代码执行类工具永久禁止进 in-process 进程**(执行类能力只能在独立沙箱容器里:容器可常驻,每次运行必须是一次性的进程与工作目录 —— 所有者裁定 2026-09-03,R-SKILLS-2);SSE 推送前白名单 sanitize,provider 凭据字段永不出服务端;LLM key 加密入库只回掩码;`.env`/密钥不入 Git、明文凭据不进日志。
     - **工具分四组**(R-WEBSEARCH 2026-09-01 定前两组、R-TITLE 同日补第三组、R-SKILLS-2 2026-09-03 裁定并落地第四组「沙箱执行组」;原文是「业务工具必须纯函数」,与第 4 层的「外呼型工具」自相矛盾):**纯函数组**(`notes_*`)不碰文件系统 / 子进程 / `process.env` / 动态 import / **网络**;**外呼组**(`web_search` / `generate_image`,后者 R-IMAGEGEN 2026-09-02 加入)可持服务端凭据发网络请求,但要过六条附加约束 —— 访客控不到网络原语(只能填一个 query / prompt,控不到 URL/host/headers/model)、**目标域白名单在代码里**(`shared/websearch-hosts.ts` / `shared/imagegen-hosts.ts`,同一份判据实现 `shared/outbound-hosts.ts`;env 只能追加不能替换)、双计时器(空闲 + 总时长,库级 CHECK 有上界)、计入日限额、结果有界且异常不外泄、返回内容视为不可信输入(生图那一侧是「不是图片就不存」)。文件系统 / 子进程 / 动态 import 对两组一样禁止。**会话绑定组**(`session_rename`;`generate_image` 同时也是会话绑定的)是「纯函数 / 数据面只读」的**唯一例外**:无网络、无凭据,只经专用 NOLOGIN 角色写**本会话那一行**的限定列(`agent_title` 只改 `sessions.title` 两列;`agent_image` 只 INSERT `generated_images`),会话 id 在建会话时闭包绑死、不是入参。**沙箱执行组**(`skill_run`,R-SKILLS-2 已落地)是第四档:api 进程内同样不碰文件系统 / 子进程,只经 **unix socket** 调独立的 `skill-runner` 容器(默认实例 `network_mode: none`、只读、rlimit;R-WEBFETCH 2026-09-03 裁定加**同一镜像的 egress 实例**,只出公网、不在 `front` / `back`,只跑 `xray.json` 声明 `network: egress` 的 skill,首个是 `web-fetch` —— 它是「api 进程内工具不接受访客 URL」这条口径(`docs/security.md` 第 4 层)的唯一例外,且例外只开在沙箱执行组的 egress 档、不在外呼组,SSRF 防线 = 脚本逐地址校验 + 钉 IP 连、容器不在内部网络、宿主 `DOCKER-USER` 过滤;**不维护域名黑白名单**,拒的是固定内网地址段);入参只有 `skill` / `script`(闭集)与 `input`(JSON,过 schema),**可执行的 skill 集合在代码里**(`runner/skills/`,改 = 发版),库里只能在集合之内开关;八条附加约束见 `docs/security.md` §1 R-SKILLS-2 补记,egress 档的第九条见 R-WEBFETCH 补记。完整口径见 `docs/security.md` §1「工具分两组」表(标题是历史名、代码注释仍按它引用,表本身已扩到四组)与 R-TITLE / R-IMAGEGEN / R-SKILLS-2 补记。
