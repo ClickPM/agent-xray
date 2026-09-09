@@ -41,17 +41,19 @@
     `kind` 六种闭集、行 / 列 / 字数 / 嵌套深度全部有上界,任一不符整卡回落成普通代码块;链接口径与 markdown 相同(只收 `http(s)` 与站内相对路径、带 `rel`),
     v1 不收图片;交互只有 tabs / 折叠 / 排序 / 单选四种本地状态,动作按钮的唯一动作是第 10 条的预填;**没有** `dangerouslySetInnerHTML`、没有表达式求值、
     没有外部资源。它不是 pi 工具,服务端不碰围栏(`content` 原样落库),Notes / Skills / Source 的渲染器不开这个开关。
-    **R-CARDS-2 补(2026-09-09 所有者裁定,未落地;任务卡 `rounds/round-cards2/round-cards2.md`)**:`kind` 闭集扩到八种(加 `choice` / `form`),闭集 / 纯文本 / 上界 / 回落四条口径不变;
+    **R-CARDS-2 补(2026-09-09 所有者裁定,同日落地;任务卡 `rounds/round-cards2/round-cards2.md`)**:`kind` 闭集扩到八种(加 `choice` / `form`),闭集 / 纯文本 / 上界 / 回落四条口径不变;
     两种新 kind 的出口**不是**第 10 条的预填而是**发送**,边界见第 12 条;本条「没有 `dangerouslySetInnerHTML`、不渲染模型 HTML」从此有**唯一**例外 = 第 13 条的 `xray-html` 帧,
     例外只开在那一个围栏、那一个组件,`Markdown` 其余路径不变;每轮最多两个组件由前端硬限(最终回答段的前两个围栏),处理过程段里的围栏一律回落
-12. **模型预制的访客消息(卡片点击即发)**(R-CARDS-2 补,2026-09-09 所有者裁定;**未落地**,边界将在 `apps/web/lib/xray-card.ts` 的 `composeChoiceMessage` / `composeFormMessage`,`bun test lib` 钉住「只由可见文本组成」与长度)——
+12. **模型预制的访客消息(卡片点击即发)**(R-CARDS-2 补,2026-09-09 所有者裁定;**同日落地**,边界在 `apps/web/lib/xray-card.ts` 的 `composeChoiceMessage` / `composeFormMessage`(组成规则)与 `parseBody`(解析期最坏长度),
+    发送通路 = `components/ComposerContext.tsx` → `Workbench.tsx` 的 `sendFromCard` → `sendText`(与输入框同一个函数体);`bun test lib` 钉住「只由可见文本组成」与长度)——
     `choice` 单选卡点选项、多选卡与 `form` 卡点 submit,组成的一句话**作为访客消息直接发出**,不经输入框。这是第 10 条「兜底在不自动发送」的**唯一例外**:访客失去发前审阅这一步,
     模型写在卡上的字可以变成访客说的话(prompt injection 的又一个出口,威胁 1 的同族)。**兜底换成三件事**:① **发出的文本 = 卡上可见的文本**——题干 `prompt`、所选 `label`、字段 `label`、访客自己填的值,
     组成规则固定(ASCII `: ` / `; `、「、」),**没有**任何模型写、访客看不见的模板串(R-CARDS 的 `action.ask` 在这两种 kind 上被忽略),发出的气泡与访客刚看到、刚点的字一一对应;
     ② **只由访客对卡片的一次点击触发**(React `onClick`,键盘同一 handler),渲染 / 滚动 / hover / 聚焦都不发,一轮生成中禁用,发过即锁(本地状态,刷新解锁、再点 = 再发一条普通消息,已认);
     第 13 条的帧里任何东西都触发不了它;③ **走既有 composer 发送路径**:同一个 `send`、同一套会话 / 配额 / `MAX_PROMPT_CHARS`,服务端看到的是一条普通访客消息,api 零改动、不加任何来源标记;
     组成长度在解析期按 UTF-16 算最坏值 ≤ 1000(超则整卡回落),发送前仍过第 10 条那把清洗(去控制字符)。残余风险 = 模型通过给什么选项来引导对话走向,那正是功能本身;所有者已认(2026-09-09)
-13. **模型输出渲染成自由 HTML**(R-CARDS-2 补,2026-09-09 所有者裁定;**未落地**,边界将在 `apps/web/lib/xray-html.ts`,`bun test lib` 钉住判定函数与上限)——会话区把回复里的 ` ```xray-html ` 围栏渲染进一个 `<iframe>`,
+13. **模型输出渲染成自由 HTML**(R-CARDS-2 补,2026-09-09 所有者裁定;**同日落地**,边界在 `apps/web/lib/xray-html.ts`(CSP 拼装 + `shouldDropElement` / `shouldDropAttribute` 两个判定函数 + `DOMParser` 薄壳)
+    与 `components/XrayHtml.tsx`(`sandbox=""` 帧元素),会话区渲染器 `components/ChatFence.tsx` 只把最终回答段前两个围栏交给它;`bun test lib` 钉住判定函数与上限)——会话区把回复里的 ` ```xray-html ` 围栏渲染进一个 `<iframe>`,
     模型第一次给出**未经闭集校验的 HTML + CSS** 并在访客浏览器里成为文档。这是第 11 条「不渲染模型 HTML」的**唯一例外**。**兜底是三层各管一件事,缺一不可**:
     ① **不执行、无同源**:`sandbox=""`(空串 = 全部限制:无脚本、opaque origin、无表单提交、无弹窗、无顶层导航、无下载),模型 HTML 里的任何脚本都不执行,帧拿不到 cookie / storage / 父页 DOM,
     **永不**给 `allow-scripts` / `allow-same-origin`;这一层**不靠清洗**。② **不出网**:帧文档头部由父页注入 `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">`——

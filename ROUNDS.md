@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;此后多次修订,逐条见下方「第 N 次修订」,最近一次是 2026-09-09 第十四次)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2t(共 27 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 与 2q–2r 于 2026-09-08 新增,见第十一、第十二次修订;2s–2t 于 2026-09-09 新增,见第十三次修订;`2u`–`2v` 与移动 `5a`–`5b` 已于 2026-09-09 裁定给 R-CARDS-2、设计稿待交付、并入后再改计数,见第十四次修订)+ **移动端**画板 4a–4z(共 26 块,2026-09-07 新增 4a–4u 见 R-MOBILE,2026-09-08 追加 4v–4x 见 R-CROSSLINK,2026-09-09 追加 4y–4z 见 R-CARDS)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;此后多次修订,逐条见下方「第 N 次修订」,最近一次是 2026-09-09 第十四次)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2v(共 29 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 与 2q–2r 于 2026-09-08 新增,见第十一、第十二次修订;2s–2t 于 2026-09-09 新增,见第十三次修订;2u–2v 于 2026-09-09 新增,见第十四次修订)+ **移动端**画板 4a–4z + 5a–5b(共 28 块,2026-09-07 新增 4a–4u 见 R-MOBILE,2026-09-08 追加 4v–4x 见 R-CROSSLINK,2026-09-09 追加 4y–4z 见 R-CARDS,2026-09-09 追加 5a–5b 见 R-CARDS-2)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 >
 > **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
 > 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
@@ -159,7 +159,8 @@
 > **不是**规则 8 的例外:桌面 `2u` / `2v` 放**新文件** `Agent X-Ray Cards 2.dc.html`,移动 `5a` / `5b` 放**新文件** `Agent X-Ray Mobile - Runtime 2.dc.html`(`Workbench` 只剩 9 KB、`Mobile - Runtime` 只剩 27 KB;
 > `5x` 号段待所有者确认),并入 `design/` **之后**才开代码。`docs/security.md` §0 第 11 条修订、第 12 条(卡片点击即发 = 模型预制的访客消息,第 10 条的唯一例外)与第 13 条(自由 HTML,第 11 条的唯一例外)
 > 按规则 9 先于代码写入。提示词 [`rounds/round-cards2/design-prompt.md`](rounds/round-cards2/design-prompt.md),拆解 [`rounds/round-cards2/round-cards2.md`](rounds/round-cards2/round-cards2.md);
-> **文档就绪、设计稿待交付**。
+> 设计稿 2026-09-09 并入 `design/`(四项判据全过:`Agent X-Ray Cards 2.dc.html` 75,355 B / 2 块,`Agent X-Ray Mobile - Runtime 2.dc.html` 125,528 B / 2 块,`support.js` md5 未变;两份都是新文件、无三方合并),
+> 同日在分支 `round-cards2` 实现,**开工中**。
 
 ## 进度表
 
@@ -198,7 +199,7 @@
 | **R-LEAK** | 公开轨迹流的配置面泄露修补:`model_select` 派生字段删掉(`data` 只剩 `{type, source}`)+ `web_search` `request` 阶段文案改固定字符串 + **结果 `details` 只留 `citations`(通道 C,探针抓到)** + 同族排查 + 冒烟第 8 条改值级 | ✅ **已发版**(生产 `e8ac83e`,2026-09-08;[任务卡](rounds/round-leak/round-leak.md);codex 一轮零 findings;`test` 608 + web 28 全绿;新增 6 条用例;无迁移、无 MCP 变动、前端零改动;发版当日值级冒烟六值 × 两条流 0 命中) | 2026-09-08 |
 | **R-CROSSLINK** | 跨栏 / 跨页联动:Ask why 预填(1-A)+ 卡片 ↔ Timeline 双向定位 + Notes 章节 → Runtime 入口,共用「预填、永不自动发送」一个原语;桌面 `2q` / `2r`(新文件)+ 移动 `4v`–`4x` + `1b` / `4f` 注释 | ✅ **已完成、待发版**(所有者裁定 2026-09-08,第二轮;分支 `round-crosslink`,codex 三轮 6 条 findings 全部采纳整改、末轮零 findings;[任务卡](rounds/round-crosslink/round-crosslink.md) · [画板提示词](rounds/round-crosslink/design-prompt.md);设计稿 `2q` / `2r`(新文件 `Agent X-Ray Crosslink.dc.html`)+ `4v` / `4w` / `4x` + `1b` / `4f` 注释于 2026-09-08 并入,四项判据全过;`docs/security.md` §0 第 10 条已写并翻成「已落地」;零后端机制,api 侧只有一句提示词;`dev.ps1 test` = api 609 + web 56 用例全绿,14 项验收本机逐项实测) | — |
 | **R-CARDS** | 会话区信息卡片:内容级 ` ```xray-card ` 围栏块(六种 kind 闭集、声明式交互、非法回落、流式骨架、只在会话区开);桌面 `2s` / `2t`(新文件)+ 移动 `4y` / `4z` | ✅ **已发版 `d342b18`**(2026-09-09;分支 `round-cards`;设计稿 `2s` / `2t`(新文件 `Agent X-Ray Cards.dc.html`)+ `4y` / `4z` 同日并入,四项判据全过;交付 `lib/xray-card.ts`(六种 kind 闭集 + 上限 + 链接口径 + 围栏闭合判据,web 用例 93 条里新增 37 条)· `components/XrayCard.tsx` · `Markdown.tsx` 三个默认关的 prop · 会话区两处接线 · `globals.css` 移动端差别(宽度驱动走容器查询、只在 768 断点内;触控语汇走同一断点)· `runtime.ts` 卡片段 · `cards-e2e.test.ts`;**codex 四轮共 10 条 findings(全部 P2、high 为零):9 条采纳、1 条不采纳记 BACKLOG,末轮零 findings**;`dev.ps1 test` api 35 文件 613 用例 + web 93 用例全绿,`tsc` 过;本机 faux provider 验收 15 项 14 过,#13 的真实 provider 留证已于发版当日在生产补齐(**验收 15 项全过**);生产冒烟 33 项 0 失败,发布记录 [`docs/releases.md`](docs/releases.md);[任务卡](rounds/round-cards/round-cards.md) · [画板提示词](rounds/round-cards/design-prompt.md);`docs/security.md` §0 第 11 条已写;不是 pi 工具、无迁移、MCP 仍 51) | — |
-| **R-CARDS-2** | 会话区 UI 组件 2.0:`xray-card` 新增 `choice` / `form` 两种**可回传** kind(单选点即发、多选与表单 submit 发,文本只由可见字组成)+ 新围栏 ` ```xray-html ` 静态 HTML 组件(`sandbox=""` iframe + 帧内 CSP + 窄清洗,宽 = 正文宽、高夹取、≤ 16 KB)+ 每轮最多两个组件前端硬限;桌面 `2u` / `2v`(新文件)+ 移动 `5a` / `5b`(新文件) | 📝 **文档就绪、设计稿待交付**(所有者裁定 2026-09-09,四档圈定 A + B、C / D 记 BACKLOG;[任务卡](rounds/round-cards2/round-cards2.md) · [画板提示词](rounds/round-cards2/design-prompt.md);`docs/security.md` §0 第 11 条修订、第 12 / 13 条已写;仍是内容级、不是 pi 工具;无迁移 / 无端点 / MCP 仍 51 / 无新依赖) | — |
+| **R-CARDS-2** | 会话区 UI 组件 2.0:`xray-card` 新增 `choice` / `form` 两种**可回传** kind(单选点即发、多选与表单 submit 发,文本只由可见字组成)+ 新围栏 ` ```xray-html ` 静态 HTML 组件(`sandbox=""` iframe + 帧内 CSP + 窄清洗,宽 = 正文宽、高夹取、≤ 16 KB)+ 每轮最多两个组件前端硬限;桌面 `2u` / `2v`(新文件)+ 移动 `5a` / `5b`(新文件) | 🔧 **实现完成、审查中**(设计稿 2026-09-09 并入、同日实现,分支 `round-cards2`;所有者裁定四档圈定 A + B、C / D 记 BACKLOG;[任务卡](rounds/round-cards2/round-cards2.md) · [画板提示词](rounds/round-cards2/design-prompt.md);`docs/security.md` §0 第 11 / 12 / 13 条翻「已落地」;仍是内容级、不是 pi 工具;无迁移 / 无端点 / MCP 仍 51 / 无新依赖;本机 faux 剧本 20 项验收全过,真实 provider 留证待发版) | — |
 
 ## 里程碑
 
@@ -878,10 +879,10 @@ MCP(仍 51)/ Notes 侧 / 图片图表 / 表达式求值 / 外部资源 / 状态�
   链接口径;不解析;Notes 不受影响;移动端;提示词 + 真实 provider 留证;既有零改动;文档同步。
 - **前置**:设计稿并入 `design/`;R-CROSSLINK 已落地(否则 `action` 不渲染)。**止损**:纯前端 + 一段提示词,回滚 = 换回上一个镜像 tag;`Markdown` 的 `cards` 不传时与改前一字不差。
 
-### R-CARDS-2 — 会话区 UI 组件 2.0:可回传卡片(A)+ 沙箱静态 HTML 组件(B)(命名轮;所有者裁定 2026-09-09;文档就绪、设计稿待交付)
+### R-CARDS-2 — 会话区 UI 组件 2.0:可回传卡片(A)+ 沙箱静态 HTML 组件(B)(命名轮;所有者裁定 2026-09-09;设计稿同日并入、同日开工)
 
 > 任务卡 [`rounds/round-cards2/round-cards2.md`](rounds/round-cards2/round-cards2.md),画板提示词 [`design-prompt.md`](rounds/round-cards2/design-prompt.md)。
-> 同一顺序、**不是**规则 8 的例外:桌面 `2u` / `2v` 放新文件 `Agent X-Ray Cards 2.dc.html`,移动 `5a` / `5b` 放新文件 `Agent X-Ray Mobile - Runtime 2.dc.html`(`5x` 号段待所有者确认);并入 `design/` 之后才开工。
+> 同一顺序、**不是**规则 8 的例外:桌面 `2u` / `2v` 放新文件 `Agent X-Ray Cards 2.dc.html`,移动 `5a` / `5b` 放新文件 `Agent X-Ray Mobile - Runtime 2.dc.html`(`5x` 号段随交付确认);2026-09-09 并入 `design/` 之后开工(分支 `round-cards2`)。
 
 **问题**:所有者提出「给 agent 增加一个 UI tools,由 agent 自主决定是否使用」,三条限制:两个位置二选一;标准模板可套用、可交互、**交互数据回传对话**;不用模板时只定宽高、由模型自主生成(类似 artifacts)。
 R-CARDS 的六种卡只有本地交互、回传只有预填,也没有自由内容的载体。

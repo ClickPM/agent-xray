@@ -2,6 +2,10 @@
 // 围栏(六种合法各一 + 一张写坏的 JSON + 一张超限)的回复,断言**落库的 content 与 provider 给的文本逐字相同** ——
 // 服务端不碰围栏:delta 逐片累积(turn-recorder)→ upsertMessage → listMessages,三段都不改写、不转义、不截断。
 // 卡画不画得出来是前端 `lib/xray-card.ts` 的事(`bun test lib` 钉),这里只证「原文原样到前端」。
+// R-CARDS-2 在同一段剧本上追加:choice 单选 / 多选与 form 各一张(共 11 个 xray-card 围栏)、三个 ```xray-html 围栏
+// (合法一个 / 16 KB + 1 字节一个 / 一个塞满 script、img、a、meta refresh、link、@import 的敌意片段)——
+// 服务端同样一字不动(HTML 的三层兜底全在前端 `lib/xray-html.ts` + `components/XrayHtml.tsx`,这里只证原文到得了前端),
+// 且系统提示里带着【UI 组件】段与 xray-html 的写法。
 //
 // 两个假东西、一个真东西(与 skills-e2e / leak-e2e 同一套路):
 //   - 假 LLM:本地 OpenAI chat/completions SSE 服务,把整段回复切成 37 字一片逐片吐(围栏被切在任意位置也要拼得回来);
@@ -21,6 +25,15 @@ import { createTurnRecorder } from "./turn-recorder";
 
 const FENCE = "```";
 const card = (o: unknown) => `${FENCE}xray-card\n${JSON.stringify(o, null, 2)}\n${FENCE}`;
+const html = (body: string, info = "") => `${FENCE}xray-html${info}\n${body}\n${FENCE}`;
+
+/** 16 KB + 1 字节的 HTML 正文(前端上限按围栏正文的 UTF-8 字节算,这一段刚好超一个字节) */
+const OVERSIZED_HTML = `<p>${"x".repeat(16 * 1024 + 1 - "<p></p>".length)}</p>`;
+/** 敌意片段:每一样都该被前端去掉或被 CSP / sandbox 拦下;服务端只负责原样保留 */
+const HOSTILE_HTML =
+  '<script>alert(1)</script><img src="https://evil.example/pixel.gif"><a href="https://evil.example/">out</a>' +
+  '<meta http-equiv="refresh" content="0;url=https://evil.example/"><link rel="stylesheet" href="https://evil.example/x.css">' +
+  "<style>@import url(https://evil.example/i.css); body{background:url(https://evil.example/b.png)}</style><details><summary>ok</summary>kept</details>";
 
 /** 六种合法 + 一张坏 JSON(尾逗号)+ 一张超限(21 行);正文夹在卡与卡之间,像模型真会写的样子 */
 const REPLY = [
@@ -40,6 +53,17 @@ const REPLY = [
   `${FENCE}xray-card\n{ "v": 1, "kind": "compare", "rows": [ { "k": "内核事件", "a": "34 种", }, ] }\n${FENCE}`,
   "这张超限(21 行):",
   card({ v: 1, kind: "kv", rows: Array.from({ length: 21 }, (_, i) => ({ k: `k${i}`, v: `v${i}` })) }),
+  // ── R-CARDS-2 追加:两种可回传卡 + 三个 HTML 围栏 ──
+  "你更想从哪条线入手?",
+  card({ v: 1, kind: "choice", title: "学习路径 · 选一条主线", prompt: "你更想从哪条线入手?", options: [{ label: "纯函数组", note: "三个只读工具" }, { label: "沙箱执行组" }, { label: "外呼组" }, { label: "会话绑定组" }] }),
+  card({ v: 1, kind: "choice", title: "源码阅读 · 可多选", prompt: "哪几组工具你想先看源码?", multiple: true, options: [{ label: "纯函数组" }, { label: "外呼组" }, { label: "沙箱执行组" }], submit: "提交" }),
+  card({ v: 1, kind: "form", title: "学习路径定制", prompt: "帮我定制学习路径", fields: [{ label: "经验", type: "text", placeholder: "例:3 年", required: true }, { label: "目标", type: "select", options: ["上线一个 agent 站", "读懂内核"], required: true }, { label: "每周时间", type: "text" }] }),
+  "一圈分四段,画给你看:",
+  html("<h3>一次 agent 回合的四段</h3><ol><li>context</li><li>provider</li><li>tools</li><li>answer</li></ol>", " height=280"),
+  "这一段超 16 KB:",
+  html(OVERSIZED_HTML),
+  "这一段是敌意片段:",
+  html(HOSTILE_HTML, " height=200"),
   "一句话:要看得见内核就选 pi。",
 ].join("\n\n");
 
@@ -147,8 +171,12 @@ describe("faux provider 吐八个 xray-card 围栏:落库 content 与 provider �
     expect(rows.map((r) => r.role)).toEqual(["user", "assistant"]);
     const content = rows[1].content;
     expect(content).toBe(REPLY);
-    expect(content.split(`${FENCE}xray-card`)).toHaveLength(9); // 八个围栏一个不少
+    expect(content.split(`${FENCE}xray-card`)).toHaveLength(12); // 八个 R-CARDS 围栏 + 三张可回传卡,一个不少
+    expect(content.split(`${FENCE}xray-html`)).toHaveLength(4); // 合法 / 超限 / 敌意三个 HTML 围栏
     expect(content).toContain('"a": "34 种", }, ] }'); // 坏 JSON 原样保留:回不回落是前端的事
+    expect(content).toContain(`${FENCE}xray-html height=280\n`); // info string 原样(前端从这一行读高度)
+    expect(content).toContain("<script>alert(1)</script>"); // 敌意片段原样落库:去不去是前端清洗的事,服务端不做半套
+    expect(content).toContain(OVERSIZED_HTML); // 16 KB + 1 原样到前端,回落成代码块是前端的判据
     expect(rows[1].payload).toBeNull();
 
     // ③ 提示词真的到了 provider,且【信息卡片】排在所有工具段落之后(工具开关是什么状态都成立)。
@@ -157,8 +185,10 @@ describe("faux provider 吐八个 xray-card 围栏:落库 content 与 provider �
     expect(llm.systemPrompts.length).toBeGreaterThanOrEqual(1);
     for (const p of llm.systemPrompts) {
       expect(p).toContain(`${FENCE}xray-card`);
-      expect(p).toContain("\n\n【信息卡片】");
-      const after = p.slice(p.indexOf("【信息卡片】"));
+      expect(p).toContain(`${FENCE}xray-html height=`); // R-CARDS-2:HTML 组件的写法也到了 provider
+      expect(p).toContain("作为访客的下一条消息直接发出"); // 回传语义
+      expect(p).toContain("\n\n【UI 组件】");
+      const after = p.slice(p.indexOf("【UI 组件】"));
       expect(after).not.toMatch(/\n\n(你有|你还有|你还可以|本次会话开始时)/);
     }
   }, 60_000);

@@ -137,30 +137,59 @@ const SYSTEM_PROMPT_CLAUSES =
   "涉及站点内核机制(扩展、守卫、注入)时可以读本站源码再答;不要编造没发生过的步骤,也不要把猜测说成经过。";
 
 /**
- * 【R-CARDS:信息卡片段】(2026-09-09)。会话区把回复里的 ```xray-card 围栏渲染成信息卡片(画板 2s / 2t),
- * 这段告诉模型什么时候用、六种 kind 长什么样、上限在哪。**与工具无关**:它是正文的写法,不是工具,
- * 所以零工具的会话也送达,并且排在所有工具段落**之后**(工具段落各自承诺「某工具不在某句里」,这段不点名任何工具)。
- *
- * 【为什么把形状表写进提示词】任务卡「已认代价」:模型收不到校验错误 —— 写坏的 JSON 静默回落成代码块,访客看到裸 JSON。
- * 缓解只能在这里:六个形状各一行、上限逐条点名、点名「严格 JSON」。**每次最多两张**是所有者裁定,不是建议。
- * 「正文要能独立成句」同样是回落时的兜底:卡没画出来,回复也要读得通。
- * 「除 href 外不放网址」对应 docs/security.md §0 第 9 条(第三方资源进对话框);链接口径在前端 `lib/xray-card.ts` 再判一次。
+ * 【R-CARDS-2:静态 HTML 组件的产出开关】(2026-09-09,任务卡裁定 7)。**v1 没有运行期开关,关 = 改这里 + 发版**,语义是「模型不再产出」:
+ * 掐掉的只是下面组件段里的 HTML 半句与 HTML 规则段,卡片段不受影响;历史消息里已产出的帧继续显示到会话过期(前端渲染路径不看这个常量)。
+ * 运行期开关(表 + MCP 工具 + 读端点)记 BACKLOG,要做另裁定。
  */
-const CARDS_CLAUSE =
-  "【信息卡片】你可以在回复正文里嵌入信息卡片:写一个语言标签为 xray-card 的代码围栏(```xray-card 与 ``` 之间),里面放**一个** JSON 对象,会话区会把它渲染成卡片。" +
-  "只在访客要的是结构化数据(对比 / 清单 / 指标 / 键值 / 表格,且条目不少于 3)时用,普通问答不用;**每次回复最多两张**。\n" +
-  "六种 kind 与形状(所有值都是字符串;每张卡可选 title(≤ 60 字)、collapsed: true(初始折叠,必须有 title)、" +
+export const HTML_COMPONENT_ENABLED = true;
+
+/**
+ * 【R-CARDS / R-CARDS-2:UI 组件段】(2026-09-09)。会话区把回复里的 ```xray-card 围栏渲染成信息卡片(画板 2s / 2t / 2u),
+ * ```xray-html 围栏渲染成沙箱帧(画板 2v);这段告诉模型什么时候用、八种 kind 与 HTML 组件长什么样、上限在哪、**回传语义**是什么。
+ * **与工具无关**:它是正文的写法,不是工具,所以零工具的会话也送达,并且排在所有工具段落**之后**(工具段落各自承诺「某工具不在某句里」,这段不点名任何工具)。
+ *
+ * 【为什么把形状表写进提示词】任务卡「已认代价」:模型收不到校验错误 —— 写坏的 JSON / HTML 静默回落成代码块,访客看到裸源码。
+ * 缓解只能在这里:八个形状各一行、上限逐条点名、点名「严格 JSON」。**每次最多两个组件、只在最终回答的开头或结尾**是所有者裁定,
+ * 前端另有硬限(最终回答段的前两个围栏;处理过程里的一律回落),这里的措辞是让模型别撞上那条硬限。
+ * 「正文要能独立成句」同样是回落时的兜底:组件没画出来,回复也要读得通。
+ * 「除 href 外不放网址」「HTML 里不放外部资源」对应 docs/security.md §0 第 9 条(第三方资源进对话框);链接口径在前端 `lib/xray-card.ts` 再判一次,
+ * HTML 的三层兜底(sandbox / CSP / 窄清洗)在前端 `lib/xray-html.ts`,提示词只是让模型别写会被去掉的东西。
+ * 【回传语义要写透】(docs/security.md §0 第 12 条)访客点选项 / 按钮后那句话**作为访客的下一条消息直接发出**,模型下一轮原样收到 ——
+ * 所以 prompt 要是一句完整的问题、label 要能单独成立;不写透的话模型会把题干写成「请选择」、把 label 写成「A / B」,发出去的消息没人读得懂。
+ */
+const COMPONENTS_CLAUSE =
+  "【UI 组件】你可以在回复里嵌入 UI 组件" +
+  (HTML_COMPONENT_ENABLED
+    ? ",两类:信息卡片(```xray-card 围栏 + 一个 JSON 对象)与静态 HTML 组件(```xray-html 围栏 + HTML/CSS),会话区会把它们渲染出来。"
+    : ":信息卡片(```xray-card 围栏 + 一个 JSON 对象),会话区会把它渲染出来。") +
+  "**每次回复最多两个组件**(任意组合),只放在**最终回答的开头或结尾**、不放正文中间、不放处理过程里(否则只会显示成代码)。\n" +
+  "什么时候用:访客要的是结构化数据(对比 / 清单 / 指标 / 键值 / 表格,且条目不少于 3)时用卡片;" +
+  "需要访客做一个选择、或提供几项信息你才能继续时用 choice / form 卡;" +
+  (HTML_COMPONENT_ENABLED ? "布局类内容(时间线 / 流程 / 架构示意 / 带排版的说明,八种卡装不下的)用 HTML 组件;" : "") +
+  "普通问答一律不用。\n" +
+  "八种 kind 与形状(所有值都是字符串;每张卡可选 title(≤ 60 字)、collapsed: true(初始折叠,必须有 title)、" +
   "links(≤ 5 条 {text, href},href 只收 http(s) 地址或以 / 开头的站内路径)、" +
-  "action: {label, ask}(至多一枚按钮;点击只把 ask 那句话放进访客的输入框、不会发送,所以 ask 只能写访客下一句可能想问的话,≤ 500 字)):\n" +
+  "action: {label, ask}(至多一枚按钮;点击只把 ask 那句话放进访客的输入框、不会发送,所以 ask 只能写访客下一句可能想问的话,≤ 500 字;choice / form 上不要写 action)):\n" +
   '{"v":1,"kind":"kv","title":"…","rows":[{"k":"…","v":"…"}]} —— 键值对,≤ 20 行\n' +
   '{"v":1,"kind":"table","title":"…","columns":["…","…"],"rows":[["…","…"]],"sortable":true} —— 表格,≤ 6 列 × 20 行,每行的格数必须等于列数\n' +
   '{"v":1,"kind":"list","title":"…","ordered":true,"items":[{"text":"…","note":"…"}]} —— 清单 / 步骤,≤ 20 项,note 可选\n' +
   '{"v":1,"kind":"stat","title":"…","items":[{"label":"…","value":"…","unit":"…","note":"…"}]} —— 指标,2–4 格,unit / note 可选\n' +
   '{"v":1,"kind":"compare","title":"…","columns":["A","B"],"rows":[{"k":"维度","a":"…","b":"…"}]} —— 两方对比,≤ 20 行\n' +
   '{"v":1,"kind":"tabs","title":"…","tabs":[{"label":"…","card":{"kind":"kv","rows":[{"k":"…","v":"…"}]}}]} —— 分页,≤ 5 页,每页装上面五种之一,不能再套 tabs\n' +
+  '{"v":1,"kind":"choice","title":"…","prompt":"你更想从哪条线入手?","multiple":false,"options":[{"label":"…","note":"…"}],"submit":"提交"} —— 让访客选:2–8 项,label ≤ 60 字、note 可选;' +
+  "multiple 为 false 时单选(点选项即发出、没有按钮),为 true 时多选(卡底一枚按钮,文案 submit ≤ 20 字、缺省「提交」)\n" +
+  '{"v":1,"kind":"form","title":"…","prompt":"…","fields":[{"label":"…","type":"text","placeholder":"…","required":true},{"label":"…","type":"select","options":["…","…"],"required":false}],"submit":"提交"} —— 让访客填:1–5 个字段,type 只有 text 与 select,label ≤ 40 字,text 最多 100 字\n' +
+  "回传语义:访客点了选项或按钮后,「题干: 所选项」(多选以「、」相连)或「题干 字段: 值; 字段: 值」这句话会**作为访客的下一条消息直接发出**、你下一轮会原样收到 —— " +
+  "所以 prompt 要写成一句完整的问题、label 与字段名要能单独成立;title / note / placeholder / 按钮文案都不会进那句话。choice / form 不能放进 tabs。\n" +
   "其它上限:整段 JSON ≤ 8 KB,每个字符串 ≤ 200 字。卡里的值按纯文本显示,不解析 markdown、不放 HTML;除 links 的 href 之外不要在卡里放任何网址。" +
-  "JSON 不合法或超限时访客看到的只是一段代码,所以要写严格的 JSON(双引号、无尾逗号、无注释、v 必须是数字 1)。" +
-  "正文不要复述卡里的内容,但要能独立成句 —— 就算卡片没能显示,回复也要读得通。";
+  "JSON 不合法或超限时访客看到的只是一段代码,所以要写严格的 JSON(双引号、无尾逗号、无注释、v 必须是数字 1)。\n" +
+  (HTML_COMPONENT_ENABLED
+    ? "HTML 组件:开围栏行写 ```xray-html height=<像素>(160–480,缺省 320;宽度固定为正文宽、你控制不了,内容超高时在组件内滚动),围栏里只写 HTML + CSS(<style> 或 style 属性)。" +
+      "不写 script、表单、链接、图片、字体与任何外部资源 —— 它们会被去掉或拦下,写了等于白写;唯一可用的交互是 <details>。" +
+      "配色只用这几个变量:var(--xh-bg) 底 / var(--xh-fg) 正文 / var(--xh-muted) 次级 / var(--xh-dim) 弱化 / var(--xh-panel) 面 / var(--xh-border) 边框 / var(--xh-brand) 品牌 / var(--xh-sans) 与 var(--xh-mono) 字体。" +
+      "建议 ≤ 6 KB,上限 16 KB(超过只会显示成代码)。\n"
+    : "") +
+  "正文不要复述组件里的内容,但要能独立成句 —— 就算组件没能显示,回复也要读得通。";
 
 /** 底座 = 开场白 + 时间基准 + 三条通用条款,段落间空一行;工具全关时也整段送达。 */
 function systemPromptBase(now: Date): string {
@@ -194,8 +223,8 @@ function systemPromptBase(now: Date): string {
  */
 export function systemPromptFor(toolNames: string[], now: Date = new Date()): string {
   const base = systemPromptBase(now);
-  // R-CARDS:卡片段与工具无关,零工具也送达,且永远是最后一段
-  if (toolNames.length === 0) return `${base}\n\n你当前没有任何可用工具。\n\n${CARDS_CLAUSE}`;
+  // R-CARDS / R-CARDS-2:组件段与工具无关,零工具也送达,且永远是最后一段
+  if (toolNames.length === 0) return `${base}\n\n你当前没有任何可用工具。\n\n${COMPONENTS_CLAUSE}`;
   const hasRename = toolNames.includes(SESSION_RENAME_TOOL);
   const hasSkillLoad = toolNames.includes(SKILL_LOAD_TOOL);
   const hasSkillRun = toolNames.includes(SKILL_RUN_TOOL);
@@ -316,7 +345,7 @@ export function systemPromptFor(toolNames: string[], now: Date = new Date()): st
           : "本会话不能运行脚本,只能读说明。"),
     );
   }
-  parts.push(CARDS_CLAUSE); // 排在所有工具段落之后(见其上方注释)
+  parts.push(COMPONENTS_CLAUSE); // 排在所有工具段落之后(见其上方注释)
   // 段落之间空一行(理由见 systemPromptBase 上方注释末段);各段的措辞不依赖前后相接
   return parts.join("\n\n");
 }

@@ -970,3 +970,52 @@ html {
     padding-top: 8px !important;
   }
 }
+
+/* ── R-CARDS-2:两种可回传卡(画板 5a)的移动端差别;帧(5b)没有 CSS 差别 —— 高度上限 360 在 components/XrayHtml.tsx 里按视口夹。
+   内核 token 一字照搬桌面(画板 5a 裁定「源 2u」),这里只有三处触控适配:选项行 44 命中、submit 胶囊独占一行、输入框胶囊 44。 */
+@media (max-width: 768px) {
+  /* 选项行整行 min-height 44、选择指示居中固定在左(桌面是 flex-start + 上移 2px 对齐首行) */
+  .xcard-opt {
+    min-height: 44px;
+    align-items: center !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+  .xcard-opt .xcard-ind-wrap {
+    margin-top: 0 !important;
+  }
+  /* submit:ghost 方按钮 → 胶囊、独占一行、44 高(--m-fill 底 + 品牌色字 15/600),照 4y 对卡底动作按钮的既有裁定;
+     禁用 = 字降到 --text-dim、底色与描边不变(与底部发送按钮同一副禁用视觉,画板 5a ⑩屏) */
+  .xcard-submit {
+    width: 100%;
+    height: auto !important;
+    min-height: 44px;
+    border-radius: 22px !important;
+    background: var(--m-fill) !important;
+    border-color: transparent !important;
+    color: var(--accent) !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    padding: 0 16px !important;
+  }
+  .xcard-submit:disabled {
+    color: var(--text-dim) !important;
+  }
+  /* 输入框:站内既有的胶囊语汇(--m-fill 底、r10、44 高、15px —— iOS 聚焦不缩放的下限);聚焦 = 白底 + 品牌色描边;锁定态底色降到 .08 */
+  .xcard-input {
+    min-height: 44px;
+    height: auto !important;
+    border-radius: 10px !important;
+    background: var(--m-fill) !important;
+    border-color: transparent !important;
+    padding: 0 14px !important;
+    font-size: 15px !important;
+  }
+  .xcard-input:focus {
+    background: var(--bg) !important;
+    border-color: var(--accent) !important;
+  }
+  .xcard-input:disabled {
+    background: rgba(120, 120, 128, 0.08) !important;
+  }
+}

@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-cards2/round-cards2.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**文档就绪、设计稿待交付**(所有者裁定 2026-09-09;分支 `round-cards2` 待开)。
+> 状态:**实现完成、审查中**(所有者裁定 2026-09-09;设计稿同日并入 `design/`,同日在分支 `round-cards2` 实现;本机验收 20 项全过,见「本轮实测」)。
 > 所有者原话(2026-09-09):「给 agent 增加一个 UI tools,支持回复结果中在对话区展示 UI 组件,由 agent 自主决定根据当前回答是否使用这个 tools」,三条限制:
 > ① 支持两个区域二选一展示(折叠区和最终 message 中间 / 在 message 后面);② UI 组件提供几个标准模板,可直接套用模板生成样式,支持交互式样式,以及交互数据回传对话;
 > ③ 支持不使用标准模板,只定义高度和宽度限制,由模型自主决定生成内容,类似 artifacts。
@@ -180,10 +180,10 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 
 | 画板 | 内容 | 实现落点 | 状态 |
 |---|---|---|---|
-| `2u` | 桌面 · 两种可回传卡 + 位置① + 单选发送后的锁定态与紧随的访客气泡 + 多选 / 表单的 submit 禁用与可用态 + busy 态 | `XrayCard.tsx`(choice / form)· `Workbench.tsx` | 待交付 |
-| `2v` | 桌面 · `xray-html` 帧 + 位置② + 流式骨架(按声明高度)+ 回落代码块 + 高度夹取 + 主题态 + 「一轮两个组件」示意 | `XrayHtml.tsx` · `Markdown.tsx` | 待交付 |
-| `5a` | 移动 · 两种可回传卡(44 命中、胶囊 submit、键盘弹起态、锁定态) | `globals.css` 移动端差别 · `MobileChat.tsx` | 待交付 |
-| `5b` | 移动 · `xray-html` 帧(高 ≤ 360、帧内横滚、页面不横滚)+ 骨架 + 回落 | 同上 | 待交付 |
+| `2u` | 桌面 · 两种可回传卡 + 位置① + 单选发送后的锁定态与紧随的访客气泡 + 多选 / 表单的 submit 禁用与可用态 + busy 态 | `XrayCard.tsx`(`Choice` / `Form` / `Indicator` / `Prompt`)· `ComposerContext.tsx`(busy / onSend)· `Workbench.tsx`(`sendText` / `sendFromCard`) | ✅ 已落地(2026-09-09):选择指示 15px 圆点 / r4 方框、常态 `--border` + 白底、选中 `--accent`;选项行 padding 9/12 + 1px 行间;题干 13/1.7 `--text-muted`;submit = 既有 `GhostButton` 32/r7;三态(idle / busy / locked)按标本①–⑦ |
+| `2v` | 桌面 · `xray-html` 帧 + 位置② + 流式骨架(按声明高度)+ 回落代码块 + 高度夹取 + 主题态 + 「一轮两个组件」示意 | `XrayHtml.tsx`(帧 + 骨架 + 主题快照)· `lib/xray-html.ts` · `ChatFence.tsx`(三个出口 + 预算) | ✅ 已落地:帧 r7 + 1px `--border`、无工具栏、`marginTop` 14 与代码块同节奏;骨架 = 同一外框 + 三条 r4 骨架条(首条 `omPulseBg`);回落 = `CodeBlock`(语言标签 `xray-html`);主题态照标本⑤(注入九个 `--xh-*`) |
+| `5a` | 移动 · 两种可回传卡(44 命中、胶囊 submit、键盘弹起态、锁定态) | `globals.css`(`.xcard-opt` / `.xcard-submit` / `.xcard-input` 三组移动规则)· `MobileChat.tsx`(零改动,靠 Context) | ✅ 已落地:选项行 min-height 44 + 指示居中;submit 胶囊 44 / r22 / `--m-fill` 底 / 品牌色 15/600 / 独占一行;输入框 44 / r10 / `--m-fill` / 15px,聚焦白底 + 品牌色描边,锁定底 `.08`。键盘弹起态靠浏览器默认 `scrollIntoView`(任务卡派生取舍 14),真机待所有者核 |
+| `5b` | 移动 · `xray-html` 帧(高 ≤ 360、帧内横滚、页面不横滚)+ 骨架 + 回落 | `XrayHtml.tsx`(`useIsMobile` → 上限 360)· `lib/xray-html.ts`(移动端 `summary` 44) | ✅ 已落地:390 宽实测帧 354×360、`body.scrollWidth === innerWidth`;帧内横滚由模型片段自己的 `overflow-x:auto` 盒承担(基础样式只给 `svg, table { max-width: 100% }`) |
 
 ## 交付物
 
@@ -191,8 +191,9 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 - `apps/web/lib/xray-html.ts`(新):info string 解析与高度夹取、字节上限、`shouldDropElement` / `shouldDropAttribute` 两个判定纯函数、`srcdoc` 拼装(纯字符串部分);`xray-html.test.ts` ≥ 20 条(含 `javascript:` / 带控制字符的 `href` / `xlink:href` / `srcset` / `formaction` / `ping` / 大小写与空白变体)。
 - `apps/web/components/XrayCard.tsx`:两种新 kind 的渲染、`onSend` prop、busy 与锁定两种态。
 - `apps/web/components/XrayHtml.tsx`(新):`DOMParser` 遍历薄壳 + 帧 + 骨架 + 主题重建。
-- `apps/web/components/Markdown.tsx`:`html` prop(默认关)、`onSend` 透传、组件预算(最终段前两个围栏)、`xray-html` 三个出口(骨架 / 帧 / 代码块)。
-- `apps/web/components/workbench/Workbench.tsx` / `apps/web/components/mobile/MobileChat.tsx`:`send` 拆成 `sendText(text)` + `send`,`onSend` 注入,最终回答段传开关、处理过程段不传。
+- `apps/web/components/Markdown.tsx`:`html` prop(默认关);组件预算与三个出口**挪进新文件** `components/ChatFence.tsx`(恒等的围栏渲染器 + `ChatFenceContext`,理由见「本轮实测 · 偏离」第 1 条),Notes 的普通代码块抽成 `components/CodeBlock.tsx`(标记一字不改)。
+- `apps/web/components/ComposerContext.tsx`(新):`busy` / `onSend` 经 Context 直达 `XrayCard`,不经 `Markdown` props(同一条理由)。
+- `apps/web/components/workbench/Workbench.tsx` / `apps/web/components/mobile/MobileChat.tsx`:`send` 拆成 `sendText(text)` + `send`,`sendFromCard` 经 `ComposerContext.Provider` 注入两套壳;最终回答段开组件、处理过程段 `components={false}`;`MobileChat` 只改注释。
 - `apps/web/app/globals.css`:两种新卡与帧的移动端差别(按 `5a` / `5b`)。
 - `apps/api/agent/runtime.ts`:`CARDS_CLAUSE` 扩成组件段 + `HTML_COMPONENT_ENABLED` 常量;`runtime.test.ts` / `cards-e2e.test.ts` 更新(faux 剧本加三张新卡 + 四个 HTML 用例 + 三围栏用例)。
 - 文档:`docs/security.md` §0 第 11 条修订 + 第 12 / 13 条(已写,落地后翻「已落地」)· `docs/architecture.md` 关键决策表加一行 · `design/README.md` 增删记录 · `docs/releases.md`(发版时)· `ROUNDS.md` 进度。
@@ -248,4 +249,47 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 
 ## 本轮实测
 
-<!-- 完成后回填:实际数字、踩的坑、与设计/计划的偏离及原因 -->
+### 验收结果(2026-09-09,本机;faux provider 剧本 `选择` / `多选` / `表单` / `大表单` / `无题干` / `帧` / `敌意` / `超限` / `三个` / `两帧` / `高9999` / `高10` / `高abc` / `高无` / `停` / `工具` / `处理`,脚本留 scratchpad 不入库)
+
+| # | 结果 | 留证 |
+|---|---|---|
+| 1 | ✅ | `dev.ps1 check` 过;`dev.ps1 test`:api 35 文件 / 614 用例(613 过 + `source-tools.test.ts` 1 条**已知**文件顺序 flake,BACKLOG 里 R-SOURCE / R-CARDS 记过,单跑 9/9 过;本轮新增 `runtime.test` 1 条 + `cards-e2e` 断言 6 条)+ web `bun test lib` **140** 用例(`xray-card.test.ts` 37 → 64,+27;`xray-html.test.ts` 新增 20);`apps/web` `tsc --noEmit` 过;`next build` 过(见下) |
+| 2 | ✅ | `选择`:四选项、无按钮、`role=radio` `tabIndex=0`;点第二项 → 会话区立刻一条访客气泡,文本**精确等于** `你更想从哪条线入手?: 沙箱执行组`;`POST /agent/ask` 计数 1 → 2;卡锁定(第二项 `aria-checked=true`、四行 `aria-disabled` + `tabIndex=-1` + `cursor:default`),下一轮结束后仍锁定;`无题干` 卡发出的只有 `先看内核`、且 `action` 被忽略(无按钮、无卡底) |
+| 3 | ✅ | `多选`:未选 → submit `disabled` 且字 `--text-dim`;点第 3、第 2 项 → 可用(字 `--text-muted`);提交 → `哪几组工具你想先看源码?: 外呼组、沙箱执行组`(按**选项原顺序**,不按点选顺序);缺省文案「提交」;锁定后未选 label 降到 `--text-dim`、已选保持 `--text`;卡底 1 条站内链接照常 |
+| 4 | ✅ | `表单`:text / select / text,两个必填(mono 10「必填」);填一个仍禁用;全填可用;提交 → `帮我定制学习路径 经验: 3 年; 目标: 上线一个 agent 站; 每周时间: 5 小时`;锁定后字段 `disabled`、值保留、底 `rgba(0,0,0,.02)`。`大表单`(5 字段 × 100 字 + 200 字 prompt)→ 发出 **734** 字、4 个 `; `、未被清洗闸丢弃 |
+| 5 | ✅ | `lib` 用例:两个组成函数的输出只由 prompt / label / 字段 label / 访客值拼成,`title` / `note` / `placeholder` / `submit` 逐一断言不进文本;`action` 在两种新 kind 上被忽略、不回落;`composeChoiceMessage` 对越界 / 重复下标免疫 |
+| 6 | ✅ | 生成中(`停` 剧本 25 s 停顿期间)点一张未锁的 `无题干` 卡 → 四行 `aria-disabled`、`POST /agent/ask` 计数不变(19 → 19)、卡未锁;生成结束后再点 → 发出。键盘:在第三项上 `keydown Enter` → `…: 外呼组` 发出。整个会话 `POST /agent/ask` 次数 = 手发次数 + 点击次数,渲染 / 滚动 / hover 没有多出一条 |
+| 7 | ✅ | `lib` 用例:`choice` 8 × 60 + 200 = 689 通过、9 项 / 61 字回落;emoji 按 UTF-16 算两个单位(30 个过、31 个回落);`form` 5 字段 + 200 字 = **919** 通过(任务卡写的 921 多算了一个分隔符,函数算出来的为准)、201 字回落;select 按最长一项算 |
+| 8 | ✅ | `三个`(卡 + 帧 + 卡)→ `choice`、帧、`xray-card` 代码块;`两帧`(帧 + 帧 + 卡)→ 帧、帧、`xray-card` 代码块;`处理`(第一次往返的正文里带一张卡、再调工具)→ 展开折叠行,处理过程段里那张卡是 `xray-card` 代码块,最终回答里的卡照常;`工具` → 折叠行「处理详情 · 2 次模型往返 · 1 次工具调用」在卡之前(`compareDocumentPosition` FOLLOWING) |
+| 9 | ✅ | 帧元素:`sandbox=""`、无 `allow`、`referrerpolicy=no-referrer`、`loading=lazy`、`title=agent 生成的组件`、`contentDocument === null`(opaque origin);`srcdoc` 里 CSP `<meta>` 在 `<body>` 之前(下标 111 < 3200+);`敌意` 剧本的 `srcdoc` 经 `DOMParser` 复核:`script` / `img` / `link` / `form` / `input` / `button` / `iframe` 全 0、`on*` 属性 0、只剩两条 `<meta>`(charset + CSP),`href` 只剩 `#top` / `#c`(`<use href="#c">` 保留),`<a href="https://…" target>` 与 `<a href="javascript:">` 都变成裸 `<a>`,svg 里的 `<a xlink:href>` 同样,`<details>` 与两条 `<style>` 保留(`@import` / `url()` 留在 CSS 里,由 CSP 挡) |
+| 10 | ✅ | `read_network_requests` 过滤 `example.com` 为空(整个会话);两帧内容的 `--xh-*` 引用都解析成站点色 |
+| 11 | ✅ | 缺省 → 320;`height=9999` → 480;`height=10` → 160;`height=abc` → 320;390 宽移动壳 `height=9999` → **360**(帧 354 × 360);`停` 剧本骨架外框实测 320 高 = 闭合后帧高,不跳版 |
+| 12 | ✅ | 16 KB + 1 字节 → `xray-html` 代码块(`pre` 16,386 字符含尾换行);R-CARDS 的坏 JSON / 超限 / 未知 kind 用例全在 `lib` 回归 |
+| 13 | ✅ | `停`(围栏中间停 25 s):停顿期间 `[data-xray-html=skeleton]` 320 高 + 三条骨架条;闭合后原位换成帧。`两帧`:第一帧闭合后正文又流了 4 s 以上,帧节点 **身份不变**(`===` 且 `srcdoc` 相同,`isConnected`) |
+| 14 | ✅ | 新会话 `帧` + `三个` 两轮:实时渲染完会话区 `innerHTML` sha256 `0059e68a…2173`(16,816 字节)= F5 后从侧栏重开同一会话的哈希 |
+| 15 | ✅ | `html.dark` 加上 → 两帧 `srcdoc` 里 `--xh-bg:#1a1a1a` / `--xh-fg:#e8e8e8` / `--xh-brand:#60a5fa`;去掉 → 回 `#ffffff`,哈希回到 #14 的同值 |
+| 16 | ✅ | 390 × 845 移动壳:选项行 58 高(`min-height:44`、`align-items:center`);submit 胶囊 332 × 44、r22、15/600、`--m-fill` 底、禁用字 `#9ca3af`、独占一行;输入框 44 高、r10、15px、`--m-fill` 底、描边透明(text 与 select 同一副);`body.scrollWidth === innerWidth === 390`;单选**一次点按即发**(`你更想从哪条线入手?: 沙箱执行组`);帧内 `summary{min-height:44px}` 注入。键盘弹起态未在 Browser pane 里验(系统键盘拿不到),真机待所有者核 |
+| 17 | ✅ | 往本机 `notes_chapters` 临时插一章(`/notes/pi/tmp-xray-cards2-check`,正文带同一段 ` ```xray-html height=320 ` 与一张 `choice` 卡)→ 两个代码块(语言标签 `xray-html` / `xray-card`)、`[data-xray-card]` 与 `iframe` 都为 0;验完删行 |
+| 18 | ✅ | `runtime.test.ts` 断言组件段含「每次回复最多两个组件」「最终回答的开头或结尾」「作为访客的下一条消息直接发出」「```xray-html height=」「160–480」「上限 16 KB」「var(--xh-bg)」「唯一可用的交互是 <details>」与八个 kind;`cards-e2e` 断言这一段真的到了 provider。**真实 provider 留证待发版后在生产补**(R-CARDS #13 同款) |
+| 19 | ✅ | `git diff --stat main -- apps/api` 只有 `runtime.ts` + `runtime.test.ts` + `cards-e2e.test.ts`;既有六种卡的路径、`action` 预填、`Markdown` 不传 `cards` / `html` 时的 `pre`(`plainPre` → `CodeBlock`,标记逐字节同一块)都不变;`design/` 之外没有动任何页面样式(移动端三组新规则只作用于新卡的类名) |
+| 20 | ✅ | `docs/security.md` §0 第 11 / 12 / 13 条翻「同日落地」并指到边界文件;`docs/architecture.md` 关键决策表一行;`design/README.md` 两行文件表 + 增删记录 + 256 KiB 预警段;CLAUDE.md 规则 8 计数(桌面 29 / 移动 28)与 R-CARDS-2 段;ROUNDS.md 计数 / 第十四次修订 / 进度表 / 轮次段;MCP 仍 51(`docs/mcp.md` 未动);`docs/releases.md` 发版时补 |
+
+### 数字与偏离
+
+1. **渲染器改成恒等组件 + 两个 Context,而不是任务卡设想的「`Markdown` 加 `onSend` / `busy` props + 内联 `pre`」**(`components/ChatFence.tsx` / `ComposerContext.tsx` / `CodeBlock.tsx` 三个新文件)。第一版按任务卡写完后本机实测:点选项发送 → 一轮生成结束 → 卡回到未选未锁。根因是 react-markdown 把 `components.pre` 当**元素类型**,内联回调每次渲染都是新函数,React 认成不同类型整棵重挂,卡的本地态被清;同一根因下帧在围栏闭合后正文每来一个 delta 就重载一次。
+   于是:① 会话区的 `pre` 是模块级的 `ChatFencePre`,渲染时会变的东西(源文本 / 预算 / 开关 / 流式态 / `onAsk`)经 `ChatFenceContext` 送进去;② `busy` / `onSend` 经 `ComposerContext` 从 `Workbench` 直达 `XrayCard`,`AssistantMessage` 的 memo 在一轮前后都不重渲染;③ Notes / Skills / Source 仍走内联的 `plainPre`(重挂对纯静态代码块无所谓),标记抽成 `CodeBlock` 保证逐字节相同。`Markdown` 因此只多 `html` 一个 prop。**不是新机制**:Context 是 React 自带的,没有新协议 / 队列 / 配置。
+2. `form.fields[].type` 缺省按 `text`(任务卡写的是闭集 text / select;缺失是模型最可能的笔误,text 是无害的那个;其它值仍回落)。
+3. 窄清洗名单比任务卡多四个元素(SVG `image` / `template` / `portal` / `fencedframe`)与八个古老的 URL 属性名(`srcdoc` / `manifest` / `codebase` / `archive` / `classid` / `profile` / `dynsrc` / `lowsrc`),都是同类补齐,判定函数与用例一并钉住。
+4. `form` 解析期最坏长度实际 **919**(任务卡 921 把分隔符多算了一个:5 段只有 4 个 `; `);两个数都远在 1000 内,`lib/xray-card.ts` 注释与用例按 919。
+5. 帧基础样式给了 `a{color:var(--xh-brand)}`:链接元素本身保留(只剥 `href`),给它品牌色是让模型写的「链接」在帧里至少看得出是一个词;点了没有任何反应。`--xh-mono` 注入前去掉 Next 的 `var(--font-jetbrains-mono)`(那个 `@font-face` 只在父文档里,帧又不放字体请求),落到 `"JetBrains Mono", monospace`。
+6. 帧的移动端上限 360 由 `useIsMobile` 在组件里夹(渲染器拿不到视口),骨架用同一个 hook,两者高度永远一致。
+7. 处理过程段里的卡片(含 R-CARDS 的六种)改为代码块(任务卡「已认代价」最后一条);`splitTurn` 与 `AssistantTurn` 的段落划分零改动。
+8. 提示词组件段 22 行(R-CARDS 12 行 + 两种新 kind 各一行 + 回传语义一行 + HTML 段一行 + 位置 / 用途各一句),`HTML_COMPONENT_ENABLED = false` 时掐掉三处 HTML 半句;段落头从「【信息卡片】」改为「【UI 组件】」,两个测试文件同步。
+
+### 踩的坑
+
+- **内联 `pre` 回调 = 每次渲染重挂子树**(见偏离 1)。R-CARDS 没暴露是因为 memo 的 `AssistantMessage` 让已完成的消息不再渲染;本轮 `busy` 一进 props 就现形。教训:凡是要在 react-markdown 的 `components` 里放**有状态 / 有 DOM 身份**的东西,组件类型必须恒等。
+- **Browser pane 隐藏时 `requestAnimationFrame` 不回调**(项目记忆),流式期间合帧的 delta 根本不提交到 DOM,骨架 / 帧身份都看不到。本次在验收页里把 `window.requestAnimationFrame` 换成 `setTimeout(16)`(只在页面里改,代码零改动)才观察到停顿期间的骨架与两帧剧本里的节点身份。
+- **faux 剧本关键字互相包含**:`大表单` 含 `表单`、由卡片发出的访客消息「哪几组工具…」含 `工具`,第一版剧本因此串台(多出一张不该有的卡、一次不该有的工具往返)。剧本按「长关键字在前」排序,新起一个端口 + `UPDATE llm_config SET base_url` 切过去;**同一会话下一轮就连新地址**(runtime 每轮读配置),在途那一轮会挂在旧端口上,切端口要在两轮之间。
+- `next build` 是 web 侧唯一拦 TS / RSC 错误的门(项目记忆),`dev.ps1 check` / `test` / `next dev` 都不拦;本轮跑了一次(结果见验收 #1)。
+- `dev.ps1 test` 全量跑出 `source-tools.test.ts` 1 条红:BACKLOG 里记过的文件顺序 flake(别的测试 afterAll 复原 `tool_config` 种子时漏掉迁移 016 的三个 `source_*` 行),与本轮无关,单跑绿。
