@@ -1,0 +1,251 @@
+# Round R-CARDS-2 — 会话区 UI 组件 2.0:可回传卡片(A)+ 沙箱静态 HTML 组件(B)
+
+<!-- 保存为 rounds/round-cards2/round-cards2.md;该轮其他管理产出放同一目录。 -->
+
+> 状态:**文档就绪、设计稿待交付**(所有者裁定 2026-09-09;分支 `round-cards2` 待开)。
+> 所有者原话(2026-09-09):「给 agent 增加一个 UI tools,支持回复结果中在对话区展示 UI 组件,由 agent 自主决定根据当前回答是否使用这个 tools」,三条限制:
+> ① 支持两个区域二选一展示(折叠区和最终 message 中间 / 在 message 后面);② UI 组件提供几个标准模板,可直接套用模板生成样式,支持交互式样式,以及交互数据回传对话;
+> ③ 支持不使用标准模板,只定义高度和宽度限制,由模型自主决定生成内容,类似 artifacts。
+> 讨论时给出四档 A / B / C / D(见「所有者裁定」第二张表),所有者圈定 **A + B 合成一轮,C / D 暂不考虑**(记 BACKLOG)。
+> **同日两处调整**(所有者):(a)回传不走预填 —— **单选点选项直接发送;多选加 submit 按钮,点击后发送**(表单同 submit 发送,实现者按同一口径推定,见裁定表第 4 行);
+> (b)**每轮组件上限仍是两个**(与 R-CARDS「最多两张」一致,不收成一个)。
+> 与 R-CARDS 同一形态:**仍是内容级围栏、不是 pi 工具**。名字里的「tools」沿用所有者口径,不指 pi 工具;工具级 = D 档,未选。
+> 与 R-TOOLS / R-PERF / R-TOOLCARDS / R-SOURCE / R-CROSSLINK / R-CARDS 同一顺序、**不是**规则 8 的例外:画板先扩(桌面 `2u` / `2v` 放**新文件**
+> `Agent X-Ray Cards 2.dc.html`;移动 `5a` / `5b` 放**新文件** `Agent X-Ray Mobile - Runtime 2.dc.html`,`5x` 号段待所有者确认),并入 `design/` 之后才开 `round-cards2`。
+> 给 Claude Design 的提示词在 [`design-prompt.md`](design-prompt.md)。规则 9「先改文档」:`docs/security.md` §0 第 11 条已修订,第 12 条(卡片点击即发 = 模型预制的访客消息)
+> 与第 13 条(模型输出渲染成自由 HTML)已随本任务卡写入。
+
+## 目标
+
+agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个**,两类任意组合:
+
+- **A · 可回传卡片**:`xray-card` 在六种既有 kind 之外新增 `choice`(单选 / 多选)与 `form`(≤ 5 个字段)两种。**回传 = 发送**:
+  单选卡点选项**直接把一句话作为访客消息发出**;多选卡与表单卡有一枚 submit 按钮,点击发送。发出的那句话**只由卡上可见的文本组成**
+  (题干 + 所选 label / 字段 label + 访客自己填的值),没有隐藏模板;走既有 composer 发送路径,api 侧零改动。
+- **B · 静态 HTML 组件**:模型写一个 ` ```xray-html ` 围栏,里面是 HTML + CSS,会话区把它渲染进一个**全部限制**的 `<iframe sandbox="">`:
+  不执行脚本、不出网、不出链、拿不到父页任何东西;宽 = 会话区正文宽,高由模型在围栏 info string 里声明并夹到上限,帧内滚动。
+
+两者共用 R-CARDS 的三条既有规则:非法 / 超限回落成普通代码块;流式期间围栏未闭合先画骨架;刷新回放与实时一字不差。
+**每轮最多两个组件**由前端硬限(最终回答段的前两个围栏),不再只靠提示词。
+
+可证伪:faux provider 按剧本吐出 `choice` 单选 / 多选与 `form` 各一张、一个合法 `xray-html`、一个 16 KB + 1 字节的 `xray-html`、一条同一回复里三个围栏的回复、
+一个含 `<script>` / `<img src="https://…">` / `<a href="https://…">` / `<meta http-equiv="refresh">` / `<link>` / CSS `url(https://…)` 的 `xray-html`;
+会话区渲染三张卡 + 一帧 + 一个代码块 + 「第三个围栏是代码块」;点单选卡的一个选项 → 会话区立刻出现一条访客气泡、文本**精确等于**题干 + `: ` + 该选项 label,`POST /agent/ask` 被调用一次;
+帧内 DOM 没有 `script` / `img` / `meta` / `link`,`href` 只剩 `#` 开头的;Browser pane 的网络面板**零第三方请求**;F5 前后会话区 `innerHTML` 的 sha256 一致;
+`git diff --stat main -- apps/api` 只有 `runtime.ts` 的提示词段与它的测试。
+
+## 所有者裁定(2026-09-09)
+
+三条限制 + 两处调整 → 结论:
+
+| # | 裁定项 | 结论 | 落点 |
+|---|---|---|---|
+| 1 | 位置二选一 | 位置① = **最终回答首**(折叠行之后、第一段正文之前);位置② = **最终回答末**。内容级下位置就是围栏在正文里的位置:由**提示词**约束,前端不搬动内容。两个组件可以一首一尾,也可以同在一处 | `runtime.ts` 组件段;画板 `2u`(①)/ `2v`(②) |
+| 2 | 数量 | **每轮最多两个**(卡或 HTML 任意组合;所有者 2026-09-09 二次确认,不收成一个)。**前端硬限**:只有**最终回答段**的**前两个** xray 围栏渲染成组件,第三个起回落代码块;处理过程段里的围栏一律回落 | `Markdown.tsx`(组件预算)+ 提示词 |
+| 3 | 标准模板 + 交互 | 沿用 `xray-card` 六种 kind 与四种声明式交互,**新增两种可回传 kind**:`choice` / `form`。不新造第三套语汇 | `lib/xray-card.ts` · `XrayCard.tsx` |
+| 4 | 交互数据回传 | **回传 = 发送**(所有者 2026-09-09 调整,推翻讨论时的「预填档」):`choice` 单选**点选项即发送、没有按钮**;`choice` 多选与 `form` 有一枚 **submit 按钮**,点击发送(表单沿用 submit 口径,所有者未单独点名,实现者推定、可推翻)。发送走既有 composer 的发送函数,api 零改动。**发出的文本只由卡上可见文本组成**(WYSIWYG),这是本条的安全边界,见 `docs/security.md` §0 第 12 条 | `XrayCard.tsx` 的 `onSend` · `Workbench.tsx` / `MobileChat.tsx` 接线 |
+| 5 | 自由内容 | ` ```xray-html ` → `<iframe sandbox="" srcdoc>` **静态档**:不给 `allow-scripts`、**永不**给 `allow-same-origin`;帧文档头部注入 meta CSP 不出网;前端窄清洗不出链、不换页 | `lib/xray-html.ts` · `XrayHtml.tsx` |
+| 6 | 只定宽高 | 宽 = 会话区正文宽,模型控不到;高由模型在 info string 声明 `height=<px>`,夹到 **[160, 480]**(移动端上限 360),缺省 320;内容超高在帧内滚 | 同上 |
+| 7 | 开关 | **v1 无运行期开关,关 = 发版**(与 R-CARDS 卡片、`runner/skills` 集合同口径)。关的语义是「模型不再产出」:api 侧一个常量掐掉提示词里的 HTML 段;历史消息里已产出的组件显示到会话过期(R-VISITOR 3 天)。MCP 运行期开关(表 + 两个工具 + 读端点)记 BACKLOG | `runtime.ts` |
+| 8 | 不做 | **C 档**(帧给 `allow-scripts` + postMessage)与 **D 档**(pi 工具级 + 结构化回传 / 挂起等答)暂不考虑,记 BACKLOG;要做另裁定 | — |
+| 9 | 顺序 | 先画板、再进轮次 | `2u` / `2v` + `5a` / `5b` |
+
+讨论时的四档(记录用;A + B 被圈定,A 的回传随后由「预填」调成「发送」):
+
+| 档 | 内容 | 机制代价 | 要动的约束 | 裁定 |
+|---|---|---|---|---|
+| A | `xray-card` 扩 kind(choice / form)+ 回传 | 零(前端 lib + 提示词 + 画板;发送复用 composer) | §0 第 10 条「不自动发送」开一条例外 → 新写第 12 条 | **做** |
+| B | 新围栏 `xray-html`,sandbox iframe 静态档,内嵌 CSP,窄清洗 | 小(一个 iframe 组件 + 上限 + 骨架) | §0 第 11 条改写、加第 13 条 | **做** |
+| C | B 的帧给 `allow-scripts`,postMessage 回传 | 中(第一处模型 JS 在访客端执行) | 第 13 条再改、加新威胁 | 暂不考虑 |
+| D | 改成 pi 工具(R-CARDS 的 2-B)+ 结构化回传(挂起等答) | 重(payload / SSE / 2l 例外 / pending 登记 / 新端点) | 反转 R-TOOLCARDS 与 R-CARDS 两条裁定 | 暂不考虑 |
+
+**为什么 A 与 B 拆成两个围栏、不装进同一个「UI tool」**:模板的安全来自闭集(JSON → 字段白名单 → React 元素),自由 HTML 的意义就是不闭集;
+装在一起风险面按最松的那个算。分开之后 A 的路径与 R-CARDS 一字不差地延续,B 的三层防线只护 B。
+
+**「点击即发」为什么还能收住**(讨论时我把它列为要单独裁定的一档,所有者已裁定做;边界正本是 `docs/security.md` §0 第 12 条):
+预填的兜底是「访客发前能看见、能改」;改成发送后这一步没了,兜底换成三件事 ——
+① **发出的文本 = 卡上可见的文本**:`prompt` 题干、所选 `label`、字段 `label`、访客自己填的值,**没有** `ask` 这类模型写、访客看不见的模板串;发出去的气泡与访客刚看到、刚点的字一一对应;
+② **只由访客的一次点击触发**,渲染 / 滚动 / hover 都不触发,一轮生成中(`busy`)禁用,发过即锁;
+③ **走既有 composer 发送路径**:同一个 `send`、同一套会话 / 配额 / 4000 字上限,服务端看到的就是一条普通访客消息,api 一行不改。
+残余风险 = 模型通过「给选项」引导对话走向,那正是这个功能本身;所有者已认。
+
+派生取舍(实现者定,画板照此画;可推翻):
+
+1. **`choice` DSL**(`v` 必填 = 1):
+
+   ```json
+   { "v": 1, "kind": "choice", "title": "…", "prompt": "…", "multiple": false,
+     "options": [{ "label": "…", "note": "…" }],
+     "submit": "提交" }
+   ```
+
+   `options` 2–8 项,`label` ≤ 60、`note` ≤ 200(可选);`prompt` ≤ 200(可选,题干一行;**强烈建议写**,否则发出的文本只有 label);`multiple` 缺省 false;
+   `submit` 只在 `multiple: true` 时有意义(按钮文案,≤ 20,缺省「提交」),单选卡**没有按钮**。
+   **发送文本**:`prompt` + ASCII `: ` + 已选 `label` 按原顺序以「、」相连;没有 `prompt` 时只有 label 部分。单选:点选项即发送;多选:至少选中一项前按钮禁用。
+   `action`(R-CARDS 的预填按钮)在两种新 kind 上**被忽略**(不回落,与 `collapsed` 无 `title` 时的处理同口径):一张卡只有一个出口。
+2. **`form` DSL**:
+
+   ```json
+   { "v": 1, "kind": "form", "title": "…", "prompt": "…",
+     "fields": [{ "label": "…", "type": "text", "placeholder": "…", "required": true },
+                { "label": "…", "type": "select", "options": ["…", "…"], "required": false }],
+     "submit": "提交" }
+   ```
+
+   `fields` 1–5 个,`type` 闭集 `text` / `select`;`label` ≤ 40、`placeholder` ≤ 100(可选)、`select.options` 2–8 项每项 ≤ 60、`required` 缺省 false;
+   text 输入框 DOM `maxLength = 100`;`submit` ≤ 20,缺省「提交」。
+   **发送文本(单行)**:`prompt`(有则跟一个 ASCII 空格)+ 每个非空字段的 `label` + ASCII `: ` + 值,字段之间以 ASCII `; ` 相连。全部 `required` 字段非空前按钮禁用。
+   **为什么是单行**:发送前的清洗(复用 `sanitizePrefill`,去全部 `\p{Cc}` 含换行)会把多行压成一行、分隔消失;从一开始就按单行设计。
+   分隔符**用 ASCII** 是刻意的:源码里手打的全角标点在本机会落成半角(项目记忆),按 ASCII 写就不存在这个问题。
+3. **发送文本长度可证明 ≤ 1000**:清洗函数对超过 1000 的原文是「整段丢弃」,访客点了却没消息发出是最坏的体验。所以校验器在**解析期**按与清洗同一计量(UTF-16 `.length`)算
+   **最坏组成长度**,超过 1000 **整卡回落**;运行期不再可能超。来源:`choice` 最坏 = 200 + 2 + 8 × 60 + 7 = 689;`form` 最坏 = 200 + 1 + 5 × (40 + 2 + 100 + 2) = 921。
+   text 的 `maxLength` 按浏览器语义也是 UTF-16 单位,三处同一把尺;服务端 `MAX_PROMPT_CHARS = 4000` 远在其上。
+4. **发送的接线**:`Workbench.tsx` 现有 `send`(读输入框状态)拆成 `sendText(text)` + `send = () => sendText(input)`,两条路径**同一个函数体**(建会话 / busy 守卫 / 错误分档 / 计数都不分叉);
+   `XrayCard` 新增 `onSend(text)`,与既有 `onAsk` 并列,由会话区注入(与 `onAsk` 同一处)。发送前 `sanitizePrefill(text)`(名字是历史,函数就是「去控制字符 + 长度闸」),回 `null` 不发。
+   **触发只认 React `onClick`**(选项行 / submit 按钮),键盘可达(Enter / Space 走同一 handler);不在 `onChange` / `onFocus` / effect 里发。
+5. **两种态**:(a)**busy** —— 一轮生成中,选项与按钮禁用(与 composer 发送按钮同一判据、同一禁用视觉);(b)**已发送锁定** —— 发出后本卡选项不可点、已选高亮保留、按钮禁用、
+   文案不变(不新增「已发送」字样,画板若给了再加)。锁定是**本地状态**,刷新回初始态(与 R-CARDS 第 8 条一致):重放后老卡又能点、再点 = 再发一条访客消息,认下(见已认代价)。
+6. **两种新 kind 不能嵌进 `tabs`**(与「tabs 里不能再套 tabs」同一条);`collapsed` / `links` 按通用规则。
+7. **最多两个的实现**:`AssistantMessage` 给**处理过程段**不传组件开关(`cards` / `html` 都不传,围栏全部回落代码块、进折叠行),给**最终回答段**传;
+   渲染器只把最终段里**前两个** xray 围栏(不分卡 / HTML)当组件,第三个起走代码块出口。流式期间「最终段」= 最后一次工具调用之后的正文:
+   若模型在组件之后又调了工具,这些组件会随正文进折叠行并变回代码块 —— 提示词要求组件只写在最终回答里,这条边界情况认下。
+8. **`xray-html` 围栏与高度**:语言标签 `xray-html`,info string 只认一个键 `height=<整数>`(如 ` ```xray-html height=320 `)。
+   读法不依赖 hast 的 `data.meta`:`Markdown` 已持有 `source` 与开围栏行号(`fenceUnterminated` 用的那两样),直接从源文本那一行取 info string。
+   夹到 [160, 480](移动端 ≤ 360,按既有移动判据或容器查询,画板定);非整数 / 缺省 → 320。**骨架按夹取后的高度立住**:开围栏行一到高度就定了,闭合时不跳版。
+9. **`srcdoc` 由父页拼装**,模型片段只占 body:
+
+   ```
+   <!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+   <style>…基础样式 + --xh-* 变量…</style></head><body>…清洗后的片段…</body></html>
+   ```
+
+   模型片段里的 `</body></html>` 逃逸无效(整段都在 sandbox 里,后面接的任何东西同样不执行、不出网);模型自己再写一条 meta CSP 只会与父页那条**取交集**,放松不了。
+   基础样式:`margin:0; padding:12px; box-sizing:border-box; font:14px/1.6 var(--xh-sans); color:var(--xh-fg); background:var(--xh-bg); overflow-wrap:anywhere`,`svg, table { max-width: 100% }`。
+   **帧元素**:`sandbox=""`(空串 = 全部限制)、`srcDoc`、`referrerPolicy="no-referrer"`、`loading="lazy"`、固定 `title`(如「agent 生成的组件」)、`width:100%`、`height` = 夹取值、无 `allow` 属性;
+   按(围栏原文, 主题)记忆化,一次围栏只建一次帧、无关重渲染不重建(重建 = 帧闪)。
+10. **窄清洗(`DOMParser` 一遍)的职责只有一件:不出链、不换页**。sandbox 与 CSP 都拦不住帧**自导航**(`<a href>` 点击、`<meta http-equiv="refresh">`),
+    帧内加载第三方页 = 访客 IP 泄给第三方 + 站内出现看不到地址栏的外站内容(威胁 9 的同族)。清洗规则:
+    - 去元素:`script` / `iframe` / `frame` / `frameset` / `object` / `embed` / `applet` / `form` / `input` / `textarea` / `select` / `button` / `meta` / `link` / `base` / `img` / `picture` / `source` / `video` / `audio` / `track`;
+    - 去属性:所有 `on*`;所有 URL 承载属性(`href` / `src` / `srcset` / `xlink:href` / `action` / `formaction` / `poster` / `ping` / `background` / `data` / `cite` / `longdesc` / `usemap`),
+      **除非**值去掉空白与控制字符后以 `#` 开头(帧内锚点);`target` 一律去;
+    - 保留:`style`(元素与属性;`@import` / `url()` 的外部抓取由 CSP 挡)、`details` / `summary`(**唯一**的无脚本交互)、内联 `svg`(`use href="#id"` 可用)、`math`、表格 / 列表 / 标题 / `pre` / `code` / `blockquote` 等全部排版元素。
+    **它不是 XSS 防线**:「不执行」由 sandbox 保证,清洗被绕过的最坏结果是一次点击后帧内换页,那个页仍在同一个 sandbox 里。所以**不引 DOMPurify**:
+    自写窄清洗的判定部分是两个纯函数(`shouldDropElement(tag)` / `shouldDropAttribute(name, value)`),`bun test lib` 钉住;DOM 遍历是薄壳,整体在 faux 剧本 + Browser pane 里用夹具核(验收 #9)。
+    审查者或所有者若更想要 DOMPurify(多一个运行时依赖,§7 供应链),改这一条即可。
+11. **主题跟随**:拼 `srcdoc` 时从父页 `getComputedStyle(document.documentElement)` 读站点既有的颜色 / 字体变量,注成 `--xh-bg` / `--xh-fg` / `--xh-muted` / `--xh-border` / `--xh-brand` / `--xh-sans` / `--xh-mono`;
+    切换主题 → 依赖变化 → 重拼 `srcdoc` → 帧重载(静态内容,肉眼一闪,无状态可丢)。提示词要求配色只用 `var(--xh-*)`,不强制。
+12. **上限**:围栏正文 ≤ **16 KB**(UTF-8 字节,复用 `xray-card.ts` 的 `TextEncoder` 计量),超过整段回落代码块(语言标签 `xray-html`)。
+    为什么不是 artifacts 常见的 32–64 KB:16 KB ≈ 5k token,流式期间访客要盯着骨架约一分钟,也直接计入访客配额;静态 HTML + CSS 画一张时间线 / 架构示意 3–8 KB 足够。
+    提示词**建议** ≤ 6 KB。**流式期间不做渐进渲染**:每个 delta 重拼 `srcdoc` = 每个 delta 重载帧;围栏闭合前只有骨架。两个组件都是 HTML 时上限相加(最坏 32 KB),不另设总量。
+13. **只在会话区开**:`Markdown` 加 `html` prop(默认关),`Workbench.tsx` / `MobileChat.tsx` 只给最终回答段传;Notes / Skills / Source 的渲染器不传,
+    同一段 ` ```xray-html ` 在那里就是代码块(Notes 正文契约「标准 markdown」不扩)。
+14. **移动端**(`5a` / `5b`):`choice` 选项行与 `form` 输入框 44 命中,submit 按钮胶囊、独占一行(照 `4y` 的既有裁定);帧高上限 360,帧宽 = 正文宽,帧内横向内容在帧内滚、页面不横滚。
+    单选卡在触屏上**一次点按即发送**,误触成本所有者已认;滚动手势不触发 click,这是浏览器语义。`form` 的输入框在会话列表里聚焦时,依赖浏览器默认的 `scrollIntoView` 不被键盘遮住
+    (R-MOBILE 的键盘避让原语只管 composer),验收 #16 实测。
+15. **回放 = 实时**:两种新卡的选择 / 填写 / 锁定是纯前端状态,不产生事件、不落库,刷新回初始态;`srcdoc` 是(围栏原文, 主题)的确定性函数,同一主题下刷新前后一字不差。
+16. **提示词**(`runtime.ts`,`CARDS_CLAUSE` 扩成组件段,仍单独一段、与工具无关、永远最后一段):
+    ① **每次回复最多两个组件**(卡或 HTML 任意组合),放在最终回答的**开头或结尾**、不放中间、不放处理过程里;
+    ② 什么时候用卡(结构化数据,沿用 R-CARDS 口径)、什么时候用 `choice` / `form`(要访客做选择 / 提供几项信息再继续时)、什么时候用 HTML(布局类:时间线 / 流程 / 架构示意 / 带排版的说明,八种卡装不下的);
+    ③ 两种新 kind 的形状各一行 + **回传语义**:访客点选项 / 按钮后,「题干: 选项」或「题干 字段: 值; …」会**作为访客的下一条消息直接发出**,所以 `prompt` 要写成一句完整的问题、`label` 要能单独成立、
+    发出的那句话模型下一轮会原样收到;
+    ④ HTML 规则:只写 HTML + CSS;不写 `script` / 表单 / 链接 / 图片 / 任何外部资源(会被去掉或拦下,写了等于白写);配色只用 `var(--xh-*)`;开围栏行声明 `height=<px>`(160–480);建议 ≤ 6 KB、上限 16 KB;
+    ⑤ 沿用:正文不复述组件内容但要能独立成句。**提示词修补也走完整 codex 循环**(项目记忆)。
+    `HTML_COMPONENT_ENABLED` 常量掐掉的是 ④ 与 ② 里的 HTML 半句,卡片段不受影响。
+
+**已认代价**(所有者 2026-09-09 圈定 A + B 并调整回传方式时一并认下):
+
+- **访客失去发前审阅**:点选项 / 按钮即发送,不再经输入框。兜底换成「发出的文本 = 卡上可见的文本」与「只由一次点击触发」(§0 第 12 条);
+  模型仍能通过给什么选项来引导对话,这是功能本身。触屏误触即发一条消息。
+- 刷新后老卡解锁、再点再发(锁定是本地状态);每次都是一条普通访客消息、计入既有配额,无放大。
+- 模型写坏 HTML 时访客看到的是一个 `xray-html` 代码块里最多 16 KB 的裸 HTML(R-CARDS 同类代价,更长);缓解只有提示词与 faux 剧本回归。
+- **关 = 发版,且只停产出**:历史消息里已产出的组件继续显示到会话过期,不回溯隐藏。
+- 帧内**没有脚本**:交互只剩 `details` / `summary`;想要 JS 交互 = C 档,另裁定。帧内**没有链接与图片**:要链接写在正文 markdown 里(既有口径)。
+- 切换主题时帧重载一闪(静态,无状态丢失)。
+- 模型输出成本上升:一个 6 KB 组件 ≈ 2k 输出 token,两个组件都是 HTML 时最坏 32 KB;计入既有 `total_tokens` 与日配额,**不加新限额**。
+- 窄清洗可能有漏,漏的后果被 sandbox 封在「一次点击后帧内换页」;修漏 = 改判定函数 + 加夹具,不改机制。
+- iOS WebKit 对 iframe 尺寸历史上有「按内容撑开」的怪癖,本轮验收只到 Browser pane 的移动预设,**所有者真机核一次**。
+- 处理过程段里的卡片改为代码块(所有者若觉得处理过程段该保留卡片,改 `AssistantMessage` 一处传参即可)。
+- Timeline 里仍没有「画了组件」的事件(同 R-CARDS);由卡片发出的访客消息在 Timeline 里就是一次普通 `turn_start`,不标来源。
+
+## 前置
+
+- **设计稿**:`2u` / `2v`(新文件 `Agent X-Ray Cards 2.dc.html`)+ `5a` / `5b`(新文件 `Agent X-Ray Mobile - Runtime 2.dc.html`),四项判据(字节数 / 闭合标签 / div 开合 / 画板数)全过后并入 `design/`。
+  **`5x` 号段待所有者确认**(CLAUDE.md 规则 8 只写了「建议移动端继续占 `5x` 段从 `5a` 起」);确认前提示词按 `5a` / `5b` 写,若改号段只改编号不改内容。
+  两份既有大文件都不碰:`Workbench` 离 256 KiB 只剩 9 KB,`Mobile - Runtime` 只剩 27 KB(一块移动画板约 27 KB,放不进)。
+- R-CARDS `d342b18` 与 R-CROSSLINK `995dc49` 已在生产:卡片渲染路径、骨架语汇、`m-xscroll` / `SegmentedControl`、composer 的 `send` / `busy` 都在。
+- 无新凭据、无新依赖(不引 DOMPurify / iframe-resizer / 图表库)、无新容器、无迁移、无新端点、MCP 仍 51。
+
+## 与画板的对照关系(拉回设计稿后逐项填)
+
+| 画板 | 内容 | 实现落点 | 状态 |
+|---|---|---|---|
+| `2u` | 桌面 · 两种可回传卡 + 位置① + 单选发送后的锁定态与紧随的访客气泡 + 多选 / 表单的 submit 禁用与可用态 + busy 态 | `XrayCard.tsx`(choice / form)· `Workbench.tsx` | 待交付 |
+| `2v` | 桌面 · `xray-html` 帧 + 位置② + 流式骨架(按声明高度)+ 回落代码块 + 高度夹取 + 主题态 + 「一轮两个组件」示意 | `XrayHtml.tsx` · `Markdown.tsx` | 待交付 |
+| `5a` | 移动 · 两种可回传卡(44 命中、胶囊 submit、键盘弹起态、锁定态) | `globals.css` 移动端差别 · `MobileChat.tsx` | 待交付 |
+| `5b` | 移动 · `xray-html` 帧(高 ≤ 360、帧内横滚、页面不横滚)+ 骨架 + 回落 | 同上 | 待交付 |
+
+## 交付物
+
+- `apps/web/lib/xray-card.ts`:`choice` / `form` 两种 kind 的校验、组成发送文本的纯函数(`composeChoiceMessage` / `composeFormMessage`)、解析期最坏长度判定;`xray-card.test.ts` 新增 ≥ 15 条。
+- `apps/web/lib/xray-html.ts`(新):info string 解析与高度夹取、字节上限、`shouldDropElement` / `shouldDropAttribute` 两个判定纯函数、`srcdoc` 拼装(纯字符串部分);`xray-html.test.ts` ≥ 20 条(含 `javascript:` / 带控制字符的 `href` / `xlink:href` / `srcset` / `formaction` / `ping` / 大小写与空白变体)。
+- `apps/web/components/XrayCard.tsx`:两种新 kind 的渲染、`onSend` prop、busy 与锁定两种态。
+- `apps/web/components/XrayHtml.tsx`(新):`DOMParser` 遍历薄壳 + 帧 + 骨架 + 主题重建。
+- `apps/web/components/Markdown.tsx`:`html` prop(默认关)、`onSend` 透传、组件预算(最终段前两个围栏)、`xray-html` 三个出口(骨架 / 帧 / 代码块)。
+- `apps/web/components/workbench/Workbench.tsx` / `apps/web/components/mobile/MobileChat.tsx`:`send` 拆成 `sendText(text)` + `send`,`onSend` 注入,最终回答段传开关、处理过程段不传。
+- `apps/web/app/globals.css`:两种新卡与帧的移动端差别(按 `5a` / `5b`)。
+- `apps/api/agent/runtime.ts`:`CARDS_CLAUSE` 扩成组件段 + `HTML_COMPONENT_ENABLED` 常量;`runtime.test.ts` / `cards-e2e.test.ts` 更新(faux 剧本加三张新卡 + 四个 HTML 用例 + 三围栏用例)。
+- 文档:`docs/security.md` §0 第 11 条修订 + 第 12 / 13 条(已写,落地后翻「已落地」)· `docs/architecture.md` 关键决策表加一行 · `design/README.md` 增删记录 · `docs/releases.md`(发版时)· `ROUNDS.md` 进度。
+- **不交付**:pi 工具 / `payload` 与 SSE / 迁移 / 新端点 / MCP(仍 51)/ Notes 侧 / `allow-scripts` / `allow-same-origin` / postMessage / 帧内图片与链接 / 运行期开关 / 任何新依赖。
+
+## 验收
+
+| # | 检查 | 命令 / 期望 |
+|---|---|---|
+| 1 | 编译与测试 | `dev.ps1 check` 过;`dev.ps1 test` 全绿(api 含 `runtime` / `cards-e2e` 更新;web `xray-card` 新增 ≥ 15 条、`xray-html` ≥ 20 条);`apps/web` 的 `npx tsc --noEmit` 过(项目记忆:check / test 不拦 web 的 TS 错) |
+| 2 | `choice` 单选 = 点即发 | 四选项卡,没有按钮;点第二项 → 会话区立刻出现访客气泡,文本**精确等于** `prompt` + `: ` + 该 label;`POST /agent/ask` 恰好一次;卡进入锁定态(选项不可点、第二项高亮);无 `prompt` 的卡发出的只有 label |
+| 3 | `choice` 多选 = submit 发 | 未选 → 按钮禁用;选两项 → 可用;点按钮 → 一条气泡,文本 = `prompt` + `: ` + 两个 label 以「、」相连;缺省按钮文案「提交」;卡锁定 |
+| 4 | `form` = submit 发 | 3 字段(text / select / text,一个 `required`);required 空 → 禁用;全填 → 点按钮一条气泡,单行、ASCII `: ` 与 `; ` 分隔、按字段顺序、空字段省略;5 字段全部 100 字满值 + 200 字 `prompt` → 仍发出(未被清洗闸丢弃);卡锁定 |
+| 5 | WYSIWYG | 单测:三个组成函数的输出**只由** `prompt` / `label` / 字段 `label` / 访客值拼成,任何非可见字段(`title` / `note` / `placeholder` / `submit` / `links`)都不进文本;`action` 在新 kind 上被忽略 |
+| 6 | 触发边界 | 渲染 / 滚动 / hover / 聚焦都不发;busy 期间点选项与按钮不发(计数 `POST /agent/ask` 不变);键盘 Enter / Space 走同一 handler;锁定后再点不发 |
+| 7 | 解析期最坏长度 | 单测:`choice` 8 × 60 字 label + 200 字 prompt → 通过;9 项 / 61 字 → 回落;`form` 5 字段 + 201 字 prompt → 回落;计量按 UTF-16(emoji 用例) |
+| 8 | 最多两个 | 同一最终回答里三个围栏(卡 + HTML + 卡、HTML + HTML + 卡两种顺序)→ 前两个是组件、第三个代码块;处理过程段里的围栏 → 代码块(展开折叠行可见);一首一尾各一个 → 两个都渲染 |
+| 9 | 帧属性与清洗 | `iframe` 的 `sandbox` 属性为空串、无任何 `allow-*`;`referrerpolicy="no-referrer"`;`srcdoc` 里 `<meta http-equiv="Content-Security-Policy">` 在任何模型内容之前;帧内 DOM(读 `srcdoc` 字符串或 `contentDocument`)没有 `script` / `img` / `meta`(除父页那条)/ `link` / `form` / `input` / `button` / `on*` 属性;所有 `href` 以 `#` 开头;`<details>` / `<style>` / 内联 `<svg>` 保留 |
+| 10 | 出网为零 | 夹具含 `<img src="https://…">`、`<link rel=stylesheet href=https://…>`、`<style>@import url(https://…); body{background:url(https://…)}</style>`、`@font-face src:url(https://…)`、`<a href="https://…">`、`<meta http-equiv="refresh" content="0;url=https://…">` → Browser pane `read_network_requests` 无任何第三方请求;点 `<a>` 帧不换页 |
+| 11 | 高度 | `height=` 缺省 → 320;`height=9999` → 480;`height=10` → 160;`height=abc` → 320;移动预设下 `height=480` → 360;骨架高度 = 夹取后高度 |
+| 12 | 上限与回落 | 16 KB + 1 字节 → 代码块(语言标签 `xray-html`);未知 kind / 坏 JSON 仍回落(R-CARDS 回归) |
+| 13 | 流式 | 围栏未闭合 → 骨架(高度已定、不跳版);闭合 → 帧;整轮里帧只创建一次(`javascript_tool` 数 `iframe` 的 load 事件或对比节点身份) |
+| 14 | 回放 = 实时 | 三张新卡 + 一帧的两轮,F5 前后会话区 `innerHTML` sha256 一致(同一主题下;新卡回初始态是预期,sha 按初始态比) |
+| 15 | 主题 | 切深色 → `srcdoc` 里的 `--xh-*` 值随之变、帧背景与站点一致;切回一致 |
+| 16 | 移动端 | Browser pane 移动预设 390:两种新卡 44 命中、submit 胶囊独占一行、单选点即发;`form` 输入框聚焦时可见;帧高 ≤ 360、帧内横向内容可滚、页面不横滚 |
+| 17 | 其它页面不受影响 | `/notes/*` / `/skills/*` / `/source/*` 对同一段 ` ```xray-html ` 与 ` ```xray-card `(choice)的渲染仍是代码块 |
+| 18 | 提示词 + 真实 provider 留证 | `runtime.test.ts` 断言组件段含「最多两个」「开头或结尾」「直接发出」「xray-html」「height=」与两种新 kind;发版后在生产各跑出一张 `choice` 卡(点一次、看到气泡与下一轮)与一个 HTML 组件,截图留证(R-CARDS #13 同款) |
+| 19 | 既有零改动 | `Markdown` 不传 `html` / `onSend` 时输出与改前一字不差(快照);既有六种卡的 `action` 仍是预填、不发送;`git diff --stat main -- apps/api` 只有 `runtime.ts` 与其测试;`design/` 之外一个像素不动(规则 7) |
+| 20 | 文档同步 | `docs/security.md` §0 第 11 / 12 / 13 条翻「已落地」并核对边界文件名;`docs/architecture.md` 一行;`design/README.md` 增删记录;`ROUNDS.md` 进度;发版后 `docs/releases.md` |
+
+## 禁止
+
+- 不做 pi 工具、不改 `payload` / SSE / 迁移 / MCP、不加端点;不给 Notes / Skills / Source 开任何组件。
+- 发送**只能**经既有 composer 的发送函数、**只能**由访客对卡片的一次点击触发;发送文本**只能**由卡上可见文本与访客自己填的值组成,不得带任何模型写的隐藏模板;不做「发送后自动追问」「连发」「定时发」。
+- 帧**不给** `allow-scripts` / `allow-same-origin` / `allow-forms` / `allow-popups` / `allow-top-navigation` 及任何 `allow-*`;不做 postMessage;不做帧内链接 / 图片 / 外部资源;不做高度自适应;帧里的任何东西都不能触发发送。
+- 不引入任何新依赖(DOMPurify / iframe-resizer / 图表库 / 表格库都不要);不渲染模型 HTML 到父页 DOM(`dangerouslySetInnerHTML` 一处不加)。
+- 不做运行期开关机制(表 / MCP 工具 / 读端点);关 = 改常量 + 发版。
+- 不把组件状态落库或写存储;不给 Timeline 加事件;不给由卡片发出的访客消息加任何标记或字段。
+- 默认继承两条:不改前端页面样式(规则 7,画板之外的一个像素都不动);不加设计稿没有的功能(规则 8)。
+
+## 代码审查
+
+<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
+
+- 审查方式:<codex /codex:review | codex /codex:adversarial-review | /code-review(写明降级原因)>
+- findings 处理:<逐条:采纳整改 / 不采纳及理由;或链接同目录记录文件>
+- 结论:<PASS | 整改后 PASS>
+
+## 失败处理
+
+同一验收项针对性整改后连续 2 次验证仍不过 → 写 `rounds/round-cards2/BLOCKED.md`,停下呼人。禁止放宽验收标准自我通过。
+项目记忆两条一并适用:findings 连续两轮落在同一块自建机制上(最可能是第 10 条的窄清洗)就停下回所有者重定方案,不堆补丁;审查收口之后才 `dev.ps1 build`。
+
+## 本轮实测
+
+<!-- 完成后回填:实际数字、踩的坑、与设计/计划的偏离及原因 -->

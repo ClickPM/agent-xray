@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;此后多次修订,逐条见下方「第 N 次修订」,最近一次是 2026-09-09 第十三次)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2t(共 27 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 与 2q–2r 于 2026-09-08 新增,见第十一、第十二次修订;2s–2t 于 2026-09-09 新增,见第十三次修订)+ **移动端**画板 4a–4z(共 26 块,2026-09-07 新增 4a–4u 见 R-MOBILE,2026-09-08 追加 4v–4x 见 R-CROSSLINK,2026-09-09 追加 4y–4z 见 R-CARDS)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;此后多次修订,逐条见下方「第 N 次修订」,最近一次是 2026-09-09 第十四次)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2t(共 27 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 与 2q–2r 于 2026-09-08 新增,见第十一、第十二次修订;2s–2t 于 2026-09-09 新增,见第十三次修订;`2u`–`2v` 与移动 `5a`–`5b` 已于 2026-09-09 裁定给 R-CARDS-2、设计稿待交付、并入后再改计数,见第十四次修订)+ **移动端**画板 4a–4z(共 26 块,2026-09-07 新增 4a–4u 见 R-MOBILE,2026-09-08 追加 4v–4x 见 R-CROSSLINK,2026-09-09 追加 4y–4z 见 R-CARDS)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 >
 > **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
 > 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
@@ -150,6 +150,17 @@
 > 提示词 [`rounds/round-cards/design-prompt.md`](rounds/round-cards/design-prompt.md),拆解 [`rounds/round-cards/round-cards.md`](rounds/round-cards/round-cards.md);
 > 分支 `round-cards` 已开、设计稿已并入,**开工中**。
 
+> **2026-09-09 第十四次修订(R-CARDS-2)**:所有者裁定做**会话区 UI 组件 2.0**(所有者原话「UI tools」:标准模板可交互可回传 + 只定宽高的自由内容)。讨论时分四档,
+> 所有者圈定 **A + B 合成一轮、C / D 暂不考虑**,同日两处调整:**回传 = 发送**(单选点选项直接发、多选与表单点 submit 发,推翻讨论时的预填档)、**每轮组件上限仍两个**。
+> **A** = `xray-card` 新增 `choice`(单选 / 多选)与 `form`(≤ 5 字段)两种 kind,发出的文本**只由卡上可见文本组成**(题干 + 所选 label / 字段 label + 访客填的值,无隐藏模板)、只由访客一次点击触发、
+> 走既有 composer 发送路径,api 零改动;**B** = 新围栏 ` ```xray-html `,模型写 HTML + CSS,渲染进 `sandbox=""` 的 iframe(静态档:无脚本、opaque origin、帧内 meta CSP 不出网、窄清洗不出链;
+> 宽 = 正文宽,高由模型在 info string 声明并夹到 [160, 480]、移动 ≤ 360,≤ 16 KB;流式先按声明高度立骨架;主题跟随)。**仍是内容级、不是 pi 工具**;组件只在最终回答段渲染、
+> 位置首或尾、最多两个(前端硬限);无迁移 / 无端点 / MCP 仍 51 / 无新依赖 / 无运行期开关(关 = 发版,只停产出)。与 R-TOOLS / R-PERF / R-TOOLCARDS / R-SOURCE / R-CROSSLINK / R-CARDS 同一顺序、
+> **不是**规则 8 的例外:桌面 `2u` / `2v` 放**新文件** `Agent X-Ray Cards 2.dc.html`,移动 `5a` / `5b` 放**新文件** `Agent X-Ray Mobile - Runtime 2.dc.html`(`Workbench` 只剩 9 KB、`Mobile - Runtime` 只剩 27 KB;
+> `5x` 号段待所有者确认),并入 `design/` **之后**才开代码。`docs/security.md` §0 第 11 条修订、第 12 条(卡片点击即发 = 模型预制的访客消息,第 10 条的唯一例外)与第 13 条(自由 HTML,第 11 条的唯一例外)
+> 按规则 9 先于代码写入。提示词 [`rounds/round-cards2/design-prompt.md`](rounds/round-cards2/design-prompt.md),拆解 [`rounds/round-cards2/round-cards2.md`](rounds/round-cards2/round-cards2.md);
+> **文档就绪、设计稿待交付**。
+
 ## 进度表
 
 | 轮 | 内容 | 状态 | 完成 |
@@ -187,6 +198,7 @@
 | **R-LEAK** | 公开轨迹流的配置面泄露修补:`model_select` 派生字段删掉(`data` 只剩 `{type, source}`)+ `web_search` `request` 阶段文案改固定字符串 + **结果 `details` 只留 `citations`(通道 C,探针抓到)** + 同族排查 + 冒烟第 8 条改值级 | ✅ **已发版**(生产 `e8ac83e`,2026-09-08;[任务卡](rounds/round-leak/round-leak.md);codex 一轮零 findings;`test` 608 + web 28 全绿;新增 6 条用例;无迁移、无 MCP 变动、前端零改动;发版当日值级冒烟六值 × 两条流 0 命中) | 2026-09-08 |
 | **R-CROSSLINK** | 跨栏 / 跨页联动:Ask why 预填(1-A)+ 卡片 ↔ Timeline 双向定位 + Notes 章节 → Runtime 入口,共用「预填、永不自动发送」一个原语;桌面 `2q` / `2r`(新文件)+ 移动 `4v`–`4x` + `1b` / `4f` 注释 | ✅ **已完成、待发版**(所有者裁定 2026-09-08,第二轮;分支 `round-crosslink`,codex 三轮 6 条 findings 全部采纳整改、末轮零 findings;[任务卡](rounds/round-crosslink/round-crosslink.md) · [画板提示词](rounds/round-crosslink/design-prompt.md);设计稿 `2q` / `2r`(新文件 `Agent X-Ray Crosslink.dc.html`)+ `4v` / `4w` / `4x` + `1b` / `4f` 注释于 2026-09-08 并入,四项判据全过;`docs/security.md` §0 第 10 条已写并翻成「已落地」;零后端机制,api 侧只有一句提示词;`dev.ps1 test` = api 609 + web 56 用例全绿,14 项验收本机逐项实测) | — |
 | **R-CARDS** | 会话区信息卡片:内容级 ` ```xray-card ` 围栏块(六种 kind 闭集、声明式交互、非法回落、流式骨架、只在会话区开);桌面 `2s` / `2t`(新文件)+ 移动 `4y` / `4z` | ✅ **已发版 `d342b18`**(2026-09-09;分支 `round-cards`;设计稿 `2s` / `2t`(新文件 `Agent X-Ray Cards.dc.html`)+ `4y` / `4z` 同日并入,四项判据全过;交付 `lib/xray-card.ts`(六种 kind 闭集 + 上限 + 链接口径 + 围栏闭合判据,web 用例 93 条里新增 37 条)· `components/XrayCard.tsx` · `Markdown.tsx` 三个默认关的 prop · 会话区两处接线 · `globals.css` 移动端差别(宽度驱动走容器查询、只在 768 断点内;触控语汇走同一断点)· `runtime.ts` 卡片段 · `cards-e2e.test.ts`;**codex 四轮共 10 条 findings(全部 P2、high 为零):9 条采纳、1 条不采纳记 BACKLOG,末轮零 findings**;`dev.ps1 test` api 35 文件 613 用例 + web 93 用例全绿,`tsc` 过;本机 faux provider 验收 15 项 14 过,#13 的真实 provider 留证已于发版当日在生产补齐(**验收 15 项全过**);生产冒烟 33 项 0 失败,发布记录 [`docs/releases.md`](docs/releases.md);[任务卡](rounds/round-cards/round-cards.md) · [画板提示词](rounds/round-cards/design-prompt.md);`docs/security.md` §0 第 11 条已写;不是 pi 工具、无迁移、MCP 仍 51) | — |
+| **R-CARDS-2** | 会话区 UI 组件 2.0:`xray-card` 新增 `choice` / `form` 两种**可回传** kind(单选点即发、多选与表单 submit 发,文本只由可见字组成)+ 新围栏 ` ```xray-html ` 静态 HTML 组件(`sandbox=""` iframe + 帧内 CSP + 窄清洗,宽 = 正文宽、高夹取、≤ 16 KB)+ 每轮最多两个组件前端硬限;桌面 `2u` / `2v`(新文件)+ 移动 `5a` / `5b`(新文件) | 📝 **文档就绪、设计稿待交付**(所有者裁定 2026-09-09,四档圈定 A + B、C / D 记 BACKLOG;[任务卡](rounds/round-cards2/round-cards2.md) · [画板提示词](rounds/round-cards2/design-prompt.md);`docs/security.md` §0 第 11 条修订、第 12 / 13 条已写;仍是内容级、不是 pi 工具;无迁移 / 无端点 / MCP 仍 51 / 无新依赖) | — |
 
 ## 里程碑
 
@@ -865,6 +877,30 @@ MCP(仍 51)/ Notes 侧 / 图片图表 / 表达式求值 / 外部资源 / 状态�
 - 验收 15 项(细则在任务卡):`check` / `test`(`xray-card` ≥ 20 条)/ web `tsc`;六种渲染;回落;流式骨架;折叠后仍在;回放一致(innerHTML sha256);四种交互;动作按钮;
   链接口径;不解析;Notes 不受影响;移动端;提示词 + 真实 provider 留证;既有零改动;文档同步。
 - **前置**:设计稿并入 `design/`;R-CROSSLINK 已落地(否则 `action` 不渲染)。**止损**:纯前端 + 一段提示词,回滚 = 换回上一个镜像 tag;`Markdown` 的 `cards` 不传时与改前一字不差。
+
+### R-CARDS-2 — 会话区 UI 组件 2.0:可回传卡片(A)+ 沙箱静态 HTML 组件(B)(命名轮;所有者裁定 2026-09-09;文档就绪、设计稿待交付)
+
+> 任务卡 [`rounds/round-cards2/round-cards2.md`](rounds/round-cards2/round-cards2.md),画板提示词 [`design-prompt.md`](rounds/round-cards2/design-prompt.md)。
+> 同一顺序、**不是**规则 8 的例外:桌面 `2u` / `2v` 放新文件 `Agent X-Ray Cards 2.dc.html`,移动 `5a` / `5b` 放新文件 `Agent X-Ray Mobile - Runtime 2.dc.html`(`5x` 号段待所有者确认);并入 `design/` 之后才开工。
+
+**问题**:所有者提出「给 agent 增加一个 UI tools,由 agent 自主决定是否使用」,三条限制:两个位置二选一;标准模板可套用、可交互、**交互数据回传对话**;不用模板时只定宽高、由模型自主生成(类似 artifacts)。
+R-CARDS 的六种卡只有本地交互、回传只有预填,也没有自由内容的载体。
+
+**形态裁定**(2026-09-09):讨论给四档,所有者圈定 **A + B**、C / D 暂不考虑;同日调整**回传 = 发送**(单选点选项直接发、多选与表单点 submit 发)、**每轮上限仍两个**。
+**A** = `xray-card` 加 `choice` / `form` 两种 kind;发出的文本只由卡上可见文本组成、只由访客一次点击触发、走既有 composer 发送函数(`send` 拆成 `sendText(text)`),api 零改动;发过即锁(本地态)。
+**B** = ` ```xray-html ` 围栏 → `<iframe sandbox="" srcdoc>` 静态档:三层各管一件事(sandbox 不执行 / 帧内 meta CSP 不出网 / `DOMParser` 窄清洗不出链不换页,后者**不是** XSS 防线),
+宽 = 正文宽、高由 info string `height=` 声明夹到 [160, 480](移动 ≤ 360)、≤ 16 KB、流式按声明高度立骨架、主题变量注入、不引 DOMPurify。
+组件只在最终回答段渲染、位置首或尾(提示词约束)、最多两个(前端硬限);无运行期开关(关 = 发版,只停产出)。
+**已认代价**:访客失去发前审阅(兜底换成 WYSIWYG + 一次点击 + 既有路径);刷新后老卡解锁再点再发;坏 HTML 时看到最多 16 KB 裸 HTML 代码块;帧内无脚本 / 链接 / 图片;主题切换帧一闪;
+输出 token 上升(两个 HTML 最坏 32 KB,不加新限额);窄清洗可能有漏但被 sandbox 封在「点击后帧内换页」;iOS 帧尺寸怪癖待真机;处理过程段里的卡改为代码块。
+
+**交付**:`lib/xray-card.ts`(两种 kind + 组成函数 + 解析期最坏长度)· `lib/xray-html.ts`(新)· `XrayCard.tsx` / `XrayHtml.tsx`(新)· `Markdown.tsx`(`html` prop、`onSend` 透传、组件预算)·
+会话区两处接线 · `globals.css` 移动端差别 · `runtime.ts` 组件段 + `HTML_COMPONENT_ENABLED` · faux 剧本 e2e · `docs/security.md` §0 第 11 / 12 / 13 条(已写)· `docs/architecture.md` 一行。
+**不交付**:pi 工具 / payload 与 SSE / 迁移 / 新端点 / MCP(仍 51)/ Notes 侧 / `allow-scripts` / `allow-same-origin` / postMessage / 帧内图片链接 / 运行期开关 / 新依赖。
+
+- 验收 20 项(细则在任务卡):`check` / `test` / web `tsc`;单选点即发;多选 submit;form submit;WYSIWYG;触发边界;解析期最坏长度;最多两个;帧属性与清洗;出网为零;高度;上限回落;流式;回放一致;主题;移动端;
+  其它页面不受影响;提示词 + 真实 provider 留证;既有零改动;文档同步。
+- **前置**:设计稿并入 `design/`;R-CARDS / R-CROSSLINK 已在生产。**止损**:纯前端 + 一段提示词,回滚 = 换回上一个镜像 tag;`Markdown` 不传 `html` / `onSend` 时与改前一字不差。
 
 ## 轮次外事项
 
