@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-cards2/round-cards2.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**实现完成、审查中**(所有者裁定 2026-09-09;设计稿同日并入 `design/`,同日在分支 `round-cards2` 实现;本机验收 20 项全过,见「本轮实测」)。
+> 状态:**审查收口(codex 4 轮,第 4 轮零 findings),已合并 `main`,待发版**(所有者裁定 2026-09-09;设计稿同日并入 `design/`,同日在分支 `round-cards2` 实现;本机验收 20 项全过,见「本轮实测」;发版后补 `docs/releases.md` 与真实 provider 留证)。
 > 所有者原话(2026-09-09):「给 agent 增加一个 UI tools,支持回复结果中在对话区展示 UI 组件,由 agent 自主决定根据当前回答是否使用这个 tools」,三条限制:
 > ① 支持两个区域二选一展示(折叠区和最终 message 中间 / 在 message 后面);② UI 组件提供几个标准模板,可直接套用模板生成样式,支持交互式样式,以及交互数据回传对话;
 > ③ 支持不使用标准模板,只定义高度和宽度限制,由模型自主决定生成内容,类似 artifacts。
@@ -272,6 +272,11 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 | 1 | **P2 · 收紧到 ≤ 3 空格之后,列表续行里的合法围栏被拒**(`lib/xray-card.ts` `fenceOpener`):`1. text\n\n    ```xray-card` 的四个空格是列表容器缩进,micromark 照常产出 fenced code,扫描器脱离上下文按顶层缩进拒掉 → 组件回落成代码块,基线版本反而认得 | **停下回所有者重定方案**(项目记忆「审查循环不是设计」:第 2、3 轮 findings 连续落在同一块自建机制 —— 扫描器在重新实现 CommonMark 的一角,补列表上下文之后 lazy continuation / tab / 嵌套还会再来)。给所有者三档:A 用解析器自己的树数(推荐)/ B 扫描器补列表上下文 / C 认下不改记 BACKLOG。**所有者裁定 A**(2026-09-09)。落地:新文件 `lib/remark-component-budget.ts` —— 一个 remark 插件(与 `remarkDollarGuard` / `remarkLinkHref` 同一形态,排在它们之后)在 micromark 产出的 mdast 上按文档序给前两个 xray 围栏的 `code` 节点打 `data.hProperties.dataXrayComponent`,经 mdast-util-to-hast 落到 `<code>` 的 `data-xray-component` prop,`ChatFencePre` 只认这个标记;围栏是不是围栏由 micromark 说了算,两边**不可能**再不一致。逐行正则扫描器 `leadingComponentFences` 删除;`fenceOpener` 回到宽松前缀(它只在 micromark 已认定为围栏的行上读记号与 info string,不判「是不是」)。用例:`remark-component-budget.test.ts` 新增 6 条(列表项 / 引用块 / 缩进代码块 lang=null / 语言标签精确 / 保留既有 data),`xray-card.test.ts` 的扫描器用例换成 `fenceOpener` 读法 1 条,`fenceInfo` 的四空格断言反转。浏览器复核 `列表`(列表续行里的卡 + 帧:卡渲染在 `<li>` 里)/ `缩进` / `三个` / `处理` / `帧` 五个剧本 |
 
 复验:`bun test lib` **149** 用例全绿(11 个文件),`tsc --noEmit` 过。第一版把插件写成了 transformer 而不是 attacher(unified 调 attacher 时没有 tree → 整页掉进错误边界),本机第一次跑就撞上、改成与 `remarkLinkHref` 同一形状(工厂 → attacher → transformer)后过。
+
+**第 4 轮**(只审整改 diff,`--base 0c59fdb`,提交 `1b0dc53`;7.5 分钟):**零 findings**。原话:「未发现会破坏现有功能或测试的缺陷。新的 remark 插件能够按解析后的 mdast 文档顺序标记前两个组件围栏,并正确处理列表、引用及缩进代码块边界。」
+
+- 结论:**整改后 PASS**。四轮合计 8 条 findings:2 P1 + 6 P2 —— P1 SMIL 采纳、P1 DOMParser 两轮同一条不采纳(规范 + 实证,记在 `sanitizeFragment` 注释);P2 六条全部采纳(其中第 3 轮那条按「审查循环不是设计」回所有者裁定后以换方案落地)。
+  **留给所有者的一条**:不采纳的那条 P1 是本轮唯一未清零的 high 级项,理由与实证在第 1 轮 #1 / 第 2 轮 #1;所有者若不认这个理由,备选是换 DOMPurify —— 但它走的是同一条 DOMParser 路径,对这条假设本身没有帮助。
 
 ## 失败处理
 
