@@ -881,6 +881,11 @@ html {
   .xcard-table td {
     white-space: nowrap;
   }
+  /* kv 键列 150 → 104、行内 gap 12 → 8(画板 4y「320 / 430 不变 = compare 与 kv 的键列 104」;codex 第 2 轮 P2) */
+  .xcard-kv-row {
+    grid-template-columns: 104px minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
 }
 @media (max-width: 768px) {
   /* collapsed 卡的标题行 = 收起态唯一的把手,整行 44 命中(桌面靠 hover) */
@@ -942,5 +947,17 @@ html {
     color: var(--text) !important;
     background: var(--bg) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+  /* 内项 padding 8/0 → 34 高;命中区靠上下各 5px 透明外扩补到 44,不参与布局(画板 4y,与上面 .m-row-tap 同一手法;codex 第 2 轮 P2) */
+  .xcard-tab {
+    position: relative;
+  }
+  .xcard-tab::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -5px;
+    bottom: -5px;
   }
 }

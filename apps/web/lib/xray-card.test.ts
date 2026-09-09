@@ -264,6 +264,12 @@ describe("流式:围栏未闭合的判据(画板 2t 段①;入参是开围栏的
     assert.equal(fenceUnterminated(`1. 看:\n\n    ${F}xray-card\n    {}\n    ${F}`, 3), false);
     assert.equal(fenceUnterminated(`> ${F}xray-card\n> {}\n> ${F}`, 1), false);
   });
+  it("开围栏紧跟在列表标记后面(`1. ` / `- ` + 围栏)也认得出,未闭合照样是骨架(codex 第 2 轮 P2)", () => {
+    assert.equal(fenceUnterminated(`1. ${F}xray-card\n   { "v": 1,`, 1), true);
+    assert.equal(fenceUnterminated(`1. ${F}xray-card\n   {}\n   ${F}`, 1), false);
+    assert.equal(fenceUnterminated(`- ${F}xray-card\n  {}`, 1), true);
+    assert.equal(fenceUnterminated(`> - ${F}xray-card\n>   {}\n>   ${F}`, 1), false);
+  });
   it("开围栏那一行不是围栏时当作已闭合(宁可少画一次骨架)", () => {
     assert.equal(fenceUnterminated("不是围栏\n{}", 1), false);
     assert.equal(fenceUnterminated("x", 9), false);

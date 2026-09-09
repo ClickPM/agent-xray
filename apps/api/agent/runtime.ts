@@ -157,7 +157,7 @@ const CARDS_CLAUSE =
   '{"v":1,"kind":"list","title":"…","ordered":true,"items":[{"text":"…","note":"…"}]} —— 清单 / 步骤,≤ 20 项,note 可选\n' +
   '{"v":1,"kind":"stat","title":"…","items":[{"label":"…","value":"…","unit":"…","note":"…"}]} —— 指标,2–4 格,unit / note 可选\n' +
   '{"v":1,"kind":"compare","title":"…","columns":["A","B"],"rows":[{"k":"维度","a":"…","b":"…"}]} —— 两方对比,≤ 20 行\n' +
-  '{"v":1,"kind":"tabs","title":"…","tabs":[{"label":"…","card":{"kind":"kv","rows":[…]}}]} —— 分页,≤ 5 页,每页装上面五种之一,不能再套 tabs\n' +
+  '{"v":1,"kind":"tabs","title":"…","tabs":[{"label":"…","card":{"kind":"kv","rows":[{"k":"…","v":"…"}]}}]} —— 分页,≤ 5 页,每页装上面五种之一,不能再套 tabs\n' +
   "其它上限:整段 JSON ≤ 8 KB,每个字符串 ≤ 200 字。卡里的值按纯文本显示,不解析 markdown、不放 HTML;除 links 的 href 之外不要在卡里放任何网址。" +
   "JSON 不合法或超限时访客看到的只是一段代码,所以要写严格的 JSON(双引号、无尾逗号、无注释、v 必须是数字 1)。" +
   "正文不要复述卡里的内容,但要能独立成句 —— 就算卡片没能显示,回复也要读得通。";

@@ -349,7 +349,8 @@ function utf8Length(s: string): number {
  * `remarkDollarGuard` 重解析时只往源码里插反斜杠、不增减行,行号在两边对得上,offset 对不上。
  * 从那一行往后找一行**独立的闭围栏**:同种记号、长度不短于开围栏、行上只有它(CommonMark 闭围栏规则);
  * 找不到 = 未闭合。行首允许任意空白与 `>`:卡片写在列表项 / 引用块里时,容器前缀会跟着每一行,
- * 而 JSON 里不会出现一整行只有反引号,放宽不会误判。
+ * 而 JSON 里不会出现一整行只有反引号,放宽不会误判。**开围栏行**还要认列表标记(`1. ` / `- `):
+ * CommonMark 允许围栏直接跟在列表项标记后面(`1. ` + 三个反引号),那一行的行号正是 position 给的行号(codex 第 2 轮 P2)。
  *
  * 开围栏那一行本身不是围栏(理论上到不了:缩进代码块没有 info string)时当作**已闭合** ——
  * 宁可少画一次骨架,也不把一张闭合的卡压成骨架。
@@ -358,7 +359,7 @@ function utf8Length(s: string): number {
  */
 export function fenceUnterminated(source: string, openerLine: number): boolean {
   const lines = source.split(/\r?\n/);
-  const opener = /^[\s>]*(`{3,}|~{3,})/.exec(lines[openerLine - 1] ?? "");
+  const opener = /^(?:[\s>]|[-+*](?=\s)|\d{1,9}[.)](?=\s))*(`{3,}|~{3,})/.exec(lines[openerLine - 1] ?? "");
   if (!opener) return false;
   const mark = opener[1][0];
   const len = opener[1].length;
