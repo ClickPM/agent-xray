@@ -168,7 +168,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
       移动 `4v` / `4w` 追加进 `- Runtime`、`4x` 追加进 `- Notes Skills About`,`1b` / `4f` 只加注释;并入 `design/` 之后才开 `round-crosslink`。
       **零后端机制**(api 侧只有 `runtime.ts` 一句追问条款);`docs/security.md` §0 第 10 条(经链接预填的诱导)按规则 9 先于代码写入。
       提示词 `rounds/round-crosslink/design-prompt.md`,拆解 `rounds/round-crosslink/round-crosslink.md`。
-    - **2026-09-08 修订(R-CARDS;设计稿 2026-09-09 并入 `design/`,分支 `round-cards` 开工)**:所有者裁定让 agent 在回复里嵌**信息卡片**(所有者原话「UI 组件工具」),形态取 **2-A 内容级**:
+    - **2026-09-08 修订(R-CARDS;设计稿 2026-09-09 并入 `design/`,同日实现、审查收口并合并 `main`,待发版)**:所有者裁定让 agent 在回复里嵌**信息卡片**(所有者原话「UI 组件工具」),形态取 **2-A 内容级**:
       模型在正文里写 ` ```xray-card ` + JSON,`Markdown.tsx` 识别 `language-xray-card` 画卡;**不是 pi 工具**(工具级要给 `tool_end` 帧与 `payload` 加结构字段、
       还得给 `2l` 折叠规则加例外)。六种 `kind` 闭集(kv / table / list / stat / compare / tabs);交互**只允许声明式**(tabs / 折叠 / 排序 / 单选),
       动作按钮唯一动作 = R-CROSSLINK 的预填;所有值纯文本、上限闭合、任一不符整卡回落成代码块;流式期间围栏未闭合先画骨架;**只在会话区开**(Notes 不开);
