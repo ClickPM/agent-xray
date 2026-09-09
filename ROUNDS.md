@@ -199,7 +199,7 @@
 | **R-LEAK** | 公开轨迹流的配置面泄露修补:`model_select` 派生字段删掉(`data` 只剩 `{type, source}`)+ `web_search` `request` 阶段文案改固定字符串 + **结果 `details` 只留 `citations`(通道 C,探针抓到)** + 同族排查 + 冒烟第 8 条改值级 | ✅ **已发版**(生产 `e8ac83e`,2026-09-08;[任务卡](rounds/round-leak/round-leak.md);codex 一轮零 findings;`test` 608 + web 28 全绿;新增 6 条用例;无迁移、无 MCP 变动、前端零改动;发版当日值级冒烟六值 × 两条流 0 命中) | 2026-09-08 |
 | **R-CROSSLINK** | 跨栏 / 跨页联动:Ask why 预填(1-A)+ 卡片 ↔ Timeline 双向定位 + Notes 章节 → Runtime 入口,共用「预填、永不自动发送」一个原语;桌面 `2q` / `2r`(新文件)+ 移动 `4v`–`4x` + `1b` / `4f` 注释 | ✅ **已完成、待发版**(所有者裁定 2026-09-08,第二轮;分支 `round-crosslink`,codex 三轮 6 条 findings 全部采纳整改、末轮零 findings;[任务卡](rounds/round-crosslink/round-crosslink.md) · [画板提示词](rounds/round-crosslink/design-prompt.md);设计稿 `2q` / `2r`(新文件 `Agent X-Ray Crosslink.dc.html`)+ `4v` / `4w` / `4x` + `1b` / `4f` 注释于 2026-09-08 并入,四项判据全过;`docs/security.md` §0 第 10 条已写并翻成「已落地」;零后端机制,api 侧只有一句提示词;`dev.ps1 test` = api 609 + web 56 用例全绿,14 项验收本机逐项实测) | — |
 | **R-CARDS** | 会话区信息卡片:内容级 ` ```xray-card ` 围栏块(六种 kind 闭集、声明式交互、非法回落、流式骨架、只在会话区开);桌面 `2s` / `2t`(新文件)+ 移动 `4y` / `4z` | ✅ **已发版 `d342b18`**(2026-09-09;分支 `round-cards`;设计稿 `2s` / `2t`(新文件 `Agent X-Ray Cards.dc.html`)+ `4y` / `4z` 同日并入,四项判据全过;交付 `lib/xray-card.ts`(六种 kind 闭集 + 上限 + 链接口径 + 围栏闭合判据,web 用例 93 条里新增 37 条)· `components/XrayCard.tsx` · `Markdown.tsx` 三个默认关的 prop · 会话区两处接线 · `globals.css` 移动端差别(宽度驱动走容器查询、只在 768 断点内;触控语汇走同一断点)· `runtime.ts` 卡片段 · `cards-e2e.test.ts`;**codex 四轮共 10 条 findings(全部 P2、high 为零):9 条采纳、1 条不采纳记 BACKLOG,末轮零 findings**;`dev.ps1 test` api 35 文件 613 用例 + web 93 用例全绿,`tsc` 过;本机 faux provider 验收 15 项 14 过,#13 的真实 provider 留证已于发版当日在生产补齐(**验收 15 项全过**);生产冒烟 33 项 0 失败,发布记录 [`docs/releases.md`](docs/releases.md);[任务卡](rounds/round-cards/round-cards.md) · [画板提示词](rounds/round-cards/design-prompt.md);`docs/security.md` §0 第 11 条已写;不是 pi 工具、无迁移、MCP 仍 51) | — |
-| **R-CARDS-2** | 会话区 UI 组件 2.0:`xray-card` 新增 `choice` / `form` 两种**可回传** kind(单选点即发、多选与表单 submit 发,文本只由可见字组成)+ 新围栏 ` ```xray-html ` 静态 HTML 组件(`sandbox=""` iframe + 帧内 CSP + 窄清洗,宽 = 正文宽、高夹取、≤ 16 KB)+ 每轮最多两个组件前端硬限;桌面 `2u` / `2v`(新文件)+ 移动 `5a` / `5b`(新文件) | ✅ **审查收口、已合并 `main`,待发版**(设计稿 2026-09-09 并入、同日实现与审查;codex 4 轮 / 8 条 findings:2 P1 + 6 P2,7 条采纳、DOMParser 那条 P1 两轮同一假设有规范与实证不采纳;第 3 轮那条按「审查循环不是设计」回所有者裁定后换成 remark 插件在解析器的树上数;第 4 轮零 findings。[任务卡](rounds/round-cards2/round-cards2.md) · [画板提示词](rounds/round-cards2/design-prompt.md);`docs/security.md` §0 第 11 / 12 / 13 条翻「已落地」;仍是内容级、不是 pi 工具;无迁移 / 无端点 / MCP 仍 51 / 无新依赖;本机 faux 剧本 20 项验收全过,真实 provider 留证待发版) | — |
+| **R-CARDS-2** | 会话区 UI 组件 2.0:`xray-card` 新增 `choice` / `form` 两种**可回传** kind(单选点即发、多选与表单 submit 发,文本只由可见字组成)+ 新围栏 ` ```xray-html ` 静态 HTML 组件(`sandbox=""` iframe + 帧内 CSP + 窄清洗,宽 = 正文宽、高夹取、≤ 16 KB)+ 每轮最多两个组件前端硬限;桌面 `2u` / `2v`(新文件)+ 移动 `5a` / `5b`(新文件) | ✅ **已发版 `2c7f174`**(2026-09-09;设计稿 2026-09-09 并入、同日实现与审查;codex 4 轮 / 8 条 findings:2 P1 + 6 P2,7 条采纳、DOMParser 那条 P1 两轮同一假设有规范与实证不采纳;第 3 轮那条按「审查循环不是设计」回所有者裁定后换成 remark 插件在解析器的树上数;第 4 轮零 findings。[任务卡](rounds/round-cards2/round-cards2.md) · [画板提示词](rounds/round-cards2/design-prompt.md);`docs/security.md` §0 第 11 / 12 / 13 条翻「已落地」;仍是内容级、不是 pi 工具;无迁移 / 无端点 / MCP 仍 51 / 无新依赖;本机 faux 剧本 20 项验收全过,真实 provider 留证已于发版当日在生产补齐(**验收 20 项全过**);生产冒烟 27 项 0 失败 + 4 项正向对照(本轮四个新文件在旧快照下判 404、发版后翻成已渲染),发布记录 [`docs/releases.md`](docs/releases.md)) | — |
 
 ## 里程碑
 
@@ -858,7 +858,7 @@ zod 闭集与说明 · 两处测试 · 两处文档。**不交付**:新工具 / 
 - 验收 14 项(细则在任务卡):`check` / `test` / web `tsc`;C1 桌面 + 非工具行 + 移动;C2 双向 + 对不上 + 移动;C3 桌面 + 隐藏 tab;预填边界;画板逐项;提示词;文档同步。
 - **前置**:设计稿并入 `design/`;建议 R-LEAK 先发版。**止损**:纯前端 + 一句提示词,回滚 = 换回上一个镜像 tag。
 
-### R-CARDS — 会话区信息卡片:内容级 `xray-card` 围栏块 + 声明式交互(命名轮;所有者裁定 2026-09-08;2026-09-09 实现、审查收口、合并 `main`,待发版)
+### R-CARDS — 会话区信息卡片:内容级 `xray-card` 围栏块 + 声明式交互(命名轮;所有者裁定 2026-09-08;2026-09-09 实现、审查收口、合并 `main`;同日已发版 `d342b18`)
 
 > 下一阶段三轮里的第三轮。任务卡 [`rounds/round-cards/round-cards.md`](rounds/round-cards/round-cards.md),画板提示词 [`design-prompt.md`](rounds/round-cards/design-prompt.md)。
 > 同一顺序、**不是**规则 8 的例外:桌面 `2s` / `2t` 放新文件 `Agent X-Ray Cards.dc.html`,移动 `4y` / `4z` 追加;并入 `design/` 之后才开工 —— **设计稿已于 2026-09-09 并入**(四项判据全过,见 `design/README.md` 增删记录),同日实现并经四轮 codex 审查收口、合并 `main`;发版后按任务卡验收 #13 在生产补真实 provider 留证。
@@ -879,7 +879,7 @@ MCP(仍 51)/ Notes 侧 / 图片图表 / 表达式求值 / 外部资源 / 状态�
   链接口径;不解析;Notes 不受影响;移动端;提示词 + 真实 provider 留证;既有零改动;文档同步。
 - **前置**:设计稿并入 `design/`;R-CROSSLINK 已落地(否则 `action` 不渲染)。**止损**:纯前端 + 一段提示词,回滚 = 换回上一个镜像 tag;`Markdown` 的 `cards` 不传时与改前一字不差。
 
-### R-CARDS-2 — 会话区 UI 组件 2.0:可回传卡片(A)+ 沙箱静态 HTML 组件(B)(命名轮;所有者裁定 2026-09-09;设计稿同日并入、同日开工)
+### R-CARDS-2 — 会话区 UI 组件 2.0:可回传卡片(A)+ 沙箱静态 HTML 组件(B)(命名轮;所有者裁定 2026-09-09;设计稿同日并入、同日开工;2026-09-09 已发版 `2c7f174`)
 
 > 任务卡 [`rounds/round-cards2/round-cards2.md`](rounds/round-cards2/round-cards2.md),画板提示词 [`design-prompt.md`](rounds/round-cards2/design-prompt.md)。
 > 同一顺序、**不是**规则 8 的例外:桌面 `2u` / `2v` 放新文件 `Agent X-Ray Cards 2.dc.html`,移动 `5a` / `5b` 放新文件 `Agent X-Ray Mobile - Runtime 2.dc.html`(`5x` 号段随交付确认);2026-09-09 并入 `design/` 之后开工(分支 `round-cards2`)。

@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-cards2/round-cards2.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**审查收口(codex 4 轮,第 4 轮零 findings),已合并 `main`,待发版**(所有者裁定 2026-09-09;设计稿同日并入 `design/`,同日在分支 `round-cards2` 实现;本机验收 20 项全过,见「本轮实测」;发版后补 `docs/releases.md` 与真实 provider 留证)。
+> 状态:**已发版 `2c7f174`(2026-09-09)**(codex 4 轮、第 4 轮零 findings,已合并 `main`;所有者裁定 2026-09-09;设计稿同日并入 `design/`,同日在分支 `round-cards2` 实现;本机验收 20 项全过,见「本轮实测」;生产冒烟 27 项 0 失败 + 4 项正向对照,真实 provider 留证见「生产留证」,发布记录 [`docs/releases.md`](../../docs/releases.md))。
 > 所有者原话(2026-09-09):「给 agent 增加一个 UI tools,支持回复结果中在对话区展示 UI 组件,由 agent 自主决定根据当前回答是否使用这个 tools」,三条限制:
 > ① 支持两个区域二选一展示(折叠区和最终 message 中间 / 在 message 后面);② UI 组件提供几个标准模板,可直接套用模板生成样式,支持交互式样式,以及交互数据回传对话;
 > ③ 支持不使用标准模板,只定义高度和宽度限制,由模型自主决定生成内容,类似 artifacts。
@@ -331,3 +331,26 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 - **faux 剧本关键字互相包含**:`大表单` 含 `表单`、由卡片发出的访客消息「哪几组工具…」含 `工具`,第一版剧本因此串台(多出一张不该有的卡、一次不该有的工具往返)。剧本按「长关键字在前」排序,新起一个端口 + `UPDATE llm_config SET base_url` 切过去;**同一会话下一轮就连新地址**(runtime 每轮读配置),在途那一轮会挂在旧端口上,切端口要在两轮之间。
 - `next build` 是 web 侧唯一拦 TS / RSC 错误的门(项目记忆),`dev.ps1 check` / `test` / `next dev` 都不拦;本轮跑了一次(结果见验收 #1)。
 - `dev.ps1 test` 全量跑出 `source-tools.test.ts` 1 条红:BACKLOG 里记过的文件顺序 flake(别的测试 afterAll 复原 `tool_config` 种子时漏掉迁移 016 的三个 `source_*` 行),与本轮无关,单跑绿。
+
+### 生产留证(2026-09-09,`2c7f174`;验收 #18 的后半段)
+
+发版流程与冒烟数字记在 [`docs/releases.md`](../../docs/releases.md) 的 `2c7f174` 行,这里只留**真实 provider** 那三条
+(本机 faux 剧本补不出的部分,桌面壳,`www.kzgai.cloud`):
+
+1. **模型自己写 `choice`** —— 「用一张单选卡问我:想先深入了解 Runtime、Notes、Skills、Source 这四个 tab 中的哪一个?」
+   → 一张 `div.xcard[data-xray-card=choice]`,`role=radiogroup` + 4 × `role=radio`,题干「你想先深入了解哪一个 Tab?」,
+   页面 `pre code` **为 0**(没有回落);同轮 `session_rename` 照常(Timeline Turn 1)。
+2. **点即发 = 一条,WYSIWYG 成立** —— 点第二项「Notes」→ 会话区当场出现访客气泡,文本**精确等于**
+   `你想先深入了解哪一个 Tab?: Notes`(题干 + ASCII `: ` + label,选项的说明文字**没有**进消息);卡随即锁定
+   (四项 `aria-disabled=true` / `tabindex=-1`,第二项 `aria-checked=true`)。**没有连发**的判据有两个:
+   Timeline 的 `input` 事件恰好 2 次(Turn 1 与 Turn 3),`read_network_requests` 里 `POST /api/agent/ask` 恰好 **3** 次
+   = 我手动发的 2 条 + 点选项发的 1 条。下一轮正常作答(调了 `notes_list_series`)并又画出一张 `table` 卡。
+3. **`xray-html` 帧** —— 「用一个 HTML 组件画一张 agent loop 的示意图…高度 320」→ 帧渲染成功:
+   `sandbox` 属性为**空串**(`iframe.sandbox` 0 个 token,无任何 `allow-*`)、`referrerpolicy="no-referrer"`、无 `src`;
+   `srcdoc` 4,946 B,`<meta http-equiv="Content-Security-Policy">` **在任何模型内容之前**(全篇 `<meta>` 恰好 2 个 = charset + CSP);
+   帧内无 `script` / `img` / `link` / `form` / `input` / `button` / `on*` 属性 / 任何 `http(s)://` URL,`<style>` 与内联 `<svg>` 保留;
+   高度 **320px**(模型声明值,落在 [160, 480] 内),`pre code` 仍为 0。**出网为零**:整轮 46 条网络请求全部指向
+   `www.kzgai.cloud` 自身,第三方 **0**。
+
+> 观察手法两条沿用本机验收:Browser pane 隐藏时把 `window.requestAnimationFrame` 换成 `setTimeout(16)`(只在页面里改),
+> 输入框用 native setter + `input` 事件驱动(项目记忆)。**冒烟会话未删**(与既往同,只对当时那个访客 cookie 可见)。
