@@ -5,6 +5,7 @@
 
 ## 工程
 
+- [ ] R-CARDS 顺带发现的**既有**链接口径漏洞:`components/Markdown.tsx` 的 `a` 只做 react-markdown 默认的 `urlTransform`(挡协议),而 WHATWG URL 对 http(s) 把反斜杠当正斜杠 —— 正文里 `[x](/\evil.com)` 渲染出的 `href` 解析后是 `https://evil.com/`,与 `//evil.com` 同一类协议相对地址,却没有 `//` 那么显眼。Notes 正文由所有者经 MCP 写、风险低;**会话区的助手正文是模型写的**(威胁 9 的同族:第三方地址进对话框),值得补一道「以 `/` 开头的 href 解析后须仍在本源」的判断(`lib/xray-card.ts` 的 `cardHref` 已按这个口径做,可直接复用)。既有、与 R-CARDS 无关,按规矩不当场改 (2026-09-09)
 - [ ] R-CARDS **pi 在 `systemPromptOverride` 的返回值之后还会追加自己的 `<project_context>`**(从 cwd 向上找到的 `AGENTS.md` 正文 + 一行「Current working directory: …」)。本机 `encore run` / `encore test` 的 cwd 是 `apps/api`,于是仓库根 `AGENTS.md`(给 codex 审查者的指针文件)整段进了发给 provider 的系统提示;`runtime.ts` 的 `ISOLATED_DIR` 只把 extensions / skills / settings 指向空目录,没有拦住 AGENTS.md 的向上查找。生产容器里 cwd 下应无 AGENTS.md、这段应为空,**未实测核实**。既有行为、与 R-CARDS 无关(`cards-e2e.test.ts` 因此不能断言「卡片段是最后一段」),按「跨轮次发现的问题不当场顺手改」记这里 (2026-09-09)
 - [ ] R-CARDS 移动端 `compare` 堆叠与 `stat` 两列**按卡内宽判、用 CSS 容器查询**(`@container (max-width: 479px)`,画板 4y 的规则边界是卡宽不是视口)。不支持容器查询的老 webview(Chromium < 105 / iOS < 16)会退化成桌面三列版式挤在 358 宽里(不横滚、每格折行);所有者裁定「按普通 H5 做、不为微信单独优化」,故不加 `useIsMobile` 分流(那是第二套判据)。要兼容老内核时再裁定 (2026-09-09)
 - [ ] R-CARDS 本机验收踩到:**编辑 `apps/api` 下任何文件(含测试文件)都会让 `encore run` 热重载**,在途的 `/agent/ask` SSE 被掐断、那一轮既无助手消息也无轨迹落库,前端停在「生成中」。浏览器验收期间别改 api 侧文件;真要改就重发那一轮。不是缺陷,是 dev 环境事实,记这里免得下次再查一遍 (2026-09-09)

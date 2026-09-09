@@ -136,14 +136,29 @@ function arr(v: unknown, min: number, max: number): unknown[] | null {
   return Array.isArray(v) && v.length >= min && v.length <= max ? v : null;
 }
 
+/** 站内路径解析用的假基址:只用来问「解析后还在不在同一个源」,不会出现在任何 href 里 */
+const SAME_ORIGIN_PROBE = "https://xray.invalid";
+
 /**
  * 链接口径 = markdown 的(任务卡派生取舍 3;`lib/external.ts` 的 `safeExternal` 是同一套协议判断):
- * `http(s)://` 且有主机名,或以单个 `/` 开头的站内路径(`//evil` 是协议相对地址,不收)。
+ * `http(s)://` 且有主机名,或以 `/` 开头且**解析后仍在本源**的站内路径。
  * 其余(`javascript:` / `data:` / `mailto:` / 不带 `/` 的相对路径 / 超长)回 null,调用方**丢该条**。
+ *
+ * 【站内路径为什么要真的解析一遍,不能只看前两个字符】`//evil` 是协议相对地址,谁都知道要挡;
+ * 但 WHATWG URL 对 http(s) 这类 special scheme 把反斜杠**当正斜杠**,`/\evil.com` 解析出来同样是 `https://evil.com/` ——
+ * 只判 `startsWith("//")` 就放过了它。所以拿一个假基址解析,`origin` 变了就不是站内。
  */
 export function cardHref(raw: unknown): { href: string; external: boolean } | null {
   if (typeof raw !== "string" || raw === "" || raw.length > CARD_LIMITS.href) return null;
-  if (raw.startsWith("/")) return raw.startsWith("//") ? null : { href: raw, external: false };
+  if (raw.startsWith("/")) {
+    let resolved: URL;
+    try {
+      resolved = new URL(raw, SAME_ORIGIN_PROBE);
+    } catch {
+      return null;
+    }
+    return resolved.origin === SAME_ORIGIN_PROBE ? { href: raw, external: false } : null;
+  }
   let url: URL;
   try {
     url = new URL(raw);
@@ -293,8 +308,10 @@ function parseBody(o: Obj, allowTabs: boolean): CardBody | null {
  * `v` 必填且等于 1(任务卡派生取舍 1):以后改形状时旧卡不会被新解析器误读。
  */
 export function parseCard(raw: string): CardSpec | null {
+  // 字节上限按**围栏原文**算,先于 trim(codex 第 1 轮 P2):trim 之后再量,一段小 JSON 前后垫任意空白就能绕过上限
+  if (utf8Length(raw) > CARD_LIMITS.fenceBytes) return null;
   const text = raw.trim();
-  if (text === "" || utf8Length(text) > CARD_LIMITS.fenceBytes) return null;
+  if (text === "") return null;
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -325,17 +342,31 @@ function utf8Length(s: string): number {
 }
 
 /**
- * 流式期间「围栏还没闭合」的判据(画板 2t 段①:未闭合显示骨架,闭合即换成卡或回落代码块)。
+ * 「围栏还没闭合」的判据(画板 2t 段①:未闭合显示骨架、闭合后才换成卡或回落代码块;
+ * codex 第 1 轮 P2:**闭合之前即使 JSON 已经完整也不能画卡**,流结束了仍没闭合的按代码块)。
  *
- * CommonMark 对没有闭合围栏的代码块的处理是「吃到文档末尾」,所以未闭合时代码正文恰好是
- * **整篇正文的后缀**;闭合了的块后面至少还跟着那行 ```,正文就不再是后缀。
- * 只比较文本、不依赖解析器的 position:`remarkDollarGuard` 重解析时会改写源码,offset 与外面这份
- * 字符串对不上,而后缀关系不受前面那些 `\$` 转义影响。
+ * 入参是渲染器从 hast 拿到的开围栏所在**行号**(1 起,remark 的 position)。用行号不用 offset:
+ * `remarkDollarGuard` 重解析时只往源码里插反斜杠、不增减行,行号在两边对得上,offset 对不上。
+ * 从那一行往后找一行**独立的闭围栏**:同种记号、长度不短于开围栏、行上只有它(CommonMark 闭围栏规则);
+ * 找不到 = 未闭合。行首允许任意空白与 `>`:卡片写在列表项 / 引用块里时,容器前缀会跟着每一行,
+ * 而 JSON 里不会出现一整行只有反引号,放宽不会误判。
  *
- * 围栏刚开、正文还是空串的那一帧也算未闭合(`endsWith("")` 恒真),那正是骨架该出现的第一帧。
+ * 开围栏那一行本身不是围栏(理论上到不了:缩进代码块没有 info string)时当作**已闭合** ——
+ * 宁可少画一次骨架,也不把一张闭合的卡压成骨架。
+ *
+ * 早先用「代码正文是整篇正文的后缀」判,闭合的卡后面若正好跟着同样的文字会误判成未闭合;按行号找闭围栏没有这个洞。
  */
-export function fenceUnterminated(source: string, code: string): boolean {
-  return source.trimEnd().endsWith(code.trimEnd());
+export function fenceUnterminated(source: string, openerLine: number): boolean {
+  const lines = source.split(/\r?\n/);
+  const opener = /^[\s>]*(`{3,}|~{3,})/.exec(lines[openerLine - 1] ?? "");
+  if (!opener) return false;
+  const mark = opener[1][0];
+  const len = opener[1].length;
+  for (let i = openerLine; i < lines.length; i++) {
+    const m = /^[\s>]*(`{3,}|~{3,})[ \t]*$/.exec(lines[i]);
+    if (m && m[1][0] === mark && m[1].length >= len) return false;
+  }
+  return true;
 }
 
 /**

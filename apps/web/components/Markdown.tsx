@@ -346,17 +346,23 @@ export function Markdown({
           if (className?.startsWith("language-")) return <code className={className}>{children}</code>;
           return <span style={inlineCode}>{children}</span>;
         },
-        pre: ({ children }) => {
+        pre: ({ children, node }) => {
           const child = children as { props?: { className?: string; children?: ReactNode } } | undefined;
           const lang = child?.props?.className?.replace(/^language-/, "") ?? "text";
           // R-CARDS:会话区把 xray-card 围栏画成信息卡片。三个出口(画板 2t 裁定):
-          //   合法 → 卡;流式期间围栏还没闭合 → 骨架;其余(闭合了仍不合法 / 超限 / 未知 kind)→ 下面的普通代码块,
+          //   围栏未闭合 → 流式期间骨架、流结束了仍没闭合 → 代码块(闭合之前即使 JSON 已完整也不画卡,codex 第 1 轮 P2);
+          //   闭合且合法 → 卡;其余(闭合了仍不合法 / 超限 / 未知 kind)→ 下面的普通代码块,
           //   语言标签就是围栏名、正文是那段原始文本,**没有错误提示**。`cards` 不传时这段整个不进,pre 与改动前一字不差。
+          // 开围栏的行号来自 hast 的 position(mdast-util-to-hast 把 code 节点的 position 原样拷到 pre 上);
+          // 拿不到时当作已闭合 —— 宁可少画一次骨架。
           if (cards && lang === CARD_LANG) {
-            const raw = codeText(child?.props?.children);
-            const spec = parseCard(raw);
-            if (spec) return <XrayCard spec={spec} onAsk={onAsk} />;
-            if (streaming && fenceUnterminated(source, raw)) return <XrayCardSkeleton />;
+            const line = (node as { position?: { start?: { line?: number } } } | undefined)?.position?.start?.line;
+            if (typeof line === "number" && fenceUnterminated(source, line)) {
+              if (streaming) return <XrayCardSkeleton />;
+            } else {
+              const spec = parseCard(codeText(child?.props?.children));
+              if (spec) return <XrayCard spec={spec} onAsk={onAsk} />;
+            }
           }
           return (
             <div

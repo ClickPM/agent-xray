@@ -127,6 +127,9 @@ describe("每条上限各一", () => {
     const fat = json(kv({ rows, pad: "y".repeat(CARD_LIMITS.fenceBytes) }));
     assert.equal(parseCard(fat), null);
     assert.notEqual(parseCard(json(kv({ rows }))), null);
+    // 上限按围栏原文算、先于 trim:一段小 JSON 前后垫空白也不能绕过(codex 第 1 轮 P2)
+    assert.equal(parseCard(" ".repeat(CARD_LIMITS.fenceBytes) + json(kv())), null);
+    assert.notEqual(parseCard("  " + json(kv()) + "\n"), null);
   });
 
   it("rows / items > 20", () => {
@@ -204,6 +207,12 @@ describe("宽松的两处:未知字段丢弃、单条坏链接只丢那一条", 
     ]);
     // 不带 `/` 的相对路径、mailto、http 没主机、超长:都丢
     assert.equal(cardHref("notes/a"), null);
+    // WHATWG URL 把反斜杠当正斜杠:`/\evil.com` 解析后是 https://evil.com/,与 `//evil` 同一类,必须丢;
+    // 而路径中段的反斜杠(`/a\b` → `/a/b`)仍在本源,留着无害
+    assert.equal(cardHref("/" + String.fromCharCode(92) + "evil.com/x"), null);
+    assert.equal(cardHref("/" + String.fromCharCode(92) + "/evil.com"), null);
+    assert.equal(cardHref("/a" + String.fromCharCode(92) + "b")?.external, false);
+    assert.equal(cardHref("/%2F%2Fevil")?.external, false);
     assert.equal(cardHref("mailto:a@b.c"), null);
     assert.equal(cardHref("http://"), null);
     assert.equal(cardHref(`https://x.example/${"a".repeat(CARD_LIMITS.href)}`), null);
@@ -229,15 +238,35 @@ describe("宽松的两处:未知字段丢弃、单条坏链接只丢那一条", 
   });
 });
 
-describe("流式:围栏未闭合的判据(画板 2t 段①)", () => {
-  const open = '正文一段。\n\n```xray-card\n{ "v": 1, "kind": "kv",';
-  it("未闭合:代码正文是整篇正文的后缀 → 骨架", () => {
-    assert.equal(fenceUnterminated(open, '{ "v": 1, "kind": "kv",\n'), true);
-    assert.equal(fenceUnterminated("```xray-card\n", ""), true); // 刚开围栏、正文还是空串的第一帧
+describe("流式:围栏未闭合的判据(画板 2t 段①;入参是开围栏的行号)", () => {
+  const F = "```";
+  const BT = String.fromCharCode(96); // 单个反引号,用来拼四反引号的开围栏
+  const open = `正文一段。\n\n${F}xray-card\n{ "v": 1, "kind": "kv",`;
+  it("未闭合:开围栏之后没有独立的闭围栏行 → 骨架;刚开围栏的第一帧也算", () => {
+    assert.equal(fenceUnterminated(open, 3), true);
+    assert.equal(fenceUnterminated(`${F}xray-card\n`, 1), true);
+    assert.equal(fenceUnterminated(`${F}xray-card`, 1), true);
   });
-  it("闭合了:后面跟着 ``` → 不是后缀 → 回落代码块", () => {
-    assert.equal(fenceUnterminated(`${open} }\n\`\`\`\n`, '{ "v": 1, "kind": "kv", }\n'), false);
-    assert.equal(fenceUnterminated(`${open} }\n\`\`\`\n\n后面还有话。`, '{ "v": 1, "kind": "kv", }\n'), false);
+  it("闭合了:同种记号、不短于开围栏、独占一行 → 已闭合(后面有没有正文都一样;CRLF 与 ~~~ 同理)", () => {
+    assert.equal(fenceUnterminated(`${open} }\n${F}\n`, 3), false);
+    assert.equal(fenceUnterminated(`${open} }\n${F}\n\n后面还有话。`, 3), false);
+    assert.equal(fenceUnterminated(`${open} }\r\n${F}   \r\n`, 3), false);
+    assert.equal(fenceUnterminated(`~~~xray-card\n{}\n~~~`, 1), false);
+  });
+  it("闭围栏要不短于开围栏:四反引号开的块里一行三反引号不算闭合", () => {
+    assert.equal(fenceUnterminated(`${F}${BT}xray-card\n{}\n${F}\n`, 1), true);
+    assert.equal(fenceUnterminated(`${F}${BT}xray-card\n{}\n${F}\n${F}${BT}`, 1), false);
+  });
+  it("闭合的卡后面正好跟着与正文相同的文字,也不会被误判成未闭合(早先按后缀判会中招)", () => {
+    assert.equal(fenceUnterminated(`${open} }\n${F}\n\n{ "v": 1, "kind": "kv", }`, 3), false);
+  });
+  it("卡写在列表项 / 引用块里:闭围栏带容器前缀也认", () => {
+    assert.equal(fenceUnterminated(`1. 看:\n\n    ${F}xray-card\n    {}\n    ${F}`, 3), false);
+    assert.equal(fenceUnterminated(`> ${F}xray-card\n> {}\n> ${F}`, 1), false);
+  });
+  it("开围栏那一行不是围栏时当作已闭合(宁可少画一次骨架)", () => {
+    assert.equal(fenceUnterminated("不是围栏\n{}", 1), false);
+    assert.equal(fenceUnterminated("x", 9), false);
   });
 });
 
