@@ -272,10 +272,23 @@ function FoldRow({ turn, open, onToggle }: { turn: TurnView; open: boolean; onTo
  * (ChatPane 是 flex column,子项默认 min-width:auto)。
  * md-chat 见 globals.css:只抹掉首个块的上外边距,气泡间距由 ChatPane 的 gap 给。
  */
-export const AssistantMessage = memo(function AssistantMessage({ text }: { text: string }) {
+/**
+ * R-CARDS:会话区是**唯一**开信息卡片的地方(`cards`),`streaming` 决定围栏未闭合时画不画骨架,
+ * `onAsk` 是卡底动作按钮通往输入框的那条预填通路(容器里的 `prefill`,`useCallback([])` 恒等 —— 换新对象会把这层 memo 废掉)。
+ * 三个都不传时与改动前一字不差(任务卡验收 #14)。
+ */
+export const AssistantMessage = memo(function AssistantMessage({
+  text,
+  streaming = false,
+  onAsk,
+}: {
+  text: string;
+  streaming?: boolean;
+  onAsk?: (text: string) => void;
+}) {
   return (
     <div className="md-chat" style={{ minWidth: 0 }}>
-      <Markdown headingIds={false}>{text}</Markdown>
+      <Markdown headingIds={false} cards streaming={streaming} onAsk={onAsk}>{text}</Markdown>
     </div>
   );
 });
@@ -297,6 +310,7 @@ export const AssistantTurn = memo(function AssistantTurn({
   done,
   rowLink,
   locate,
+  onAsk,
 }: {
   text: string;
   turn: TurnView;
@@ -305,6 +319,8 @@ export const AssistantTurn = memo(function AssistantTurn({
   rowLink?: CrossLink;
   /** R-CROSSLINK C2 行 → 卡:右栏要求定位到某个 toolCallId;不在本轮里就什么都不做 */
   locate?: { toolCallId: string; nonce: number } | null;
+  /** R-CARDS:信息卡片动作按钮的预填通路,原样递给每一段正文 */
+  onAsk?: (text: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [openCards, setOpenCards] = useState<Record<number, boolean>>({});
@@ -346,15 +362,17 @@ export const AssistantTurn = memo(function AssistantTurn({
     return () => clearTimeout(timer);
   }, [locate, turn.toolCalls]);
 
+  // R-CARDS:`streaming` 按整轮给 —— 已完成的文本段里不会有未闭合的围栏(围栏未闭合 = 正文后缀,而它们后面还跟着卡),
+  // 所以骨架只会出现在正在长的最后一段;闭合了的坏 JSON 在任何一段都直接是代码块
   const segment = (seg: TurnSegment, i: number) =>
     seg.kind === "text" ? (
-      <AssistantMessage key={i} text={seg.text} />
+      <AssistantMessage key={i} text={seg.text} streaming={!done} onAsk={onAsk} />
     ) : (
       <div key={i} data-tool-call-id={seg.call.toolCallId}>
         <ToolCard call={seg.call} open={!!openCards[seg.index]} onToggle={() => toggleCard(seg.index)} rowLink={rowLink} />
       </div>
     );
-  const finalAnswer = final.trim() !== "" ? <AssistantMessage text={final} /> : null;
+  const finalAnswer = final.trim() !== "" ? <AssistantMessage text={final} streaming={!done} onAsk={onAsk} /> : null;
   if (!done) {
     return (
       <div ref={rootRef} style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
@@ -380,10 +398,13 @@ function ChatPane({
   items,
   rowLink,
   locate,
+  onAsk,
 }: {
   items: ChatItem[];
   rowLink?: CrossLink;
   locate?: { toolCallId: string; nonce: number } | null;
+  /** R-CARDS:信息卡片动作按钮 → 输入框(预填,不发送) */
+  onAsk?: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // 末项的「长度」= 正文长度 + 工具卡数:卡片到达而正文没变的那一帧也要跟着滚到底
@@ -405,8 +426,8 @@ function ChatPane({
           );
         }
         // R-TOOLCARDS:有工具调用的一轮走 AssistantTurn;没有的与改动前一字不差(任务卡验收 #4)
-        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} rowLink={rowLink} locate={locate} />;
-        return <AssistantMessage key={i} text={item.text} />;
+        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} rowLink={rowLink} locate={locate} onAsk={onAsk} />;
+        return <AssistantMessage key={i} text={item.text} streaming={!item.done} onAsk={onAsk} />;
       })}
     </div>
   );
@@ -980,7 +1001,7 @@ export function Workbench() {
         // R-CROSSLINK:预填要能聚焦到移动端这只输入框(画板 4v),Sheet 的开关由容器按动作请求
         inputRef={inputRef}
         sheetRequest={sheetRequest}
-        renderChat={() => <MobileChat items={items} rowLink={rowLink} locate={locateCard} />}
+        renderChat={() => <MobileChat items={items} rowLink={rowLink} locate={locateCard} onAsk={prefill} />}
         renderEmpty={() => <MobileEmptyState onSuggest={setDraft} />}
         // 内核层照搬:Sheet 里装的就是桌面右栏那四个组件本身
         renderPanel={(p, onPanelExpand) =>
@@ -1041,7 +1062,7 @@ export function Workbench() {
           {/* 中栏:对话 */}
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
             {active ? (
-              <ChatPane items={items} rowLink={rowLink} locate={locateCard} />
+              <ChatPane items={items} rowLink={rowLink} locate={locateCard} onAsk={prefill} />
             ) : (
               <EmptyState onSuggest={setDraft} />
             )}

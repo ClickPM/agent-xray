@@ -23,6 +23,8 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { remarkLinkHref } from "@/lib/remark-link-href";
 import { mono } from "@/lib/styles";
+import { fenceUnterminated, parseCard } from "@/lib/xray-card";
+import { XrayCard, XrayCardSkeleton } from "@/components/XrayCard";
 // KaTeX 自带样式表:字体文件由构建产物同源提供(不连 CDN,与 app/layout.tsx
 // 自托管 JetBrains Mono 同一个理由 —— 境内首访不能挂在外域字体请求上)。
 import "katex/dist/katex.min.css";
@@ -36,6 +38,16 @@ const inlineCode: CSSProperties = {
 };
 
 const para: CSSProperties = { fontSize: 14, lineHeight: 1.7, marginTop: 12, marginBottom: 0 };
+
+/** R-CARDS:信息卡片围栏的语言标签(` ```xray-card `);回落成代码块时头部条上显示的也是它 */
+const CARD_LANG = "xray-card";
+
+/** 围栏代码的原文:hast 给 `<code>` 的子节点通常是一个字符串,偶尔是字符串数组 */
+function codeText(children: ReactNode): string {
+  if (typeof children === "string") return children;
+  if (Array.isArray(children)) return children.filter((c): c is string => typeof c === "string").join("");
+  return "";
+}
 
 /**
  * 标题锚点 id:标题可见文本的 slug(GitHub / Obsidian 那一套)。
@@ -231,6 +243,9 @@ export function Markdown({
   children,
   headingIds = true,
   linkHref,
+  cards = false,
+  streaming = false,
+  onAsk,
 }: {
   children: string;
   headingIds?: boolean;
@@ -240,7 +255,23 @@ export function Markdown({
    * code span / 围栏代码里长得像链接的文本才不会被误伤(codex 第 3 轮 P2)。回 null = 不动。
    */
   linkHref?: (url: string) => string | null;
+  /**
+   * R-CARDS:把 ` ```xray-card ` 围栏画成信息卡片(画板 2s / 2t)。**默认关**:只有会话区传 true
+   * (`Workbench` / `MobileChat` 经 `AssistantMessage`);Notes / Skills / Source 的渲染器不传,同一段围栏在那里
+   * 就是普通代码块 —— Notes 的正文契约是「标准 markdown」(docs/mcp.md),不扩(任务卡派生取舍 5)。
+   * 不传时 `pre` 的路径与改动前一字不差(任务卡验收 #14)。
+   */
+  cards?: boolean;
+  /**
+   * 这段正文还在流式到达。围栏已开、未闭合的那段时间画骨架(画板 2t 段①);闭合后仍不合法就落回代码块。
+   * 只在 `cards` 为真时有意义。
+   */
+  streaming?: boolean;
+  /** 卡底动作按钮的唯一动作:把 `action.ask` 放进输入框(R-CROSSLINK 预填原语,永不自动发送)。不传时按钮整个不渲染 */
+  onAsk?: (text: string) => void;
 }) {
+  // `pre` 的回调里 `children` 会被自己的参数遮住;围栏未闭合的判据要拿整篇正文比后缀,先记一份
+  const source = children;
   return (
     <ReactMarkdown
       remarkPlugins={linkHref ? [remarkGfm, remarkMath, remarkDollarGuard, remarkLinkHref(linkHref)] : [remarkGfm, remarkMath, remarkDollarGuard]}
@@ -318,6 +349,15 @@ export function Markdown({
         pre: ({ children }) => {
           const child = children as { props?: { className?: string; children?: ReactNode } } | undefined;
           const lang = child?.props?.className?.replace(/^language-/, "") ?? "text";
+          // R-CARDS:会话区把 xray-card 围栏画成信息卡片。三个出口(画板 2t 裁定):
+          //   合法 → 卡;流式期间围栏还没闭合 → 骨架;其余(闭合了仍不合法 / 超限 / 未知 kind)→ 下面的普通代码块,
+          //   语言标签就是围栏名、正文是那段原始文本,**没有错误提示**。`cards` 不传时这段整个不进,pre 与改动前一字不差。
+          if (cards && lang === CARD_LANG) {
+            const raw = codeText(child?.props?.children);
+            const spec = parseCard(raw);
+            if (spec) return <XrayCard spec={spec} onAsk={onAsk} />;
+            if (streaming && fenceUnterminated(source, raw)) return <XrayCardSkeleton />;
+          }
           return (
             <div
               style={{

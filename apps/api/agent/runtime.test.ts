@@ -499,3 +499,41 @@ describe("系统提示词的时间基准与先搜再答(2026-09-07 修补)", () 
     );
   });
 });
+
+// ───────────────────── 信息卡片段(R-CARDS,2026-09-09)─────────────────────
+//
+// 【这组用例保护的是什么】卡片是正文的写法、不是工具:零工具的会话也要送达,且它不点名任何工具
+// (否则上面「底座不点名任何工具」与各分组用例的前提会被它悄悄破坏)。形状表与「每次最多两张」是所有者裁定;
+// 模型收不到校验错误(任务卡「已认代价」),这段提示词是唯一的缓解,钉住它的几个关键句。
+describe("系统提示词的信息卡片段(R-CARDS)", () => {
+  const KINDS = ["kv", "table", "list", "stat", "compare", "tabs"];
+  const cases: string[][] = [[], ["notes_search"], ["session_rename", "notes_search", "web_search", "generate_image", "skill_load", "skill_run"]];
+
+  it("零工具与有工具都送达,且排在所有工具段落之后", () => {
+    for (const tools of cases) {
+      const p = systemPromptFor(tools);
+      expect(p).toContain("\n\n【信息卡片】");
+      const at = p.indexOf("【信息卡片】");
+      for (const name of tools) expect(p.lastIndexOf(name)).toBeLessThan(at);
+      if (tools.length === 0) expect(p.indexOf("没有任何可用工具")).toBeLessThan(at);
+    }
+  });
+
+  it("钉住:围栏名 / 六个 kind / 每次最多两张 / 不套 tabs / 8 KB / 按钮不发送 / 正文独立成句", () => {
+    const p = systemPromptFor([]);
+    expect(p).toContain("```xray-card");
+    for (const k of KINDS) expect(p).toContain(`"kind":"${k}"`);
+    expect(p).toContain("每次回复最多两张");
+    expect(p).toContain("不能再套 tabs");
+    expect(p).toContain("≤ 8 KB");
+    expect(p).toContain("不会发送");
+    expect(p).toContain("回复也要读得通");
+  });
+
+  it("只出现一次,且这一段不点名任何工具", () => {
+    const p = systemPromptFor(cases[2]);
+    expect(p.split("【信息卡片】")).toHaveLength(2);
+    const clause = p.slice(p.indexOf("【信息卡片】"));
+    for (const name of ["notes_", "web_search", "generate_image", "session_rename", "skill"]) expect(clause).not.toContain(name);
+  });
+});
