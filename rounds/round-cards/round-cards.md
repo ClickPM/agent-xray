@@ -2,7 +2,7 @@
 
 <!-- 保存为 rounds/round-cards/round-cards.md;该轮其他管理产出放同一目录。 -->
 
-> 状态:**已实现、审查收口、已合并 `main`,待发版**(2026-09-09;所有者裁定 2026-09-08:下一阶段三轮里的第三轮,排在 R-LEAK / R-CROSSLINK 之后;两者已分别发版 `e8ac83e` / `995dc49`)。分支 `round-cards`。验收 #13 的真实 provider 留证待发版后在生产补。
+> 状态:**已发版 `d342b18`(2026-09-09,生产 https://www.kzgai.cloud/)**;所有者裁定 2026-09-08:下一阶段三轮里的第三轮,排在 R-LEAK / R-CROSSLINK 之后(两者已分别发版 `e8ac83e` / `995dc49`)。分支 `round-cards`。验收 **15 项全过**(#13 的真实 provider 留证已在生产补齐,见下)。发布记录:[`docs/releases.md`](../../docs/releases.md)。
 > 所有者原话:「增加一个 UI 组件工具,支持 agent 在回复结果中插入现场写好的数据,以信息卡片形式进行展示(甚至可以在里面加一些交互)」。
 > 形态裁定为 **2-A 内容级**(不是工具级 2-B,理由见下),所以名字里的「工具」不是 pi 工具:它是回复正文里的一个围栏块。
 > 与 R-TOOLS / R-PERF / R-TOOLCARDS / R-SOURCE 同一顺序、**不是**规则 8 的例外:画板先扩(桌面 `2s` / `2t` 放**新文件**
@@ -196,7 +196,7 @@ F5 前后会话区 `innerHTML` 的 sha256 一致(R-TOOLCARDS 验收同款);`git 
 | 10 | ✅ | `工具` 剧本的 kv:`<b>粗体标签</b>` / `**星号** 与 \`反引号\`` / `$x^2$ 与 $$y$$` / `[点我](javascript:alert(1))` 全部原样显示,单元格只有文本节点(`children.length === 0`) |
 | 11 | ✅ | 往本机 `notes_chapters` 临时插一章、正文带同一段围栏 → `/notes/pi/tmp-xray-card-check` 渲染为 `xray-card` 代码块、`[data-xray-card]` 为 0(验完删行);`git diff` 不碰 `components/notes` / `skills` / `source` |
 | 12 | ✅ | 390 × 845 移动壳:`body.scrollWidth === innerWidth`;表格在 `.xcard-scroll` 内横滚;逐项对照 4y / 4z(见上表) |
-| 13 | ◐ | `runtime.test.ts` 钉住卡片段(零工具 / 有工具都送达、排在工具段落之后、六个 kind / 最多两张 / 8 KB / 不套 tabs / 不发送);`cards-e2e` 断言这一段真的到了 provider。**真实 provider 上的命中率待发版后在生产留证**:本机 `llm_config` 为空、没有任何真 key,不为此借用生产凭据 |
+| 13 | ✅ | `runtime.test.ts` 钉住卡片段(零工具 / 有工具都送达、排在工具段落之后、六个 kind / 最多两张 / 8 KB / 不套 tabs / 不发送);`cards-e2e` 断言这一段真的到了 provider。**真实 provider 留证已在生产补齐(2026-09-09,`d342b18` 发版当日)**:两轮实跑,① 「用表格对比 REST / GraphQL / gRPC 三个维度」→ 模型**自己**写了围栏,DOM 链 `TABLE.xcard-table < DIV.xcard-scroll < DIV.xcard < DIV.md-chat`、页面 `pre code` 为 0(没有回落);② 「可排序的表格 + 一个按钮」→ 卡带 `action`,点按钮输入框出现那句话而 `agent_settled` 计数不变(预填未发送),点表头行序三态切换、`aria-sort=ascending`;移动壳(457 宽)下同一张卡的 action 与预填同样成立。**命中率不是 100%**:两次提问都明说了「表格」/「可排序的表格 + 按钮」,未测不明说时的自发命中 |
 | 14 | ✅ | `git diff --stat main -- apps/web` 只有 `Markdown.tsx` / `Workbench.tsx` / `MobileChat.tsx` / `globals.css` 四处接线 + 三个新文件;`Markdown` 的 `cards` 不传时 `pre` 路径一字不变;`apps/api` 只有 `runtime.ts` 一段提示词 + 两个测试文件 |
 | 15 | ✅ | `docs/architecture.md` 关键决策表新增一行;`docs/security.md` §0 第 11 条改「已落地」并指到边界;`design/README.md` 增删记录;MCP 仍 51(`docs/mcp.md` 未动);`docs/releases.md` 发版时补 |
 

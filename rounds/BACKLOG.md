@@ -279,6 +279,7 @@
       带换行的结果在 6 行框里读起来是一段;要不要 `pre-wrap` 得在画布上定(规则 7),定了再改一行样式 (2026-09-03)
 - [ ] R-TOOLCARDS **卡片耗时格式**:实现沿用 Timeline 的 `formatDuration`(`26ms` / `4.7s`),画板 1a 示例写的是 `0.3s`;两种并存在同一块画板上,
       本轮取「一个格式器」。所有者若更想要卡片一律秒制,改 `lib/turn-view.ts` 的 `toolDuration` 一处 (2026-09-03)
+- [ ] R-CARDS 发版冒烟实测:MCP **2026-07-28 的逐请求头**(每请求 `Mcp-Method: <method>`,`tools/call` 再加 `Mcp-Name: <工具名>`)在 `apps/api/mcp/README.md`(契约正本)里没有记载,只有 `_meta` 三个 camelCase 键在 `rounds/round-10/checklist.md` §9 记着。手写 JSON-RPC 冒烟脚本时会连撞三次(键名 kebab-case → 静默走 legacy、`server/discover` 回 `-32601`;缺 `Mcp-Method` → `-32020`;`tools/call` 缺 `Mcp-Name` → `-32020`)。补进正本的「三条容易改错的地方」即可,零代码改动 (2026-09-09)
 
 ## 功能提案(需所有者裁定)
 
