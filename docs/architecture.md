@@ -56,6 +56,7 @@ Caddy :443(自动 TLS,单机反代)
 | Skills 内容 | 与 notes 同形:所有者经 MCP **整包**发布(`SKILL.md` + `scripts/` + `references/` 的文本文件入库 `skill_files`),读面只读、文件一律当文本渲染、zip 写入时打好存库由读面吐;**agent 侧本轮不可读**(新表不授权任何 agent 角色) | 2026-09-03 裁定,R-SKILLS 落地(迁移 `012`,`apps/api/skills/` + mcp 八个 `skills_*` 工具,判据在 `shared/skill-pack.ts`,zip 用 `fflate`);约束见 security.md §1 第 2 层 / §4 的 R-SKILLS 补记;对外 zip URL `/skills/<name>.zip`,API 侧 `/assets/skills/…`(与 notes 配图同一前缀策略) |
 | agent 使用 skills(R-SKILLS-2) | **执行不进 api 进程**:第五个容器 `skill-runner`(Python venv,`network_mode: none`),api 经 unix socket 调它,每次运行一次性进程 + tmpfs 目录;**可执行集合在代码里**(`runner/skills/` → 构建期生成 api 与容器两份同源清单),库里 `skills.agent_enabled` 只开关、且展示副本须与代码副本 sha256 一致才注入;pi 侧 `xray-guard`(`tool_call` 否决)/ `xray-skills`(`before_agent_start` 注入)两个扩展把裁决写进既有 34 事件(派生字段 `handlers`),不新增事件类型 | 2026-09-03 所有者七条裁定,同日落地(spike 留证:两个 `network_mode: none` 容器经命名卷 unix socket,bun 1.4.0 `fetch({unix})` 通;任务卡「本轮实测」);规则 9「一次性沙箱容器」措辞同日改为「独立容器可常驻 + 一次性进程」,理由与残余风险在 security.md §1 第 1 层;研究全文 `rounds/round-skills/research.md`。**生成物落在 `apps/api/shared/`**(不是任务卡写的 `agent/`):mcp 的 `skills_agent_status` 也要同一份清单,两个服务不互相 import |
 | 读访客指定网页(R-WEBFETCH) | **不是新工具,是一个 egress 档 skill**:`runner/skills/web-fetch` 经 `skill_run` 跑在 `skill-runner-egress`(同一 runner 镜像、第二个实例,只出公网)里;`xray.json` 的 `network` 字段决定路由,两个实例各自拒绝不属于自己档次的 skill;**不维护域名黑白名单**,拒的是固定内网地址段;限额与超时复用 R-SKILLS-2 的;零新工具 / 画板 / 迁移 / MCP 工具 / 前端改动 | 2026-09-03 所有者十条裁定(预研 in-process 形态同日退役),**2026-09-04 落地**(`runner/skills/web-fetch` + compose `skill-runner-egress` / `egress` 网络 / `deploy/egress-filter.sh` + `agent/skill-runner.ts` 两档路由;抽取库 `trafilatura` 及传递依赖全部 hash 钉进 `runner/requirements.txt`);任务卡 `rounds/round-webfetch/round-webfetch.md`;约束 security.md §0 威胁 7–9、§1 R-WEBFETCH 补记 |
+| 会话区富内容(R-CARDS) | **内容级围栏 DSL,服务端不参与**:模型在回复正文里写 ` ```xray-card ` + 一个 JSON 对象,前端 `apps/web/lib/xray-card.ts` 校验(六种 `kind` 闭集 kv / table / list / stat / compare / tabs、行列字数嵌套全部有上界、链接口径同 markdown)→ `components/XrayCard.tsx` 渲染,所有值当纯文本、交互只有 tabs / 折叠 / 排序 / 单选四种本地状态、动作按钮唯一动作 = R-CROSSLINK 的预填;任一不符整卡回落成普通代码块,流式期间围栏未闭合先画骨架。**不是 pi 工具**:`content` 原样落库,`tool_end` 帧 / `payload` / 两条 SSE / MCP(仍 51)/ 迁移零变动,api 侧只多一段系统提示;**只在会话区开**(`Markdown` 的 `cards` 开关,Notes / Skills / Source 的渲染器不传)| 2026-09-08 所有者裁定 2-A(工具级 2-B 要给帧与 payload 加结构字段、给 2l 折叠规则加例外,两条都是新机制),2026-09-09 落地;已认代价 = 坏 JSON 时访客看到裸 JSON 代码块、Timeline 里没有「画了一张卡」的事件;约束 security.md §0 第 11 条;任务卡 `rounds/round-cards/round-cards.md` |
 
 ## 事件模式与观测
 
@@ -84,4 +85,4 @@ R4 落地轨迹流后补记两条实现约束:
 
 ## 设计稿
 
-见 [design/](../design/README.md) —— 15 块画板静态稿(1a–1g + 2a–2h;2f–2h 为 Skills 技能库,2026-09-03 新增)+ 可交互原型,token 与组件语汇以其为准。
+见 [design/](../design/README.md) —— 桌面 27 块(1a–1g + 2a–2t)+ 移动 26 块(4a–4z)画板静态稿 + 可交互原型(清单、计数与增删记录以 `design/README.md` 为准),token 与组件语汇以其为准。

@@ -136,6 +136,32 @@ const SYSTEM_PROMPT_CLAUSES =
   "【被追问「为什么这么做」时】访客可能对轨迹里的某一步追问原因:按你**实际做过**的调用与拿到的结果如实解释," +
   "涉及站点内核机制(扩展、守卫、注入)时可以读本站源码再答;不要编造没发生过的步骤,也不要把猜测说成经过。";
 
+/**
+ * 【R-CARDS:信息卡片段】(2026-09-09)。会话区把回复里的 ```xray-card 围栏渲染成信息卡片(画板 2s / 2t),
+ * 这段告诉模型什么时候用、六种 kind 长什么样、上限在哪。**与工具无关**:它是正文的写法,不是工具,
+ * 所以零工具的会话也送达,并且排在所有工具段落**之后**(工具段落各自承诺「某工具不在某句里」,这段不点名任何工具)。
+ *
+ * 【为什么把形状表写进提示词】任务卡「已认代价」:模型收不到校验错误 —— 写坏的 JSON 静默回落成代码块,访客看到裸 JSON。
+ * 缓解只能在这里:六个形状各一行、上限逐条点名、点名「严格 JSON」。**每次最多两张**是所有者裁定,不是建议。
+ * 「正文要能独立成句」同样是回落时的兜底:卡没画出来,回复也要读得通。
+ * 「除 href 外不放网址」对应 docs/security.md §0 第 9 条(第三方资源进对话框);链接口径在前端 `lib/xray-card.ts` 再判一次。
+ */
+const CARDS_CLAUSE =
+  "【信息卡片】你可以在回复正文里嵌入信息卡片:写一个语言标签为 xray-card 的代码围栏(```xray-card 与 ``` 之间),里面放**一个** JSON 对象,会话区会把它渲染成卡片。" +
+  "只在访客要的是结构化数据(对比 / 清单 / 指标 / 键值 / 表格,且条目不少于 3)时用,普通问答不用;**每次回复最多两张**。\n" +
+  "六种 kind 与形状(所有值都是字符串;每张卡可选 title(≤ 60 字)、collapsed: true(初始折叠,必须有 title)、" +
+  "links(≤ 5 条 {text, href},href 只收 http(s) 地址或以 / 开头的站内路径)、" +
+  "action: {label, ask}(至多一枚按钮;点击只把 ask 那句话放进访客的输入框、不会发送,所以 ask 只能写访客下一句可能想问的话,≤ 500 字)):\n" +
+  '{"v":1,"kind":"kv","title":"…","rows":[{"k":"…","v":"…"}]} —— 键值对,≤ 20 行\n' +
+  '{"v":1,"kind":"table","title":"…","columns":["…","…"],"rows":[["…","…"]],"sortable":true} —— 表格,≤ 6 列 × 20 行,每行的格数必须等于列数\n' +
+  '{"v":1,"kind":"list","title":"…","ordered":true,"items":[{"text":"…","note":"…"}]} —— 清单 / 步骤,≤ 20 项,note 可选\n' +
+  '{"v":1,"kind":"stat","title":"…","items":[{"label":"…","value":"…","unit":"…","note":"…"}]} —— 指标,2–4 格,unit / note 可选\n' +
+  '{"v":1,"kind":"compare","title":"…","columns":["A","B"],"rows":[{"k":"维度","a":"…","b":"…"}]} —— 两方对比,≤ 20 行\n' +
+  '{"v":1,"kind":"tabs","title":"…","tabs":[{"label":"…","card":{"kind":"kv","rows":[{"k":"…","v":"…"}]}}]} —— 分页,≤ 5 页,每页装上面五种之一,不能再套 tabs\n' +
+  "其它上限:整段 JSON ≤ 8 KB,每个字符串 ≤ 200 字。卡里的值按纯文本显示,不解析 markdown、不放 HTML;除 links 的 href 之外不要在卡里放任何网址。" +
+  "JSON 不合法或超限时访客看到的只是一段代码,所以要写严格的 JSON(双引号、无尾逗号、无注释、v 必须是数字 1)。" +
+  "正文不要复述卡里的内容,但要能独立成句 —— 就算卡片没能显示,回复也要读得通。";
+
 /** 底座 = 开场白 + 时间基准 + 三条通用条款,段落间空一行;工具全关时也整段送达。 */
 function systemPromptBase(now: Date): string {
   return `${SYSTEM_PROMPT_INTRO}\n\n${timeClause(now)}\n\n${SYSTEM_PROMPT_CLAUSES}`;
@@ -168,7 +194,8 @@ function systemPromptBase(now: Date): string {
  */
 export function systemPromptFor(toolNames: string[], now: Date = new Date()): string {
   const base = systemPromptBase(now);
-  if (toolNames.length === 0) return `${base}\n\n你当前没有任何可用工具。`;
+  // R-CARDS:卡片段与工具无关,零工具也送达,且永远是最后一段
+  if (toolNames.length === 0) return `${base}\n\n你当前没有任何可用工具。\n\n${CARDS_CLAUSE}`;
   const hasRename = toolNames.includes(SESSION_RENAME_TOOL);
   const hasSkillLoad = toolNames.includes(SKILL_LOAD_TOOL);
   const hasSkillRun = toolNames.includes(SKILL_RUN_TOOL);
@@ -289,6 +316,7 @@ export function systemPromptFor(toolNames: string[], now: Date = new Date()): st
           : "本会话不能运行脚本,只能读说明。"),
     );
   }
+  parts.push(CARDS_CLAUSE); // 排在所有工具段落之后(见其上方注释)
   // 段落之间空一行(理由见 systemPromptBase 上方注释末段);各段的措辞不依赖前后相接
   return parts.join("\n\n");
 }

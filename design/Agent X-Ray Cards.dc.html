@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#fafafa}
+a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
+@keyframes omPulseBg{0%,100%{background-color:rgba(37,99,235,0.05)}50%{background-color:rgba(37,99,235,0.16)}}
+@keyframes omWaveSweep{from{background-position:200% 0}to{background-position:-100% 0}}
+@keyframes omSpin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<section style="display:flex;flex-wrap:wrap;gap:48px;padding:48px;align-items:flex-start;width:1536px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+
+<!-- ━━━ 2s 桌面 · 六种信息卡片(一轮完成态的会话区) ━━━ -->
+<div id="2s" style="flex:none;width:1440px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2s</span><span style="font-size:12px;font-weight:600;color:#6b7280">画板 2s · 桌面 · 助手正文里的六种信息卡片(一轮已完成)</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af">底 = 1a 三栏 · 中栏正文宽 640 · 卡内不横滚</span></div>
+<div data-screen-label="2s 卡片六种" style="width:1440px;min-height:1880px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;display:flex;overflow:hidden;color:#1a1a1a">
+  <div style="width:260px;flex:none;background:#f5f5f5;border-right:1px solid #e0e0e0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:15px;font-weight:700;letter-spacing:-0.01em;flex:1">{{siteName}}</div>
+      <div style="display:flex;align-items:center;gap:6px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;height:28px;padding:0 10px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">+ New</div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+    </div>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{sessions}}" as="s" hint-placeholder-count="5">
+        <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee">
+          <div style="font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{s.title}}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">{{s.time}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:13px;font-weight:600;flex:1">选型:pi SDK 还是 Claude Agent SDK</div>
+      <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>18.6k tokens</span><span>·</span><span>$0.061</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>ctx 9%</span><span>·</span><span>61 events</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+        <div style="flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">我要给一个 Encore.ts 后端嵌一个 coding agent,pi SDK 和 Claude Agent SDK 该怎么选?</div></div>
+          <div style="display:flex;align-items:center;gap:8px;color:#6b7280;cursor:pointer" style-hover="color:#2563eb">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg>
+            <span style="font-size:13px;line-height:1.7">处理详情 · 3 次模型往返 · 4 次工具调用 · 2.1s</span>
+          </div>
+
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">两个 SDK 都能把 agent 内核嵌进你自己的进程里,差别集中在内核可观测性和运行约束上。先看 pi 这一侧的量级:</div>
+
+          <!-- ① stat:三格一排,格间用表格同一条 1px 分隔线,数字 mono 22/650 -->
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+            <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI 内核规模 · v0.9.2</span></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr)">
+              <sc-for list="{{statCells}}" as="c" hint-placeholder-count="3">
+                <div style="padding:2px 12px 12px;border-left:{{c.sep}}">
+                  <div style="display:flex;align-items:baseline;gap:5px">
+                    <span style="font:650 22px 'JetBrains Mono',monospace;color:#1a1a1a;letter-spacing:-0.01em;font-variant-numeric:tabular-nums">{{c.n}}</span>
+                    <span style="font-size:12px;color:#6b7280">{{c.u}}</span>
+                  </div>
+                  <div style="font-size:12px;color:#1a1a1a;margin-top:3px">{{c.l}}</div>
+                  <div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:2px;text-wrap:pretty">{{c.note}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">Claude Agent SDK 那一侧不公开内核事件表,能拿到的是一组封装好的回调。它的接入参数我折起来了,要看点开:</div>
+
+          <!-- ② kv · collapsed 收起态:只剩标题行 + 行首 12px 箭头(与 2l 折叠行同一枚) -->
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer" style-hover="background:rgba(0,0,0,0.02)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg>
+              <span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">CLAUDE AGENT SDK · 接入参数(6 项)</span>
+            </div>
+          </div>
+
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">工具层的约束是两边差最多的地方。下面这张表按入参上限降序排,点表头可以换列排序:</div>
+
+          <!-- ③ table · sortable,第二列降序态。表格照 2c markdown 表格:表头 #f5f5f5 底 600、行 1px #e0e0e0 分隔、单元格 8/12、13px -->
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+            <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK · 内置工具的入参约束</span></div>
+            <div style="display:grid;grid-template-columns:226px 128px 96px 188px;background:#f5f5f5;border-top:1px solid #e0e0e0;border-bottom:1px solid #e0e0e0">
+              <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;cursor:pointer" style-hover="color:#2563eb">工具</div>
+              <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;color:#2563eb;cursor:pointer">入参上限<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+              <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;cursor:pointer" style-hover="color:#2563eb">入参数</div>
+              <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;cursor:pointer" style-hover="color:#2563eb">分组</div>
+            </div>
+            <sc-for list="{{tblDesc}}" as="r" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:226px 128px 96px 188px;border-top:{{r.sep}}">
+                <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a">{{r.tool}}</div>
+                <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;font-variant-numeric:tabular-nums">{{r.cap}}</div>
+                <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;font-variant-numeric:tabular-nums">{{r.args}}</div>
+                <div style="font-size:13px;padding:8px 12px;color:#1a1a1a">{{r.group}}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">如果你选 pi,接入顺序是固定的 —— 第三步错过了要重跑整轮才能补:</div>
+
+          <!-- ④ list · 有序 5 项,两项带 note -->
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+            <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">把 PI 嵌进 ENCORE.TS 后端的五步</span></div>
+            <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:7px">
+              <sc-for list="{{listItems}}" as="i" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:22px minmax(0,1fr);align-items:baseline;gap:2px">
+                  <span style="font:400 13px 'JetBrains Mono',monospace;color:#9ca3af;font-variant-numeric:tabular-nums">{{i.num}}</span>
+                  <div>
+                    <div style="font-size:13px;line-height:1.7;color:#1a1a1a;text-wrap:pretty">{{i.text}}</div>
+                    <sc-if value="{{i.hasNote}}" hint-placeholder-val="{{false}}"><div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:1px;text-wrap:pretty">{{i.note}}</div></sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">按你关心的六项摊开对比:</div>
+
+          <!-- ⑤ compare · 3 列(维度 / A / B)× 6 行,首列次级色 -->
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+            <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK / CLAUDE AGENT SDK</span></div>
+            <div style="display:grid;grid-template-columns:150px 244px 244px;background:#f5f5f5;border-top:1px solid #e0e0e0;border-bottom:1px solid #e0e0e0">
+              <div style="font-size:13px;font-weight:600;padding:8px 12px;color:#6b7280">维度</div>
+              <div style="font-size:13px;font-weight:600;padding:8px 12px">pi SDK</div>
+              <div style="font-size:13px;font-weight:600;padding:8px 12px">Claude Agent SDK</div>
+            </div>
+            <sc-for list="{{cmpRows}}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:150px 244px 244px;border-top:{{r.sep}}">
+                <div style="font-size:13px;line-height:1.6;padding:8px 12px;color:#6b7280">{{r.dim}}</div>
+                <div style="font-size:13px;line-height:1.6;padding:8px 12px;color:#1a1a1a;text-wrap:pretty">{{r.a}}</div>
+                <div style="font-size:13px;line-height:1.6;padding:8px 12px;color:#1a1a1a;text-wrap:pretty">{{r.b}}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">最后是 pi 在三种运行环境下的约束,一个环境一页:</div>
+
+          <!-- ⑥ tabs · 3 个胶囊单选(照 2c 顶部导航那一枚),当前 tab 装一张 kv;卡底 = 2 链接 + 1 枚 ghost 动作按钮 -->
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+            <div style="align-items:center;gap:10px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK · 运行环境约束</span></div>
+            <div style="padding:2px 12px 10px">
+              <div style="display:inline-flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+                <sc-for list="{{envTabs}}" as="t" hint-placeholder-count="3">
+                  <div style="font-size:12px;font-weight:{{t.fw}};padding:4px 14px;border-radius:5px;background:{{t.bg}};color:{{t.color}};border:1px solid {{t.border}};cursor:pointer" style-hover="color:#2563eb">{{t.label}}</div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="padding:0 12px 12px;display:flex;flex-direction:column">
+              <sc-for list="{{envRows}}" as="r" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:5px 0;border-top:{{r.sep}}">
+                  <div style="font-size:13px;line-height:1.6;color:#6b7280">{{r.k}}</div>
+                  <div style="font-size:13px;line-height:1.6;color:#1a1a1a;text-wrap:pretty">{{r.v}}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="align-items:center;gap:16px;padding:10px 12px;border-top:1px solid #e0e0e0;display:{{footerDisplay}}">
+              <a href="#2s" style="font-size:13px">pi · 第3章 Agent Loop</a>
+              <a href="#2s" style="font-size:13px">pi SDK 仓库 ↗</a>
+              <div style="flex:1"></div>
+              <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">帮我按这五步写一份接入清单</div>
+            </div>
+          </div>
+
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">一句话:要看得见内核就选 pi,要开箱的审批流就选另一边。</div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
+          <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
+          <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+        </div>
+      </div>
+      <div style="width:500px;flex:none;display:flex;flex-direction:column">
+        <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:12px;font-weight:600;padding:8px 14px;background:#ffffff;color:#1a1a1a;border-right:1px solid #e0e0e0">Timeline</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Chain View</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Lifecycle Map</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:10px 14px;align-self:flex-start">
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 1</div>
+          <sc-for list="{{t1rows}}" as="r" hint-placeholder-count="7">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:14px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 2</div>
+          <sc-for list="{{t2done}}" as="r" hint-placeholder-count="8">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2s · 裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">这是第二种卡,不是第三种视觉语言</span>。工具卡 = 「agent 做了什么」(带工具名 / 入参 / 耗时 / 状态色),信息卡 = 「agent 给你看什么」。外框一律照 <a href="#2s" style="font:400 11px 'JetBrains Mono',monospace">2m</a> 的卡片展开体:<span style="color:#1a1a1a">r6 + rgba(0,0,0,.03) 底 + 1px #e0e0e0 描边</span>,与工具卡的区别只有一条 —— 描边用中性 #e0e0e0,不用工具卡的状态色(绿 / 红)。<span style="color:#1a1a1a">卡片里一处不用语义色</span>:数据里没有「红 = 差」这种字段,染色就是编造。</div>
+    <div>· <span style="color:#1a1a1a">标题行</span>:可选。规格 = mono 10/600 #9ca3af 0.08em,与展开体的 INPUT / RESULT 同一枚。<span style="color:#1a1a1a">collapsed 卡的标题行不可省</span> —— 它是收起态唯一的把手,行首挂 12px 箭头(stroke #9ca3af,› 收起 / ˅ 展开,与 2l 折叠行、工具卡箭头是同一个图标)。</div>
+    <div>· <span style="color:#1a1a1a">六种主体的解剖与上限</span>:① <span style="color:#1a1a1a">stat</span> 2–4 格一排,大数字 mono 22/650 tabular + 单位 12 #6b7280 + 标签 12 #1a1a1a + note 11 #9ca3af,格间用表格的 1px #e0e0e0 竖分隔;② <span style="color:#1a1a1a">kv</span> ≤ 20 行,键列定宽 150 次级色 / 值列正文色,行间 1px #e0e0e0;③ <span style="color:#1a1a1a">table</span> ≤ 6 列 × 20 行,照 2c 的 markdown 表格(表头 #f5f5f5 底 600、行 1px #e0e0e0 分隔、单元格 padding 8/12、13px),数字列走 mono tabular;④ <span style="color:#1a1a1a">list</span> 有序 / 无序,序号 mono 13 #9ca3af 定宽 22,每项一行 13/1.7 正文 + 可选一行 11 note;⑤ <span style="color:#1a1a1a">compare</span> 3 列 ≤ 20 行,首列(维度)#6b7280,后两列正文色;⑥ <span style="color:#1a1a1a">tabs</span> ≤ 5 个,每页装上面五种之一、不能再套 tabs。所有主体的字段都是字符串 ≤ 200 字,<span style="color:#1a1a1a">不解析 markdown</span> —— 卡里没有加粗 / 内联代码 / 链接语法。</div>
+    <div>· <span style="color:#1a1a1a">table 的外框就是表格的外框</span>:表格全出血,靠卡片自己的 1px 描边当外边线,不再套第二层 border(套了会出双线)。表头两侧不留卡片内边距,单元格 padding 8/12 是唯一的横向留白。</div>
+    <div>· <span style="color:#1a1a1a">tabs 的形状定案:胶囊单选组</span>,直接取 <a href="#2s" style="font:400 11px 'JetBrains Mono',monospace">2c</a> 顶栏导航那一枚(容器 #f5f5f5 + 1px #e0e0e0 + r7 + 2px 内边距;选中 = #ffffff 底 + 1px #e0e0e0 + r5 + 600)。<span style="color:#1a1a1a">唯一改动</span>:选中文字换品牌色 #2563eb(桌面 hover 本来就是这个色)—— 卡内没有导航语义,需要一个「当前是哪一页」的强指示。不做下划线 tab:右栏的 Timeline / Chain View / Lifecycle Map 已经占了「方角 tab 条」这个形状,卡里再来一套会被读成第二个面板。</div>
+    <div>· <span style="color:#1a1a1a">卡底</span>:可选,只有 ≤ 5 条链接(13px 品牌色文本链接,<span style="color:#1a1a1a">↗ 只给站外</span>)+ 至多一枚动作按钮(ghost 32 高 r7,照 2g 的 GitHub ↗)。按钮文案由模型给;点了只做一件事 —— <span style="color:#1a1a1a">把那句话放进输入框、不发送</span>,与 4f / 4v 的 Ask why 预填是同一个机制。卡底与主体之间 1px #e0e0e0 分隔。</div>
+    <div>· <span style="color:#1a1a1a">卡片留在最终回答里</span>:它是回答的一部分,<span style="color:#1a1a1a">不进折叠行</span>。折叠行折的是「中间说的话 + 工具卡」;信息卡写在最终回答的正文里,模型写在哪就在哪(可以夹在两段话之间,也可以收尾),每次回复最多两张。本板故意画成一轮已完成态(折叠行收起,2l 画法),就是为了证明这一点。<span style="color:#1a1a1a">卡片级没有「查看轨迹」入口</span> —— 卡不是工具调用,没有对应的事件行。</div>
+    <div>· <span style="color:#1a1a1a">本轮没有失败的工具调用,所以折叠行行尾不画 6px 红点</span>(2l 规则原样生效)。中栏一次画满 = 实际是滚动区的一次全量展开;右栏事件流不随之拉长,固定贴顶。</div>
+    <div>· <span style="color:#1a1a1a">卡宽 = 会话区正文宽度 640,卡内不横滚</span>(桌面够宽);表格四列 226/128/96/188 = 638 是按内容排的定宽,不是弹性列 —— 同一张卡换列排序时列宽不动,只换行序。移动端的横滚与堆叠规则见 <a href="#2s" style="font:400 11px 'JetBrains Mono',monospace">4y</a>。</div>
+    <div>· <span style="color:#1a1a1a">交互只有四种</span>:tabs 切换、折叠 / 展开、表头排序(升 / 降)、单选切面板。<span style="color:#1a1a1a">三者都不做动画</span> —— 现有三个动效(omPulseBg / omWaveSweep / omSpin)语义都是「还在跑」,拿来做切换会撒谎。没有可编辑单元格、没有表单、没有会发请求的东西、没有「复制卡片」、没有「导出」、没有图表 / 图片 / 图标 / 进度条。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━ 2t 桌面 · 骨架 / 回落 / 交互态 ━━━ -->
+<div id="2t" style="flex:none;width:1440px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2t</span><span style="font-size:12px;font-weight:600;color:#6b7280">画板 2t · 桌面 · 流式骨架 / 回落 / 交互态三连</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af">段① 整屏 · 段②③ 取中栏正文列 640</span></div>
+<div data-screen-label="2t 卡片骨架与状态" style="width:1440px;height:900px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;display:flex;overflow:hidden;color:#1a1a1a">
+  <div style="width:260px;flex:none;background:#f5f5f5;border-right:1px solid #e0e0e0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:15px;font-weight:700;letter-spacing:-0.01em;flex:1">{{siteName}}</div>
+      <div style="display:flex;align-items:center;gap:6px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;height:28px;padding:0 10px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">+ New</div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+    </div>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{sessions}}" as="s" hint-placeholder-count="5">
+        <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee">
+          <div style="font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{s.title}}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">{{s.time}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:13px;font-weight:600;flex:1">选型:pi SDK 还是 Claude Agent SDK</div>
+      <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>16.2k tokens</span><span>·</span><span>$0.054</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>ctx 8%</span><span>·</span><span>57 events</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+        <div style="flex:1;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px">
+          <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">我要给一个 Encore.ts 后端嵌一个 coding agent,pi SDK 和 Claude Agent SDK 该怎么选?</div></div>
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">两个 SDK 都能把 agent 内核嵌进你自己的进程里,差别集中在内核可观测性和运行约束上。按你关心的六项摊开对比:</div>
+          <!-- 正在到达的卡:围栏已开、JSON 还没闭合。卡片外框先立住,里面一条标题骨架条 + 三条正文骨架条;骨架色叠在 rgba(0,0,0,.03) 灰面上降一档到 #e0e0e0(2i 规则)。omPulseBg 只挂标题条一处锚点。 -->
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+            <div style="padding:9px 12px 8px"><div style="width:210px;height:12px;border-radius:6px;background:#e0e0e0;animation:{{pulse}}"></div></div>
+            <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:9px">
+              <div style="width:100%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+              <div style="width:100%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+              <div style="width:62%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
+          <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
+          <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;color:#9ca3af;border-radius:7px;cursor:default"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite;transform-origin:50% 50%"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></div>
+        </div>
+      </div>
+      <div style="width:500px;flex:none;display:flex;flex-direction:column">
+        <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:12px;font-weight:600;padding:8px 14px;background:#ffffff;color:#1a1a1a;border-right:1px solid #e0e0e0">Timeline</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Chain View</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Lifecycle Map</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:10px 14px;align-self:flex-start">
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 1</div>
+          <sc-for list="{{t1rows}}" as="r" hint-placeholder-count="7">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:14px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 2</div>
+          <sc-for list="{{t2live}}" as="r" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px;background:{{r.rowBg}};animation:{{r.anim}}">
+              <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}};animation:{{r.barAnim}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:680px 680px;gap:40px;margin-top:24px">
+
+  <!-- 段② 回落:JSON 写坏 → 普通代码块 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">段②</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">回落:非法 / 超限 / 未知 kind → 普通代码块,无错误提示</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:14px;line-height:1.7;text-wrap:pretty">按你关心的六项摊开对比:</div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+        <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:1">xray-card</span><div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="color:#2563eb"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div></div>
+        <pre style="margin:0;padding:12px 14px;font:400 12px/1.7 'JetBrains Mono',monospace;overflow:hidden">{
+  "kind": "compare",
+  "title": "pi SDK / Claude Agent SDK",
+  "rows": [
+    { "dim": "内核事件", "a": "34 种,全量可订阅" },
+    { "dim": "嵌入形态", "a": "in-process,无 sidecar", }
+  ]</pre>
+      </div>
+      <div style="font-size:14px;line-height:1.7;text-wrap:pretty">要看得见内核就选 pi,要开箱的审批流就选另一边。</div>
+    </div>
+  </div>
+
+  <!-- 段③-1 交互态:tabs 切到第二个 tab -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">段③-1</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">tabs 切到第二个 tab(整卡只换主体,标题行 / 卡底不动)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:10px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK · 运行环境约束</span></div>
+        <div style="padding:2px 12px 10px">
+          <div style="display:inline-flex;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:2px;gap:2px">
+            <sc-for list="{{envTabs2}}" as="t" hint-placeholder-count="3">
+              <div style="font-size:12px;font-weight:{{t.fw}};padding:4px 14px;border-radius:5px;background:{{t.bg}};color:{{t.color}};border:1px solid {{t.border}};cursor:pointer" style-hover="color:#2563eb">{{t.label}}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="padding:0 12px 12px;display:flex;flex-direction:column">
+          <sc-for list="{{envRows2}}" as="r" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:5px 0;border-top:{{r.sep}}">
+              <div style="font-size:13px;line-height:1.6;color:#6b7280">{{r.k}}</div>
+              <div style="font-size:13px;line-height:1.6;color:#1a1a1a;text-wrap:pretty">{{r.v}}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="align-items:center;gap:16px;padding:10px 12px;border-top:1px solid #e0e0e0;display:{{footerDisplay}}">
+          <a href="#2s" style="font-size:13px">pi · 第3章 Agent Loop</a>
+          <a href="#2s" style="font-size:13px">pi SDK 仓库 ↗</a>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">帮我按这五步写一份接入清单</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 段③-2 交互态:table 表头升序 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">段③-2</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">table 第二列升序(与 2s 的降序成对,列宽不动)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">PI SDK · 内置工具的入参约束</span></div>
+        <div style="display:grid;grid-template-columns:226px 128px 96px 188px;background:#f5f5f5;border-top:1px solid #e0e0e0;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;cursor:pointer" style-hover="color:#2563eb">工具</div>
+          <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;color:#2563eb;cursor:pointer">入参上限<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg></div>
+          <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;cursor:pointer" style-hover="color:#2563eb">入参数</div>
+          <div style="font-size:13px;font-weight:600;padding:8px 12px;display:flex;align-items:center;gap:5px;cursor:pointer" style-hover="color:#2563eb">分组</div>
+        </div>
+        <sc-for list="{{tblAsc}}" as="r" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:226px 128px 96px 188px;border-top:{{r.sep}}">
+            <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a">{{r.tool}}</div>
+            <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;font-variant-numeric:tabular-nums">{{r.cap}}</div>
+            <div style="font:400 13px 'JetBrains Mono',monospace;padding:8px 12px;color:#1a1a1a;font-variant-numeric:tabular-nums">{{r.args}}</div>
+            <div style="font-size:13px;padding:8px 12px;color:#1a1a1a">{{r.group}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- 段③-3 交互态:collapsed 卡点开 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">段③-3</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">collapsed 卡点开(与 2s 里那张收起态成对,箭头转 ˅)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer" style-hover="background:rgba(0,0,0,0.02)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">CLAUDE AGENT SDK · 接入参数(6 项)</span>
+        </div>
+        <div style="padding:0 12px 12px;display:flex;flex-direction:column">
+          <sc-for list="{{sdkRows}}" as="r" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:5px 0;border-top:{{r.sep}}">
+              <div style="font-size:13px;line-height:1.6;color:#6b7280">{{r.k}}</div>
+              <div style="font-size:13px;line-height:1.6;color:#1a1a1a;text-wrap:pretty">{{r.v}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:12px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2t · 裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">流式骨架的显示条件</span>:正文流到 ```xray-card 这一行、<span style="color:#1a1a1a">围栏还没闭合</span>的那段时间里显示;围栏一闭合就整块换成卡(或换成回落代码块)。骨架不预测行数 —— 固定一条标题条 + 三条正文条,因为围栏里那段 JSON 还没读完,行数与 kind 都还不知道。</div>
+    <div>· <span style="color:#1a1a1a">骨架规格照 2i</span>:文本条 r4、标题条 r6、卡片外框 r7 那一档在这里让位给卡片自己的 r6(外框就是最终卡的外框,不是骨架的一部分,所以它一开始就用最终态)。<span style="color:#1a1a1a">骨架色降一档</span>:叠在 rgba(0,0,0,.03) 灰面上用 #e0e0e0,不用 #eeeeee —— 与 2i 「骨架叠在灰面上降一档」同一条规则。<span style="color:#1a1a1a">omPulseBg 只挂标题条一处锚点</span>,三条正文条静止。</div>
+    <div>· <span style="color:#1a1a1a">回落规则</span>:JSON 解析失败 / 超限(行数、列数、字数、tabs 数量)/ 未知 kind,<span style="color:#1a1a1a">一律渲染成普通代码块</span>,语言标签就是围栏名 xray-card,正文是那段原始文本。<span style="color:#1a1a1a">没有错误提示</span> —— 不画红条、不写「卡片渲染失败」、不给「重试」。理由:对访客来说这就是模型写了一段代码块,是完全正常的 markdown;对我来说原文还在,足够排查。代码块继承 2c 的既有画法(r7 外框 + #f5f5f5 头部条 + mono 11/650 语言标签 + mono 12/1.7 正文),连它本来就有的 copy 一起继承 —— 这不是「复制卡片」,是代码块的既有能力。</div>
+    <div>· <span style="color:#1a1a1a">交互态三连</span>:① tabs 切页 = 只换主体,标题行、胶囊组位置、卡底一律不动,选中胶囊 #ffffff 底 + 品牌色 600;② 排序 = 表头文字旁 10px 箭头(降 ˅ / 升 ˄),<span style="color:#1a1a1a">当前排序列整格转品牌色</span>,其余三列常态 #1a1a1a、hover 才转品牌色,列宽与行高一字不动;③ 折叠 = 箭头 › → ˅,主体在标题行下方展开,标题行自身的字号 / 颜色 / 内边距不变。<span style="color:#1a1a1a">三种都不做动画</span>。</div>
+    <div>· 段③-3 画的是 <a href="#2s" style="font:400 11px 'JetBrains Mono',monospace">2s</a> 里那张 collapsed 的 kv 卡点开后的样子,两块成对。<span style="color:#1a1a1a">collapsed 是卡片级状态,与 kind 无关</span> —— 六种主体都可以带 collapsed,list 与 table 的收起态与这里一模一样(标题行 + › 箭头),所以不再各画一遍。</div>
+    <div>· 段②③ 只画中栏正文列(<span style="color:#1a1a1a">640 + 左右 20 内边距 = 680</span>),外壳与右栏省略 —— 这三样东西都只发生在正文列里,重画三遍三栏骨架只会让人以为哪里不一样。段① 保留整屏,因为它要同时给出「发送按钮转圈 + 右栏末行扫光 + 卡片骨架」是同一时刻的三个视图。</div>
+    <div>· <span style="color:#1a1a1a">卡片留在最终回答里</span>:段① 的骨架长在最终回答的正文里,不在折叠段里;这一轮跑完后折叠行收起,卡片留在原位(见 2s)。</div>
+  </div>
+</div>
+</div>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;siteName&quot;: {&quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Agent X-Ray&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Site&quot;},
+  &quot;cardTitleRow&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Cards&quot;},
+  &quot;cardFooter&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Cards&quot;},
+  &quot;streamingPulse&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Runtime panel&quot;},
+  &quot;barScale&quot;: {&quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 1, &quot;min&quot;: 0.6, &quot;max&quot;: 2, &quot;step&quot;: 0.1, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Runtime panel&quot;},
+  &quot;boardLabels&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Canvas&quot;}
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const scale = this.props.barScale ?? 1;
+    const on = this.props.streamingPulse ?? true;
+    const pulse = on ? 'omPulseBg 1.8s ease-in-out infinite' : 'none';
+    const wave = on ? 'omWaveSweep 1.8s linear infinite' : 'none';
+    const waveRowBg = 'rgba(37,99,235,0.05) linear-gradient(90deg,rgba(37,99,235,0) 0%,rgba(37,99,235,0.16) 50%,rgba(37,99,235,0) 100%) 200% 0 / 200% 100% no-repeat';
+    const waveBar = '#9ca3af linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.6) 50%,rgba(255,255,255,0) 100%) 200% 0 / 200% 100% no-repeat';
+    const W = ms => Math.min(198, Math.max(4, Math.round(Math.sqrt(ms) * 11 * scale)));
+    const row = (name, ms, dur, c, x = {}) => ({ name, dur, c, w: W(ms), rowBg: 'transparent', anim: 'none', barAnim: 'none', ...x });
+
+    const t1rows = [
+      row('context', 12, '12ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('after_provider_response', 2, '2ms', '#9ca3af'),
+      row('tool_call · notes_search', 8, '8ms', '#2563eb'),
+      row('tool_execution_start', 0.3, '0ms', '#9ca3af'),
+      row('tool_execution_end', 264, '264ms', '#9ca3af'),
+      row('tool_result', 10, '10ms', '#2563eb'),
+    ];
+    const t2done = [
+      row('context', 11, '11ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('tool_call · notes_get_chapter', 9, '9ms', '#2563eb'),
+      row('tool_result', 6, '6ms', '#2563eb'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 640, '640ms', '#9ca3af'),
+      row('message_end', 1, '1ms', '#9ca3af'),
+      row('turn_end', 1, '1ms', '#2563eb'),
+    ];
+    // 2t 段①:同一轮还在跑 —— 末行扫光(与发送按钮 omSpin、卡片骨架 omPulseBg 是同一时刻)
+    const t2live = [
+      row('context', 11, '11ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('tool_call · notes_get_chapter', 9, '9ms', '#2563eb'),
+      row('tool_result', 6, '6ms', '#2563eb'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 2, '…', waveBar, { rowBg: waveRowBg, anim: wave, barAnim: wave }),
+    ];
+
+    const sessions = [
+      { title: '选型:pi SDK 还是 Claude Agent SDK', time: '刚刚', bg: '#e8e8e8' },
+      { title: '演示:危险命令拦截', time: '2m ago', bg: 'transparent' },
+      { title: '帮我查上海→东京的低价航线', time: '1h ago', bg: 'transparent' },
+      { title: 'permission-gate 源码解读', time: '3h ago', bg: 'transparent' },
+      { title: 'context 注入前后对比实验', time: '昨天', bg: 'transparent' },
+    ];
+
+    // ① stat:格间用表格同一条 1px 竖分隔,首格不画
+    const statCells = [
+      { n: '4.2k', u: '行', l: '内核代码量', note: 'agent-loop、事件总线、扩展系统三部分' },
+      { n: '34', u: '种', l: '内核事件', note: '观测者扩展可一次性全量订阅' },
+      { n: '0', u: '个', l: '额外常驻进程', note: 'in-process 嵌入,无 sidecar' },
+    ].map((c, i) => ({ ...c, sep: i === 0 ? 'none' : '1px solid #e0e0e0' }));
+
+    // ③ table:sortable,按「入参上限」排序;降序 = 2s,升序 = 2t 段③-2
+    const tbl = [
+      { tool: 'web_search', cap: '300 字符', args: '1', group: '外呼' },
+      { tool: 'notes_get_chapter', cap: '128 字符', args: '2', group: '纯函数' },
+      { tool: 'notes_search', cap: '120 字符', args: '2', group: '纯函数' },
+      { tool: 'notes_list_series', cap: '64 字符', args: '2', group: '纯函数' },
+      { tool: 'session_rename', cap: '60 字符', args: '1', group: '会话绑定' },
+    ];
+    const sep = (arr, key) => arr.map((r, i) => ({ ...r, sep: i === 0 ? 'none' : '1px solid #e0e0e0' }));
+    const tblDesc = sep(tbl);
+    const tblAsc = sep(tbl.slice().reverse());
+
+    // ④ list:有序 5 项,两项带 note
+    const listItems = [
+      { text: '在服务启动时创建一个 Agent 实例,与 Encore 的 service 生命周期同寿。', note: '不要每次请求新建 —— 会话状态会跟着请求一起消失。' },
+      { text: '给每个工具写一份 JSON Schema,additionalProperties 一律 false。', note: '' },
+      { text: '挂一个观测者扩展,一次订阅全部 34 种内核事件。', note: '这一步决定之后能不能画出 Timeline;漏挂要重跑整轮才能补齐。' },
+      { text: '把对话流与事件轨迹分成两条 SSE 通道推给前端。', note: '' },
+      { text: '加一道 permission-gate 扩展,在 tool_call 落地前拦危险入参。', note: '' },
+    ].map((i, idx) => ({ ...i, num: (idx + 1) + '.', hasNote: !!i.note }));
+
+    // ⑤ compare:3 列 × 6 行,首列次级色
+    const cmpRows = sep([
+      { dim: '内核事件', a: '34 种,全量可订阅', b: '未公开,按回调暴露' },
+      { dim: '嵌入形态', a: 'in-process,无 sidecar', b: 'in-process,会话对象需常驻管理' },
+      { dim: '会话分叉', a: '任意一圈可 fork', b: '无对应接口' },
+      { dim: '扩展点', a: '事件订阅 + 中间件两类', b: '钩子式回调,6 个' },
+      { dim: '权限模型', a: '由扩展自行 fail-closed', b: '内置审批流' },
+      { dim: '源码', a: '4.2k 行,可整读', b: '发行包,不含源码' },
+    ]);
+
+    // ⑥ tabs:胶囊单选组(照 2c 顶栏导航),选中文字换品牌色
+    const pill = (labels, active) => labels.map(label => label === active
+      ? { label, fw: 600, bg: '#ffffff', color: '#2563eb', border: '#e0e0e0' }
+      : { label, fw: 400, bg: 'transparent', color: '#6b7280', border: 'transparent' });
+    const envLabels = ['Node 20', 'Bun 1.2', '容器镜像'];
+
+    const envRows = sep([
+      { k: '最低版本', v: '20.11 LTS' },
+      { k: '原生依赖', v: '无' },
+      { k: '常驻进程', v: '0 个(与后端同进程)' },
+      { k: '事件总线', v: '进程内 EventEmitter' },
+      { k: '会话存储', v: '由宿主提供,SDK 不落盘' },
+      { k: '并发会话', v: '单进程内不限,受内存约束' },
+    ]);
+    const envRows2 = sep([
+      { k: '最低版本', v: '1.2.4' },
+      { k: '原生依赖', v: '无' },
+      { k: '常驻进程', v: '0 个(与后端同进程)' },
+      { k: '事件总线', v: '进程内 EventEmitter' },
+      { k: '已知差异', v: 'SSE 背压行为与 Node 不同,长回答需自行分片' },
+      { k: '会话存储', v: '由宿主提供,SDK 不落盘' },
+    ]);
+    // ② kv:2s 里是 collapsed 收起态,2t 段③-3 是同一张卡点开后的 6 行
+    const sdkRows = sep([
+      { k: '最低运行时', v: 'Node 20 LTS' },
+      { k: '凭据', v: '环境变量,单一 API key' },
+      { k: '会话对象', v: '由 SDK 创建并持有' },
+      { k: '工具注册', v: '声明式,进程启动时一次' },
+      { k: '回调', v: '6 个,不含内核事件' },
+      { k: '结果上限', v: '由 SDK 内部裁剪,不可配' },
+    ]);
+
+    return {
+      siteName: this.props.siteName ?? 'Agent X-Ray',
+      sessions, t1rows, t2done, t2live, pulse,
+      statCells, tblDesc, tblAsc, listItems, cmpRows, sdkRows,
+      envRows, envRows2, envTabs: pill(envLabels, 'Node 20'), envTabs2: pill(envLabels, 'Bun 1.2'),
+      labelDisplay: (this.props.boardLabels ?? true) ? 'flex' : 'none',
+      titleDisplay: (this.props.cardTitleRow ?? true) ? 'flex' : 'none',
+      footerDisplay: (this.props.cardFooter ?? true) ? 'flex' : 'none',
+    };
+  }
+}
+</script>
+</body>
+</html>

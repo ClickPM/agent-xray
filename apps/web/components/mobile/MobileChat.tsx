@@ -21,6 +21,7 @@ export function MobileChat({
   items,
   rowLink,
   locate,
+  onAsk,
 }: {
   items: ChatItem[];
   /** R-CROSSLINK C2(画板 4w):卡片展开体底部那条「在 Timeline 里查看 ↗」——
@@ -28,6 +29,8 @@ export function MobileChat({
   rowLink?: CrossLink;
   /** R-CROSSLINK C2 行 → 卡:详情块底部的「查看卡片」要求定位到某个 toolCallId */
   locate?: { toolCallId: string; nonce: number } | null;
+  /** R-CARDS(画板 4y):信息卡片动作胶囊 → 输入框(预填,不发送);与桌面同一个 prefill */
+  onAsk?: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const last = items[items.length - 1];
@@ -73,8 +76,8 @@ export function MobileChat({
         }
         // 内核层原样复用:有工具调用的一轮走 AssistantTurn(折叠行 + 工具卡),
         // 没有的走 AssistantMessage —— 与桌面同一条渲染路径。
-        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} rowLink={rowLink} locate={locate} />;
-        return <AssistantMessage key={i} text={item.text} />;
+        if (item.turn) return <AssistantTurn key={i} text={item.text} turn={item.turn} done={item.done} rowLink={rowLink} locate={locate} onAsk={onAsk} />;
+        return <AssistantMessage key={i} text={item.text} streaming={!item.done} onAsk={onAsk} />;
       })}
     </div>
   );
