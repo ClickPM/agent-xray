@@ -25,6 +25,9 @@ describe("info string 与高度", () => {
     assert.equal(fenceInfo(src, 6), "xray-html");
     assert.equal(fenceInfo(src, 7), "");
     assert.equal(fenceInfo(src, 99), "");
+    // 四个空格起头 = 缩进代码块,不是围栏(与 leadingComponentFences 同一条判据)
+    assert.equal(fenceInfo(`    ${F}xray-html height=200`, 1), "");
+    assert.equal(fenceInfo(`   ${F}xray-html height=200`, 1), "xray-html height=200");
   });
   it("declaredHeight:只认 height=<整数>;缺省 / 非整数 / 小数 / 负号都是 null", () => {
     assert.equal(declaredHeight("xray-html height=320"), 320);

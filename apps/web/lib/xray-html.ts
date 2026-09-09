@@ -11,7 +11,7 @@
 //      所以不引 DOMPurify(任务卡派生取舍 10):判定部分是两个纯函数,`bun test lib` 钉住;DOM 遍历是薄壳。
 //
 // 除 `sanitizeFragment` 外全部是纯函数、不碰 DOM、不 import React,`bun`(没有 DOMParser)里直接跑测试。
-import { utf8Length } from "./xray-card";
+import { fenceOpener, utf8Length } from "./xray-card";
 
 /** 围栏的语言标签;回落成代码块时头部条上显示的也是它 */
 export const HTML_LANG = "xray-html";
@@ -38,9 +38,7 @@ export function htmlWithinLimit(raw: string): boolean {
  * 不依赖 hast 的 `data.meta`:`Markdown` 手里本来就有源文本与行号(任务卡派生取舍 8)。取不到时回空串(→ 缺省高度)。
  */
 export function fenceInfo(source: string, openerLine: number): string {
-  const line = source.split(/\r?\n/)[openerLine - 1] ?? "";
-  const m = /^(?:[\s>]|[-+*](?=\s)|\d{1,9}[.)](?=\s))*(?:`{3,}|~{3,})[ \t]*(.*)$/.exec(line);
-  return m ? m[1].trim() : "";
+  return fenceOpener(source.split(/\r?\n/)[openerLine - 1] ?? "")?.info ?? "";
 }
 
 /**
@@ -149,9 +147,17 @@ export function buildSrcdoc(fragment: string, theme: FrameTheme, mobile: boolean
 }
 
 /**
- * DOM 遍历那层薄壳(**只能在浏览器里调**:bun 没有 DOMParser)。把模型片段解析成一个独立文档(DOMParser 文档里脚本永不执行、
- * 资源永不加载),按上面两个判定函数去元素 / 去属性,再把 head(剩下的只会是 `style` / `title`)与 body 序列化回去。
- * 模型写的是完整文档还是一段片段都行:两种在 `text/html` 解析下都会落进 head / body。
+ * DOM 遍历那层薄壳(**只能在浏览器里调**:bun 没有 DOMParser)。把模型片段解析成一个独立文档,按上面两个判定函数去元素 / 去属性,
+ * 再把 head(剩下的只会是 `style` / `title`)与 body 序列化回去。模型写的是完整文档还是一段片段都行:两种在 `text/html` 解析下都会落进 head / body。
+ *
+ * 【解析这一步本身不发任何请求 —— 这是规范保证,不是运气】(codex 第 1、2 轮都提出「某些浏览器可能在 DOMParser 构造文档时就抓 img / iframe」,
+ * 两轮都不采纳,理由写在这里免得第三次再问)`DOMParser.parseFromString` 产出的是一个**没有浏览环境的惰性文档**(与 `createHTMLDocument`、
+ * `<template>` 的内容文档同一类),它**不是 fully active**;HTML 规范把 `img`(update the image data)、`iframe`(process the iframe attributes)、
+ * 媒体元素(resource selection)、`object` / `embed`、`link rel=stylesheet` 的加载算法全部挂在「node document 是 fully active」这个前提上,惰性文档里一律不启动;
+ * 脚本同样因为「scripting is disabled」永不执行。DOMPurify 走的就是这条路径。本机 Chromium 实证(任务卡「代码审查」第 1 轮 #1):
+ * 一段含 img / link / iframe / video / audio / object / embed / script / `@import` + `url()` / `input type=image` / SVG image / picture+source
+ * 共 12 个指向本机探针地址的元素,`DOMParser` 解析后网络面板与 `performance.getEntriesByType("resource")` 都没有任何探针请求。
+ * 真会在惰性文档里发请求的浏览器不存在于支持范围内(那是 2017 年前的老 WebKit 缺陷);要是哪天出现,唯一的修法也是换一种惰性文档,不是改这里的字符串。
  */
 export function sanitizeFragment(html: string): string {
   const doc = new DOMParser().parseFromString(html, "text/html");

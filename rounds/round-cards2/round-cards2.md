@@ -256,6 +256,15 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 
 复验:`bun test lib` **146** 用例全绿(+6),`tsc --noEmit` 过,`dev.ps1 test agent/runtime.test.ts agent/cards-e2e.test.ts` 43 用例过;浏览器按上表逐条复核(faux 剧本新增 `空表单` / `隐形`,`敌意` 加 SMIL)。
 
+**第 2 轮**(仍全量,提交 `e415ec5`;15.7 分钟):2 条 findings,**1 P1 + 1 P2**;**P2 采纳、P1 再次不采纳(同第 1 轮 #1,理由与实证写进代码注释)**。
+
+| # | finding | 处理 |
+|---|---|---|
+| 1 | **P1 · `DOMParser` 解析前应先让原文「不可抓取」**(`lib/xray-html.ts`)—— 与第 1 轮 #1 同一条,措辞仍是「some browsers may」 | **不采纳**,理由同第 1 轮 #1(惰性文档不是 fully active,规范里所有子资源加载算法都不启动;本机 12 种资源元素实证零请求;不存在比惰性文档更「不能发请求」的解析路径,`createHTMLDocument` / `<template>` 是同一类)。这次把规范依据与实证**写进 `sanitizeFragment` 的注释**,让第 3 轮起审整改 diff 时看得到。**这不是「同一块自建机制连续两轮出 findings」**:两轮里对这层清洗只有第 1 轮 #2(SMIL)是真缺陷,#1 是同一条被重复提出的假设;所有者若仍不放心,可裁定换 DOMPurify —— 但 DOMPurify 走的正是同一条 DOMParser 路径,对这条假设没有任何帮助 |
+| 2 | **P2 · 组件预算扫描器把四个空格缩进的行当围栏**(`lib/xray-card.ts` `leadingComponentFences`):顶层四个空格起头是缩进代码块,micromark 不当围栏;模型先用缩进代码块演示语法、再给两个真组件,第二个真组件就被挤成代码块 | **采纳**。抽出三处共用的 `fenceOpener`(容器前缀各 ≤ 3 空格 + `>` / 列表标记,可叠;记号前 ≤ 3 空格;反引号围栏的 info string 不含反引号),`fenceUnterminated` / `leadingComponentFences` / `fenceInfo` 都改用它。用例 +2(顶层 4 空格 / 引用块内 5 空格 / 列表标记后 1–3 空格 / info 含反引号)+ `fenceInfo` 2 条断言;浏览器复核 `缩进` 剧本(缩进演示 + 卡 + 帧 → 演示是代码块、卡与帧都渲染) |
+
+复验:`bun test lib` **148** 用例全绿(+2),`tsc --noEmit` 过。
+
 ## 失败处理
 
 同一验收项针对性整改后连续 2 次验证仍不过 → 写 `rounds/round-cards2/BLOCKED.md`,停下呼人。禁止放宽验收标准自我通过。
