@@ -49,7 +49,8 @@
     `choice` 单选卡点选项、多选卡与 `form` 卡点 submit,组成的一句话**作为访客消息直接发出**,不经输入框。这是第 10 条「兜底在不自动发送」的**唯一例外**:访客失去发前审阅这一步,
     模型写在卡上的字可以变成访客说的话(prompt injection 的又一个出口,威胁 1 的同族)。**兜底换成三件事**:① **发出的文本 = 卡上可见的文本**——题干 `prompt`、所选 `label`、字段 `label`、访客自己填的值,
     组成规则固定(ASCII `: ` / `; `、「、」),**没有**任何模型写、访客看不见的模板串(R-CARDS 的 `action.ask` 在这两种 kind 上被忽略),发出的气泡与访客刚看到、刚点的字一一对应;
-    ② **只由访客对卡片的一次点击触发**(React `onClick`,键盘同一 handler),渲染 / 滚动 / hover / 聚焦都不发,一轮生成中禁用,发过即锁(本地状态,刷新解锁、再点 = 再发一条普通消息,已认);
+    会进消息的字段(题干 / 选项 label / 字段 label / select 选项)在**解析期**先去不可见字符(`stripInvisible`,与发送前那把清洗同一条正则)—— U+202E 这类 bidi 覆盖会让卡上显示的顺序与发出去的字不一致,去掉之后「看到的 = 发出去的」才成立(codex 第 1 轮 P2);
+    ② **只由访客对卡片的一次点击触发**(React `onClick`,键盘同一 handler),渲染 / 滚动 / hover / 聚焦都不发,一轮生成中禁用,**发出去了才锁**(`onSend` 回 true;清洗闸丢弃或 composer 守卫拒收都不留痕),锁是本地状态(刷新解锁、再点 = 再发一条普通消息,已认);
     第 13 条的帧里任何东西都触发不了它;③ **走既有 composer 发送路径**:同一个 `send`、同一套会话 / 配额 / `MAX_PROMPT_CHARS`,服务端看到的是一条普通访客消息,api 零改动、不加任何来源标记;
     组成长度在解析期按 UTF-16 算最坏值 ≤ 1000(超则整卡回落),发送前仍过第 10 条那把清洗(去控制字符)。残余风险 = 模型通过给什么选项来引导对话走向,那正是功能本身;所有者已认(2026-09-09)
 13. **模型输出渲染成自由 HTML**(R-CARDS-2 补,2026-09-09 所有者裁定;**同日落地**,边界在 `apps/web/lib/xray-html.ts`(CSP 拼装 + `shouldDropElement` / `shouldDropAttribute` 两个判定函数 + `DOMParser` 薄壳)
@@ -58,7 +59,7 @@
     ① **不执行、无同源**:`sandbox=""`(空串 = 全部限制:无脚本、opaque origin、无表单提交、无弹窗、无顶层导航、无下载),模型 HTML 里的任何脚本都不执行,帧拿不到 cookie / storage / 父页 DOM,
     **永不**给 `allow-scripts` / `allow-same-origin`;这一层**不靠清洗**。② **不出网**:帧文档头部由父页注入 `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">`——
     图片 / 字体 / `@import` / CSS `url()` / 嵌套帧全部不发请求(第 9 条的同族:第三方地址进对话框 = 访客 IP 泄露);模型再写一条 meta CSP 只会取交集、放松不了。
-    ③ **不出链、不换页**:前端一次 `DOMParser` 窄清洗——去 `script` / `iframe` / `object` / `embed` / `form` / `input` / `button` / `meta` / `link` / `base` / `img` / 媒体元素、去全部 `on*`、
+    ③ **不出链、不换页**:前端一次 `DOMParser` 窄清洗(惰性文档:没有浏览环境、不是 fully active,解析期不会启动任何子资源加载,本机 Chromium 12 种资源元素实证零请求)——去 `script` / `iframe` / `object` / `embed` / `form` / `input` / `button` / `meta` / `link` / `base` / `img` / 媒体元素 / **SVG SMIL 动画元素**(`set` / `animate` 这类不靠脚本就能在清洗之后改写 `href` 的元素,codex 第 1 轮 P1)、去全部 `on*`、
     去所有 URL 承载属性除 `#` 片段外、去 `target`——sandbox 与 CSP 都拦不住帧**自导航**(`<a href>` 点击、`<meta refresh>`),清洗只为堵这一个口;**它不是 XSS 防线**,
     被绕过的最坏结果是一次点击后帧内加载第三方页,而那个页仍在同一个 sandbox 里。其它上界:围栏 ≤ 16 KB、高度夹取 [160, 480]、每轮最多两个组件、只在最终回答段、只在会话区;
     帧 `referrerpolicy="no-referrer"`、无 `allow` 属性;`srcdoc` 由父页拼装(doctype + charset + CSP + 基础样式 + 清洗后的 body),模型片段里的 `</body>` 逃逸无效(整段都在 sandbox 内);

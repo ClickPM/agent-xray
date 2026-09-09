@@ -178,7 +178,8 @@ const COMPONENTS_CLAUSE =
   '{"v":1,"kind":"tabs","title":"…","tabs":[{"label":"…","card":{"kind":"kv","rows":[{"k":"…","v":"…"}]}}]} —— 分页,≤ 5 页,每页装上面五种之一,不能再套 tabs\n' +
   '{"v":1,"kind":"choice","title":"…","prompt":"你更想从哪条线入手?","multiple":false,"options":[{"label":"…","note":"…"}],"submit":"提交"} —— 让访客选:2–8 项,label ≤ 60 字、note 可选;' +
   "multiple 为 false 时单选(点选项即发出、没有按钮),为 true 时多选(卡底一枚按钮,文案 submit ≤ 20 字、缺省「提交」)\n" +
-  '{"v":1,"kind":"form","title":"…","prompt":"…","fields":[{"label":"…","type":"text","placeholder":"…","required":true},{"label":"…","type":"select","options":["…","…"],"required":false}],"submit":"提交"} —— 让访客填:1–5 个字段,type 只有 text 与 select,label ≤ 40 字,text 最多 100 字\n' +
+  '{"v":1,"kind":"form","title":"…","prompt":"…","fields":[{"label":"…","type":"text","placeholder":"…","required":true},{"label":"…","type":"select","options":["…","…"],"required":false}],"submit":"提交"} —— 让访客填:1–5 个字段,type 只有 text 与 select,' +
+  "label ≤ 40 字、placeholder ≤ 100 字(可选)、select 的 options 2–8 项每项 ≤ 60 字、submit ≤ 20 字(缺省「提交」),text 访客最多填 100 字\n" +
   "回传语义:访客点了选项或按钮后,「题干: 所选项」(多选以「、」相连)或「题干 字段: 值; 字段: 值」这句话会**作为访客的下一条消息直接发出**、你下一轮会原样收到 —— " +
   "所以 prompt 要写成一句完整的问题、label 与字段名要能单独成立;title / note / placeholder / 按钮文案都不会进那句话。choice / form 不能放进 tabs。\n" +
   "其它上限:整段 JSON ≤ 8 KB,每个字符串 ≤ 200 字。卡里的值按纯文本显示,不解析 markdown、不放 HTML;除 links 的 href 之外不要在卡里放任何网址。" +

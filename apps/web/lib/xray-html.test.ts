@@ -65,6 +65,9 @@ describe("shouldDropElement:去脚本 / 嵌入 / 表单控件 / 头部元数据 
   it("同类补三个:SVG image / template / portal", () => {
     for (const t of ["image", "template", "portal", "fencedframe"]) assert.equal(shouldDropElement(t), true, t);
   });
+  it("SVG SMIL 动画元素都去(codex 第 1 轮 P1:<set attributeName=href> 能在清洗之后改写锚点)", () => {
+    for (const t of ["set", "animate", "animateMotion", "animateTransform", "animateColor", "discard", "mpath", "SET"]) assert.equal(shouldDropElement(t), true, t);
+  });
   it("大小写变体同样去(SVG 元素名区分大小写,判定统一小写)", () => {
     for (const t of ["SCRIPT", "Script", "IMG", "Meta"]) assert.equal(shouldDropElement(t), true, t);
   });

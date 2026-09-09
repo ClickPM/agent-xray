@@ -16,6 +16,9 @@
 // 这里多出两件事:`composeChoiceMessage` / `composeFormMessage` 是那句话的**唯一**组成规则(只由卡上可见文本 + 访客自己填的值拼成,
 // 没有任何模型写、访客看不见的模板串),`parseBody` 在解析期按同一把尺(UTF-16 `.length`)算**最坏组成长度**,超过 `CARD_LIMITS.message`
 // 整卡回落 —— 运行期发送前的清洗闸(`sanitizePrefill`,超 1000 整段丢弃)因此永远不可能把一次点击吞掉。
+// 第三条宽松处理(codex 第 1 轮 P2):**会进消息的字段在解析期先去不可见字符**(`stripInvisible`,与 `sanitizePrefill` 同一条正则)——
+// U+202E 这类 bidi 覆盖字符会让卡上显示的顺序与发出去的字不一致;去掉之后「卡上看到的 = 发出去的」这条边界才成立。不进消息的字段(title / note / placeholder / submit)不动。
+import { stripInvisible } from "./ask-why";
 
 export const CARD_KINDS = ["kv", "table", "list", "stat", "compare", "tabs", "choice", "form"] as const;
 export type CardKind = (typeof CARD_KINDS)[number];
@@ -189,6 +192,14 @@ function req(v: unknown, max: number = CARD_LIMITS.text): string | null {
 function opt(v: unknown, max: number = CARD_LIMITS.text): string | null | undefined {
   const s = str(v, max);
   return s === "" ? undefined : s;
+}
+
+/**
+ * 会进访客消息的字符串(题干 / 选项 label / 字段 label / select 选项):先去不可见字符再按 `req` / `opt` 判(理由见文件头第三条宽松处理)。
+ * 去掉之后变空的必填项照常回落(一个只由控制字符组成的 label 不是 label)。
+ */
+function visible(v: unknown): unknown {
+  return typeof v === "string" ? stripInvisible(v) : v;
 }
 
 /** 可选布尔:缺 → 默认;不是布尔 → null(整卡回落) */
@@ -367,14 +378,14 @@ function parseBody(o: Obj, allowTabs: boolean): CardBody | null {
     case "choice": {
       if (!allowTabs) return null; // 与 tabs 同一条:可回传的卡不能嵌进 tabs 页里(任务卡派生取舍 6)
       const options = arr(o.options, CARD_LIMITS.optionsMin, CARD_LIMITS.optionsMax);
-      const prompt = opt(o.prompt);
+      const prompt = opt(visible(o.prompt));
       const multiple = bool(o.multiple, false);
       const submit = opt(o.submit, CARD_LIMITS.submit);
       if (!options || prompt === null || multiple === null || submit === null) return null;
       const out: ChoiceBody["options"] = [];
       for (const it of options) {
         if (!isObj(it)) return null;
-        const label = req(it.label, CARD_LIMITS.optionLabel);
+        const label = req(visible(it.label), CARD_LIMITS.optionLabel);
         const note = opt(it.note);
         if (label === null || note === null) return null;
         out.push(note === undefined ? { label } : { label, note });
@@ -387,13 +398,13 @@ function parseBody(o: Obj, allowTabs: boolean): CardBody | null {
     case "form": {
       if (!allowTabs) return null;
       const fields = arr(o.fields, CARD_LIMITS.fieldsMin, CARD_LIMITS.fieldsMax);
-      const prompt = opt(o.prompt);
+      const prompt = opt(visible(o.prompt));
       const submit = opt(o.submit, CARD_LIMITS.submit);
       if (!fields || prompt === null || submit === null) return null;
       const out: FormField[] = [];
       for (const f of fields) {
         if (!isObj(f)) return null;
-        const label = req(f.label, CARD_LIMITS.fieldLabel);
+        const label = req(visible(f.label), CARD_LIMITS.fieldLabel);
         const placeholder = opt(f.placeholder, CARD_LIMITS.placeholder);
         const required = bool(f.required, false);
         if (label === null || placeholder === null || required === null) return null;
@@ -405,7 +416,7 @@ function parseBody(o: Obj, allowTabs: boolean): CardBody | null {
           if (!options) return null;
           const opts: string[] = [];
           for (const s of options) {
-            const v = req(s, CARD_LIMITS.selectOption);
+            const v = req(visible(s), CARD_LIMITS.selectOption);
             if (v === null) return null;
             opts.push(v);
           }
@@ -466,9 +477,13 @@ export function formWorstLength(body: FormBody): number {
   return composeFormMessage(body, worst).length;
 }
 
-/** 一张 `form` 卡的 submit 能不能按:全部 `required` 字段非空(trim 后)才行(画板 2u 标本⑤ / ⑥) */
+/**
+ * 一张 `form` 卡的 submit 能不能按:全部 `required` 字段非空(trim 后)才行(画板 2u 标本⑤ / ⑥),**且组成出来的消息非空**
+ * (codex 第 1 轮 P2:没有题干、字段全是可选的表单,一个字没填也「完整」,点了组成空串 → 清洗闸丢弃 → 没消息却锁卡;
+ * 要发的东西为空就没有可按的按钮)。
+ */
 export function formComplete(body: FormBody, values: readonly string[]): boolean {
-  return body.fields.every((f, i) => !f.required || (values[i] ?? "").trim() !== "");
+  return body.fields.every((f, i) => !f.required || (values[i] ?? "").trim() !== "") && composeFormMessage(body, values).trim() !== "";
 }
 
 /**

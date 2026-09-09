@@ -23,7 +23,7 @@
 // 选择指示(单选 15px 圆点 / 多选 15px r4 方框,常态 1px `--border` + 白底,选中态描边与填充换 `--accent`,多选内嵌 9px 白色对勾)。
 // 出口是**发送**而不是预填(`docs/security.md` §0 第 12 条):发出的文本由 `lib/xray-card.ts` 的两个 compose 函数组成、只由可见文本拼成;
 // **触发只认 React onClick**(选项行 / submit 按钮;键盘 Enter / Space 走同一 handler),渲染 / 滚动 / hover / 聚焦都不发;
-// 一轮生成中(`busy`)禁用;发过即锁(本地状态,刷新回初始态)。两种态都不做动画。
+// 一轮生成中(`busy`)禁用;**发出去了才锁**(`onSend` 回 true;被清洗闸或 composer 守卫拒收就什么都不留,codex 第 1 轮 P2),锁是本地状态,刷新回初始态。两种态都不做动画。
 import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { GhostButton } from "@/components/ui";
 import { Bar } from "@/components/Skeleton";
@@ -353,7 +353,7 @@ function keyActivate(e: KeyboardEvent<HTMLElement>, fn: () => void) {
  *   locked(已发送)—— 已选高亮保留、未选 label 降到 `--text-dim`、不可再点、按钮回到禁用视觉、文案不变。
  * 三个都是本地状态(`sent` / `selected`),刷新回初始态。`onSend` 不传时按 busy 画(没有发送通路就没有可点的选项)。
  */
-function Choice({ body, hasTitle, busy, onSend, footerLinks }: { body: ChoiceBody; hasTitle: boolean; busy: boolean; onSend?: (text: string) => void; footerLinks: ReactNode }) {
+function Choice({ body, hasTitle, busy, onSend, footerLinks }: { body: ChoiceBody; hasTitle: boolean; busy: boolean; onSend?: (text: string) => boolean; footerLinks: ReactNode }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [sent, setSent] = useState(false);
   const disabled = busy || sent || onSend === undefined;
@@ -363,15 +363,14 @@ function Choice({ body, hasTitle, busy, onSend, footerLinks }: { body: ChoiceBod
       setSelected((s) => (s.includes(i) ? s.filter((x) => x !== i) : [...s, i]));
       return;
     }
-    // 单选:点选项即发送并锁定(画板 2u:少一次点击,也少一个「选了但没提交」的中间态)
+    // 单选:点选项即发送并锁定(画板 2u:少一次点击,也少一个「选了但没提交」的中间态);发送被拒收就什么都不留(codex 第 1 轮 P2)
+    if (!onSend!(composeChoiceMessage(body, [i]))) return;
     setSelected([i]);
     setSent(true);
-    onSend!(composeChoiceMessage(body, [i]));
   };
   const submit = () => {
     if (disabled || selected.length === 0) return;
-    setSent(true);
-    onSend!(composeChoiceMessage(body, selected));
+    if (onSend!(composeChoiceMessage(body, selected))) setSent(true);
   };
   const idle = !disabled;
   return (
@@ -435,15 +434,14 @@ const fieldBox: CSSProperties = {
  * form(画板 2u 标本⑤–⑥ / 5a):1–5 个字段,text 输入框 `maxLength = 100`(浏览器按 UTF-16 单位计,与解析期那把尺相同),
  * select 收起态值走 placeholder 次级色;全部 required 非空前 submit 禁用;发出后字段 `disabled`、值保留、按钮回禁用视觉。
  */
-function Form({ body, hasTitle, busy, onSend, footerLinks }: { body: FormBody; hasTitle: boolean; busy: boolean; onSend?: (text: string) => void; footerLinks: ReactNode }) {
+function Form({ body, hasTitle, busy, onSend, footerLinks }: { body: FormBody; hasTitle: boolean; busy: boolean; onSend?: (text: string) => boolean; footerLinks: ReactNode }) {
   const [values, setValues] = useState<string[]>(() => body.fields.map(() => ""));
   const [sent, setSent] = useState(false);
   const disabled = busy || sent || onSend === undefined;
   const set = (i: number, v: string) => setValues((vs) => vs.map((x, j) => (j === i ? v : x)));
   const submit = () => {
     if (disabled || !formComplete(body, values)) return;
-    setSent(true);
-    onSend!(composeFormMessage(body, values));
+    if (onSend!(composeFormMessage(body, values))) setSent(true);
   };
   const lockedBox: CSSProperties = sent ? { background: "rgba(0,0,0,0.02)", cursor: "default" } : {};
   return (

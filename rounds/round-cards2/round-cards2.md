@@ -238,9 +238,23 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 
 <!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
 
-- 审查方式:<codex /codex:review | codex /codex:adversarial-review | /code-review(写明降级原因)>
-- findings 处理:<逐条:采纳整改 / 不采纳及理由;或链接同目录记录文件>
-- 结论:<PASS | 整改后 PASS>
+- 审查方式:codex `review --scope branch`(PowerShell `Start-Process` 脱离启动 + Monitor 盯 `.out`,项目记忆的做法;前两轮全量,第 3 轮起 `--base <上一轮已审提交>`)。
+  带给审查者的要求:只判定缺陷与严重级别,不展开设计方案;重点是窄清洗的判定函数(不出链 / 不换页)、可回传卡的 WYSIWYG 与发送边界、组件预算。
+  **findings 若连续两轮落在同一块自建机制上(最可能是窄清洗),停下回所有者重定方案,不堆补丁**(项目记忆)。
+
+**第 1 轮**(全量 `branch diff against main`,提交 `1762b40`;18.7 分钟):5 条 findings,**2 P1 + 3 P2**;**4 条采纳整改、1 条 P1 不采纳(有实证)**。
+
+| # | finding | 处理 |
+|---|---|---|
+| 1 | **P1 · `DOMParser` 解析时就可能抓取子资源**(`lib/xray-html.ts` `sanitizeFragment`):「在解析惰性文档时会抓 `<img>` / `<iframe>` 的浏览器里」,清洗之前请求就发出去了,CSP 在帧里、管不到父页 | **不采纳,有实证**。HTML 规范:`DOMParser` 产出的文档没有浏览环境、**不是 fully active**,图片的「update the image data」、`iframe` 的「process the iframe attributes」、媒体元素的资源选择、`object` / `embed` 的加载算法都以「node document 是 fully active」为前提,惰性文档里一律不启动(DOMPurify 就是靠这一条才敢用 DOMParser)。本机 Chromium 实证:在站点页面里 `new DOMParser().parseFromString(...)` 一段含 `img` / `link` / `iframe` / `video` / `audio` / `object` / `embed` / `script` / `@import` + `url()` / `input type=image` / SVG `image` / `picture+source` 共 12 个指向 `localhost:4000/probe-*` 的元素 → `read_network_requests` 与 `performance.getEntriesByType("resource")` 都没有任何 `probe-` 请求。finding 措辞本身是「in browsers that…」的假设句,没有点名任何一个真会这么做的现代浏览器;没有一个可替代的路径能比惰性文档更「不能发请求」(`createHTMLDocument` / `<template>` 是同一类)。记任务卡,不改代码 |
+| 2 | **P1 · SVG SMIL 动画元素能在清洗之后改写锚点**(`lib/xray-html.ts`):`<a href="#x"><set attributeName="href" to="https://evil"/></a>` 过清洗时是帧内锚点,渲染后 `<set>` 不靠脚本就把 href 改成外站,点一下帧自导航 —— sandbox 与 CSP 都拦不住,正是这层清洗唯一要堵的口 | **采纳**。`DROP_ELEMENTS` 加 `set` / `animate` / `animateMotion` / `animateTransform` / `animateColor` / `discard` / `mpath`(没有脚本、没有动画,属性在清洗之后就再也不会变);用例 +1(含大小写),`cards-e2e` 敌意片段与 faux 剧本各加一段 `<a href="#top"><set …/><animate …/></a>`,浏览器复核 `srcdoc` 里五种 SMIL 元素都是 0、`<a>` 只剩 `#top` |
+| 3 | **P2 · 可回传卡的题干 / label 接受不可见字符**(`lib/xray-card.ts`):U+202E 这类 bidi 覆盖在卡上会改变显示顺序,发送前又被 `sanitizePrefill` 去掉 —— 访客看到的不是发出去的,违反 §0 第 12 条 ① | **采纳**。`ask-why.ts` 抽出 `stripInvisible`(与 `sanitizePrefill` 同一条正则),`parseBody` 对**会进消息的字段**(prompt / 选项 label / 字段 label / select 选项)在解析期先去再判长度;不进消息的 title / note / placeholder / submit 不动。用例 +4(含「组成出来的消息再过一遍 `sanitizePrefill` 一字不变」这条不变量);浏览器复核 `隐形` 剧本:卡上没有 U+202E / U+200B,发出的文本与卡上逐字相同 |
+| 4 | **P2 · 没有题干、字段全可选的表单一个字没填也能按,点了组成空串被清洗闸丢弃,卡却锁了**(`XrayCard.tsx`) | **采纳**,两处:① `formComplete` 加「组成出来的消息非空」;② `ComposerContext.onSend` 改回 `boolean`(清洗闸丢弃 / `sendText` 的 busy 或历史加载守卫拒收都回 false),三处点击**发出去了才锁**(单选连选中态也不留)。用例 +1;浏览器复核 `空表单` 剧本:初始禁用、填一个字段后可用、提交 → `邮箱: a@b.c` 且锁定 |
+| 5 | **P2 · 提示词里 form 的上限没点全**(`runtime.ts`):只说了字段数 / type / label ≤ 40 / text 100,下一句「每个字符串 ≤ 200 字」会让模型写出 placeholder > 100、select 选项 > 8 或 > 60、submit > 20 的表单,静默回落成代码块 | **采纳**。form 那一行补齐 placeholder ≤ 100、select options 2–8 项每项 ≤ 60、submit ≤ 20(缺省「提交」);`runtime.test.ts` 逐条断言五个上限短语 |
+
+审查者推理里还提到但**没有**列为 finding 的两处,顺手核过:「`sendTextRef` 在 passive effect 里同步、点击可能拿到旧闭包」—— React 18 在处理下一个离散事件之前一定先冲掉上一次提交的 passive effect,点击永远拿到最新的 `sendText`,且整改 #4 后即使拒收也不会锁卡;「`leadingComponentFences` 与 micromark 的围栏判据有出入」—— 两边不一致的后果只是那一个围栏回落成代码块(与 `fenceUnterminated` 同一口径),未列 finding、不改。
+
+复验:`bun test lib` **146** 用例全绿(+6),`tsc --noEmit` 过,`dev.ps1 test agent/runtime.test.ts agent/cards-e2e.test.ts` 43 用例过;浏览器按上表逐条复核(faux 剧本新增 `空表单` / `隐形`,`敌意` 加 SMIL)。
 
 ## 失败处理
 
@@ -253,7 +267,7 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 
 | # | 结果 | 留证 |
 |---|---|---|
-| 1 | ✅ | `dev.ps1 check` 过;`dev.ps1 test`:api 35 文件 / 614 用例(613 过 + `source-tools.test.ts` 1 条**已知**文件顺序 flake,BACKLOG 里 R-SOURCE / R-CARDS 记过,单跑 9/9 过;本轮新增 `runtime.test` 1 条 + `cards-e2e` 断言 6 条)+ web `bun test lib` **140** 用例(`xray-card.test.ts` 37 → 64,+27;`xray-html.test.ts` 新增 20);`apps/web` `tsc --noEmit` 过;`next build` 过(见下) |
+| 1 | ✅ | `dev.ps1 check` 过;`dev.ps1 test`:api 35 文件 / 614 用例(613 过 + `source-tools.test.ts` 1 条**已知**文件顺序 flake,BACKLOG 里 R-SOURCE / R-CARDS 记过,单跑 9/9 过;本轮新增 `runtime.test` 1 条 + `cards-e2e` 断言 6 条)+ web `bun test lib` **140** 用例(`xray-card.test.ts` 37 → 64,+27;`xray-html.test.ts` 新增 20;审查第 1 轮整改后 **146**);`apps/web` `tsc --noEmit` 过;`next build` 过(见下) |
 | 2 | ✅ | `选择`:四选项、无按钮、`role=radio` `tabIndex=0`;点第二项 → 会话区立刻一条访客气泡,文本**精确等于** `你更想从哪条线入手?: 沙箱执行组`;`POST /agent/ask` 计数 1 → 2;卡锁定(第二项 `aria-checked=true`、四行 `aria-disabled` + `tabIndex=-1` + `cursor:default`),下一轮结束后仍锁定;`无题干` 卡发出的只有 `先看内核`、且 `action` 被忽略(无按钮、无卡底) |
 | 3 | ✅ | `多选`:未选 → submit `disabled` 且字 `--text-dim`;点第 3、第 2 项 → 可用(字 `--text-muted`);提交 → `哪几组工具你想先看源码?: 外呼组、沙箱执行组`(按**选项原顺序**,不按点选顺序);缺省文案「提交」;锁定后未选 label 降到 `--text-dim`、已选保持 `--text`;卡底 1 条站内链接照常 |
 | 4 | ✅ | `表单`:text / select / text,两个必填(mono 10「必填」);填一个仍禁用;全填可用;提交 → `帮我定制学习路径 经验: 3 年; 目标: 上线一个 agent 站; 每周时间: 5 小时`;锁定后字段 `disabled`、值保留、底 `rgba(0,0,0,.02)`。`大表单`(5 字段 × 100 字 + 200 字 prompt)→ 发出 **734** 字、4 个 `; `、未被清洗闸丢弃 |
@@ -285,6 +299,7 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 6. 帧的移动端上限 360 由 `useIsMobile` 在组件里夹(渲染器拿不到视口),骨架用同一个 hook,两者高度永远一致。
 7. 处理过程段里的卡片(含 R-CARDS 的六种)改为代码块(任务卡「已认代价」最后一条);`splitTurn` 与 `AssistantTurn` 的段落划分零改动。
 8. 提示词组件段 22 行(R-CARDS 12 行 + 两种新 kind 各一行 + 回传语义一行 + HTML 段一行 + 位置 / 用途各一句),`HTML_COMPONENT_ENABLED = false` 时掐掉三处 HTML 半句;段落头从「【信息卡片】」改为「【UI 组件】」,两个测试文件同步。
+9. **审查第 1 轮带来的三处口径变化**(见「代码审查」):会进消息的字段在解析期先去不可见字符(`stripInvisible`,与 `sanitizePrefill` 同一条正则)—— 这是 `lib/xray-card.ts` 头注释里的第三条宽松处理;`onSend` 回 `boolean`、**发出去了才锁**;窄清洗名单再加七个 SVG SMIL 动画元素。
 
 ### 踩的坑
 

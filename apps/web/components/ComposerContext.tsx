@@ -12,7 +12,11 @@ import { createContext, useContext } from "react";
 
 export interface ComposerValue {
   busy: boolean;
-  onSend?: (text: string) => void;
+  /**
+   * 回「发没发出去」:`sendText` 的 busy / 历史加载守卫会拒收,拒收了卡就不能锁(codex 第 1 轮 P2:锁了却没消息是最坏的体验)。
+   * 卡片只在它回 true 时进入锁定态。
+   */
+  onSend?: (text: string) => boolean;
 }
 
 export const ComposerContext = createContext<ComposerValue>({ busy: true });

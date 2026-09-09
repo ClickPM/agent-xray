@@ -3,6 +3,7 @@
 // 纯函数测试,不起 Next。经 `dev.ps1 test` → `bun test lib` 运行(node:test 写法,零新增依赖)。
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { sanitizePrefill } from "./ask-why";
 import {
   CARD_LIMITS,
   DEFAULT_SUBMIT,
@@ -400,6 +401,32 @@ describe("choice:发送文本只由 prompt + 所选 label 组成", () => {
   });
 });
 
+describe("会进消息的字段在解析期去不可见字符(codex 第 1 轮 P2:卡上看到的 = 发出去的)", () => {
+  const RLO = String.fromCharCode(0x202e); // bidi 覆盖
+  const ZWSP = String.fromCharCode(0x200b);
+  it("choice:prompt / label 里的 U+202E、零宽空格、控制字符都在解析期去掉;note 不动(不进消息)", () => {
+    const c = parseCard(json(choice({ prompt: `你更想${RLO}从哪条线入手?`, options: [{ label: `纯函数${ZWSP}组`, note: `n${ZWSP}` }, { label: "b" }] }))) as ChoiceBody;
+    assert.equal(c.prompt, "你更想从哪条线入手?");
+    assert.deepEqual(c.options.map((o) => o.label), ["纯函数组", "b"]);
+    assert.equal(c.options[0].note, `n${ZWSP}`);
+  });
+  it("WYSIWYG 不变量:组成出来的消息再过一遍 sanitizePrefill 一字不变", () => {
+    const c = parseCard(json(choice({ prompt: `题${RLO}干`, options: [{ label: `A${ZWSP}` }, { label: "B" }] }))) as ChoiceBody;
+    const text = composeChoiceMessage(c, [0, 1]);
+    assert.equal(sanitizePrefill(text), text);
+    const f = parseCard(json(form({ prompt: `帮我${RLO}定制`, fields: [{ label: `经${ZWSP}验`, type: "select", options: [`3${RLO} 年`, "5 年"] }] }))) as FormBody;
+    const ft = composeFormMessage(f, [f.fields[0].type === "select" ? f.fields[0].options[0] : ""]);
+    assert.equal(ft, "帮我定制 经验: 3 年");
+    assert.equal(sanitizePrefill(ft), ft);
+  });
+  it("去掉之后变空的 label 照常回落", () => {
+    assert.equal(parseCard(json(choice({ options: [{ label: RLO + ZWSP }, { label: "b" }] }))), null);
+  });
+  it("长度按去掉之后的字算(60 个字 + 若干零宽仍通过)", () => {
+    assert.notEqual(parseCard(json(choice({ options: [{ label: "x".repeat(60) + ZWSP.repeat(5) }, { label: "b" }] }))), null);
+  });
+});
+
 describe("choice:解析期最坏长度(UTF-16)", () => {
   it("8 × 60 字 label + 200 字 prompt = 689 → 通过", () => {
     const c = parseCard(json(choice({ prompt: "p".repeat(200), options: Array.from({ length: 8 }, () => ({ label: "l".repeat(60) })) })));
@@ -469,6 +496,14 @@ describe("form:发送文本单行、ASCII 分隔、按字段顺序、空字段�
     assert.equal(formComplete(body, ["3 年", "", "x"]), false);
     assert.equal(formComplete(body, ["3 年", "读懂内核", ""]), true);
     assert.equal(formComplete(body, ["  ", "读懂内核", ""]), false);
+  });
+  it("formComplete:没有题干、字段全可选、一个字没填 → 消息为空 → 不能按(codex 第 1 轮 P2);填一个就能按;有题干时空表单也能按(消息 = 题干)", () => {
+    const optional = parseCard(json(form({ prompt: undefined, fields: [{ label: "a" }, { label: "b" }] }))) as FormBody;
+    assert.equal(formComplete(optional, ["", ""]), false);
+    assert.equal(formComplete(optional, ["  ", ""]), false);
+    assert.equal(formComplete(optional, ["", "x"]), true);
+    const withPrompt = parseCard(json(form({ fields: [{ label: "a" }] }))) as FormBody;
+    assert.equal(formComplete(withPrompt, [""]), true);
   });
 });
 

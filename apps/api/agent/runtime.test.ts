@@ -538,6 +538,8 @@ describe("系统提示词的 UI 组件段(R-CARDS / R-CARDS-2)", () => {
     expect(p).toContain('"kind":"choice"');
     expect(p).toContain('"kind":"form"');
     expect(p).toContain("choice / form 不能放进 tabs");
+    // codex 第 1 轮 P2:form 的每条上限都要点名,否则「每个字符串 ≤ 200 字」那句会让模型写出解析器拒收的表单
+    for (const s of ["label ≤ 40 字", "placeholder ≤ 100 字", "options 2–8 项每项 ≤ 60 字", "submit ≤ 20 字", "最多填 100 字"]) expect(p).toContain(s);
     if (HTML_COMPONENT_ENABLED) {
       expect(p).toContain("```xray-html height=");
       expect(p).toContain("160–480");

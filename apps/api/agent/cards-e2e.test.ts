@@ -33,7 +33,9 @@ const OVERSIZED_HTML = `<p>${"x".repeat(16 * 1024 + 1 - "<p></p>".length)}</p>`;
 const HOSTILE_HTML =
   '<script>alert(1)</script><img src="https://evil.example/pixel.gif"><a href="https://evil.example/">out</a>' +
   '<meta http-equiv="refresh" content="0;url=https://evil.example/"><link rel="stylesheet" href="https://evil.example/x.css">' +
-  "<style>@import url(https://evil.example/i.css); body{background:url(https://evil.example/b.png)}</style><details><summary>ok</summary>kept</details>";
+  "<style>@import url(https://evil.example/i.css); body{background:url(https://evil.example/b.png)}</style><details><summary>ok</summary>kept</details>" +
+  // codex 第 1 轮 P1:SMIL 能在清洗之后改写锚点,前端要把 <set> / <animate> 整个去掉
+  '<svg><a href="#top"><set attributeName="href" to="https://evil.example/"></set><animate attributeName="href" to="https://evil.example/"></animate><text>x</text></a></svg>';
 
 /** 六种合法 + 一张坏 JSON(尾逗号)+ 一张超限(21 行);正文夹在卡与卡之间,像模型真会写的样子 */
 const REPLY = [

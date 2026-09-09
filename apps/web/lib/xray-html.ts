@@ -63,15 +63,18 @@ export function clampHeight(declared: number | null, mobile: boolean): number {
 }
 
 /**
- * 整个元素去掉(连同子树)。任务卡派生取舍 10 的名单 + 三个同类:`image`(SVG 里的位图,等于 `img`)、`template`(没有脚本就没有用处,
- * 而它的内容在 DOM 遍历里看不见)、`portal` / `fencedframe`(嵌入类)。**保留** `style` / `details` / `summary` / 内联 `svg` / `math` 与全部排版元素。
- * 入参是 `localName`(SVG 元素大小写敏感,这里统一小写比)。
+ * 整个元素去掉(连同子树)。任务卡派生取舍 10 的名单 + 三类同类:`image`(SVG 里的位图,等于 `img`)、`template`(没有脚本就没有用处,
+ * 而它的内容在 DOM 遍历里看不见)、`portal` / `fencedframe`(嵌入类);以及 **SVG 的 SMIL 动画元素**(codex 第 1 轮 P1):`<set>` / `<animate>` 这类元素
+ * **不靠脚本**就能在运行期改写属性 —— `<a href="#x"><set attributeName="href" to="https://…"/></a>` 在清洗时看着是帧内锚点,渲染后 href 已经变成外站,
+ * 点一下帧就换页(sandbox 与 CSP 都拦不住帧自导航,正是这层清洗唯一要堵的口)。没有脚本、没有动画,属性在清洗之后就再也不会变。
+ * **保留** `style` / `details` / `summary` / 内联 `svg` / `math` 与全部排版元素。入参是 `localName`(SVG 元素大小写敏感,这里统一小写比)。
  */
 const DROP_ELEMENTS = new Set([
   "script", "iframe", "frame", "frameset", "object", "embed", "applet", "portal", "fencedframe",
   "form", "input", "textarea", "select", "button",
   "meta", "link", "base", "template",
   "img", "image", "picture", "source", "video", "audio", "track",
+  "set", "animate", "animatemotion", "animatetransform", "animatecolor", "discard", "mpath",
 ]);
 
 export function shouldDropElement(tag: string): boolean {

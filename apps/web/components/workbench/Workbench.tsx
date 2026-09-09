@@ -1004,10 +1004,12 @@ export function Workbench() {
    */
   const sendTextRef = useRef(sendText);
   useEffect(() => { sendTextRef.current = sendText; }, [sendText]);
-  const sendFromCard = useCallback((text: string) => {
+  // 回「发没发出去」:清洗闸丢弃、或 sendText 的守卫拒收,都回 false,卡不锁(codex 第 1 轮 P2)。
+  // ref 在 passive effect 里同步:React 在处理下一个离散事件(点击)之前一定先冲掉上一次提交的 passive effect,所以卡点到的永远是最新那份 sendText。
+  const sendFromCard = useCallback((text: string): boolean => {
     const clean = sanitizePrefill(text);
-    if (!clean) return;
-    sendTextRef.current(clean);
+    if (!clean) return false;
+    return sendTextRef.current(clean);
   }, []);
   // 可回传卡读的那份:值只在一轮开始 / 结束时换,消费者只有卡本身(ComposerContext.tsx)
   const composer = useMemo(() => ({ busy: streaming, onSend: sendFromCard }), [streaming, sendFromCard]);
