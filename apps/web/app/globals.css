@@ -821,9 +821,11 @@ html {
 /* ── R-CARDS:会话区信息卡片(components/XrayCard.tsx;画板 2s / 2t 桌面,4y / 4z 移动) ──
    桌面样式全在组件的内联样式里(与画板逐条对齐);这里只放移动端的差别,与上面 R-MOBILE 那些规则同一手法。
    两类差别按两种条件分开:
-   · **宽度驱动**(compare 堆叠、stat 两列、table 单元格不折行)按**卡内宽**判 —— 画板 4y 的规则边界是
+   · **宽度驱动**(compare 堆叠、stat 两列、table 单元格不折行、kv 键列 104)按**卡内宽**判 —— 画板 4y 的规则边界是
      「A / B 列各 ≥ 160 即卡内宽 ≥ 480 时不堆叠」,它说的是卡的宽度、不是视口,所以用容器查询;
      `.xcard` 只补 `container-type`,不写别的(容器的度量根就是卡片本身)。
+     **整块套在 768 断点之内**:4y 是移动画板,桌面卡片照桌面画板 2s(键列 150、三列对比、三格一排),
+     桌面聊天栏再窄也不切换 —— 否则窄一点的桌面窗口会把桌面卡画成移动版(codex 第 3 轮 P2)。
    · **触控语汇**(44 命中、胶囊按钮、SegmentedControl)跟移动壳走,与全站其它移动规则同一断点 768。 */
 .xcard {
   container-type: inline-size;
@@ -832,59 +834,61 @@ html {
 .xcard-cmp-label {
   display: none;
 }
-@container (max-width: 479px) {
-  /* stat 三格排成 2+1:第 2 格加左分隔、第 3 格加上分隔(画板 4y ①屏) */
-  .xcard-stat {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-  .xcard-stat-cell {
-    border-left: none !important;
-    padding-top: 8px !important;
-  }
-  .xcard-stat-cell:nth-child(even) {
-    border-left: 1px solid var(--border) !important;
-  }
-  .xcard-stat-cell:nth-child(n + 3) {
-    border-top: 1px solid var(--border);
-  }
-  /* compare 上下堆叠:表头隐藏,每行 = 维度一行 + A / B 各一行,列名降级成行内 mono 10 小标题(画板 4y ②屏) */
-  .xcard-cmp-head {
-    display: none !important;
-  }
-  .xcard-compare {
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-bottom: 12px;
-  }
-  .xcard-cmp-row {
-    display: block !important;
-    padding: 8px 0;
-  }
-  .xcard-cmp-dim {
-    padding: 0 !important;
-  }
-  .xcard-cmp-cell {
-    display: grid !important;
-    grid-template-columns: 104px minmax(0, 1fr);
-    gap: 8px;
-    padding: 0 !important;
-    margin-top: 3px;
-  }
-  .xcard-cmp-cell + .xcard-cmp-cell {
-    margin-top: 1px;
-  }
-  .xcard-cmp-label {
-    display: inline;
-  }
-  /* table 单元格不折行,整张表在 .xcard-scroll 里横滚(画板 4y:超出卡片右缘直接裁切,不加渐隐) */
-  .xcard-table th,
-  .xcard-table td {
-    white-space: nowrap;
-  }
-  /* kv 键列 150 → 104、行内 gap 12 → 8(画板 4y「320 / 430 不变 = compare 与 kv 的键列 104」;codex 第 2 轮 P2) */
-  .xcard-kv-row {
-    grid-template-columns: 104px minmax(0, 1fr) !important;
-    gap: 8px !important;
+@media (max-width: 768px) {
+  @container (max-width: 479px) {
+    /* stat 三格排成 2+1:第 2 格加左分隔、第 3 格加上分隔(画板 4y ①屏) */
+    .xcard-stat {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .xcard-stat-cell {
+      border-left: none !important;
+      padding-top: 8px !important;
+    }
+    .xcard-stat-cell:nth-child(even) {
+      border-left: 1px solid var(--border) !important;
+    }
+    .xcard-stat-cell:nth-child(n + 3) {
+      border-top: 1px solid var(--border);
+    }
+    /* compare 上下堆叠:表头隐藏,每行 = 维度一行 + A / B 各一行,列名降级成行内 mono 10 小标题(画板 4y ②屏) */
+    .xcard-cmp-head {
+      display: none !important;
+    }
+    .xcard-compare {
+      padding-left: 12px;
+      padding-right: 12px;
+      padding-bottom: 12px;
+    }
+    .xcard-cmp-row {
+      display: block !important;
+      padding: 8px 0;
+    }
+    .xcard-cmp-dim {
+      padding: 0 !important;
+    }
+    .xcard-cmp-cell {
+      display: grid !important;
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 8px;
+      padding: 0 !important;
+      margin-top: 3px;
+    }
+    .xcard-cmp-cell + .xcard-cmp-cell {
+      margin-top: 1px;
+    }
+    .xcard-cmp-label {
+      display: inline;
+    }
+    /* table 单元格不折行,整张表在 .xcard-scroll 里横滚(画板 4y:超出卡片右缘直接裁切,不加渐隐) */
+    .xcard-table th,
+    .xcard-table td {
+      white-space: nowrap;
+    }
+    /* kv 键列 150 → 104、行内 gap 12 → 8(画板 4y「320 / 430 不变 = compare 与 kv 的键列 104」;codex 第 2 轮 P2) */
+    .xcard-kv-row {
+      grid-template-columns: 104px minmax(0, 1fr) !important;
+      gap: 8px !important;
+    }
   }
 }
 @media (max-width: 768px) {
@@ -959,5 +963,10 @@ html {
     right: 0;
     top: -5px;
     bottom: -5px;
+  }
+  /* 没有标题行的 tabs 卡:控件顶着卡片上沿,卡的 overflow:hidden 会把上面那 5px 外扩裁掉(命中只剩 41);
+     给这一种留 8px 顶部内边距,外扩就落在卡内(codex 第 3 轮 P2)。有标题行时外扩落在标题行里,不用留 */
+  .xcard-tabs-wrap-notitle {
+    padding-top: 8px !important;
   }
 }

@@ -14,8 +14,8 @@
 // 现有三个动效语义都是「还在跑」,拿来做切换会撒谎(画板 2s)。
 //
 // 移动端(4y / 4z)的差别只有触控 / 换行 / 横滚,写在 globals.css 的 `.xcard-*` 规则里:
-//   - 宽度驱动的两条(`compare` 堆叠、`stat` 两列)按**卡内宽**判,用 `@container`(画板 4y 的规则边界是
-//     「A / B 列各 ≥ 160 即卡内宽 ≥ 480 时不堆叠」,它说的是卡的宽度、不是视口);
+//   - 宽度驱动的几条(`compare` 堆叠、`stat` 两列、表格不折行、kv 键列 104)按**卡内宽**判,用 `@container`(画板 4y 的规则边界是
+//     「A / B 列各 ≥ 160 即卡内宽 ≥ 480 时不堆叠」,它说的是卡的宽度、不是视口),但整块只在移动壳里生效 —— 桌面卡片照桌面画板;
 //   - 触控语汇(44 命中、胶囊按钮、SegmentedControl)跟移动壳走,用 `@media (max-width: 768px)`。
 // 内核 token(字号 / 行高 / 颜色)两端一字不改。
 import { useState, type CSSProperties, type ReactNode } from "react";
@@ -261,7 +261,7 @@ function Tabs({ body, hasTitle, renderLeaf }: { body: TabsBody; hasTitle: boolea
   const current = body.tabs[Math.min(active, body.tabs.length - 1)];
   return (
     <>
-      <div className="xcard-tabs-wrap" style={{ padding: `${hasTitle ? 2 : 10}px 12px 10px` }}>
+      <div className={hasTitle ? "xcard-tabs-wrap" : "xcard-tabs-wrap xcard-tabs-wrap-notitle"} style={{ padding: `${hasTitle ? 2 : 10}px 12px 10px` }}>
         <div
           role="tablist"
           className="xcard-tabs"

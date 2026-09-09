@@ -159,8 +159,17 @@ F5 前后会话区 `innerHTML` 的 sha256 一致(R-TOOLCARDS 验收同款);`git 
 
 复验:`bun test lib` 93 用例全绿(+1 条列表标记开围栏,含四个子断言),`tsc --noEmit` 过;`dev.ps1 test agent/runtime.test.ts agent/cards-e2e.test.ts` 过(提示词例子改动后卡片段仍是合法 JSON 且六个 kind 都在);390 宽实测 kv 行 `104px + 1fr`、gap 8,tabs 内项 34 高 + `::after` 上下各 −5px(命中 44)。
 
-- findings 处理:见上两表(第 3 轮起接在下面)。
-- 结论:<待第 3 轮>
+**第 3 轮**(按流程只审整改 diff,`--base aca80ad`,提交 `ed6f21a`;8 分钟):2 条 findings,**全部 P2、无 high**,**两条全部采纳整改**。
+
+| # | finding | 处理 |
+|---|---|---|
+| 1 | **P2 · kv 键列 104 的容器查询没套在移动断点里**(`globals.css`):桌面视口略高于 768、或桌面聊天栏把卡压到 480 以下时也会触发,把桌面画板的 150 改成 104 —— 桌面样式要零改动 | **采纳**。整块 `@container` 规则(kv 键列、stat 两列、compare 堆叠、表格不折行)套进 `@media (max-width: 768px)`:4y 是移动画板,桌面卡片照桌面画板 2s,聊天栏再窄也不切换。同一模式的四条一起改,不只改被点的那条 |
+| 2 | **P2 · 无标题 tabs 卡的命中区不足 44**(`globals.css`):tablist 顶着卡片上沿,卡的 `overflow:hidden` 把 `::after` 上面那 5px 裁掉,实际命中约 41 | **采纳**。无标题的 tabs 卡外层多一个 `xcard-tabs-wrap-notitle` 类,移动端顶部内边距 8px,外扩落在卡内;有标题时外扩落在标题行里、不用留 |
+
+复验:`bun test lib` 93 用例全绿,`tsc --noEmit` 过;桌面 1000 宽(卡宽 < 480)kv 行仍是 `150px + 1fr`、compare 表头仍显示、stat 仍三格一排、表格单元格可折行;390 宽 kv 行 `104px + 1fr`,tabs 外层加 `-notitle` 类后 padding-top 8px、`::after` top −5px。
+
+- findings 处理:见上三表(第 4 轮起接在下面)。
+- 结论:<待第 4 轮>
 
 ## 失败处理
 
