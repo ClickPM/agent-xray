@@ -309,9 +309,10 @@
       与 R-IMAGEGEN 那条「`size` 入参要加 `enum`」同一根源:扩 schema 关键字必须连 `ToolsPanel.tsx` 的约束徽标一起扩(面板永远不是第二个要改的地方)。
       属机制扩面,等所有者裁定;做了之后 `skill_run` 的 `input` 可以按脚本 schema 拆成真字段 (2026-09-03)
 
-- [ ] R-TOOLCARDS **卡片 ↔ Timeline 互相定位**:两边都有 `toolCallId`(`messages.payload.toolCalls[].toolCallId` 与轨迹的 `tool_execution_*`),
+- [x] R-TOOLCARDS **卡片 ↔ Timeline 互相定位**:两边都有 `toolCallId`(`messages.payload.toolCalls[].toolCallId` 与轨迹的 `tool_execution_*`),
       点卡片高亮右栏对应行技术上现成;画板没画,等裁定 (2026-09-03)
-      → **2026-09-08 所有者裁定「做」,落为 R-CROSSLINK**(双向:卡 → 行、行 → 卡;已定位态不新造;对不上不渲染)。任务卡 [`rounds/round-crosslink/round-crosslink.md`](round-crosslink/round-crosslink.md);发版后关闭本条
+      → **2026-09-08 所有者裁定「做」,落为 R-CROSSLINK**(双向:卡 → 行、行 → 卡;已定位态不新造;对不上不渲染)。任务卡 [`rounds/round-crosslink/round-crosslink.md`](round-crosslink/round-crosslink.md)
+      → **2026-09-09 随 `995dc49` 发版关闭**:生产端到端实跑双向都成立(详情卡「查看卡片 ↗」→ 会话区卡展开;卡片「在 Timeline 里查看 ↗」→ 折叠过的行重新展开),见 [`docs/releases.md`](../docs/releases.md) 该行
 - [ ] R-TOOLCARDS **`session_rename` 的卡片是否隐藏**:它也是一次工具调用,会以一张卡出现在首轮里(与 Timeline 的 `tool_call · session_rename` 对得上)。
       默认显示(透明是卖点);裁定隐藏再改 (2026-09-03)
 - [ ] R-TOOLCARDS **会话区是否显示「思考」块**:pi-web 有;本站内核透明度靠右栏,画板 2l/2m 明确不放,默认不做 (2026-09-03)

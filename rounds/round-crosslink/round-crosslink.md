@@ -199,3 +199,19 @@
 `Cannot update a component (MobileWorkbench) while rendering a different component (TimelineView)` ——
 `onExpand?.()`(画板 4f 的「展开即升档」)写在了 `setExpandedKey` 的更新函数里,而更新函数在渲染阶段执行。
 **引入于 R-MOBILE、`git diff main` 里那一段一字未动**,功能表现正常、只是 dev 下报错刷屏,已记 `rounds/BACKLOG.md`。
+
+## 生产发版留证(2026-09-09,`995dc49`)
+
+发版记录见 [`docs/releases.md`](../../docs/releases.md) 该行(冒烟 33 项 0 失败)。这里只记**三条联动在生产上的端到端抽验**
+(1440×900 桌面壳;上一段列的三个例子照跑了第一个与第三个):
+
+| 条 | 做法 | 实测 |
+|---|---|---|
+| C3 | `/notes/ai-native-engineering/why-vibe-coding-fails` 点「在 Runtime 里聊这一章 ↗」 | 跳 `/`,输入框带 `我在读本站教程《AI native 软件工程教程 · 为什么vibe coding不可以?》(/notes/…)。请用 notes_get_chapter 读这一章,…`;`location.search` **已清空**(读一次即清);**未自动发送** |
+| C1 | 发一轮(带 `notes_search`)后展开 Timeline 的 `tool_call · notes_search` 行 | 详情卡里 `Ask why ↗` 与 `查看卡片 ↗` **两条都在**;点 Ask why 预填出 `在 Turn 1 里你调用了 notes_search,入参是 {"query":"agent loop"}。为什么要这么做?` —— 与上一段列的第一个例子**一字不差**,未自动发送 |
+| C2 | 详情卡点「查看卡片 ↗」;再把 Timeline 行折叠,点卡片展开体里的「在 Timeline 里查看 ↗」 | 卡 ← 行:会话区对应卡展开(展开体里出现「在 Timeline 里查看 ↗」);行 ← 卡:折叠过的行**重新展开** —— 双向都成立 |
+
+**发版前拦下一处**:`apps/web/lib/ask-why.test.ts` 第 91 行本该是转义序列的 `\u0000` / `\u007f` 被写成了**字面控制字节**,
+`dev.ps1 build` 的 `source-publish --check` 拒绝构建(「含 NUL,不是文本文件」)。本轮既有关卡全都放行了它
+(测试通过、`tsc` 通过、codex 三轮零相关 findings),因为字面 NUL 与 `\u0000` 在 TS 里是同一个字符。
+改回源码转义(语义不变),发版 SHA 因此是 `995dc49` 而非 `1d872f8`。原委见 `docs/releases.md` 同名小节。
