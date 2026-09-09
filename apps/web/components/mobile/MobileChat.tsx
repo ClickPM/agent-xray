@@ -29,7 +29,8 @@ export function MobileChat({
   rowLink?: CrossLink;
   /** R-CROSSLINK C2 行 → 卡:详情块底部的「查看卡片」要求定位到某个 toolCallId */
   locate?: { toolCallId: string; nonce: number } | null;
-  /** R-CARDS(画板 4y):信息卡片动作胶囊 → 输入框(预填,不发送);与桌面同一个 prefill */
+  /** R-CARDS(画板 4y):信息卡片动作胶囊 → 输入框(预填,不发送);与桌面同一个 prefill。
+      R-CARDS-2(画板 5a)可回传卡的直接发送走 ComposerContext,与桌面同一个 sendFromCard,不经这里 */
   onAsk?: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);

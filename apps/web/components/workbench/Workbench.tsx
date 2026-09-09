@@ -21,6 +21,7 @@ import { readAskParam, sanitizePrefill } from "@/lib/ask-why";
 import type { ChatItem, CrossLink, ToolCallView, TraceEvent, TurnView } from "@/lib/types";
 import { GhostButton } from "@/components/ui";
 import { Markdown } from "@/components/Markdown";
+import { ComposerContext } from "@/components/ComposerContext";
 import { mono } from "@/lib/styles";
 import { useIsMobile } from "@/lib/use-mobile";
 import { MobileWorkbench } from "@/components/mobile/MobileWorkbench";
@@ -276,19 +277,25 @@ function FoldRow({ turn, open, onToggle }: { turn: TurnView; open: boolean; onTo
  * R-CARDS:会话区是**唯一**开信息卡片的地方(`cards`),`streaming` 决定围栏未闭合时画不画骨架,
  * `onAsk` 是卡底动作按钮通往输入框的那条预填通路(容器里的 `prefill`,`useCallback([])` 恒等 —— 换新对象会把这层 memo 废掉)。
  * 三个都不传时与改动前一字不差(任务卡验收 #14)。
+ *
+ * R-CARDS-2:`components` = 这一段开不开组件(卡 + 帧)。**只有最终回答段开**(任务卡派生取舍 7):`AssistantTurn` 给处理过程段传 false,
+ * 那里的围栏一律回落成代码块、随处理过程进折叠行。可回传卡的发送通路与 busy 态**不经这里**(`ComposerContext`,理由见那个文件):
+ * 这层 memo 因此在一轮生成前后都不重渲染,卡的「已发送锁定」本地态与帧的 srcdoc 都留在原地。
  */
 export const AssistantMessage = memo(function AssistantMessage({
   text,
   streaming = false,
   onAsk,
+  components = true,
 }: {
   text: string;
   streaming?: boolean;
   onAsk?: (text: string) => void;
+  components?: boolean;
 }) {
   return (
     <div className="md-chat" style={{ minWidth: 0 }}>
-      <Markdown headingIds={false} cards streaming={streaming} onAsk={onAsk}>{text}</Markdown>
+      <Markdown headingIds={false} cards={components} html={components} streaming={streaming} onAsk={onAsk}>{text}</Markdown>
     </div>
   );
 });
@@ -319,7 +326,7 @@ export const AssistantTurn = memo(function AssistantTurn({
   rowLink?: CrossLink;
   /** R-CROSSLINK C2 行 → 卡:右栏要求定位到某个 toolCallId;不在本轮里就什么都不做 */
   locate?: { toolCallId: string; nonce: number } | null;
-  /** R-CARDS:信息卡片动作按钮的预填通路,原样递给每一段正文 */
+  /** R-CARDS:信息卡片动作按钮的预填通路,只递给最终回答段(R-CARDS-2 起处理过程段不开组件) */
   onAsk?: (text: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -363,10 +370,12 @@ export const AssistantTurn = memo(function AssistantTurn({
   }, [locate, turn.toolCalls]);
 
   // R-CARDS:`streaming` 按整轮给 —— 已完成的文本段里不会有未闭合的围栏(围栏未闭合 = 正文后缀,而它们后面还跟着卡),
-  // 所以骨架只会出现在正在长的最后一段;闭合了的坏 JSON 在任何一段都直接是代码块
+  // 所以骨架只会出现在正在长的最后一段;闭合了的坏 JSON 在任何一段都直接是代码块。
+  // R-CARDS-2:处理过程段**不开组件**(`components={false}`,画板 2u / 2v:组件只在最终回答的首或尾、不进折叠行);
+  // 流式期间「最终段」= 最后一次工具调用之后的正文,模型在组件之后又调了工具的话,那些组件会随正文进折叠行并变回代码块(任务卡已认)
   const segment = (seg: TurnSegment, i: number) =>
     seg.kind === "text" ? (
-      <AssistantMessage key={i} text={seg.text} streaming={!done} onAsk={onAsk} />
+      <AssistantMessage key={i} text={seg.text} streaming={!done} components={false} />
     ) : (
       <div key={i} data-tool-call-id={seg.call.toolCallId}>
         <ToolCard call={seg.call} open={!!openCards[seg.index]} onToggle={() => toggleCard(seg.index)} rowLink={rowLink} />
@@ -403,7 +412,7 @@ function ChatPane({
   items: ChatItem[];
   rowLink?: CrossLink;
   locate?: { toolCallId: string; nonce: number } | null;
-  /** R-CARDS:信息卡片动作按钮 → 输入框(预填,不发送) */
+  /** R-CARDS:信息卡片动作按钮 → 输入框(预填,不发送);可回传卡的发送通路走 ComposerContext(R-CARDS-2) */
   onAsk?: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -860,13 +869,18 @@ export function Workbench() {
     [streaming, sessions, sessionId, startNew, refreshSessions],
   );
 
-  const send = useCallback(() => {
-    const prompt = draft.trim();
+  /**
+   * R-CARDS-2:发送拆成两层(任务卡派生取舍 4)。`sendText(text)` 是**唯一**的发送函数体 —— 建会话 / busy 守卫 / 错误分档 / 合帧 / 计数
+   * 都只在这一处;`send` 只是「读输入框 → sendText → 清空输入框」,卡片的点击即发走 `sendFromCard` → 同一个 `sendText`
+   * (`docs/security.md` §0 第 12 条 ③:同一套会话 / 配额 / 上限,服务端看到的是一条普通访客消息)。
+   * 回「发没发」:输入框只在真的发出去时才清空(busy 期间点发送不该把打好的字弄丢,与改动前一致)。
+   */
+  const sendText = useCallback((text: string): boolean => {
+    const prompt = text.trim();
     // 历史加载未回来时不收发送:此时 items 已被清空,若在这里作废加载结果,
     // 这个会话的历史就再也不会出现在界面上(复审 P2)。加载只有几十毫秒,
     // 与 streaming 期间的拦截是同一种处理。
-    if (!prompt || streaming || loadingHistory) return;
-    setDraft("");
+    if (!prompt || streaming || loadingHistory) return false;
     setPanel("timeline");
     setItems((prev) => [...prev, { kind: "user", text: prompt }]);
     setStreaming(true);
@@ -975,12 +989,36 @@ export function Workbench() {
         setStreaming(false);
         refreshSessions();
       });
-  }, [draft, streaming, loadingHistory, sessionId, refreshSessions]);
+    return true;
+  }, [streaming, loadingHistory, sessionId, refreshSessions]);
+
+  const send = useCallback(() => {
+    if (sendText(draft)) setDraft("");
+  }, [sendText, draft]);
+
+  /**
+   * 卡片的点击即发(画板 2u / 5a;`docs/security.md` §0 第 12 条)。**回调恒等**:`AssistantMessage` 是 memo 的,`sendText` 随 streaming / sessionId
+   * 换新,直接传下去会让每一段正文跟着重渲染 —— 所以最新的 `sendText` 放 ref、闭包只读 ref(与 `cardLink` / `rowLink` 同一手法)。
+   * 发送前过 `sanitizePrefill`(名字是历史,函数就是「去控制字符 + 长度闸」,与预填走同一条边界);回 null 不发 ——
+   * 解析期已按最坏长度卡在 1000 内,这里实际只会去掉控制字符。
+   */
+  const sendTextRef = useRef(sendText);
+  useEffect(() => { sendTextRef.current = sendText; }, [sendText]);
+  // 回「发没发出去」:清洗闸丢弃、或 sendText 的守卫拒收,都回 false,卡不锁(codex 第 1 轮 P2)。
+  // ref 在 passive effect 里同步:React 在处理下一个离散事件(点击)之前一定先冲掉上一次提交的 passive effect,所以卡点到的永远是最新那份 sendText。
+  const sendFromCard = useCallback((text: string): boolean => {
+    const clean = sanitizePrefill(text);
+    if (!clean) return false;
+    return sendTextRef.current(clean);
+  }, []);
+  // 可回传卡读的那份:值只在一轮开始 / 结束时换,消费者只有卡本身(ComposerContext.tsx)
+  const composer = useMemo(() => ({ busy: streaming, onSend: sendFromCard }), [streaming, sendFromCard]);
 
   // ── R-MOBILE:移动壳 ─────────────────────────────────────────────────
   // 桌面壳一行没动,原样留在下面。这里是**并列的第二种呈现**,不是改造。
   if (isMobile) {
     return (
+      <ComposerContext.Provider value={composer}>
       <MobileWorkbench
         sessions={sessions}
         sessionId={sessionId}
@@ -1025,6 +1063,7 @@ export function Workbench() {
           )
         }
       />
+      </ComposerContext.Provider>
     );
   }
 
@@ -1032,6 +1071,8 @@ export function Workbench() {
     // `m-hide-narrow`:窄屏下桌面壳整块不渲染出来。与上面的 `isMobile` 分支成对 ——
     // JS 保证只挂一份 SSE,CSS 保证水合首帧那一瞬不会把三栏画到 390 宽的屏上
     // (理由见 lib/use-mobile.ts)。桌面上这个类名不产生任何效果。
+    // R-CARDS-2:ComposerContext.Provider 不产生 DOM,桌面壳的标记与改动前一字不差
+    <ComposerContext.Provider value={composer}>
     <div className="m-hide-narrow" style={{ flex: 1, minHeight: 0, display: "flex" }}>
       <SessionSidebar
         sessions={sessions}
@@ -1106,5 +1147,6 @@ export function Workbench() {
         </div>
       </div>
     </div>
+    </ComposerContext.Provider>
   );
 }

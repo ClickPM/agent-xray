@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#fafafa}
+a{color:#2563eb;text-decoration:none}a:hover{color:#1d4ed8}
+@keyframes omPulseBg{0%,100%{background-color:rgba(37,99,235,0.05)}50%{background-color:rgba(37,99,235,0.16)}}
+@keyframes omWaveSweep{from{background-position:200% 0}to{background-position:-100% 0}}
+@keyframes omSpin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<section style="display:flex;flex-wrap:wrap;gap:48px;padding:48px;align-items:flex-start;width:1536px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+
+<!-- ━━━ 2u 桌面 · 两种可回传卡 + 位置① + 发送 ━━━ -->
+<div id="2u" style="flex:none;width:1440px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2u</span><span style="font-size:12px;font-weight:600;color:#6b7280">画板 2u · 桌面 · 两种可回传卡(choice / form)· 位置① · 点了就是一条访客消息</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af">底 = 1a 三栏 · 卡宽 = 正文宽 640 · 卡片语汇全部取自 2s / 2t</span></div>
+
+<div data-screen-label="2u 可回传卡与发送" style="width:1440px;height:900px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;display:flex;overflow:hidden;color:#1a1a1a">
+  <div style="width:260px;flex:none;background:#f5f5f5;border-right:1px solid #e0e0e0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:15px;font-weight:700;letter-spacing:-0.01em;flex:1">agent-xray</div>
+      <div style="display:flex;align-items:center;gap:6px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;height:28px;padding:0 10px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">+ New</div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+    </div>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{sessions}}" as="s" hint-placeholder-count="5">
+        <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee">
+          <div style="font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{s.title}}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">{{s.time}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:13px;font-weight:600;flex:1">学习路径:从哪条线入手</div>
+      <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>14.2k tokens</span><span>·</span><span>$0.046</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>ctx 7%</span><span>·</span><span>39 events</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+        <div style="flex:1;min-height:0;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px">
+          <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">我想系统学一遍这个站背后的 harness 工程,从哪儿开始比较省劲?</div></div>
+          <div style="display:flex;align-items:center;gap:8px;color:#6b7280;cursor:pointer" style-hover="color:#2563eb">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg>
+            <span style="font-size:13px;line-height:1.7">处理详情 · 2 次模型往返 · 3 次工具调用 · 1.4s</span>
+          </div>
+
+          <!-- 位置①:折叠行之后、正文之前。已发送锁定态 —— 第二项高亮,其余灰,整卡不可点。 -->
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+            <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">学习路径 · 选一条主线</span></div>
+            <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">你更想从哪条线入手?</div>
+            <sc-for list="{{chLocked}}" as="o" hint-placeholder-count="4">
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-top:1px solid #e0e0e0;cursor:default">
+                <span style="width:15px;height:15px;flex:none;margin-top:2px;box-sizing:border-box;border-radius:50%;border:1px solid {{o.dotBorder}};background:#ffffff;display:flex;align-items:center;justify-content:center"><span style="width:7px;height:7px;border-radius:50%;background:{{o.dotFill}}"></span></span>
+                <div style="min-width:0">
+                  <div style="font-size:13px;line-height:1.7;color:{{o.labelColor}}">{{o.label}}</div>
+                  <div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:1px;text-wrap:pretty;display:{{noteDisplay}}">{{o.note}}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">沙箱执行组是四组里唯一会写外部世界的一组,所以它也是唯一每次调用都要过 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">permission-gate</span> 的一组 —— 拦截规则、入参改写、fail-closed 三件事都长在这里。</div>
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">建议的读法:先看 <span style="font:400 12px 'JetBrains Mono',monospace;background:rgba(0,0,0,0.03);border-radius:4px;padding:1px 5px">bash</span> 的入参 schema,再看扩展在 tool_call 落地前做了什么。</div>
+
+          <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">你更想从哪条线入手?: 沙箱执行组</div></div>
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">好,那就从沙箱执行组开始。我先把这一组的两个工具与它们的入参约束取出来</div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
+          <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
+          <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;color:#9ca3af;border-radius:7px;cursor:default"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite;transform-origin:50% 50%"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></div>
+        </div>
+      </div>
+      <div style="width:500px;flex:none;display:flex;flex-direction:column">
+        <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:12px;font-weight:600;padding:8px 14px;background:#ffffff;color:#1a1a1a;border-right:1px solid #e0e0e0">Timeline</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Chain View</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Lifecycle Map</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:10px 14px;align-self:flex-start">
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 1</div>
+          <sc-for list="{{t1rows}}" as="r" hint-placeholder-count="7">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:14px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 2</div>
+          <sc-for list="{{t2live}}" as="r" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px;background:{{r.rowBg}};animation:{{r.anim}}">
+              <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}};animation:{{r.barAnim}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 标本区 ── -->
+<div style="align-items:center;gap:8px;margin:26px 0 10px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">以下八块都是标本,不在会话流里 —— 只画中栏正文列(640 + 左右 20 = 680)</span></div>
+
+<div style="display:grid;grid-template-columns:680px 680px;gap:40px 40px">
+
+  <!-- 标本① 单选未发送 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本①</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">choice 单选 · 未发送:全部可点、无按钮、无高亮(与主体的锁定态成对)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">学习路径 · 选一条主线</span></div>
+        <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">你更想从哪条线入手?</div>
+        <sc-for list="{{chIdle}}" as="o" hint-placeholder-count="4">
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-top:1px solid #e0e0e0;cursor:pointer" style-hover="background:rgba(0,0,0,0.02)">
+            <span style="width:15px;height:15px;flex:none;margin-top:2px;box-sizing:border-box;border-radius:50%;border:1px solid {{o.dotBorder}};background:#ffffff;display:flex;align-items:center;justify-content:center"><span style="width:7px;height:7px;border-radius:50%;background:{{o.dotFill}}"></span></span>
+            <div style="min-width:0">
+              <div style="font-size:13px;line-height:1.7;color:{{o.labelColor}}">{{o.label}}</div>
+              <div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:1px;text-wrap:pretty;display:{{noteDisplay}}">{{o.note}}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标本② 多选未选 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本②</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">choice 多选 · 一项未选:submit 禁用(文字 #9ca3af、描边不变、无 hover)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">源码阅读 · 可多选</span></div>
+        <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">哪几组工具你想先看源码?</div>
+        <sc-for list="{{mkEmpty}}" as="o" hint-placeholder-count="4">
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-top:1px solid #e0e0e0;cursor:pointer" style-hover="background:rgba(0,0,0,0.02)">
+            <span style="width:15px;height:15px;flex:none;margin-top:2px;box-sizing:border-box;border-radius:4px;border:1px solid {{o.boxBorder}};background:{{o.boxFill}};display:flex;align-items:center;justify-content:center">
+              <sc-if value="{{o.checked}}" hint-placeholder-val="{{false}}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></sc-if>
+            </span>
+            <div style="min-width:0">
+              <div style="font-size:13px;line-height:1.7;color:{{o.labelColor}}">{{o.label}}</div>
+              <div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:1px;text-wrap:pretty;display:{{noteDisplay}}">{{o.note}}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="display:flex;align-items:center;padding:10px 12px;border-top:1px solid #e0e0e0">
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#9ca3af;border-radius:7px;font-size:12px;cursor:default">提交</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标本③ 多选选中两项 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本③</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">choice 多选 · 选中两项:submit 可用(ghost 32 高 r7,照 2g)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">源码阅读 · 可多选</span></div>
+        <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">哪几组工具你想先看源码?</div>
+        <sc-for list="{{mkTwo}}" as="o" hint-placeholder-count="4">
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-top:1px solid #e0e0e0;cursor:pointer" style-hover="background:rgba(0,0,0,0.02)">
+            <span style="width:15px;height:15px;flex:none;margin-top:2px;box-sizing:border-box;border-radius:4px;border:1px solid {{o.boxBorder}};background:{{o.boxFill}};display:flex;align-items:center;justify-content:center">
+              <sc-if value="{{o.checked}}" hint-placeholder-val="{{false}}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></sc-if>
+            </span>
+            <div style="min-width:0">
+              <div style="font-size:13px;line-height:1.7;color:{{o.labelColor}}">{{o.label}}</div>
+              <div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:1px;text-wrap:pretty;display:{{noteDisplay}}">{{o.note}}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="display:flex;align-items:center;padding:10px 12px;border-top:1px solid #e0e0e0">
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">提交</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标本④ 多选锁定 + 访客气泡 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本④</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">同一张卡的锁定态 + 它发出去的那条访客消息(选项以「、」相连)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">源码阅读 · 可多选</span></div>
+        <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">哪几组工具你想先看源码?</div>
+        <sc-for list="{{mkLocked}}" as="o" hint-placeholder-count="4">
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-top:1px solid #e0e0e0;cursor:default">
+            <span style="width:15px;height:15px;flex:none;margin-top:2px;box-sizing:border-box;border-radius:4px;border:1px solid {{o.boxBorder}};background:{{o.boxFill}};display:flex;align-items:center;justify-content:center">
+              <sc-if value="{{o.checked}}" hint-placeholder-val="{{false}}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></sc-if>
+            </span>
+            <div style="min-width:0">
+              <div style="font-size:13px;line-height:1.7;color:{{o.labelColor}}">{{o.label}}</div>
+              <div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:1px;text-wrap:pretty;display:{{noteDisplay}}">{{o.note}}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="display:flex;align-items:center;padding:10px 12px;border-top:1px solid #e0e0e0">
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#9ca3af;border-radius:7px;font-size:12px;cursor:default">提交</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">哪几组工具你想先看源码?: 外呼组、沙箱执行组</div></div>
+    </div>
+  </div>
+
+  <!-- 标本⑤ form 未填 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本⑤</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">form · 3 字段(text / select / text),必填未填 → submit 禁用</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">学习路径定制</span></div>
+        <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">帮我定制学习路径</div>
+        <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{fmEmpty}}" as="f" hint-placeholder-count="3">
+            <div>
+              <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
+                <span style="font-size:13px;line-height:1.6;color:#1a1a1a">{{f.label}}</span>
+                <sc-if value="{{f.req}}" hint-placeholder-val="{{false}}"><span style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af">必填</span></sc-if>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;height:32px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;border-radius:7px;padding:0 10px;cursor:{{f.cursor}}">
+                <span style="font-size:13px;color:{{f.valueColor}};flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.value}}</span>
+                <sc-if value="{{f.isSelect}}" hint-placeholder-val="{{false}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;padding:10px 12px;border-top:1px solid #e0e0e0">
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#9ca3af;border-radius:7px;font-size:12px;cursor:default">提交</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标本⑥ form 全填 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本⑥</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">form · 全填 → submit 可用(下面 ⑥-b 是它的锁定态与那条消息)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">学习路径定制</span></div>
+        <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">帮我定制学习路径</div>
+        <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{fmFull}}" as="f" hint-placeholder-count="3">
+            <div>
+              <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
+                <span style="font-size:13px;line-height:1.6;color:#1a1a1a">{{f.label}}</span>
+                <sc-if value="{{f.req}}" hint-placeholder-val="{{false}}"><span style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af">必填</span></sc-if>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;height:32px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;border-radius:7px;padding:0 10px;cursor:{{f.cursor}}">
+                <span style="font-size:13px;color:{{f.valueColor}};flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.value}}</span>
+                <sc-if value="{{f.isSelect}}" hint-placeholder-val="{{false}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;padding:10px 12px;border-top:1px solid #e0e0e0">
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">提交</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标本⑥-b form 锁定 + 气泡 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本⑥-b</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">form 锁定态 + 消息:题干 + 空格 + 「字段: 值」以「; 」相连</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">学习路径定制</span></div>
+        <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">帮我定制学习路径</div>
+        <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{fmLocked}}" as="f" hint-placeholder-count="3">
+            <div>
+              <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
+                <span style="font-size:13px;line-height:1.6;color:#1a1a1a">{{f.label}}</span>
+                <sc-if value="{{f.req}}" hint-placeholder-val="{{false}}"><span style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af">必填</span></sc-if>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;height:32px;box-sizing:border-box;background:{{f.boxBg}};border:1px solid #e0e0e0;border-radius:7px;padding:0 10px;cursor:default">
+                <span style="font-size:13px;color:{{f.valueColor}};flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.value}}</span>
+                <sc-if value="{{f.isSelect}}" hint-placeholder-val="{{false}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;padding:10px 12px;border-top:1px solid #e0e0e0">
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;height:32px;padding:0 14px;background:#eeeeee;border:1px solid #e0e0e0;color:#9ca3af;border-radius:7px;font-size:12px;cursor:default">提交</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">帮我定制学习路径 经验: 3 年; 目标: 上线一个 agent 站; 每周时间: 5 小时</div></div>
+    </div>
+  </div>
+
+  <!-- 标本⑦ busy -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本⑦</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">busy:上一轮还在生成 → 卡上的选项与底部发送按钮同一副禁用视觉</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0">
+      <div style="padding:18px 20px">
+        <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+          <div style="align-items:center;gap:8px;padding:9px 12px 8px;display:{{titleDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">学习路径 · 选一条主线</span></div>
+          <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px;text-wrap:pretty">你更想从哪条线入手?</div>
+          <sc-for list="{{chBusy}}" as="o" hint-placeholder-count="4">
+            <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-top:1px solid #e0e0e0;cursor:default">
+              <span style="width:15px;height:15px;flex:none;margin-top:2px;box-sizing:border-box;border-radius:50%;border:1px solid {{o.dotBorder}};background:#ffffff;display:flex;align-items:center;justify-content:center"><span style="width:7px;height:7px;border-radius:50%;background:{{o.dotFill}}"></span></span>
+              <div style="min-width:0">
+                <div style="font-size:13px;line-height:1.7;color:{{o.labelColor}}">{{o.label}}</div>
+                <div style="font-size:11px;line-height:1.6;color:#9ca3af;margin-top:1px;text-wrap:pretty;display:{{noteDisplay}}">{{o.note}}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
+        <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
+        <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;color:#9ca3af;border-radius:7px;cursor:default"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite;transform-origin:50% 50%"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标本⑧ 流式骨架 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本⑧</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">choice 卡的流式骨架 = 2t 的卡片骨架,一字未改</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+        <div style="padding:9px 12px 8px"><div style="width:210px;height:12px;border-radius:6px;background:#e0e0e0;animation:{{pulse}}"></div></div>
+        <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:9px">
+          <div style="width:100%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+          <div style="width:100%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+          <div style="width:62%;height:11px;border-radius:4px;background:#e0e0e0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:24px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2u · 裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">这不是第三种卡</span>:两种新 kind 长在 <a href="#2u" style="font:400 11px 'JetBrains Mono',monospace">2s</a> / <a href="#2u" style="font:400 11px 'JetBrains Mono',monospace">2t</a> 的信息卡语汇上,一处未改 —— 外框 r6 + rgba(0,0,0,.03) 底 + 1px #e0e0e0 中性描边、标题行 mono 10/600 #9ca3af 0.08em(可选)、卡底 1px #e0e0e0 分隔 + 一枚 ghost 32 高 r7 按钮。<span style="color:#1a1a1a">唯一新增的两个形状是选择指示</span>:单选 15px 圆点 / 多选 15px r4 方框,常态 1px #e0e0e0 描边 + 白底,选中态描边与填充都换品牌色 #2563eb(多选内嵌 9px 白色对勾)。卡里一处不用语义色。</div>
+    <div>· <span style="color:#1a1a1a">解剖与上限</span>:choice = 可选 title(≤60)+ 可选 prompt 题干(≤200,13/1.7 次级色,压在标题行下、选项之上)+ <span style="color:#1a1a1a">2–8 个 options</span>(label ≤60 正文色 13/1.7、可选 note ≤200 的一行 11 #9ca3af)+ multiple 真假;form = 可选 title / prompt + <span style="color:#1a1a1a">1–5 个 fields</span>(label ≤40、type 只有 text 与 select、placeholder ≤100、select 2–8 项、required 真假),text 最多 100 字。按钮文案 ≤20,缺省「提交」。选项行 padding 9/12、行间 1px #e0e0e0,输入框照 1a 底部那一枚缩小版(1px #e0e0e0、r7、32 高、13px,聚焦描边转品牌色)。</div>
+    <div>· <span style="color:#1a1a1a">发送规则</span>:单选<span style="color:#1a1a1a">没有按钮</span> —— 点任一选项即刻发出并锁定(少一次点击,也少一个「选了但没提交」的中间态);多选与 form <span style="color:#1a1a1a">靠卡底一枚 submit</span> 发出,<span style="color:#1a1a1a">禁用条件</span>:多选至少选中一项前禁用、form 必填字段填满前禁用。禁用视觉 = 文字降到 #9ca3af、描边与底色不变、无 hover、cursor:default —— 与底部发送按钮的禁用是同一副。</div>
+    <div>· <span style="color:#1a1a1a">发出去的就是一条普通访客消息</span>:气泡照 1a(#eff6ff 底 + 1px rgba(59,130,246,.2) + r12 + 14/1.7),<span style="color:#1a1a1a">没有任何「来自卡片」的标记</span>,没有「已发送」字样、没有撤回。消息文本的组成:choice = 题干 + ASCII「: 」+ 所选 label(多选之间用「、」);form = 题干 + 空格 + 「字段: 值」以「; 」相连。<span style="color:#1a1a1a">发出的字都是卡上看得见的字</span> —— title / note / placeholder / 按钮文案一律不进消息;没有题干时消息从第一个 label(或第一个「字段: 值」)起头。</div>
+    <div>· <span style="color:#1a1a1a">锁定态</span>:选项与输入框不可再点、已选高亮原样保留、未选的 label 降到 #9ca3af、按钮回到禁用视觉、<span style="color:#1a1a1a">文案不变</span>(仍是「提交」,不改成「已提交」)。<span style="color:#1a1a1a">busy 态</span>:上一轮还在生成时,卡上的选项与按钮和底部发送按钮同时禁用(标本⑦ 把两者画在同一框里就是为了对齐这副视觉)。两种态都<span style="color:#1a1a1a">不做动画</span> —— 现有三个动效语义都是「还在跑」。</div>
+    <div>· <span style="color:#1a1a1a">选中与锁定都是本地状态</span>:刷新后回到初始态,老卡又能点。理由:服务端不存卡片答案,存的是那条已经发出去的访客消息 —— 它就在会话里,谁都看得见。</div>
+    <div>· <span style="color:#1a1a1a">位置① = 折叠行之后、最终正文之前</span>;位置② 见 <a href="#2v" style="font:400 11px 'JetBrains Mono',monospace">2v</a>(最后一段正文之后)。<span style="color:#1a1a1a">每轮最多两个组件</span>,任意组合。卡片留在最终回答里,不进折叠行;卡片级没有「查看轨迹」入口(它不是工具调用)。</div>
+    <div>· <span style="color:#1a1a1a">流式骨架</span>(标本⑧)与回落规则照 2t 原样:```xray-card 开围栏 → 卡框先立住 + 一条标题骨架条(r6,omPulseBg 唯一锚点)+ 三条正文骨架条(r4),骨架色叠在灰面上降一档到 #e0e0e0;围栏闭合 → 原位换成卡;JSON 写坏 / 超限 / 未知 kind → 普通代码块(语言标签 xray-card),<span style="color:#1a1a1a">没有错误提示</span>。</div>
+    <div>· <span style="color:#1a1a1a">画板上没有的功能不画</span>:没有校验错误文案、没有数字 / 日期 / 多行输入、没有上传、没有步骤条、没有「已发送」「发送成功」、没有撤回、Timeline 里也没有卡片事件(点选项产生的是一条访客消息,轨迹与手打一条消息完全一样)。</div>
+  </div>
+</div>
+</div>
+
+<!-- ━━━ 2v 桌面 · 静态 HTML 组件 + 位置② ━━━ -->
+<div id="2v" style="flex:none;width:1440px">
+<div style="align-items:center;gap:8px;margin-bottom:10px;display:{{labelDisplay}}"><span style="font:600 11px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 6px">2v</span><span style="font-size:12px;font-weight:600;color:#6b7280">画板 2v · 桌面 · 模型自己写的静态 HTML 组件(沙箱帧)· 位置②</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af">帧宽 = 正文宽 640 · 帧高 320(声明值,夹在 160–480)· 无工具栏</span></div>
+
+<div data-screen-label="2v HTML组件" style="width:1440px;height:900px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;display:flex;overflow:hidden;color:#1a1a1a">
+  <div style="width:260px;flex:none;background:#f5f5f5;border-right:1px solid #e0e0e0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:15px;font-weight:700;letter-spacing:-0.01em;flex:1">agent-xray</div>
+      <div style="display:flex;align-items:center;gap:6px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;height:28px;padding:0 10px;font-size:12px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)">+ New</div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+    </div>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{sessions}}" as="s" hint-placeholder-count="5">
+        <div style="padding:7px 10px;border-radius:6px;background:{{s.bg}};cursor:pointer" style-hover="background:#eeeeee">
+          <div style="font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{s.title}}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">{{s.time}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:13px;font-weight:600;flex:1">学习路径:从哪条线入手</div>
+      <div style="font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px"><span>16.9k tokens</span><span>·</span><span>$0.052</span><span>·</span><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block"></span>ctx 8%</span><span>·</span><span>52 events</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#eeeeee;color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+        <div style="flex:1;min-height:0;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px">
+          <div style="display:flex;justify-content:flex-end"><div style="max-width:85%;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.7">一圈 agent loop 到底分几段?画给我看。</div></div>
+          <div style="display:flex;align-items:center;gap:8px;color:#6b7280;cursor:pointer" style-hover="color:#2563eb">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg>
+            <span style="font-size:13px;line-height:1.7">处理详情 · 2 次模型往返 · 1 次工具调用 · 0.9s</span>
+          </div>
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">一圈分四段:组装 context、向 provider 要一次回答、把模型要的工具跑完、把结果拼回去再要一次回答。工具那一段可以重复多次,其余三段每圈只出现一次。</div>
+          <div style="font-size:14px;line-height:1.7;text-wrap:pretty">下面这张是我按内核事件表画的:</div>
+
+          <!-- 位置②:最后一段正文之后。帧 = sandbox iframe,r7 + 1px #e0e0e0,高 320,内容超高在帧内滚(系统滚动条),外面没有任何工具栏。 -->
+          <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;background:#ffffff;height:320px;flex:none">
+            <div style="height:100%;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em">一次 agent 回合的四段</div>
+              <div style="font-size:13px;line-height:1.7;color:#6b7280;text-wrap:pretty">下面的耗时取自本轮 Turn 1 的内核事件,单位毫秒。</div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+                <sc-for list="{{phases}}" as="p" hint-placeholder-count="4">
+                  <div style="border:1px solid #e0e0e0;border-radius:6px;padding:9px 10px;background:#f5f5f5">
+                    <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">{{p.n}}</div>
+                    <div style="font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;margin-top:4px">{{p.k}}</div>
+                    <div style="font-size:11px;line-height:1.6;color:#6b7280;margin-top:3px;text-wrap:pretty">{{p.d}}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <sc-for list="{{fbars}}" as="b" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:168px 1fr 46px;align-items:center;gap:10px">
+                    <div style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{b.name}}</div>
+                    <div style="min-width:0"><div style="height:10px;border-radius:2px;width:{{b.w}}px;max-width:100%;background:{{b.c}}"></div></div>
+                    <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{b.dur}}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="border-top:1px solid #e0e0e0;padding-top:10px;display:flex;align-items:center;gap:8px;cursor:pointer">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg>
+                <span style="font-size:13px;line-height:1.7;color:#6b7280">四段各自会发哪些事件(9 条)</span>
+              </div>
+              <div style="font-size:13px;line-height:1.7;color:#6b7280;text-wrap:pretty">同一圈里工具段可以出现多次:每多一次工具调用,就多一组 tool_call / tool_execution_start / tool_execution_end / tool_result。</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
+          <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
+          <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;color:#6b7280;border-radius:7px;cursor:pointer" style-hover="background:#e8e8e8;color:#2563eb;border-color:rgba(37,99,235,0.35)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></div>
+        </div>
+      </div>
+      <div style="width:500px;flex:none;display:flex;flex-direction:column">
+        <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:12px;font-weight:600;padding:8px 14px;background:#ffffff;color:#1a1a1a;border-right:1px solid #e0e0e0">Timeline</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Chain View</div>
+          <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Lifecycle Map</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:10px 14px;align-self:flex-start">
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 1</div>
+          <sc-for list="{{t1rows}}" as="r" hint-placeholder-count="7">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:14px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 2</div>
+          <sc-for list="{{t2done}}" as="r" hint-placeholder-count="8">
+            <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px">
+              <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+              <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}}"></div></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="align-items:center;gap:8px;margin:26px 0 10px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">以下四块都是标本,不在会话流里</span></div>
+
+<!-- 标本① 流式骨架(进行中:中栏 + 右栏同一时刻) -->
+<div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本①</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">一轮进行中:发送按钮转圈 + Timeline 末行扫光 + 按声明高度(320)立住的帧骨架 —— 同一时刻的三个视图</span></div>
+<div style="width:1182px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;display:flex;height:620px;overflow:hidden">
+  <div style="width:680px;flex:none;display:flex;flex-direction:column;border-right:1px solid #e0e0e0">
+    <div style="flex:1;min-height:0;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px">
+      <div style="font-size:14px;line-height:1.7;text-wrap:pretty">一圈分四段:组装 context、向 provider 要一次回答、把模型要的工具跑完、把结果拼回去再要一次回答。</div>
+      <div style="font-size:14px;line-height:1.7;text-wrap:pretty">下面这张是我按内核事件表画的:</div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;background:#ffffff;height:320px;flex:none;box-sizing:border-box;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+        <div style="width:100%;height:11px;border-radius:4px;background:#eeeeee;animation:{{pulse}}"></div>
+        <div style="width:100%;height:11px;border-radius:4px;background:#eeeeee"></div>
+        <div style="width:58%;height:11px;border-radius:4px;background:#eeeeee"></div>
+      </div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center">
+      <div style="flex:1;border:1px solid #e0e0e0;border-radius:7px;padding:8px 12px;font-size:14px;color:#9ca3af">和 agent 说点什么…(右侧实时显示内核轨迹)</div>
+      <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#eeeeee;border:1px solid #e0e0e0;color:#9ca3af;border-radius:7px;cursor:default"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:omSpin 0.8s linear infinite;transform-origin:50% 50%"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></div>
+    </div>
+  </div>
+  <div style="width:500px;flex:none;display:flex;flex-direction:column">
+    <div style="display:flex;background:#f5f5f5;border-bottom:1px solid #e0e0e0">
+      <div style="font-size:12px;font-weight:600;padding:8px 14px;background:#ffffff;color:#1a1a1a;border-right:1px solid #e0e0e0">Timeline</div>
+      <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Chain View</div>
+      <div style="font-size:12px;padding:8px 14px;color:#6b7280;border-right:1px solid #e0e0e0;cursor:pointer" style-hover="color:#2563eb">Lifecycle Map</div>
+    </div>
+    <div style="flex:1;overflow:hidden;padding:10px 14px;align-self:flex-start">
+      <div style="font:600 11px 'JetBrains Mono',monospace;color:#6b7280;letter-spacing:0.05em;padding:4px 0 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px">Turn 2</div>
+      <sc-for list="{{t2live}}" as="r" hint-placeholder-count="6">
+        <div style="display:grid;grid-template-columns:200px 1fr 52px;align-items:center;gap:10px;padding:3px 4px;border-radius:4px;background:{{r.rowBg}};animation:{{r.anim}}">
+          <div style="white-space:nowrap;overflow:hidden"><span style="font:400 11px 'JetBrains Mono',monospace;color:#1a1a1a">{{r.name}}</span></div>
+          <div style="min-width:0;overflow:hidden"><div style="height:10px;border-radius:2px;max-width:100%;width:{{r.w}}px;background:{{r.c}};animation:{{r.barAnim}}"></div></div>
+          <div style="font-size:11px;color:#6b7280;text-align:right;font-variant-numeric:tabular-nums">{{r.dur}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+<div style="width:1182px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:10px 12px;margin-top:8px;display:{{labelDisplay}}">
+  <div style="font:400 10px/1.8 'JetBrains Mono',monospace;color:#6b7280">高度从开围栏行(```xray-html height=320)读出 → 帧框按 320 立住;围栏闭合前高度不变、不做渐进渲染;闭合后原位换成帧,<span style="color:#1a1a1a">不跳版</span>。骨架条 r4 #eeeeee(叠在白底上,不降档),omPulseBg 只挂第一条锚点。</div>
+</div>
+
+<div style="display:grid;grid-template-columns:680px 680px;gap:40px;margin-top:32px">
+
+  <!-- 标本② 回落 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本②</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">回落:写坏 / 超 16 KB → 普通代码块(2c 画法,语言标签 xray-html),没有错误提示</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:14px;line-height:1.7;text-wrap:pretty">下面这张是我按内核事件表画的:</div>
+      <div style="border:1px solid #e0e0e0;border-radius:7px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,0.03)">
+        <div style="display:flex;align-items:center;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #e0e0e0"><span style="font:650 11px 'JetBrains Mono',monospace;color:#6b7280;flex:1">xray-html</span><div style="display:flex;align-items:center;gap:4px;color:#9ca3af;font-size:11px;cursor:pointer;border-radius:5px;padding:2px 6px" style-hover="color:#2563eb"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>copy</div></div>
+        <pre style="margin:0;padding:12px 14px;font:400 12px/1.7 'JetBrains Mono',monospace;overflow:hidden">&lt;div class="loop"&gt;
+  &lt;h3&gt;一次 agent 回合的四段&lt;/h3&gt;
+  &lt;div class="phase"&gt;&lt;span&gt;01&lt;/span&gt;context&lt;/div&gt;
+  &lt;div class="phase"&gt;&lt;span&gt;02&lt;/span&gt;provider
+  &lt;div class="phase"&gt;&lt;span&gt;03&lt;/span&gt;tools&lt;/div&gt;</pre>
+      </div>
+      <div style="font-size:14px;line-height:1.7;text-wrap:pretty">同一圈里工具那一段可以重复多次。</div>
+    </div>
+  </div>
+
+  <!-- 标本③ 高度夹取 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本③</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">高度夹取:声明 900 → 480,声明 100 → 160(区间 160–480,缺省 320;宽度示意缩到 300)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px;display:flex;gap:20px;align-items:flex-start">
+      <div style="flex:none;width:300px">
+        <div style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af;margin-bottom:6px">height=900 → 480</div>
+        <div style="border:1px solid #e0e0e0;border-radius:7px;height:480px;box-sizing:border-box;overflow:hidden;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:15px;font-weight:600">四层沙箱</div>
+          <div style="font-size:13px;line-height:1.7;color:#6b7280;text-wrap:pretty">帧内内容比 480 还高时,在帧内滚 —— 页面不跟着长。</div>
+          <sc-for list="{{layers}}" as="l" hint-placeholder-count="4">
+            <div style="border:1px solid #e0e0e0;border-radius:6px;background:#f5f5f5;padding:9px 10px">
+              <div style="font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a">{{l.k}}</div>
+              <div style="font-size:11px;line-height:1.6;color:#6b7280;margin-top:2px;text-wrap:pretty">{{l.d}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="flex:none;width:300px">
+        <div style="font:400 10px 'JetBrains Mono',monospace;color:#9ca3af;margin-bottom:6px">height=100 → 160</div>
+        <div style="border:1px solid #e0e0e0;border-radius:7px;height:160px;box-sizing:border-box;overflow:hidden;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:15px;font-weight:600">下限 160</div>
+          <div style="font-size:13px;line-height:1.7;color:#6b7280;text-wrap:pretty">再矮的声明也按 160 立住:比这更矮的帧,一圈边框就把内容挤没了。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标本④ 一轮两个组件 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本④</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">一轮两个组件:位置① 一张 choice 卡 + 位置② 一个帧(50% 缩略示意)</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="width:640px;height:330px;overflow:hidden">
+        <div style="width:1280px;transform:scale(0.5);transform-origin:0 0;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:8px;color:#6b7280">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg>
+            <span style="font-size:13px;line-height:1.7">处理详情 · 2 次模型往返 · 1 次工具调用 · 0.9s</span>
+          </div>
+          <div style="background:rgba(0,0,0,0.03);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;width:1280px">
+            <div style="padding:9px 12px 8px"><span style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">学习路径 · 选一条主线</span></div>
+            <div style="font-size:13px;line-height:1.7;color:#6b7280;padding:0 12px 9px">你更想从哪条线入手?</div>
+            <sc-for list="{{chIdle}}" as="o" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid #e0e0e0">
+                <span style="width:15px;height:15px;flex:none;box-sizing:border-box;border-radius:50%;border:1px solid #e0e0e0;background:#ffffff"></span>
+                <span style="font-size:13px;line-height:1.7;color:#1a1a1a">{{o.label}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:14px;line-height:1.7">四组工具的边界与它们各自的入参约束如下,最后一张图把一圈拆成四段:</div>
+          <div style="border:1px solid #e0e0e0;border-radius:7px;height:320px;box-sizing:border-box;width:1280px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:15px;font-weight:600">一次 agent 回合的四段</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+              <sc-for list="{{phases}}" as="p" hint-placeholder-count="4">
+                <div style="border:1px solid #e0e0e0;border-radius:6px;background:#f5f5f5;padding:9px 10px">
+                  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em">{{p.n}}</div>
+                  <div style="font:400 12px 'JetBrains Mono',monospace;color:#1a1a1a;margin-top:4px">{{p.k}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标本⑤ 主题态说明 -->
+  <div>
+    <div style="align-items:center;gap:8px;margin-bottom:8px;display:{{labelDisplay}}"><span style="font:600 10px 'JetBrains Mono',monospace;background:#1a1a1a;color:#ffffff;border-radius:4px;padding:2px 5px">标本⑤</span><span style="font:400 10px 'JetBrains Mono',monospace;color:#6b7280">主题态:本画布上没有深色主题的 token,跳过不画</span></div>
+    <div style="width:680px;box-sizing:border-box;background:#ffffff;border:1px solid #e0e0e0;padding:18px 20px">
+      <div style="border:1px dashed rgba(26,26,26,0.35);border-radius:7px;padding:12px 14px">
+        <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280"><span style="color:#1a1a1a">帧内配色 = 站点主题变量</span>,随主题切换 —— 帧里注入的是站点的颜色 / 字体变量(底 / 面 / 边框 / 正文 / 次级 / 弱化 / 品牌 / 等宽字体),模型写的 HTML 只能引用这些变量,拿不到别的颜色。所以深色主题下这张帧会整体换色,版式一格不动。深色 token 落定后在这里补一份对照图。</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="width:1440px;box-sizing:border-box;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:7px;padding:12px 14px;margin-top:24px;flex-direction:column;display:{{labelDisplay}}">
+  <div style="font:600 10px 'JetBrains Mono',monospace;color:#9ca3af;letter-spacing:0.08em;margin-bottom:8px">2v · 裁定</div>
+  <div style="font:400 11px/1.9 'JetBrains Mono',monospace;color:#6b7280">
+    <div>· <span style="color:#1a1a1a">帧是一个 sandbox &lt;iframe&gt;</span>:里面<span style="color:#1a1a1a">不执行脚本、不发任何网络请求、没有链接、没有图片、点不出任何东西</span>,唯一的交互是 &lt;details&gt; 折叠。只有排版:标题 / 段落 / 表格 / 列表 / 代码 / 内联 SVG / &lt;details&gt;。帧里点什么都<span style="color:#1a1a1a">不会发消息</span> —— 要让访客回话是 choice / form 的事(见 <a href="#2u" style="font:400 11px 'JetBrains Mono',monospace">2u</a>)。</div>
+    <div>· <span style="color:#1a1a1a">外框照工具卡展开体 / 代码块</span>:r7 + 1px #e0e0e0,帧内容<span style="color:#1a1a1a">不另画外框</span>(套第二层会出双线)。帧上<span style="color:#1a1a1a">没有标题栏,也没有「全屏」「复制」「在新窗口打开」「刷新」</span> —— 它是正文的一部分,不是一个应用窗口。</div>
+    <div>· <span style="color:#1a1a1a">宽 = 正文宽</span>(桌面 640,移动 358);<span style="color:#1a1a1a">高由模型在开围栏行声明</span>,夹到 160–480(移动 ≤ 360),缺省 320。内容超高在<span style="color:#1a1a1a">帧内滚</span>(系统滚动条),页面不跟着长;内容不足则帧仍按声明高度立住,底部留白。</div>
+    <div>· <span style="color:#1a1a1a">帧内文字与配色跟随站点主题</span>:帧里注入站点的颜色 / 字体变量,所以它看上去像正文的延伸,只是被一圈边框圈住 —— 正文 #1a1a1a / 次级 #6b7280 / 弱化 #9ca3af / 面 #f5f5f5 / 边框 #e0e0e0 / 品牌 #2563eb / 等宽 JetBrains Mono,一处不越界。</div>
+    <div>· <span style="color:#1a1a1a">流式</span>:开围栏行一到,高度就定了 → 先显示按那个高度立住的骨架(外框 + 三条 r4 骨架条 + omPulseBg 一处锚点);围栏闭合 → 原位换成帧;<span style="color:#1a1a1a">不做渐进渲染</span>(半截 HTML 渲出来会闪成另一种版式),换入<span style="color:#1a1a1a">不做动画</span>。</div>
+    <div>· <span style="color:#1a1a1a">回落</span>:写坏 / 超过 16 KB → 普通代码块(2c 画法:r7 外框 + #f5f5f5 头部条 + mono 11/650 语言标签 xray-html + mono 12/1.7 正文 + 既有的 copy),<span style="color:#1a1a1a">没有错误提示</span>、不写「渲染失败」、不给「重试」。对访客来说这就是模型写了一段代码块,是完全正常的 markdown。</div>
+    <div>· <span style="color:#1a1a1a">位置② = 最后一段正文之后</span>;位置① = 折叠行之后、正文之前。组件只能在最终回答的首或末,<span style="color:#1a1a1a">每轮最多两个</span>,任意组合(可一首一尾,也可同在一处)。组件不进折叠行,Timeline 里也没有组件事件。</div>
+  </div>
+</div>
+</div>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;boardLabels&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Canvas&quot;},
+  &quot;cardTitleRow&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Cards&quot;},
+  &quot;optionNotes&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Cards&quot;},
+  &quot;streamingPulse&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Runtime panel&quot;}
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const on = this.props.streamingPulse ?? true;
+    const pulse = on ? 'omPulseBg 1.8s ease-in-out infinite' : 'none';
+    const wave = on ? 'omWaveSweep 1.8s linear infinite' : 'none';
+    const waveRowBg = 'rgba(37,99,235,0.05) linear-gradient(90deg,rgba(37,99,235,0) 0%,rgba(37,99,235,0.16) 50%,rgba(37,99,235,0) 100%) 200% 0 / 200% 100% no-repeat';
+    const waveBar = '#9ca3af linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.6) 50%,rgba(255,255,255,0) 100%) 200% 0 / 200% 100% no-repeat';
+    const W = ms => Math.min(198, Math.max(4, Math.round(Math.sqrt(ms) * 11)));
+    const row = (name, ms, dur, c, x = {}) => ({ name, dur, c, w: W(ms), rowBg: 'transparent', anim: 'none', barAnim: 'none', ...x });
+
+    const t1rows = [
+      row('context', 12, '12ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('after_provider_response', 2, '2ms', '#9ca3af'),
+      row('tool_call · notes_search', 8, '8ms', '#2563eb'),
+      row('tool_execution_start', 0.3, '0ms', '#9ca3af'),
+      row('tool_execution_end', 264, '264ms', '#9ca3af'),
+      row('tool_result', 10, '10ms', '#2563eb'),
+    ];
+    const t2done = [
+      row('context', 11, '11ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('tool_call · notes_get_chapter', 9, '9ms', '#2563eb'),
+      row('tool_result', 6, '6ms', '#2563eb'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 640, '640ms', '#9ca3af'),
+      row('message_end', 1, '1ms', '#9ca3af'),
+      row('turn_end', 1, '1ms', '#2563eb'),
+    ];
+    const t2live = [
+      row('context', 11, '11ms', '#2563eb'),
+      row('before_provider_request', 4, '4ms', '#2563eb'),
+      row('tool_call · notes_get_chapter', 9, '9ms', '#2563eb'),
+      row('tool_result', 6, '6ms', '#2563eb'),
+      row('message_start', 1, '1ms', '#9ca3af'),
+      row('message_update', 2, '…', waveBar, { rowBg: waveRowBg, anim: wave, barAnim: wave }),
+    ];
+
+    const sessions = [
+      { title: '学习路径:从哪条线入手', time: '刚刚', bg: '#e8e8e8' },
+      { title: '选型:pi SDK 还是 Claude Agent SDK', time: '12m ago', bg: 'transparent' },
+      { title: '演示:危险命令拦截', time: '1h ago', bg: 'transparent' },
+      { title: 'permission-gate 源码解读', time: '3h ago', bg: 'transparent' },
+      { title: 'context 注入前后对比实验', time: '昨天', bg: 'transparent' },
+    ];
+
+    // ── choice 单选:选项顺序即消息里的顺序 ──
+    const LINE = [
+      ['纯函数组', 'notes_search / notes_get_chapter / notes_list_series,不出网、不落盘'],
+      ['沙箱执行组', 'bash / read_file,每次落地前过一道 permission-gate'],
+      ['外呼组', 'web_search 一枚,入参上限 300 字符'],
+      ['会话绑定组', 'session_rename,只改当前会话的元数据'],
+    ];
+    // mode: idle(可点) / locked(已发送) / busy(上一轮在跑)
+    const radio = (sel, mode) => LINE.map(([label, note], i) => ({
+      label, note,
+      dotBorder: i === sel ? '#2563eb' : '#e0e0e0',
+      dotFill: i === sel ? '#2563eb' : 'transparent',
+      labelColor: (mode === 'idle' || i === sel) ? '#1a1a1a' : '#9ca3af',
+    }));
+
+    // ── choice 多选 ──
+    const SRC = [
+      ['纯函数组', '三个只读工具,最容易看清 agent-loop 的调用形状'],
+      ['外呼组', '唯一出网的一组,重试与超时都写在这里'],
+      ['沙箱执行组', 'permission-gate 的拦截逻辑长在这一组上'],
+      ['会话绑定组', '最短的一组,二十行看完'],
+    ];
+    const check = (picked, mode) => SRC.map(([label, note], i) => {
+      const c = picked.indexOf(i) >= 0;
+      return {
+        label, note, checked: c,
+        boxBorder: c ? '#2563eb' : '#e0e0e0',
+        boxFill: c ? '#2563eb' : '#ffffff',
+        labelColor: (mode === 'idle' || c) ? '#1a1a1a' : '#9ca3af',
+      };
+    });
+
+    // ── form:text / select / text,值与 placeholder 都是卡上看得见的字 ──
+    const FIELDS = [
+      { label: '经验', req: true, isSelect: false, ph: '例:3 年', val: '3 年' },
+      { label: '目标', req: true, isSelect: true, ph: '请选择', val: '上线一个 agent 站' },
+      { label: '每周时间', req: false, isSelect: false, ph: '例:5 小时', val: '5 小时' },
+    ];
+    const form = mode => FIELDS.map(f => {
+      const filled = mode !== 'empty';
+      return {
+        label: f.label, req: f.req, isSelect: f.isSelect,
+        value: filled ? f.val : f.ph,
+        valueColor: filled ? '#1a1a1a' : '#9ca3af',
+        boxBg: mode === 'locked' ? 'rgba(0,0,0,0.02)' : '#ffffff',
+        cursor: mode === 'locked' ? 'default' : 'text',
+      };
+    });
+
+    // ── 2v 帧内内容(只用站点主题变量) ──
+    const phases = [
+      { n: '01', k: 'context', d: '系统提示 + 历史 + 工具表拼成一次请求' },
+      { n: '02', k: 'provider', d: '要一次回答,拿回文本或工具意图' },
+      { n: '03', k: 'tools', d: '按意图逐个执行,可重复多次' },
+      { n: '04', k: 'answer', d: '结果拼回上下文,再要一次回答' },
+    ];
+    const B = ms => Math.min(240, Math.max(4, Math.round(Math.sqrt(ms) * 13)));
+    const fbars = [
+      { name: 'context', dur: '12ms', w: B(12), c: '#2563eb' },
+      { name: 'before_provider_request', dur: '4ms', w: B(4), c: '#2563eb' },
+      { name: 'tool_call', dur: '8ms', w: B(8), c: '#2563eb' },
+      { name: 'tool_execution_end', dur: '264ms', w: B(264), c: '#9ca3af' },
+      { name: 'tool_result', dur: '10ms', w: B(10), c: '#2563eb' },
+      { name: 'message_update', dur: '640ms', w: B(640), c: '#9ca3af' },
+    ];
+    const layers = [
+      { k: '① 入参 schema', d: 'additionalProperties: false,先挡住结构不对的调用' },
+      { k: '② permission-gate', d: '按规则匹配危险入参,fail-closed' },
+      { k: '③ 执行沙箱', d: '受限文件系统与命令白名单' },
+      { k: '④ 结果裁剪', d: '超长结果按上限截断后才回到上下文' },
+    ];
+
+    return {
+      sessions, t1rows, t2done, t2live, pulse,
+      chIdle: radio(-1, 'idle'),
+      chLocked: radio(1, 'locked'),
+      chBusy: radio(-1, 'busy'),
+      mkEmpty: check([], 'idle'),
+      mkTwo: check([1, 2], 'idle'),
+      mkLocked: check([1, 2], 'locked'),
+      fmEmpty: form('empty'),
+      fmFull: form('full'),
+      fmLocked: form('locked'),
+      phases, fbars, layers,
+      labelDisplay: (this.props.boardLabels ?? true) ? 'flex' : 'none',
+      titleDisplay: (this.props.cardTitleRow ?? true) ? 'flex' : 'none',
+      noteDisplay: (this.props.optionNotes ?? true) ? 'block' : 'none',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -40,6 +40,16 @@ const INPUT_IN_SENTENCE = 120;
 const INVISIBLE = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
 
 /**
+ * 只去不可见字符、不 trim、不判长度。R-CARDS-2 的可回传卡在**解析期**对题干 / 选项 label / 字段 label / select 选项做这一步
+ * (codex 第 1 轮 P2):渲染出来的字与 `sanitizePrefill` 发出去的字必须一一对应(`docs/security.md` §0 第 12 条 ①),
+ * 而 U+202E 这类 bidi 覆盖字符在卡上会改变显示顺序、发送前又会被这把清洗去掉 —— 两边不一致就是「访客看到的不是发出去的」。
+ * 提前到解析期去掉,卡上显示的就是发出去的。与 `sanitizePrefill` 用同一条正则,两处永远同一把尺。
+ */
+export function stripInvisible(text: string): string {
+  return text.replace(INVISIBLE, "");
+}
+
+/**
  * 预填文本的清洗:去控制字符 → 去首尾空白 → 空串与超长都判为「没有预填」。
  *
  * 长度按**清洗前**的原文算:一段 5000 字的控制字符不该因为清洗后变短就放行。
@@ -47,7 +57,7 @@ const INVISIBLE = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
 export function sanitizePrefill(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") return null;
   if (raw.length > MAX_PREFILL) return null;
-  const text = raw.replace(INVISIBLE, "").trim();
+  const text = stripInvisible(raw).trim();
   return text === "" ? null : text;
 }
 

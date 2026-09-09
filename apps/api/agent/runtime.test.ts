@@ -15,6 +15,7 @@ import {
   selectIdleSessions,
   serializeColdStart,
   systemPromptFor,
+  HTML_COMPONENT_ENABLED,
   IDLE_TIMEOUT_MS,
   PENDING_FLUSH_MAX,
   SessionBusyError,
@@ -500,40 +501,60 @@ describe("系统提示词的时间基准与先搜再答(2026-09-07 修补)", () 
   });
 });
 
-// ───────────────────── 信息卡片段(R-CARDS,2026-09-09)─────────────────────
+// ───────────────────── UI 组件段(R-CARDS 2026-09-09;R-CARDS-2 同日扩成组件段)─────────────────────
 //
-// 【这组用例保护的是什么】卡片是正文的写法、不是工具:零工具的会话也要送达,且它不点名任何工具
-// (否则上面「底座不点名任何工具」与各分组用例的前提会被它悄悄破坏)。形状表与「每次最多两张」是所有者裁定;
-// 模型收不到校验错误(任务卡「已认代价」),这段提示词是唯一的缓解,钉住它的几个关键句。
-describe("系统提示词的信息卡片段(R-CARDS)", () => {
-  const KINDS = ["kv", "table", "list", "stat", "compare", "tabs"];
+// 【这组用例保护的是什么】组件是正文的写法、不是工具:零工具的会话也要送达,且它不点名任何工具
+// (否则上面「底座不点名任何工具」与各分组用例的前提会被它悄悄破坏)。形状表、「每次最多两个」与「开头或结尾」是所有者裁定;
+// 模型收不到校验错误(任务卡「已认代价」),这段提示词是唯一的缓解,钉住它的几个关键句。R-CARDS-2 验收 #18 的关键句也在这里。
+describe("系统提示词的 UI 组件段(R-CARDS / R-CARDS-2)", () => {
+  const KINDS = ["kv", "table", "list", "stat", "compare", "tabs", "choice", "form"];
   const cases: string[][] = [[], ["notes_search"], ["session_rename", "notes_search", "web_search", "generate_image", "skill_load", "skill_run"]];
 
   it("零工具与有工具都送达,且排在所有工具段落之后", () => {
     for (const tools of cases) {
       const p = systemPromptFor(tools);
-      expect(p).toContain("\n\n【信息卡片】");
-      const at = p.indexOf("【信息卡片】");
+      expect(p).toContain("\n\n【UI 组件】");
+      const at = p.indexOf("【UI 组件】");
       for (const name of tools) expect(p.lastIndexOf(name)).toBeLessThan(at);
       if (tools.length === 0) expect(p.indexOf("没有任何可用工具")).toBeLessThan(at);
     }
   });
 
-  it("钉住:围栏名 / 六个 kind / 每次最多两张 / 不套 tabs / 8 KB / 按钮不发送 / 正文独立成句", () => {
+  it("钉住:围栏名 / 八个 kind / 每次最多两个 / 开头或结尾 / 不套 tabs / 8 KB / 按钮不发送 / 正文独立成句", () => {
     const p = systemPromptFor([]);
     expect(p).toContain("```xray-card");
     for (const k of KINDS) expect(p).toContain(`"kind":"${k}"`);
-    expect(p).toContain("每次回复最多两张");
+    expect(p).toContain("每次回复最多两个组件");
+    expect(p).toContain("最终回答的开头或结尾");
     expect(p).toContain("不能再套 tabs");
     expect(p).toContain("≤ 8 KB");
     expect(p).toContain("不会发送");
     expect(p).toContain("回复也要读得通");
   });
 
+  it("R-CARDS-2:回传语义(直接发出)与两种新 kind 的形状;HTML 组件段随 HTML_COMPONENT_ENABLED 出现", () => {
+    const p = systemPromptFor([]);
+    expect(p).toContain("作为访客的下一条消息直接发出");
+    expect(p).toContain('"kind":"choice"');
+    expect(p).toContain('"kind":"form"');
+    expect(p).toContain("choice / form 不能放进 tabs");
+    // codex 第 1 轮 P2:form 的每条上限都要点名,否则「每个字符串 ≤ 200 字」那句会让模型写出解析器拒收的表单
+    for (const s of ["label ≤ 40 字", "placeholder ≤ 100 字", "options 2–8 项每项 ≤ 60 字", "submit ≤ 20 字", "最多填 100 字"]) expect(p).toContain(s);
+    if (HTML_COMPONENT_ENABLED) {
+      expect(p).toContain("```xray-html height=");
+      expect(p).toContain("160–480");
+      expect(p).toContain("上限 16 KB");
+      expect(p).toContain("var(--xh-bg)");
+      expect(p).toContain("唯一可用的交互是 <details>");
+    } else {
+      expect(p).not.toContain("xray-html");
+    }
+  });
+
   it("只出现一次,且这一段不点名任何工具", () => {
     const p = systemPromptFor(cases[2]);
-    expect(p.split("【信息卡片】")).toHaveLength(2);
-    const clause = p.slice(p.indexOf("【信息卡片】"));
+    expect(p.split("【UI 组件】")).toHaveLength(2);
+    const clause = p.slice(p.indexOf("【UI 组件】"));
     for (const name of ["notes_", "web_search", "generate_image", "session_rename", "skill"]) expect(clause).not.toContain(name);
   });
 });

@@ -22,9 +22,9 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { remarkLinkHref } from "@/lib/remark-link-href";
-import { mono } from "@/lib/styles";
-import { fenceUnterminated, parseCard } from "@/lib/xray-card";
-import { XrayCard, XrayCardSkeleton } from "@/components/XrayCard";
+import { remarkComponentBudget } from "@/lib/remark-component-budget";
+import { ChatFencePre, ChatFenceProvider } from "@/components/ChatFence";
+import { CodeBlock, fenceLang, type PreChild } from "@/components/CodeBlock";
 // KaTeX 自带样式表:字体文件由构建产物同源提供(不连 CDN,与 app/layout.tsx
 // 自托管 JetBrains Mono 同一个理由 —— 境内首访不能挂在外域字体请求上)。
 import "katex/dist/katex.min.css";
@@ -39,14 +39,20 @@ const inlineCode: CSSProperties = {
 
 const para: CSSProperties = { fontSize: 14, lineHeight: 1.7, marginTop: 12, marginBottom: 0 };
 
-/** R-CARDS:信息卡片围栏的语言标签(` ```xray-card `);回落成代码块时头部条上显示的也是它 */
-const CARD_LANG = "xray-card";
+/**
+ * R-CARDS-2「每轮最多两个组件」的前端硬限(任务卡裁定 2):一段正文里只有**前两个** xray 围栏(卡或帧,不分)渲染成组件,
+ * 第三个起走代码块出口。所有者 2026-09-09 二次确认是两个、不收成一个。数的地方在 remark 管线里(`remarkComponentBudget`,
+ * 解析器自己的树上按文档序打标记),不在源文本上扫。
+ */
+const COMPONENT_BUDGET = 2;
 
-/** 围栏代码的原文:hast 给 `<code>` 的子节点通常是一个字符串,偶尔是字符串数组 */
-function codeText(children: ReactNode): string {
-  if (typeof children === "string") return children;
-  if (Array.isArray(children)) return children.filter((c): c is string => typeof c === "string").join("");
-  return "";
+/**
+ * Notes / Skills / Source 的围栏代码块 —— 与 R-CARDS 之前的 `pre` 回调逐字节同一块标记(抽到 CodeBlock.tsx 只是为了让会话区渲染器也能画它)。
+ * 内联回调每次渲染都是新函数、会让子树重挂,对纯静态的代码块无所谓;会话区不用它(见 ChatFence.tsx 头注释)。
+ */
+function plainPre({ children }: { children?: ReactNode }) {
+  const child = children as PreChild;
+  return <CodeBlock lang={fenceLang(child)}>{child?.props?.children}</CodeBlock>;
 }
 
 /**
@@ -244,6 +250,7 @@ export function Markdown({
   headingIds = true,
   linkHref,
   cards = false,
+  html = false,
   streaming = false,
   onAsk,
 }: {
@@ -263,18 +270,34 @@ export function Markdown({
    */
   cards?: boolean;
   /**
+   * R-CARDS-2:把 ` ```xray-html ` 围栏渲染成沙箱帧(画板 2v / 5b;`docs/security.md` §0 第 13 条)。**默认关**,与 `cards` 同一口径:
+   * 只有会话区的**最终回答段**传 true;Notes / Skills / Source 的渲染器不传,同一段围栏在那里就是普通代码块。
+   * `cards` / `html` 任一为真时,「每轮最多两个组件」的预算(`COMPONENT_BUDGET`)对两种围栏一起数。
+   */
+  html?: boolean;
+  /**
    * 这段正文还在流式到达。围栏已开、未闭合的那段时间画骨架(画板 2t 段①);闭合后仍不合法就落回代码块。
-   * 只在 `cards` 为真时有意义。
+   * 只在 `cards` / `html` 为真时有意义。
    */
   streaming?: boolean;
-  /** 卡底动作按钮的唯一动作:把 `action.ask` 放进输入框(R-CROSSLINK 预填原语,永不自动发送)。不传时按钮整个不渲染 */
+  /** 卡底动作按钮的唯一动作:把 `action.ask` 放进输入框(R-CROSSLINK 预填原语,永不自动发送)。不传时按钮整个不渲染。
+      可回传卡的发送通路与 busy 态**不经这里**:`XrayCard` 从 `ComposerContext` 读(R-CARDS-2) */
   onAsk?: (text: string) => void;
 }) {
-  // `pre` 的回调里 `children` 会被自己的参数遮住;围栏未闭合的判据要拿整篇正文比后缀,先记一份
-  const source = children;
-  return (
+  // R-CARDS / R-CARDS-2:会话区(两种开关任一为真)把围栏交给恒等的 ChatFencePre,渲染时会变的东西经 Context 送进去;
+  // 「前两个」的标记由 remarkComponentBudget 在 mdast 上打(排在 remarkDollarGuard 之后:它重解析时会换一棵树,标记要打在最终那棵上)。
+  // 两种开关都关时走内联的普通 pre、不挂这个插件,与改动前一字不差。
+  const chat = cards || html;
+  const remarkPlugins = [
+    remarkGfm,
+    remarkMath,
+    remarkDollarGuard,
+    ...(linkHref ? [remarkLinkHref(linkHref)] : []),
+    ...(chat ? [remarkComponentBudget(COMPONENT_BUDGET)] : []),
+  ];
+  const md = (
     <ReactMarkdown
-      remarkPlugins={linkHref ? [remarkGfm, remarkMath, remarkDollarGuard, remarkLinkHref(linkHref)] : [remarkGfm, remarkMath, remarkDollarGuard]}
+      remarkPlugins={remarkPlugins}
       // 公式写错时 rehype-katex 自己兜住 ParseError(不会把整页渲染带崩),
       // 退化成「原文标红」;这里只把那个红换成现成的 --err-text(规则 7:不新增视觉语言)。
       // 不挂 id 时连 rehypeHeadingIds 都不装,聊天区因此一个 id 都不会产出(见上方 headingIds 的说明)
@@ -346,45 +369,8 @@ export function Markdown({
           if (className?.startsWith("language-")) return <code className={className}>{children}</code>;
           return <span style={inlineCode}>{children}</span>;
         },
-        pre: ({ children, node }) => {
-          const child = children as { props?: { className?: string; children?: ReactNode } } | undefined;
-          const lang = child?.props?.className?.replace(/^language-/, "") ?? "text";
-          // R-CARDS:会话区把 xray-card 围栏画成信息卡片。三个出口(画板 2t 裁定):
-          //   围栏未闭合 → 流式期间骨架、流结束了仍没闭合 → 代码块(闭合之前即使 JSON 已完整也不画卡,codex 第 1 轮 P2);
-          //   闭合且合法 → 卡;其余(闭合了仍不合法 / 超限 / 未知 kind)→ 下面的普通代码块,
-          //   语言标签就是围栏名、正文是那段原始文本,**没有错误提示**。`cards` 不传时这段整个不进,pre 与改动前一字不差。
-          // 开围栏的行号来自 hast 的 position(mdast-util-to-hast 把 code 节点的 position 原样拷到 pre 上);
-          // 拿不到时当作已闭合 —— 宁可少画一次骨架。
-          if (cards && lang === CARD_LANG) {
-            const line = (node as { position?: { start?: { line?: number } } } | undefined)?.position?.start?.line;
-            if (typeof line === "number" && fenceUnterminated(source, line)) {
-              if (streaming) return <XrayCardSkeleton />;
-            } else {
-              const spec = parseCard(codeText(child?.props?.children));
-              if (spec) return <XrayCard spec={spec} onAsk={onAsk} />;
-            }
-          }
-          return (
-            <div
-              style={{
-                border: "1px solid var(--border)", borderRadius: 7, marginTop: 14,
-                overflow: "hidden", boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex", alignItems: "center", padding: "6px 12px",
-                  background: "var(--bg-panel)", borderBottom: "1px solid var(--border)",
-                }}
-              >
-                <span style={{ ...mono(11, 650), color: "var(--text-muted)", flex: 1 }}>{lang}</span>
-              </div>
-              <pre style={{ margin: 0, padding: "12px 14px", font: "400 12px/1.7 var(--font-mono)", overflow: "auto" }}>
-                {child?.props?.children}
-              </pre>
-            </div>
-          );
-        },
+        // 围栏代码块:会话区走 ChatFence.tsx(卡 / 帧 / 骨架 / 代码块四个出口 + 组件预算),其余页面走普通代码块
+        pre: chat ? ChatFencePre : plainPre,
         // 画板 2c 没有表格样例;按代码块卡片的同一套 token 构造,不新增视觉语言。
         // 宽表在自己的容器里横向滚动,不让整页出现横向滚动条。
         table: ({ children }) => (
@@ -414,5 +400,11 @@ export function Markdown({
     >
       {children}
     </ReactMarkdown>
+  );
+  if (!chat) return md;
+  return (
+    <ChatFenceProvider value={{ source: children, cards, html, streaming, onAsk }}>
+      {md}
+    </ChatFenceProvider>
   );
 }

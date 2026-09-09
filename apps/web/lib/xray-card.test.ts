@@ -3,14 +3,24 @@
 // 纯函数测试,不起 Next。经 `dev.ps1 test` → `bun test lib` 运行(node:test 写法,零新增依赖)。
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { sanitizePrefill } from "./ask-why";
 import {
   CARD_LIMITS,
+  DEFAULT_SUBMIT,
   cardHref,
+  choiceWorstLength,
   compareCells,
+  composeChoiceMessage,
+  composeFormMessage,
+  fenceOpener,
   fenceUnterminated,
+  formComplete,
+  formWorstLength,
   isMonoColumn,
   parseCard,
   sortRows,
+  type ChoiceBody,
+  type FormBody,
 } from "./xray-card";
 
 const json = (o: unknown) => JSON.stringify(o);
@@ -297,5 +307,231 @@ describe("表头排序与 mono 列判据", () => {
     assert.equal(isMonoColumn(rows, 2), false);
     assert.equal(isMonoColumn(rows, 3), false);
     assert.equal(isMonoColumn([["-3.5"], ["$12"]], 0), true);
+  });
+});
+
+// ───────────────────── R-CARDS-2:两种可回传 kind(验收 #5 / #7)─────────────────────
+//
+// 【这组用例保护的是什么】`docs/security.md` §0 第 12 条的三件事里,前两件在 lib 里能钉住:
+//   ① 发出的文本**只由**卡上可见文本(prompt / label / 字段 label / 访客值)组成 —— 任何非可见字段都不进文本;
+//   ② 解析期按最坏组成长度卡在 1000 内(与 `sanitizePrefill` 同一把尺),运行期那把清洗闸永远吃不掉一次点击。
+const SEP_LABEL = String.fromCharCode(0x3001); // 「、」
+const choice = (extra: Record<string, unknown> = {}) => ({
+  v: 1,
+  kind: "choice",
+  prompt: "你更想从哪条线入手?",
+  options: [{ label: "纯函数组", note: "三个只读工具" }, { label: "沙箱执行组" }, { label: "外呼组" }, { label: "会话绑定组" }],
+  ...extra,
+});
+const form = (extra: Record<string, unknown> = {}) => ({
+  v: 1,
+  kind: "form",
+  prompt: "帮我定制学习路径",
+  fields: [
+    { label: "经验", type: "text", placeholder: "例:3 年", required: true },
+    { label: "目标", type: "select", options: ["上线一个 agent 站", "读懂内核"], required: true },
+    { label: "每周时间", type: "text" },
+  ],
+  ...extra,
+});
+
+describe("choice:形状与上限", () => {
+  it("单选:multiple 缺省 false、submit 缺省「提交」、note 可选;title / links 按通用规则", () => {
+    const c = parseCard(json(choice({ title: "学习路径 · 选一条主线" })));
+    assert.equal(c?.kind, "choice");
+    if (c?.kind !== "choice") return;
+    assert.equal(c.multiple, false);
+    assert.equal(c.submit, DEFAULT_SUBMIT);
+    assert.equal(c.prompt, "你更想从哪条线入手?");
+    assert.deepEqual(c.options[0], { label: "纯函数组", note: "三个只读工具" });
+    assert.deepEqual(c.options[1], { label: "沙箱执行组" });
+    assert.equal(c.title, "学习路径 · 选一条主线");
+    assert.deepEqual(c.links, []);
+  });
+  it("多选:multiple: true 与自定义 submit 文案(≤ 20)", () => {
+    const c = parseCard(json(choice({ multiple: true, submit: "就这几组" })));
+    assert.equal(c?.kind, "choice");
+    if (c?.kind !== "choice") return;
+    assert.equal(c.multiple, true);
+    assert.equal(c.submit, "就这几组");
+    assert.equal(parseCard(json(choice({ submit: "x".repeat(CARD_LIMITS.submit + 1) }))), null);
+  });
+  it("options 2–8 项:1 项与 9 项都回落", () => {
+    assert.equal(parseCard(json(choice({ options: [{ label: "只有一项" }] }))), null);
+    assert.equal(parseCard(json(choice({ options: Array.from({ length: 9 }, (_, i) => ({ label: `o${i}` })) }))), null);
+    assert.notEqual(parseCard(json(choice({ options: Array.from({ length: 8 }, (_, i) => ({ label: `o${i}` })) }))), null);
+  });
+  it("label ≤ 60、note ≤ 200、prompt ≤ 200;label 必填;multiple 不是布尔回落", () => {
+    assert.notEqual(parseCard(json(choice({ options: [{ label: "x".repeat(60) }, { label: "y" }] }))), null);
+    assert.equal(parseCard(json(choice({ options: [{ label: "x".repeat(61) }, { label: "y" }] }))), null);
+    assert.equal(parseCard(json(choice({ options: [{ label: "a", note: "n".repeat(201) }, { label: "b" }] }))), null);
+    assert.equal(parseCard(json(choice({ prompt: "p".repeat(201) }))), null);
+    assert.equal(parseCard(json(choice({ options: [{ note: "没有 label" }, { label: "b" }] }))), null);
+    assert.equal(parseCard(json(choice({ multiple: "yes" }))), null);
+  });
+  it("action 在 choice 上被忽略、不回落(一张卡只有一个出口);未知字段照常丢弃", () => {
+    const c = parseCard(json(choice({ action: { label: "追问", ask: "再讲讲" }, icon: "x" })));
+    assert.equal(c?.kind, "choice");
+    assert.equal(c && "action" in c, false);
+    assert.equal(c && "icon" in c, false);
+  });
+  it("不能嵌进 tabs(与 tabs 套 tabs 同一条)", () => {
+    const c = parseCard(json({ v: 1, kind: "tabs", tabs: [{ label: "a", card: choice() }] }));
+    assert.equal(c, null);
+  });
+});
+
+describe("choice:发送文本只由 prompt + 所选 label 组成", () => {
+  const body = parseCard(json(choice({ title: "T", multiple: true, submit: "提交", options: [{ label: "A", note: "note-A" }, { label: "B" }, { label: "C", note: "note-C" }] }))) as ChoiceBody;
+  it("单选 = prompt + ASCII「: 」+ label", () => {
+    assert.equal(composeChoiceMessage(body, [1]), "你更想从哪条线入手?: B");
+  });
+  it("多选按选项原顺序以「、」相连,与点选顺序无关", () => {
+    assert.equal(composeChoiceMessage(body, [2, 0]), `你更想从哪条线入手?: A${SEP_LABEL}C`);
+  });
+  it("没有 prompt 时只有 label 部分;title / note / submit 不进文本", () => {
+    const noPrompt = parseCard(json(choice({ prompt: undefined, title: "T" }))) as ChoiceBody;
+    assert.equal(noPrompt.prompt, undefined);
+    assert.equal(composeChoiceMessage(noPrompt, [0]), "纯函数组");
+    const text = composeChoiceMessage(body, [0, 1, 2]);
+    for (const hidden of ["T", "note-A", "note-C", "提交"]) assert.equal(text.includes(hidden), false, hidden);
+  });
+  it("越界与重复的下标忽略", () => {
+    assert.equal(composeChoiceMessage(body, [9, 1, 1, -1]), "你更想从哪条线入手?: B");
+  });
+});
+
+describe("会进消息的字段在解析期去不可见字符(codex 第 1 轮 P2:卡上看到的 = 发出去的)", () => {
+  const RLO = String.fromCharCode(0x202e); // bidi 覆盖
+  const ZWSP = String.fromCharCode(0x200b);
+  it("choice:prompt / label 里的 U+202E、零宽空格、控制字符都在解析期去掉;note 不动(不进消息)", () => {
+    const c = parseCard(json(choice({ prompt: `你更想${RLO}从哪条线入手?`, options: [{ label: `纯函数${ZWSP}组`, note: `n${ZWSP}` }, { label: "b" }] }))) as ChoiceBody;
+    assert.equal(c.prompt, "你更想从哪条线入手?");
+    assert.deepEqual(c.options.map((o) => o.label), ["纯函数组", "b"]);
+    assert.equal(c.options[0].note, `n${ZWSP}`);
+  });
+  it("WYSIWYG 不变量:组成出来的消息再过一遍 sanitizePrefill 一字不变", () => {
+    const c = parseCard(json(choice({ prompt: `题${RLO}干`, options: [{ label: `A${ZWSP}` }, { label: "B" }] }))) as ChoiceBody;
+    const text = composeChoiceMessage(c, [0, 1]);
+    assert.equal(sanitizePrefill(text), text);
+    const f = parseCard(json(form({ prompt: `帮我${RLO}定制`, fields: [{ label: `经${ZWSP}验`, type: "select", options: [`3${RLO} 年`, "5 年"] }] }))) as FormBody;
+    const ft = composeFormMessage(f, [f.fields[0].type === "select" ? f.fields[0].options[0] : ""]);
+    assert.equal(ft, "帮我定制 经验: 3 年");
+    assert.equal(sanitizePrefill(ft), ft);
+  });
+  it("去掉之后变空的 label 照常回落", () => {
+    assert.equal(parseCard(json(choice({ options: [{ label: RLO + ZWSP }, { label: "b" }] }))), null);
+  });
+  it("长度按去掉之后的字算(60 个字 + 若干零宽仍通过)", () => {
+    assert.notEqual(parseCard(json(choice({ options: [{ label: "x".repeat(60) + ZWSP.repeat(5) }, { label: "b" }] }))), null);
+  });
+});
+
+describe("choice:解析期最坏长度(UTF-16)", () => {
+  it("8 × 60 字 label + 200 字 prompt = 689 → 通过", () => {
+    const c = parseCard(json(choice({ prompt: "p".repeat(200), options: Array.from({ length: 8 }, () => ({ label: "l".repeat(60) })) })));
+    assert.equal(c?.kind, "choice");
+    if (c?.kind !== "choice") return;
+    assert.equal(choiceWorstLength(c), 200 + 2 + 8 * 60 + 7);
+  });
+  it("计量按 UTF-16:emoji 算两个单位,与 label ≤ 60 同一把尺", () => {
+    const heart = String.fromCodePoint(0x1f49c);
+    assert.notEqual(parseCard(json(choice({ options: [{ label: heart.repeat(30) }, { label: "b" }] }))), null); // 60 单位
+    assert.equal(parseCard(json(choice({ options: [{ label: heart.repeat(31) }, { label: "b" }] }))), null); // 62 单位
+  });
+});
+
+describe("form:形状与上限", () => {
+  it("三字段(text / select / text):required 缺省 false、placeholder 可选、type 缺省 text", () => {
+    const c = parseCard(json(form({ title: "学习路径定制" })));
+    assert.equal(c?.kind, "form");
+    if (c?.kind !== "form") return;
+    assert.equal(c.submit, DEFAULT_SUBMIT);
+    assert.deepEqual(c.fields[0], { label: "经验", type: "text", placeholder: "例:3 年", required: true });
+    assert.deepEqual(c.fields[1], { label: "目标", type: "select", options: ["上线一个 agent 站", "读懂内核"], required: true });
+    assert.deepEqual(c.fields[2], { label: "每周时间", type: "text", required: false });
+  });
+  it("fields 1–5:0 与 6 都回落", () => {
+    assert.equal(parseCard(json(form({ fields: [] }))), null);
+    assert.equal(parseCard(json(form({ fields: Array.from({ length: 6 }, (_, i) => ({ label: `f${i}` })) }))), null);
+    assert.notEqual(parseCard(json(form({ fields: Array.from({ length: 5 }, (_, i) => ({ label: `f${i}` })) }))), null);
+  });
+  it("type 闭集 text / select;select.options 2–8 项每项 ≤ 60;label ≤ 40;placeholder ≤ 100", () => {
+    assert.equal(parseCard(json(form({ fields: [{ label: "a", type: "number" }] }))), null);
+    assert.equal(parseCard(json(form({ fields: [{ label: "a", type: "select", options: ["只一项"] }] }))), null);
+    assert.equal(parseCard(json(form({ fields: [{ label: "a", type: "select", options: Array.from({ length: 9 }, (_, i) => `o${i}`) }] }))), null);
+    assert.equal(parseCard(json(form({ fields: [{ label: "a", type: "select", options: ["x".repeat(61), "b"] }] }))), null);
+    assert.equal(parseCard(json(form({ fields: [{ label: "l".repeat(41) }] }))), null);
+    assert.equal(parseCard(json(form({ fields: [{ label: "a", placeholder: "p".repeat(101) }] }))), null);
+    assert.equal(parseCard(json(form({ fields: [{ label: "a", required: "yes" }] }))), null);
+  });
+  it("action 在 form 上被忽略;不能嵌进 tabs", () => {
+    const c = parseCard(json(form({ action: { label: "追问", ask: "再讲讲" } })));
+    assert.equal(c?.kind, "form");
+    assert.equal(c && "action" in c, false);
+    assert.equal(parseCard(json({ v: 1, kind: "tabs", tabs: [{ label: "a", card: form() }] })), null);
+  });
+});
+
+describe("form:发送文本单行、ASCII 分隔、按字段顺序、空字段省略", () => {
+  const body = parseCard(json(form())) as FormBody;
+  it("全填 = prompt + 空格 + 「label: 值」以「; 」相连", () => {
+    assert.equal(composeFormMessage(body, ["3 年", "上线一个 agent 站", "5 小时"]), "帮我定制学习路径 经验: 3 年; 目标: 上线一个 agent 站; 每周时间: 5 小时");
+  });
+  it("空字段(含只有空白)省略;值两端空白去掉", () => {
+    assert.equal(composeFormMessage(body, ["3 年", "", "  "]), "帮我定制学习路径 经验: 3 年");
+    assert.equal(composeFormMessage(body, [" 3 年 ", "读懂内核"]), "帮我定制学习路径 经验: 3 年; 目标: 读懂内核");
+  });
+  it("没有 prompt 时从第一个「label: 值」起头;全空时没有 prompt 就是空串", () => {
+    const noPrompt = parseCard(json(form({ prompt: undefined }))) as FormBody;
+    assert.equal(composeFormMessage(noPrompt, ["3 年"]), "经验: 3 年");
+    assert.equal(composeFormMessage(noPrompt, []), "");
+    assert.equal(composeFormMessage(body, []), "帮我定制学习路径");
+  });
+  it("placeholder / title / submit 不进文本", () => {
+    const text = composeFormMessage(parseCard(json(form({ title: "TT", submit: "发出" }))) as FormBody, ["a", "b", "c"]);
+    for (const hidden of ["TT", "发出", "例:3 年"]) assert.equal(text.includes(hidden), false, hidden);
+  });
+  it("formComplete:全部 required 非空才为真", () => {
+    assert.equal(formComplete(body, ["3 年", "", "x"]), false);
+    assert.equal(formComplete(body, ["3 年", "读懂内核", ""]), true);
+    assert.equal(formComplete(body, ["  ", "读懂内核", ""]), false);
+  });
+  it("formComplete:没有题干、字段全可选、一个字没填 → 消息为空 → 不能按(codex 第 1 轮 P2);填一个就能按;有题干时空表单也能按(消息 = 题干)", () => {
+    const optional = parseCard(json(form({ prompt: undefined, fields: [{ label: "a" }, { label: "b" }] }))) as FormBody;
+    assert.equal(formComplete(optional, ["", ""]), false);
+    assert.equal(formComplete(optional, ["  ", ""]), false);
+    assert.equal(formComplete(optional, ["", "x"]), true);
+    const withPrompt = parseCard(json(form({ fields: [{ label: "a" }] }))) as FormBody;
+    assert.equal(formComplete(withPrompt, [""]), true);
+  });
+});
+
+describe("form:解析期最坏长度(UTF-16)", () => {
+  it("5 字段 + 200 字 prompt = 919 → 通过(任务卡写的 921 多算了一个分隔符:5 段只有 4 个「; 」);201 字 prompt → 回落", () => {
+    const five = Array.from({ length: 5 }, (_, i) => ({ label: `${"l".repeat(38)}${i.toString().padStart(2, "0")}`, type: "text" }));
+    const ok = parseCard(json(form({ prompt: "p".repeat(200), fields: five })));
+    assert.equal(ok?.kind, "form");
+    if (ok?.kind !== "form") return;
+    assert.equal(formWorstLength(ok), 200 + 1 + 5 * (40 + 2 + 100) + 4 * 2);
+    assert.ok(formWorstLength(ok) <= CARD_LIMITS.message);
+    assert.equal(parseCard(json(form({ prompt: "p".repeat(201), fields: five }))), null);
+  });
+  it("select 按最长一项算;label 超 40 本身就回落", () => {
+    const c = parseCard(json(form({ prompt: undefined, fields: [{ label: "L", type: "select", options: ["a", "abc"] }] })));
+    assert.equal(c?.kind, "form");
+    if (c?.kind !== "form") return;
+    assert.equal(formWorstLength(c), "L: abc".length);
+  });
+});
+
+describe("fenceOpener:只读围栏长什么样(记号 / 长度 / info string),前缀宽松 —— 是不是围栏由 micromark 定", () => {
+  const F = "```";
+  it("顶层 / 引用块 / 列表标记后 / 列表续行的四空格缩进都读得出;波浪线也读", () => {
+    assert.deepEqual(fenceOpener(`${F}xray-html height=320`), { mark: "`", len: 3, info: "xray-html height=320" });
+    assert.deepEqual(fenceOpener(`> ~~~~xray-card`), { mark: "~", len: 4, info: "xray-card" });
+    assert.deepEqual(fenceOpener(`1. ${F}xray-card`), { mark: "`", len: 3, info: "xray-card" });
+    assert.deepEqual(fenceOpener(`    ${F}xray-card`), { mark: "`", len: 3, info: "xray-card" });
+    assert.equal(fenceOpener("不是围栏"), null);
   });
 });
