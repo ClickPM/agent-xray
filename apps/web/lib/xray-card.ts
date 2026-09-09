@@ -556,53 +556,23 @@ export function fenceUnterminated(source: string, openerLine: number): boolean {
 }
 
 /**
- * 开围栏行的判据,三处共用(`fenceUnterminated` / `leadingComponentFences` / `lib/xray-html.ts` 的 `fenceInfo`):
- * 容器前缀(各自 ≤ 3 空格 + `>` 或列表标记,可叠)+ **≤ 3 个空格** + 围栏记号 + info string。
- * **四个空格起头的行是缩进代码块,不是围栏**(CommonMark;codex 第 2 轮 P2:`    ```xray-card` 是在演示语法,micromark 不会把它当围栏,
- * 扫描器若把它算进「前两个」,后面一个真组件就被挤成代码块)。反引号围栏的 info string 里不能有反引号(同样照 CommonMark,否则 micromark 也不认)。
+ * 开围栏行的读法,两处共用(`fenceUnterminated` / `lib/xray-html.ts` 的 `fenceInfo`):跳过容器前缀(空白 / `>` / 列表标记,任意组合),
+ * 取围栏记号与 info string。**只在 micromark 已经认定为围栏的那一行上用**(行号来自 hast 的 position),所以前缀刻意写得宽松 ——
+ * 这里不判「是不是围栏」,只读「围栏长什么样」;判「是不是」的事在 `lib/remark-component-budget.ts`,由解析器自己的树说了算
+ * (所有者裁定 2026-09-09:扫描器不再重新实现 CommonMark 的一角,见那个文件头注释)。
  */
-const FENCE_OPENER = /^(?:[ \t]{0,3}(?:>[ \t]?|[-+*][ \t]{1,3}|\d{1,9}[.)][ \t]{1,3}))*[ \t]{0,3}(`{3,}|~{3,})[ \t]*(.*)$/;
+const FENCE_OPENER = /^(?:[\s>]|[-+*](?=\s)|\d{1,9}[.)](?=\s))*(`{3,}|~{3,})[ \t]*(.*)$/;
 
 export function fenceOpener(line: string): { mark: string; len: number; info: string } | null {
   const m = FENCE_OPENER.exec(line);
-  if (!m) return null;
-  const mark = m[1][0];
-  if (mark === "`" && m[2].includes("`")) return null;
-  return { mark, len: m[1].length, info: m[2].trim() };
+  return m ? { mark: m[1][0], len: m[1].length, info: m[2].trim() } : null;
 }
-
-/** 会话区会渲染成组件的两个围栏语言标签(R-CARDS 的卡 + R-CARDS-2 的帧) */
-export const COMPONENT_LANGS = ["xray-card", "xray-html"] as const;
 
 /**
- * R-CARDS-2「每轮最多两个组件」的前端硬限(任务卡裁定 2 / 派生取舍 7):返回一段正文里**前 `limit` 个** xray 围栏
- * (不分卡 / 帧、不管合不合法)的开围栏行号(1 起),渲染器只把行号在这个集合里的围栏当组件,其余走代码块出口。
- *
- * 【为什么在源文本上数,不在渲染期数】渲染期的计数器会被 React 的双调用(StrictMode)数乱 —— `rehypeHeadingIds` 上方那段注释说的
- * 就是这个坑;从源文本一次算定,与渲染几次无关。行号与 hast 的 `position` 对得上:`remarkDollarGuard` 只往源码里插反斜杠、不增减行。
- *
- * 扫描规则与 `fenceUnterminated` 同一套(`fenceOpener`):开围栏行允许容器前缀(`>` / 列表标记)与 ≤ 3 空格,语言标签是 info string 的第一个词
- * (`xray-html height=320`);**在别的围栏里的行不算**(代码块里写 ```xray-card 是在演示语法,micromark 也不会把它当围栏),
- * 四个空格起头的缩进代码块同样不算(codex 第 2 轮 P2);闭围栏判据同样照 `fenceUnterminated`(同种记号、不短于开围栏、行上只有它)。
+ * 会话区会渲染成组件的两个围栏语言标签(R-CARDS 的卡 + R-CARDS-2 的帧)。「每轮最多两个」的硬限在 `lib/remark-component-budget.ts`:
+ * 在 micromark 产出的 mdast 上按文档序给前两个打标记(所有者裁定 2026-09-09,替代早先的逐行正则扫描器)。
  */
-export function leadingComponentFences(source: string, limit: number): number[] {
-  const out: number[] = [];
-  const lines = source.split(/\r?\n/);
-  let open: { mark: string; len: number } | null = null;
-  for (let i = 0; i < lines.length && out.length < limit; i++) {
-    const line = lines[i];
-    if (open) {
-      const m = /^[\s>]*(`{3,}|~{3,})[ \t]*$/.exec(line);
-      if (m && m[1][0] === open.mark && m[1].length >= open.len) open = null;
-      continue;
-    }
-    const f = fenceOpener(line);
-    if (!f) continue;
-    open = f;
-    if ((COMPONENT_LANGS as readonly string[]).includes(f.info.split(/\s+/)[0])) out.push(i + 1);
-  }
-  return out;
-}
+export const COMPONENT_LANGS = ["xray-card", "xray-html"] as const;
 
 /**
  * 表头排序用的比较器(画板 2s:「按入参上限降序」—— 300 / 128 / 120 / 64 / 60,是**数值感知**的字符串序,

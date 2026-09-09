@@ -191,7 +191,7 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 - `apps/web/lib/xray-html.ts`(新):info string 解析与高度夹取、字节上限、`shouldDropElement` / `shouldDropAttribute` 两个判定纯函数、`srcdoc` 拼装(纯字符串部分);`xray-html.test.ts` ≥ 20 条(含 `javascript:` / 带控制字符的 `href` / `xlink:href` / `srcset` / `formaction` / `ping` / 大小写与空白变体)。
 - `apps/web/components/XrayCard.tsx`:两种新 kind 的渲染、`onSend` prop、busy 与锁定两种态。
 - `apps/web/components/XrayHtml.tsx`(新):`DOMParser` 遍历薄壳 + 帧 + 骨架 + 主题重建。
-- `apps/web/components/Markdown.tsx`:`html` prop(默认关);组件预算与三个出口**挪进新文件** `components/ChatFence.tsx`(恒等的围栏渲染器 + `ChatFenceContext`,理由见「本轮实测 · 偏离」第 1 条),Notes 的普通代码块抽成 `components/CodeBlock.tsx`(标记一字不改)。
+- `apps/web/components/Markdown.tsx`:`html` prop(默认关);三个出口**挪进新文件** `components/ChatFence.tsx`(恒等的围栏渲染器 + `ChatFenceContext`,理由见「本轮实测 · 偏离」第 1 条),Notes 的普通代码块抽成 `components/CodeBlock.tsx`(标记一字不改);组件预算 = 新文件 `lib/remark-component-budget.ts`(remark 插件,在 mdast 上给前两个 xray 围栏打标记;所有者裁定 A,见「代码审查」第 3 轮)。
 - `apps/web/components/ComposerContext.tsx`(新):`busy` / `onSend` 经 Context 直达 `XrayCard`,不经 `Markdown` props(同一条理由)。
 - `apps/web/components/workbench/Workbench.tsx` / `apps/web/components/mobile/MobileChat.tsx`:`send` 拆成 `sendText(text)` + `send`,`sendFromCard` 经 `ComposerContext.Provider` 注入两套壳;最终回答段开组件、处理过程段 `components={false}`;`MobileChat` 只改注释。
 - `apps/web/app/globals.css`:两种新卡与帧的移动端差别(按 `5a` / `5b`)。
@@ -265,6 +265,14 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 
 复验:`bun test lib` **148** 用例全绿(+2),`tsc --noEmit` 过。
 
+**第 3 轮**(按流程只审整改 diff,`--base e415ec5`,提交 `0c59fdb`;5.5 分钟):1 条 finding,**P2**。
+
+| # | finding | 处理 |
+|---|---|---|
+| 1 | **P2 · 收紧到 ≤ 3 空格之后,列表续行里的合法围栏被拒**(`lib/xray-card.ts` `fenceOpener`):`1. text\n\n    ```xray-card` 的四个空格是列表容器缩进,micromark 照常产出 fenced code,扫描器脱离上下文按顶层缩进拒掉 → 组件回落成代码块,基线版本反而认得 | **停下回所有者重定方案**(项目记忆「审查循环不是设计」:第 2、3 轮 findings 连续落在同一块自建机制 —— 扫描器在重新实现 CommonMark 的一角,补列表上下文之后 lazy continuation / tab / 嵌套还会再来)。给所有者三档:A 用解析器自己的树数(推荐)/ B 扫描器补列表上下文 / C 认下不改记 BACKLOG。**所有者裁定 A**(2026-09-09)。落地:新文件 `lib/remark-component-budget.ts` —— 一个 remark 插件(与 `remarkDollarGuard` / `remarkLinkHref` 同一形态,排在它们之后)在 micromark 产出的 mdast 上按文档序给前两个 xray 围栏的 `code` 节点打 `data.hProperties.dataXrayComponent`,经 mdast-util-to-hast 落到 `<code>` 的 `data-xray-component` prop,`ChatFencePre` 只认这个标记;围栏是不是围栏由 micromark 说了算,两边**不可能**再不一致。逐行正则扫描器 `leadingComponentFences` 删除;`fenceOpener` 回到宽松前缀(它只在 micromark 已认定为围栏的行上读记号与 info string,不判「是不是」)。用例:`remark-component-budget.test.ts` 新增 6 条(列表项 / 引用块 / 缩进代码块 lang=null / 语言标签精确 / 保留既有 data),`xray-card.test.ts` 的扫描器用例换成 `fenceOpener` 读法 1 条,`fenceInfo` 的四空格断言反转。浏览器复核 `列表`(列表续行里的卡 + 帧:卡渲染在 `<li>` 里)/ `缩进` / `三个` / `处理` / `帧` 五个剧本 |
+
+复验:`bun test lib` **149** 用例全绿(11 个文件),`tsc --noEmit` 过。第一版把插件写成了 transformer 而不是 attacher(unified 调 attacher 时没有 tree → 整页掉进错误边界),本机第一次跑就撞上、改成与 `remarkLinkHref` 同一形状(工厂 → attacher → transformer)后过。
+
 ## 失败处理
 
 同一验收项针对性整改后连续 2 次验证仍不过 → 写 `rounds/round-cards2/BLOCKED.md`,停下呼人。禁止放宽验收标准自我通过。
@@ -309,6 +317,7 @@ agent 在回复**最终回答**的开头或结尾嵌组件,**每轮最多两个*
 7. 处理过程段里的卡片(含 R-CARDS 的六种)改为代码块(任务卡「已认代价」最后一条);`splitTurn` 与 `AssistantTurn` 的段落划分零改动。
 8. 提示词组件段 22 行(R-CARDS 12 行 + 两种新 kind 各一行 + 回传语义一行 + HTML 段一行 + 位置 / 用途各一句),`HTML_COMPONENT_ENABLED = false` 时掐掉三处 HTML 半句;段落头从「【信息卡片】」改为「【UI 组件】」,两个测试文件同步。
 9. **审查第 1 轮带来的三处口径变化**(见「代码审查」):会进消息的字段在解析期先去不可见字符(`stripInvisible`,与 `sanitizePrefill` 同一条正则)—— 这是 `lib/xray-card.ts` 头注释里的第三条宽松处理;`onSend` 回 `boolean`、**发出去了才锁**;窄清洗名单再加七个 SVG SMIL 动画元素。
+10. **「前两个围栏」不再扫源文本,改在解析器的树上数**(审查第 2、3 轮 → 所有者裁定 A):任务卡派生取舍 7 说的「渲染器只把最终段里前两个 xray 围栏当组件」不变,数的位置从逐行正则挪到 remark 插件 `lib/remark-component-budget.ts`,理由与形态见「代码审查」第 3 轮。
 
 ### 踩的坑
 

@@ -22,7 +22,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { remarkLinkHref } from "@/lib/remark-link-href";
-import { leadingComponentFences } from "@/lib/xray-card";
+import { remarkComponentBudget } from "@/lib/remark-component-budget";
 import { ChatFencePre, ChatFenceProvider } from "@/components/ChatFence";
 import { CodeBlock, fenceLang, type PreChild } from "@/components/CodeBlock";
 // KaTeX 自带样式表:字体文件由构建产物同源提供(不连 CDN,与 app/layout.tsx
@@ -41,7 +41,8 @@ const para: CSSProperties = { fontSize: 14, lineHeight: 1.7, marginTop: 12, marg
 
 /**
  * R-CARDS-2「每轮最多两个组件」的前端硬限(任务卡裁定 2):一段正文里只有**前两个** xray 围栏(卡或帧,不分)渲染成组件,
- * 第三个起走代码块出口。所有者 2026-09-09 二次确认是两个、不收成一个。
+ * 第三个起走代码块出口。所有者 2026-09-09 二次确认是两个、不收成一个。数的地方在 remark 管线里(`remarkComponentBudget`,
+ * 解析器自己的树上按文档序打标记),不在源文本上扫。
  */
 const COMPONENT_BUDGET = 2;
 
@@ -284,11 +285,19 @@ export function Markdown({
   onAsk?: (text: string) => void;
 }) {
   // R-CARDS / R-CARDS-2:会话区(两种开关任一为真)把围栏交给恒等的 ChatFencePre,渲染时会变的东西经 Context 送进去;
-  // 组件预算从源文本一次算定(不在渲染期数,理由见 leadingComponentFences)。两种开关都关时走内联的普通 pre,与改动前一字不差。
+  // 「前两个」的标记由 remarkComponentBudget 在 mdast 上打(排在 remarkDollarGuard 之后:它重解析时会换一棵树,标记要打在最终那棵上)。
+  // 两种开关都关时走内联的普通 pre、不挂这个插件,与改动前一字不差。
   const chat = cards || html;
+  const remarkPlugins = [
+    remarkGfm,
+    remarkMath,
+    remarkDollarGuard,
+    ...(linkHref ? [remarkLinkHref(linkHref)] : []),
+    ...(chat ? [remarkComponentBudget(COMPONENT_BUDGET)] : []),
+  ];
   const md = (
     <ReactMarkdown
-      remarkPlugins={linkHref ? [remarkGfm, remarkMath, remarkDollarGuard, remarkLinkHref(linkHref)] : [remarkGfm, remarkMath, remarkDollarGuard]}
+      remarkPlugins={remarkPlugins}
       // 公式写错时 rehype-katex 自己兜住 ParseError(不会把整页渲染带崩),
       // 退化成「原文标红」;这里只把那个红换成现成的 --err-text(规则 7:不新增视觉语言)。
       // 不挂 id 时连 rehypeHeadingIds 都不装,聊天区因此一个 id 都不会产出(见上方 headingIds 的说明)
@@ -394,7 +403,7 @@ export function Markdown({
   );
   if (!chat) return md;
   return (
-    <ChatFenceProvider value={{ source: children, budget: leadingComponentFences(children, COMPONENT_BUDGET), cards, html, streaming, onAsk }}>
+    <ChatFenceProvider value={{ source: children, cards, html, streaming, onAsk }}>
       {md}
     </ChatFenceProvider>
   );

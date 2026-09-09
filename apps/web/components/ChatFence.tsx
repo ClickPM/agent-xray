@@ -12,6 +12,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { fenceUnterminated, parseCard } from "@/lib/xray-card";
 import { HTML_LANG, declaredHeight, fenceInfo, htmlWithinLimit } from "@/lib/xray-html";
+import { COMPONENT_ATTR } from "@/lib/remark-component-budget";
 import { CodeBlock, codeText, fenceLang, type PreChild } from "@/components/CodeBlock";
 import { XrayCard, XrayCardSkeleton } from "@/components/XrayCard";
 import { XrayHtml, XrayHtmlSkeleton } from "@/components/XrayHtml";
@@ -22,8 +23,6 @@ export const CARD_LANG = "xray-card";
 export interface ChatFenceValue {
   /** 整篇正文(围栏未闭合的判据与 info string 都从它上面取) */
   source: string;
-  /** 前两个 xray 围栏的开围栏行号(`leadingComponentFences`),不在里面的走代码块 */
-  budget: number[];
   cards: boolean;
   html: boolean;
   streaming: boolean;
@@ -41,6 +40,7 @@ export function ChatFenceProvider({ value, children }: { value: ChatFenceValue; 
  *   围栏未闭合 → 流式期间骨架、流结束了仍没闭合 → 代码块(闭合之前即使 JSON 已完整也不画卡,codex 第 1 轮 P2);
  *   闭合且合法 → 卡 / 帧;其余(闭合了仍不合法 / 超限 / 未知 kind / 第三个起 / 拿不到行号)→ 普通代码块,
  *   语言标签就是围栏名、正文是那段原始文本,**没有错误提示**。
+ * 「前两个」的标记由 `lib/remark-component-budget.ts` 在 mdast 上打好、落在 `<code>` 元素的 `data-xray-component` 上(没有标记 = 第三个起);
  * 开围栏的行号来自 hast 的 position(mdast-util-to-hast 把 code 节点的 position 原样拷到 pre 上);帧的高度从开围栏行的 info string 读(`height=`),
  * 骨架按同一高度立住。
  */
@@ -50,9 +50,9 @@ export function ChatFencePre({ children, node }: { children?: ReactNode; node?: 
   const lang = fenceLang(child);
   const isCard = !!ctx?.cards && lang === CARD_LANG;
   const isHtml = !!ctx?.html && lang === HTML_LANG;
-  if (ctx && (isCard || isHtml)) {
+  if (ctx && (isCard || isHtml) && child?.props?.[COMPONENT_ATTR] !== undefined) {
     const line = (node as { position?: { start?: { line?: number } } } | undefined)?.position?.start?.line;
-    if (typeof line === "number" && ctx.budget.includes(line)) {
+    if (typeof line === "number") {
       const raw = codeText(child?.props?.children);
       if (fenceUnterminated(ctx.source, line)) {
         if (ctx.streaming) return isCard ? <XrayCardSkeleton /> : <XrayHtmlSkeleton declared={declaredHeight(fenceInfo(ctx.source, line))} />;

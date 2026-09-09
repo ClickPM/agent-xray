@@ -33,8 +33,8 @@ export function codeText(children: ReactNode): string {
   return "";
 }
 
-/** react-markdown 交给 `pre` 的那个子元素(`<code className="language-…">`)的形状 */
-export type PreChild = { props?: { className?: string; children?: ReactNode } } | undefined;
+/** react-markdown 交给 `pre` 的那个子元素(`<code className="language-…">`)的形状;`data-xray-component` 是 remark-component-budget 打的标记 */
+export type PreChild = { props?: { className?: string; children?: ReactNode; "data-xray-component"?: string } } | undefined;
 
 /** 语言标签:`language-xray-card` → `xray-card`;没有 info string 的围栏按 `text` */
 export function fenceLang(child: PreChild): string {

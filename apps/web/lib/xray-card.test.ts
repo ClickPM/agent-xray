@@ -12,11 +12,11 @@ import {
   compareCells,
   composeChoiceMessage,
   composeFormMessage,
+  fenceOpener,
   fenceUnterminated,
   formComplete,
   formWorstLength,
   isMonoColumn,
-  leadingComponentFences,
   parseCard,
   sortRows,
   type ChoiceBody,
@@ -525,36 +525,13 @@ describe("form:解析期最坏长度(UTF-16)", () => {
   });
 });
 
-describe("leadingComponentFences:最终回答段前 N 个 xray 围栏的开围栏行号", () => {
+describe("fenceOpener:只读围栏长什么样(记号 / 长度 / info string),前缀宽松 —— 是不是围栏由 micromark 定", () => {
   const F = "```";
-  it("卡 + 帧 + 卡:只回前两个;第三个不在集合里", () => {
-    const src = ["正文", `${F}xray-card`, "{}", F, "中间", `${F}xray-html height=320`, "<p>x</p>", F, `${F}xray-card`, "{}", F].join("\n");
-    assert.deepEqual(leadingComponentFences(src, 2), [2, 6]);
-    assert.deepEqual(leadingComponentFences(src, 3), [2, 6, 9]);
-  });
-  it("普通代码块不占名额;代码块里演示的 ```xray-card 不算围栏", () => {
-    const src = [`${F}ts`, "const a = 1;", F, "````md", `${F}xray-card`, "{}", F, "````", `${F}xray-card`, "{}", F].join("\n");
-    assert.deepEqual(leadingComponentFences(src, 2), [9]);
-  });
-  it("容器前缀与列表标记后的开围栏都认;波浪线围栏也认;未闭合的围栏(流式中)也占名额", () => {
-    const src = ["- 第一项", `  ${F}xray-card`, "  {}", `  ${F}`, "> 引用", `> ~~~xray-html`, "> <b>x</b>", "> ~~~", `1. ${F}xray-card`, "{"].join("\n");
-    assert.deepEqual(leadingComponentFences(src, 5), [2, 6, 9]);
-  });
-  it("语言标签必须完全匹配:xray-cards / xray 不算", () => {
-    const src = [`${F}xray-cards`, "{}", F, `${F}xray`, "{}", F, `${F}xray-html`, "", F].join("\n");
-    assert.deepEqual(leadingComponentFences(src, 2), [7]);
-  });
-  it("四个空格起头的是缩进代码块、不占名额;三个空格的仍是围栏(codex 第 2 轮 P2)", () => {
-    const src = ["演示:", `    ${F}xray-card`, "    {}", `    ${F}`, "", `   ${F}xray-card`, "{}", F, `${F}xray-html`, "", F, `${F}xray-card`, "{}", F].join("\n");
-    assert.deepEqual(leadingComponentFences(src, 2), [6, 9]);
-    // 引用块 / 列表项里的缩进代码块同样不算;列表标记后 1–3 个空格的围栏算
-    const nested = ["> 引用", `>     ${F}xray-card`, ">     {}", `- 项`, `-   ${F}xray-card`, "  {}", `  ${F}`].join("\n");
-    assert.deepEqual(leadingComponentFences(nested, 2), [5]);
-  });
-  it("反引号围栏的 info string 里有反引号就不是围栏(micromark 同一口径)", () => {
-    // 第 1 行不是围栏 → 第 2 行是段落 → 第 3 行才是第一个真围栏(第 1 行若被误认成围栏,第 3 行就成了它的正文)
-    const src = [`${F}xray-card \`x\``, "不是围栏的一行", `${F}xray-card`, "{}", F].join("\n");
-    assert.deepEqual(leadingComponentFences(src, 2), [3]);
-    assert.equal(fenceUnterminated(src, 1), false);
+  it("顶层 / 引用块 / 列表标记后 / 列表续行的四空格缩进都读得出;波浪线也读", () => {
+    assert.deepEqual(fenceOpener(`${F}xray-html height=320`), { mark: "`", len: 3, info: "xray-html height=320" });
+    assert.deepEqual(fenceOpener(`> ~~~~xray-card`), { mark: "~", len: 4, info: "xray-card" });
+    assert.deepEqual(fenceOpener(`1. ${F}xray-card`), { mark: "`", len: 3, info: "xray-card" });
+    assert.deepEqual(fenceOpener(`    ${F}xray-card`), { mark: "`", len: 3, info: "xray-card" });
+    assert.equal(fenceOpener("不是围栏"), null);
   });
 });
