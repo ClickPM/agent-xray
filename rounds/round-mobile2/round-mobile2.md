@@ -1,6 +1,6 @@
 # Round R-MOBILE-2 — 移动端 standalone 壳层修补:顶部空条 + 屏底 Tab Bar + 备案号搬进 About
 
-> 状态:进行中(`5c` / `5d` 已于 2026-09-10 并入 `design/`;A1 / A2 / B1 / B2 + `4r` 收口已实现,本机验收全过,独立审查中)
+> 状态:**已完成**(`5c` / `5d` 于 2026-09-10 并入 `design/`;A1 / A2 / B1 / B2 + `4r` 收口同日实现,验收 14 项全过,独立审查一轮零 findings 收口并合并 `main`,**待发版**)
 >
 > 触发:所有者 2026-09-10 在真机 **standalone(添加到主屏幕)**下报障四条 + 两张截图。
 > 分级方案与圈定:A1 / A2 / B1 / B2 全做,`GitHub ↗` 按画板 `4r` 收口;C1 / C2 不做(记 BACKLOG)。
@@ -74,12 +74,15 @@ standalone 与普通移动浏览器下,**一屏的顶部与底部不再有无主
 
 ## 代码审查
 
-<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」与 docs/review-workflow.md。 -->
-
-- 审查方式:<cursor-review.ps1(默认档)| -Kind adversarial | /code-review(写明降级原因)>
-- 审查器与模型:cursor CLI `cursor-grok-4.6-high`(本轮是切换执行器后的第一轮,耗时基线要回填)
-- findings 处理:<逐条:采纳整改 / 不采纳及理由>
-- 结论:<PASS | 整改后 PASS>
+- 审查方式:`powershell -File .claude\cursor-review.ps1 -Note "<本轮要点>"`(默认档,`-Scope branch` = `main...HEAD` 全量,后台跑)。未降级。
+- 审查器与模型:cursor CLI `cursor-grok-4.6-high`(**切换执行器后的第一轮**)。
+- **耗时基线(全量分支 diff)**:16:29:15 发起 → 16:36:50 落地 = **7 分 35 秒**,范围 1 个提交 / 13 文件 / 825 insertions。
+  `.err.log` 全程 **0 字节**(与 `docs/review-workflow.md` 第 2 节记的一致:`--output-format text` 下 cursor-agent 不写心跳,别拿它判死活)。
+- findings 处理:**0 条**,无整改,故不发复审(复审的触发条件是「有采纳整改的 findings」)。
+- 审查者另附了它核对过、判定不构成 finding 的四点,与本轮的三条硬约束对得上:规则 7(样式 diff 仅窄屏、桌面底栏结构与 main 一致,只多一个窄屏隐藏类)、
+  规则 8(没有返回顶部 / 页尾链接组 / 备案标题 / Notes·Skills 页尾备案 —— C2 在 BACKLOG)、本 diff 不含 `apps/api` 与 MCP / 密钥 / 运行时、
+  以及「移动首页不再显示备案号」是任务卡已认的风险而不是新逻辑错误。
+- 结论:**PASS**(一轮零 findings)。
 
 ## 失败处理
 
