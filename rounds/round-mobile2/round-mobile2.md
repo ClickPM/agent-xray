@@ -1,6 +1,6 @@
 # Round R-MOBILE-2 — 移动端 standalone 壳层修补:顶部空条 + 屏底 Tab Bar + 备案号搬进 About
 
-> 状态:进行中(文档就绪;`5c` / `5d` 设计稿由所有者交付中,A1 / A2 不依赖画板可先落地)
+> 状态:**已完成**(`5c` / `5d` 于 2026-09-10 并入 `design/`;A1 / A2 / B1 / B2 + `4r` 收口同日实现,验收 14 项全过,独立审查一轮零 findings 收口并合并 `main`,**待发版**)
 >
 > 触发:所有者 2026-09-10 在真机 **standalone(添加到主屏幕)**下报障四条 + 两张截图。
 > 分级方案与圈定:A1 / A2 / B1 / B2 全做,`GitHub ↗` 按画板 `4r` 收口;C1 / C2 不做(记 BACKLOG)。
@@ -74,12 +74,15 @@ standalone 与普通移动浏览器下,**一屏的顶部与底部不再有无主
 
 ## 代码审查
 
-<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」与 docs/review-workflow.md。 -->
-
-- 审查方式:<cursor-review.ps1(默认档)| -Kind adversarial | /code-review(写明降级原因)>
-- 审查器与模型:cursor CLI `cursor-grok-4.6-high`(本轮是切换执行器后的第一轮,耗时基线要回填)
-- findings 处理:<逐条:采纳整改 / 不采纳及理由>
-- 结论:<PASS | 整改后 PASS>
+- 审查方式:`powershell -File .claude\cursor-review.ps1 -Note "<本轮要点>"`(默认档,`-Scope branch` = `main...HEAD` 全量,后台跑)。未降级。
+- 审查器与模型:cursor CLI `cursor-grok-4.6-high`(**切换执行器后的第一轮**)。
+- **耗时基线(全量分支 diff)**:16:29:15 发起 → 16:36:50 落地 = **7 分 35 秒**,范围 1 个提交 / 13 文件 / 825 insertions。
+  `.err.log` 全程 **0 字节**(与 `docs/review-workflow.md` 第 2 节记的一致:`--output-format text` 下 cursor-agent 不写心跳,别拿它判死活)。
+- findings 处理:**0 条**,无整改,故不发复审(复审的触发条件是「有采纳整改的 findings」)。
+- 审查者另附了它核对过、判定不构成 finding 的四点,与本轮的三条硬约束对得上:规则 7(样式 diff 仅窄屏、桌面底栏结构与 main 一致,只多一个窄屏隐藏类)、
+  规则 8(没有返回顶部 / 页尾链接组 / 备案标题 / Notes·Skills 页尾备案 —— C2 在 BACKLOG)、本 diff 不含 `apps/api` 与 MCP / 密钥 / 运行时、
+  以及「移动首页不再显示备案号」是任务卡已认的风险而不是新逻辑错误。
+- 结论:**PASS**(一轮零 findings)。
 
 ## 失败处理
 
@@ -91,3 +94,55 @@ standalone 与普通移动浏览器下,**一屏的顶部与底部不再有无主
 
 - 报障复现的原始数字已记在上方「根因」表(生产 `6b6a4cb`,Browser pane `375×812`,`--safe-top` / `--safe-bottom` 注成 59 / 34 模拟 standalone)。
 - 已认的残余风险:**移动端首页(Runtime,自身不滚动)不再显示备案号**;备案抽查通常看首页底部。所有者 2026-09-10 认此风险(桌面底栏照旧、移动 About 里有),更稳的变体(C2)记 BACKLOG。
+
+### 拉稿(2026-09-10)
+
+`Agent X-Ray Mobile - Shell.dc.html` 是**纯新增文件**,直接落盘、无三方合并;既有九份一个字节没碰。
+四项判据:**53,144 字节** / `</x-dc>` 与 `</html>` 各 1 / `<div>` 开合 **196 : 196** / 画板 2 块 6 屏(`5c` ①②③、`5d` ①②③),另加验了无控制字符与 LF 行尾。
+`support.js` 本轮未重拉(前两次拉稿 md5 均一致,新增文件不依赖新的运行时特性),已在 `design/README.md` 注明。
+
+### 实现取舍(三处值得记)
+
+1. **「到顶不出条」用的是负外边距,不是不渲染、也不是 `fixed`**(`.m-pagebar-float`,只在 ≤768px 生效)。
+   条实高 = `44 + safe-top`,`margin-bottom: -44px` 只抵掉那 44,**剩下的 `safe-top` 正好成了内容顶部的安全区留白** ——
+   于是 `.m-page-wrap` 的顶部内边距一个字节没改,大标题靠 `.m-h1` 既有的 `margin-top:8` 落在「安全区下 8」(实测 top = 67 = 59 + 8)。
+   反面两条都试过在纸上:**整条不渲染**会让条出现的那一刻把内容推下 44,内容一动、「大标题滚出了没有」的判定跟着翻,来回抖;
+   **`fixed`** 要另找定位祖先(各页的滚动容器在 layout 那一层之下),等于新机制。
+2. **收起阈值按大标题的位置量,不按滚动了多少像素**:`title.getBoundingClientRect().bottom <= bar.getBoundingClientRect().bottom`。
+   画板 `5c` 的规则原文就是「功能条只在**大标题滚出后**出现」,阈值随字号 / 折行 / 安全区变,量元素比量常数稳(320 / 430 / 横屏都不用另配数)。
+   大标题靠**既有的 `.m-h1` 类**找(三个一级页共用,globals.css 里 34/700 那条规则就是按它写的);找不到时退回「条常驻」——
+   宁可多一条空条,也不能把条里的动作(Notes 的 RSS)永久藏掉。滚动监听沿用 `MobileTabBar` 的手法(document 捕获阶段 + rAF 合帧)。
+3. **条内 gap 在收起态取 0**:二级页三个位子之间留 4,而画板给的是「左内边距 6 + 8 的隔条」= 页名距屏边 **14**;
+   保留 gap 会变成 18(第一次实测就是 18,据此改的)。右位子在最右端,不受影响。
+
+### 与计划的偏离(两处,都是画板要求的补齐)
+
+- **About 页多了一个移动端专属的大标题「About」**(`m-h1 m-show-narrow`)。画板 `4r` / `5c` ① 都画着它,但桌面 `2e` 从头像行起、
+  首版 R-MOBILE 是纯 CSS 重排、变不出一个不存在的元素,所以移动 About 一直没有页标题 —— 没有大标题,「到顶不出条」就等于这一页没有标题。
+  只在窄屏渲染,桌面逐像素不变。
+- **移动端的简介是「同一份文本的两处呈现」**:桌面那段留在头像行里(加 `m-hide-narrow`),移动端在行外独立成段(`m-show-narrow`)。
+  画板 `4r` / `5c` 要求简介出头像行,而它嵌在头像行的中间列里、CSS 搬不出去。与 Notes 的 `RssModal` / `MobileRssSheet` 同一手法,桌面那份一个字节没动。
+
+### 验收实测(390×845,`--safe-top:59` / `--safe-bottom:34` 注入模拟 standalone;桌面 1280×800)
+
+| # | 结果 |
+|---|---|
+| 1 | `dev.ps1 check` 通过;`dev.ps1 test` **api 614/614 + web 149/149 全绿**;`apps/web` 里 `npx tsc --noEmit` 通过。**中途挂过一次**:`agent/source-tools.test.ts` 那条断言迁移 016 种子的用例回 `[]` —— 是 BACKLOG 里 2026-09-08 已记的**既有竞态**(多个测试文件 `DELETE FROM tool_config`,与本轮零关系:本轮 diff 不含 `apps/api` 任何文件)。判据:单跑该文件 9/9 过;`git stash` 掉本轮改动后整套也过;`stash pop` 后整套再跑仍过 |
+| 2 | 到顶三页均无条:`.m-pagebar` 高 103(= 44 + 59)但 `opacity:0` / `pointer-events:none`;大标题 top **67** = 59 + 8,34px / 700 |
+| 3 | 滚过大标题后 `opacity:1` / `pointer-events:auto`,条内标题 **17px / 600 / 左对齐 left = 14**;玻璃实测 `rgba(255,255,255,0.72)` + `blur(24px) saturate(1.8)`;内容从条下穿过 |
+| 4 | 二级页(`/skills/ppt-master`、`/notes/pi`)className 里**没有** `m-pagebar-float`、`margin-bottom: 0px`、`opacity:1`,条后第一个元素从 103 起 —— 与改前一致 |
+| 5 | Runtime(`/`)壳层几何未动:输入栏 704 → 762,Tab Bar 762 → 845 紧贴 |
+| 6 | Tab Bar `rect.bottom = 845.1` ≈ `innerHeight 845`;底栏 `display:none` |
+| 7 | 收起后 `transform: translateY(83)`(= 49 + 34,条整高)、`rect.top = 845.1 ≥ innerHeight` —— **屏底零残条**(改前是 `footerCovered = 26px`) |
+| 8 | About 页尾两行各 **44 高、整行 354.3 宽居中**、mono 11 `--text-dim`、`white-space:nowrap`、两行命中区相接(701.9 = 上行底 = 下行顶);ICP → `beian.miit.gov.cn`;公安 → `beian.mps.gov.cn/#/query/webSearch?code=<数字串>`;图标 natural 36×40、渲染 18×20、在号码左侧。末行底 745.9 + `.m-page-wrap` 底部内边距 99(= 49 + 34 + 16)= 844.9,与画板「↓16 → 内容区底」一致 |
+| 9 | 两个 env 都清空后重启 dev server:整块不渲染(页面最后一行是导流句),`beianLinks = 0` |
+| 10 | 1280×800:底栏仍是 26 高一行、两号并排(ICP 482.9→601.7、公安 615.7→797.1);About 头部仍是「头像 64 + 中列 + `GitHub ↗` 32 高」三段并排;`.m-pagebar` 与全部 7 个 `.m-show-narrow` 元素 `display:none` |
+| 11 | 移动 About:无 `GitHub ↗`;头像行 = 头像 64 + (@名 mono 15/600 + 「5 repositories」13px `--text-dim`)一行、`align-items:center`、行高 64;简介 15/1.75 独立成段 |
+| 12 | `5c` ①②③ / `5d` ①②③ 逐屏比对通过(截图留在会话里)。**唯一不同源的一处**:大标题文案实现里是「Notes · 研习笔记」而画板是「Notes」,是 R-MOBILE 首版的既有取舍,记 BACKLOG |
+| 13 | 390 / 320 / 430 三个宽度 × 四 Tab:`body.scrollWidth === innerWidth` 全部相等;320 下备案两行仍各 44 高(未折行) |
+| 14 | `docs/deploy-cn-lightweight.md` §1 第 6 步与上线检查单在开工前的文档轮里已按本轮口径写好,实现与之逐条一致,无需再改;`design/README.md`(文件表 + 增删记录 + 256 KiB 预警)、`CLAUDE.md`(规则 8 修订段 + 三处计数)、`ROUNDS.md`(功能边界计数 + 进度表 + 小节标题)已同步 |
+
+**本机验收的两件工具事**(下次省时间):① 开发库是空的,About / Notes / Skills 三页得先经**本机 MCP** 种内容才滚得起来
+(脚本走 `node` + `XRAY_MCP_TOKEN`,2026-07-28 协议除 `params._meta` 三键外还要 **`Mcp-Method` 与 `Mcp-Name` 两个请求头**,少了回 `-32020`);
+② 备案号靠 `apps/web/.env.local`(gitignored)注两个假号,**删掉后必须重启 dev server**才生效 —— Next 不认 `.env.local` 的删除。
+③ Browser pane 被隐藏时 `requestAnimationFrame` 与 scroll 事件都不发,滚动态量出来永远是旧值;截图会强制走一帧,**先截图再量**。

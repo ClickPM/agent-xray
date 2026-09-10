@@ -52,7 +52,9 @@ powershell -File .claude\cursor-review.ps1 -Wait
 - 轮询 `.out.md` 非空,或 `tasklist /FI "PID eq <pid>"`(脚本打印的 pid 是 `cmd` 壳,真正干活的是它的 node 子进程);
   **Git Bash 里先 `export MSYS_NO_PATHCONV=1`**,否则 `/FI` 被当路径改写、永远报「进程已死」。
 - **耗时基线**(同一台机,待逐轮补):`HEAD~1..HEAD` 单文件 diff = **5 分钟**(2026-09-10 首次冒烟,给出 1 条 P2,
-  格式与任务书要求一致)。全量分支 diff 的基线等 R-MOBILE-2 第一轮回填。
+  格式与任务书要求一致);**全量分支 diff(`main...HEAD`,1 个提交 / 13 文件 / 825 insertions)= 7 分 35 秒**
+  (2026-09-10 R-MOBILE-2 第一轮,零 findings,结果一次性落地、`.err.log` 全程 0 字节)。
+  对比 codex 那边「百文件分支单轮 20 分钟上下」的旧基线:同为全量档,这一轮的 diff 小一个量级,别拿这两个数直接比。
 - findings 逐条处理后回填任务卡「代码审查」段(采纳整改 / 不采纳及理由),`.out.md` 本体不入库,
   任务卡里记结论与条数。
 

@@ -18,6 +18,15 @@
 // 一行放不下(≲320px 的手机)时才折行、底栏随之变高——比把号码截掉好,
 // 备案号**必须可见**(docs/deploy-cn-lightweight.md 的部署约束)。
 //
+// 【2026-09-10(R-MOBILE-2):移动端这条底栏不再渲染,两个号搬进 About 页尾】
+// 所有者在真机 standalone 下报障三条,根因都是这条 26px 底栏参与了移动端布局:
+// 它占着屏底,Tab Bar 于是贴的是「内容区的底」而不是屏底(Tab Bar 自己那段
+// 安全区留白没落在 Home Indicator 上,屏底多一条白带),随滚动收起时又只滑出
+// 自身高度、剩 26 的残条压在底栏上(画板 5d ②:位移量必须等于条整高)。
+// 裁定是「移动端屏底从此只有 Tab Bar」(画板 5d ①),号码改挂 About 页尾(5d ③)。
+// 桌面底栏一个像素不动。备案号在移动端仍然可见可点 —— 只是位置换了,
+// 判据见 docs/deploy-cn-lightweight.md「上线检查单」。
+//
 // 只在 Server Component 里读,所以不加 NEXT_PUBLIC_ 前缀:那个前缀意味着构建期
 // 内联,而备案号要到部署时才有(与 lib/site.ts 的 SITE_ORIGIN 同理)。
 //
@@ -40,40 +49,100 @@ const MPS = "https://beian.mps.gov.cn/#/query/webSearch";
 /** 公安备案编号图标(备案系统下载的原文件,36×40;这里按 18×20 显示 = 正好半尺寸,不变形)。 */
 const MPS_ICON = "/beian-mps.png";
 
-export async function SiteFooter() {
+/**
+ * 两个备案号的运行期读取与链接口径,**桌面底栏与移动 About 页尾共用这一处**
+ * (R-MOBILE-2 拆出来的:两处各读一遍 env、各拼一次公安查询链接,迟早会分叉,
+ * 而分叉出来的那一处不合规是看不出来的)。都没配就回 null,整块不渲染。
+ */
+async function readBeian(): Promise<{ icp?: string; mps?: string; mpsHref: string } | null> {
   await connection();
   const icp = process.env.ICP_BEIAN?.trim();
   const mps = process.env.MPS_BEIAN?.trim();
   if (!icp && !mps) return null;
-
   // 号码里的数字串就是查询用的 code(「苏公网安备32011402012723号」→ 32011402012723)。
   // 万一填成了取不到数字的东西,退到查询页首页:链接必须在,让访客自己搜也比没链接好。
   const code = mps?.match(/\d{6,}/)?.[0];
+  return { icp, mps, mpsHref: code ? `${MPS}?code=${code}` : MPS };
+}
+
+/** 公安备案编号图标 + 号码。图标必须在号码左边(备案系统的格式要求);
+ *  alt 留空 —— 号码就在它右边,图标是装饰。 */
+function MpsNumber({ mps }: { mps: string }) {
+  return (
+    <>
+      <img src={MPS_ICON} alt="" width={18} height={20} style={{ display: "block", flex: "none" }} />
+      {mps}
+    </>
+  );
+}
+
+export async function SiteFooter() {
+  const beian = await readBeian();
+  if (!beian) return null;
   const link = { ...mono(11), color: "var(--text-dim)", textDecoration: "none" };
 
   return (
     <div
+      // R-MOBILE-2:≤768px 整条不渲染(两个号在 About 页尾),屏底从此只有 Tab Bar
+      className="m-hide-narrow"
       style={{
         flex: "none", minHeight: 26, display: "flex", alignItems: "center", justifyContent: "center",
         flexWrap: "wrap", columnGap: 14, rowGap: 2, padding: "0 10px",
         borderTop: "1px solid var(--border)", background: "var(--bg)", boxSizing: "border-box",
       }}
     >
-      {icp ? (
+      {beian.icp ? (
         <a href={MIIT} target="_blank" rel="noreferrer" style={link}>
-          {icp}
+          {beian.icp}
         </a>
       ) : null}
-      {mps ? (
+      {beian.mps ? (
         <a
-          href={code ? `${MPS}?code=${code}` : MPS}
+          href={beian.mpsHref}
           target="_blank"
           rel="noreferrer"
           style={{ ...link, display: "flex", alignItems: "center", gap: 5 }}
         >
-          {/* 图标必须在号码左边(备案系统的格式要求);alt 留空 —— 号码就在它右边,图标是装饰 */}
-          <img src={MPS_ICON} alt="" width={18} height={20} style={{ display: "block" }} />
-          {mps}
+          <MpsNumber mps={beian.mps} />
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 移动端的备案两号(画板 5d ③):About 页尾,**两个号各占一行、整行居中、整行可点**。
+ *
+ * 【为什么不是并排一行】390 宽减去左右 16 只剩 358,两个号并排(mono 11 约 152 + 198
+ * 加图标 18 与间距)要 380 以上 —— 必然折行或被截断,而备案号折了读不出来、
+ * 截了不合规(画板 5d 裁定)。桌面仍是并排一行,不动。
+ *
+ * 【它是页尾小字,不是分组卡】不加 r16 卡、不加分隔线、不加「备案信息」这类标题
+ * (画板 5d ③);命中区靠 44 的行高,两行相接。
+ *
+ * 间距按画板:导流句 ↓24 →(44)→(44)→ ↓16 → 内容区底;末尾那 16 与
+ * 「内容区底已为 Tab Bar 留 49 + 安全区」都由 `.m-page-wrap` 的底部内边距给。
+ */
+export async function MobileBeianRows() {
+  const beian = await readBeian();
+  if (!beian) return null;
+  const row = {
+    ...mono(11), color: "var(--text-dim)", textDecoration: "none",
+    minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center",
+    // 备案号**不许**被省略号吃掉(画板 5d:不用 ellipsis),只允许不换行
+    whiteSpace: "nowrap" as const,
+  };
+
+  return (
+    <div className="m-show-narrow" style={{ flexDirection: "column", marginTop: 24 }}>
+      {beian.icp ? (
+        <a href={MIIT} target="_blank" rel="noreferrer" style={row}>
+          {beian.icp}
+        </a>
+      ) : null}
+      {beian.mps ? (
+        <a href={beian.mpsHref} target="_blank" rel="noreferrer" style={{ ...row, gap: 6 }}>
+          <MpsNumber mps={beian.mps} />
         </a>
       ) : null}
     </div>

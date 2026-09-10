@@ -17,6 +17,7 @@ import { requireVisibleTab } from "@/lib/tabs-server";
 import { mono } from "@/lib/styles";
 import { MobilePageBar } from "@/components/mobile/MobilePageBar";
 import { MobileThemeRow } from "@/components/mobile/MobileThemeRow";
+import { MobileBeianRows } from "@/components/SiteFooter";
 
 // 内容随 MCP 写入变化,且 docker build 时后端不可达 —— 不允许构建期预渲染。
 export const dynamic = "force-dynamic";
@@ -62,8 +63,13 @@ export default async function AboutPage() {
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "40px 32px 64px" }} className="m-page-wrap">
-        {/* R-MOBILE(画板 4r):About 是一级页,功能条两侧都空 */}
-        <MobilePageBar />
+        {/* R-MOBILE(画板 4r):About 是一级页,功能条两侧都空。
+            R-MOBILE-2(画板 5c①②):到顶不出条,滚过大标题后条里是 17/600 的「About」。 */}
+        <MobilePageBar collapseTitle="About" />
+        {/* R-MOBILE-2(画板 4r / 5c①):移动端的 iOS 大标题。桌面 About 没有页标题
+            (画板 2e 就是从头像行起),所以这一块**只在窄屏渲染** —— 桌面逐像素不变。
+            `.m-h1` 是三个一级页共用的大标题类,收起判定也按它找(MobilePageBar)。 */}
+        <div className="m-h1 m-show-narrow">About</div>
         {/* 头部 — 仅 GitHub 公开信息,无姓名/公司/经历。
             三项任一有值就渲染:about_set 的每个字段都可省略,只配了 originUrl 的
             库行是合法状态,漏掉它会让那条链接**永远不出现**(codex 第 1 轮 P2)。 */}
@@ -86,12 +92,21 @@ export default async function AboutPage() {
                   @{about.githubUser}
                 </a>
               )}
-              <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, marginTop: 6, maxWidth: 560 }}>
+              {/* 移动端(画板 4r / 5c):@名 下面是 repo 数,与头像并成一行 */}
+              {gh && about.repos.length > 0 && (
+                <div className="m-show-narrow" style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>
+                  {about.repos.length} repositories
+                </div>
+              )}
+              {/* 桌面这一段留在头像行里(画板 2e);移动端的简介是行外独立的一段,见下面那块 */}
+              <div className="m-hide-narrow" style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, marginTop: 6, maxWidth: 560 }}>
                 {about.intro}
               </div>
             </div>
+            {/* 移动端不渲染这枚按钮(所有者裁定 2026-09-10,按画板 4r):@名 本身就是同一个链接,
+                358 宽里再挂一枚 ghost 按钮只会把头像行挤成三段。桌面照旧。 */}
             {gh && (
-              <a href={gh} target="_blank" rel="noreferrer" style={ghostLink}>
+              <a href={gh} target="_blank" rel="noreferrer" className="m-hide-narrow" style={ghostLink}>
                 GitHub ↗
               </a>
             )}
@@ -100,6 +115,17 @@ export default async function AboutPage() {
                 origin ↗
               </a>
             )}
+          </div>
+        )}
+        {/* 移动端的简介:画板 4r / 5c 里它是头像行之外独立的一段(15/1.75)。
+            与上面那一段是**同一份文本的两处呈现**,各带断点类,永不同时出现 ——
+            与 Notes 的 RssModal / MobileRssSheet 同一手法(桌面那份一个字节没动)。 */}
+        {about.intro && (
+          <div
+            className="m-show-narrow"
+            style={{ fontSize: 15, lineHeight: 1.75, color: "var(--text-muted)", marginTop: 20 }}
+          >
+            {about.intro}
           </div>
         )}
 
@@ -194,6 +220,10 @@ export default async function AboutPage() {
           <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 20 }}>
             教程库全部内容开源并提供 RSS 订阅 → <Link href="/notes" style={{ color: "var(--accent)" }}>Notes</Link>
           </div>
+          {/* R-MOBILE-2(画板 5d ③):移动端的备案两号挂在这里 —— 屏底让给 Tab Bar。
+              组件自带 `m-show-narrow`,桌面不渲染(桌面仍是 SiteFooter 那条底栏);
+              两个 env 都没配时整块不出现。 */}
+          <MobileBeianRows />
         </div>
       </div>
     </div>

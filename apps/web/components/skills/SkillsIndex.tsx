@@ -45,8 +45,10 @@ export function SkillsIndex({
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 32px 64px" }} className="m-page-wrap">
         {/* R-MOBILE(画板 4o):Skills 首页既无返回也无 RSS,功能条两侧都空 ——
-            但仍然保留,它承载大标题的收起态。 */}
-        <MobilePageBar />
+            条本身承载的就是大标题的收起态。
+            R-MOBILE-2(画板 5c):到顶时整条不出现(两侧都空的条到顶就是一条白边),
+            滚过大标题后淡入,条里只有左对齐的 17/600「Skills」。 */}
+        <MobilePageBar collapseTitle="Skills" />
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 650 }} className="m-h1">Skills · 技能库</div>

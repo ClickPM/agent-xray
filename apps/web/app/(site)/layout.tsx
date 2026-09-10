@@ -21,16 +21,21 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           Notes 章节页的 `flex:1 minHeight:0 overflow:auto` 等)拿到的仍是同一份约束,
           桌面渲染逐像素不变(规则 7 要求的「写明理由与影响范围」即此)。
 
-          【为什么 Tab Bar 不能直接 absolute 到最外层】最外层底部还有 SiteFooter
-          (生产环境的 ICP 与公安联网备案号)。Tab Bar 贴最外层 bottom:0 会把备案号盖住,
-          而备案号**必须可见**(docs/deploy-cn-lightweight.md 的部署约束)。
-          套这一层之后:Tab Bar 贴的是「内容区」的底,备案条在它下面,两者都在。 */}
+          【这一层为什么还留着】首版套它是为了「Tab Bar 别盖住底栏的备案号」。
+          R-MOBILE-2 起那条理由在移动端已经不成立:`SiteFooter` 带 `m-hide-narrow`,
+          ≤768px 整条不渲染(两个号搬去了 About 页尾),内容区因此自然长到屏底 ——
+          Tab Bar 贴的「内容区底」就是真正的屏底(画板 5d ①),收起时 `translateY(100%)`
+          也就整条出屏、不再剩那条 26 高的残条(5d ②)。
+          **桌面仍有底栏**,而 Tab Bar 在桌面 `display:none`,所以这一层保留:
+          它现在的职责只是「给 Tab Bar 一个定位祖先」,拆掉等于让 Tab Bar 去找
+          更外层那个还含底栏的容器,又会退回老问题。 */}
       <div style={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>
         {children}
         {/* 只在 ≤768px 出现(自身带 m-show-narrow);桌面 display:none,不占位、不参与布局 */}
         <MobileTabBar visible={visible} />
       </div>
-      {/* 备案号占位(R8):ICP_BEIAN / MPS_BEIAN 都未配置时整块不渲染 —— 开发与预发下版式与画板一致 */}
+      {/* 备案号占位(R8):ICP_BEIAN / MPS_BEIAN 都未配置时整块不渲染 —— 开发与预发下版式与画板一致。
+          R-MOBILE-2:它自带 `m-hide-narrow`,≤768px 不渲染;移动端的两号在 About 页尾 */}
       <SiteFooter />
       {/* pageview 打点(R8):渲染 null,不参与布局 */}
       <Beacon />
