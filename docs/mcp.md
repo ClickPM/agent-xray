@@ -144,130 +144,191 @@
 
 ## 6. 工具详细说明与参数契约
 
+> **口径**：本节逐条对照 `apps/api/mcp/tools.ts` 的 Zod `inputSchema` 与回执对象写成。
+> 标「可选」的字段一律是「省略 = 保留库内原值 / 不参与本次写入」；标「默认 X」的字段省略时按 X 落库。
+> 返回值给的是工具回执 JSON 的键名（工具统一把对象序列化成一段文本），时间戳一律是 ISO 8601 字符串。
+
 ### 6.1 Notes 研习库管理（13 个）
 
 > **设计准则**：入参即标准 Markdown，服务端不改写正文，只自动派生 `word_count` 与 `content_hash`。
+> **命名口径**：分类与系列的展示名字段是 `name`（不是 `title`），只有章节才有 `title` / `summary`；系列没有 `badge` 这个字段。
 
 1. **`notes_categories_list`**（只读）：列出全部文章分类。
-   - 入参：无
-   - 返回：分类列表（含 `id`, `slug`, `title`, `dot`, `sortOrder`, `seriesCount`）。
-2. **`notes_category_upsert`**（写）：新增或更新分类。
-   - 入参：`slug`（`^[a-z0-9][a-z0-9-]{0,63}$`）、`title`、`description`（可选）、`dot`（6位十六进制 `#RRGGBB`）、`sortOrder`（默认 0）。
+   - 入参：无。
+   - 返回：分类数组（`slug`, `name`, `dot`, `sortOrder`, `seriesCount`）。
+2. **`notes_category_upsert`**（写）：按 slug 新增或更新分类。
+   - 入参：`slug`（`^[a-z0-9][a-z0-9-]{0,63}$`）、`name`（1–64 字符）、`dot`（`#RRGGBB` 六位十六进制）、`sortOrder`（整数 0–9999，默认 0）。
+   - 返回：`{ slug, status: "saved" }`。
 3. **`notes_category_delete`**（写）：删除空分类。
-   - 入参：`slug`。若分类下仍有系列会拒绝删除。
-4. **`notes_series_list`**（只读）：列出系列列表。
-   - 入参：`categorySlug`（可选）。
-   - 返回：系列列表（含 `chapterCount`, `totalWords` 等）。
-5. **`notes_series_upsert`**（写）：新增或更新系列。
-   - 入参：`categorySlug`, `slug`, `title`, `summary`（可选）, `badge`（可选）, `sortOrder`。
-6. **`notes_series_delete`**（写）：删除空系列。
-   - 入参：`categorySlug`, `slug`。若系列下仍有章节会拒绝删除。
-7. **`notes_chapters_list`**（只读）：列出系列下的章节目录（不含长正文）。
+   - 入参：`slug`。分类下仍有系列时拒绝删除。
+   - 返回：`{ slug, status: "deleted" }`。
+4. **`notes_series_list`**（只读）：列出系列。
+   - 入参：`categorySlug`（可选，按分类过滤）。
+   - 返回：系列数组（`slug`, `categorySlug`, `name`, `description`, `sortOrder`, `chapterCount`, `assetCount`）。
+5. **`notes_series_upsert`**（写）：按 slug 新增或更新系列。
+   - 入参：`slug`、`categorySlug`、`name`（1–128 字符）、`description`（≤512 字符，默认 `""`）、`sortOrder`（整数 0–9999，默认 0）。
+   - 注意：`slug` 同时是 URL 片段 `/notes/<slug>`，建后不要再改。
+   - 返回：`{ slug, status: "saved" }`。
+6. **`notes_series_delete`**（写）：删除系列。
+   - 入参：`slug`、`cascade`（布尔，默认 `false`）。系列下仍有章节或附件时必须显式 `cascade: true` —— 它们会被一并删除，不可恢复。
+   - 返回：`{ slug, status: "deleted" }`。
+7. **`notes_chapters_list`**（只读）：列出系列下的章节目录（不含长正文），按 `ordinal` 排序。
    - 入参：`seriesSlug`。
-8. **`notes_chapter_get`**（只读）：读取单篇章节完整信息（含 Markdown 正文与哈希）。
-   - 入参：`seriesSlug`, `slug`。
+   - 返回：章节数组（`seriesSlug`, `slug`, `ordinal`, `label`, `pinned`, `title`, `summary`, `wordCount`, `sourceUrl`, `publishedAt`（ISO 或 `null`）, `updatedAt`（ISO））。
+8. **`notes_chapter_get`**（只读）：读取单篇章节完整信息（含 Markdown 正文）。
+   - 入参：`seriesSlug`、`slug`。
+   - 返回：与 `notes_chapters_list` 同样的字段，另加 `contentMd`。**不回内容哈希**（哈希只在服务端内部用于幂等判断）。
 9. **`notes_chapter_upsert`**（写）：新增或更新章节正文。
-   - 入参：`seriesSlug`, `slug`, `title`, `order`, `content`（完整 Markdown 文本）。
-   - 行为：自动重新计算字数与 SHA-256 内容哈希；若内容无变化则不更新时间戳。
-10. **`notes_chapter_delete`**（写）：删除指定章节。
-    - 入参：`seriesSlug`, `slug`。
-11. **`notes_assets_list`**（只读）：列出系列下的正文图片资源。
-    - 入参：`seriesSlug`。
-12. **`notes_asset_put`**（写）：上传系列配图。
-    - 入参：`seriesSlug`, `fileName`（仅小写哈希文件名如 `abc.webp`）, `contentType`（仅支持 webp/png/jpg/gif）, `base64Data`。
-    - 防御：文件最大 4 MiB，强制做魔数与格式一致性校验，不接受 SVG。
-13. **`notes_asset_delete`**（写）：删除指定正文配图。
-    - 入参：`seriesSlug`, `fileName`。
+   - 入参：`seriesSlug`、`slug`、`ordinal`（整数 0–9999）、`label`（1–32 字符，章节表左列文本：README / 01 / 02 …）、`pinned`（布尔，默认 `false`，置顶行不计入章节数）、`title`（1–256 字符）、`summary`（≤512 字符，默认 `""`）、`contentMd`（1–1048576 字符，标准 GFM Markdown）、`sourceUrl`（URL，≤1024 字符，可为 `null`，默认 `null`）、`publishedAt`（可解析的 ISO 8601 时间，可为 `null`，默认 `null`）。
+   - 行为：自动重算字数与 SHA-256 内容哈希；内容与库内完全一致时整行不动（不刷新 `updatedAt`，RSS 不会假装有更新）。正文里的配图用 `/notes/<seriesSlug>/<文件名>` 引用，文件先经 `notes_asset_put` 上传。
+   - 返回：`{ seriesSlug, slug, status: "created" | "updated" | "unchanged", wordCount, url }`。
+10. **`notes_chapter_delete`**（写）：删除指定章节，不可恢复。
+    - 入参：`seriesSlug`、`slug`。
+    - 返回：`{ seriesSlug, slug, status: "deleted" }`。
+11. **`notes_assets_list`**（只读）：列出正文图片资源的元信息（不含二进制）。
+    - 入参：`seriesSlug`（**可选**，按系列过滤；省略 = 列出全部）。
+    - 返回：附件数组（`seriesSlug`, `name`, `contentType`, `byteSize`, `etag`, `url`, `updatedAt`）。
+12. **`notes_asset_put`**（写）：上传系列配图，同名重传即覆盖。
+    - 入参：`seriesSlug`、`name`（**全小写**、不含路径分隔符的文件名 `^[a-z0-9][a-z0-9._-]{0,95}$`，形如 `<内容哈希>.webp`）、`contentType`（闭集：`image/webp` / `image/png` / `image/jpeg` / `image/gif`）、`dataBase64`（标准 base64）。
+    - 防御：单图 ≤ 4 MiB；扩展名必须与 `contentType` 自洽；base64 严格解码（掺杂非法字符即拒）；文件二进制魔数必须与 `contentType` 匹配；**不接受 SVG**。
+    - 返回：`{ created, byteSize, etag, url }`（`url` = `/notes/<seriesSlug>/<name>`）。
+13. **`notes_asset_delete`**（写）：删除指定正文配图（不检查是否仍被正文引用，删错了会变破图）。
+    - 入参：`seriesSlug`、`name`。
+    - 返回：`{ seriesSlug, name, status: "deleted" }`。
 
 ---
 
 ### 6.2 About 关于页内容管理（2 个）
 
 1. **`about_get`**（只读）：获取 About 页面完整配置。
-   - 返回：`intro`, `narrative`, `openSource`, `languages`, `techStack`, `milestones`。
+   - 入参：无。
+   - 返回：`githubUser`, `originUrl`, `intro`, `buildPoints`（字符串数组）, `repos`（每项 `name` / `lang` / `dot` / `stars` / `desc` / `pushed`）, `langBar`（每项 `name` / `pct` / `color`）, `updatedAt`（ISO；从未设置过为 `null`）。
 2. **`about_set`**（写）：更新 About 页面内容（**部分更新语义**）。
-   - 入参：各字段均为可选（省略保留原值，显式传 `""` 或 `[]` 表示清空）。
+   - 入参（**全部可选**；省略保留原值，显式传 `""` 或 `[]` 表示清空）：
+     - `githubUser`：合法 GitHub 用户名或 `""`（`""` = 不渲染头部）。
+     - `originUrl`：≤512 字符，带主机名的 http(s) 绝对地址或 `""`。
+     - `intro`：≤1024 字符。
+     - `buildPoints`：≤32 条，每条 ≤256 字符。
+     - `repos`：≤24 项；每项 `name`（合法 GitHub 仓库名）/ `lang`（≤32，默认 `""`）/ `dot`（`#RRGGBB`）/ `stars`（整数 0–1000000，默认 0）/ `desc`（≤512，默认 `""`）/ `pushed`（≤32，默认 `""`）。
+     - `langBar`：≤12 项；每项 `name`（1–32）/ `pct`（0–100）/ `color`（`#RRGGBB`）。
+   - 返回：`{ status: "saved", updated: [本次带上的字段名] }`。
 
 ---
 
 ### 6.3 Traffic 访问统计（3 个，只读）
 
-> **口径提示**：数据源自 `/t` 匿名打点，访客标识按天轮换。`visitorDays` 为各日 UV 之和（非全局去重人数）。
+> **口径提示**：数据源自 `/t` 匿名打点，访客标识按天轮换。`visitorDays` 为各日 UV 之和（非全局去重人数）。日期按站点时区计算。
 
-1. **`traffic_overview`**：获取近 N 天站点 PV、日均访问量及趋势。
-   - 入参：`days`（1–90，默认 30）。
+1. **`traffic_overview`**：获取近 N 天站点 PV、各日 UV 之和及逐日趋势。
+   - 入参：`days`（整数 1–365，默认 30；含今天在内的天数）。
+   - 返回：`{ timezone, from, to, pageviews, visitorDays, daily: [{ day, pv, uv }] }`；没有访问的日子不会出现在 `daily` 里。
 2. **`traffic_paths`**：获取热门访问路径排行。
-   - 入参：`days`（默认 30）、`limit`（默认 20）。
+   - 入参：`days`（整数 1–365，默认 30）、`limit`（整数 1–200，默认 20）。
+   - 返回：`[{ key, pv, visitorDays }]`，按 PV 倒序；`key` 是**归一后**的站内路径，`/*` 是归一不出来的那些的常量桶。
 3. **`traffic_agents`**：获取访问端 UA / Agent 分布统计。
-   - 入参：`days`（默认 30）、`limit`（默认 20）。
+   - 入参：`days`（整数 1–365，默认 30）。**没有 `limit`**（UA 摘要本身是闭集，全量返回）。
+   - 返回：`[{ key, pv, visitorDays }]`，`key` 是 `<浏览器族>/<平台族>` 摘要（如 `Chrome/Windows`）；原始 User-Agent 从不落库。
 
 ---
 
 ### 6.4 模型与外呼 Provider 配置（12 个）
 
-> **安全准则**：Key 加密入库，所有列表/读取接口只输出掩码；更新为部分更新语义。
+> **安全准则**：Key 加密入库，所有列表/读取接口只输出掩码（`sk-…abcd`）；三个 `*_upsert` 一律是**部分更新**（省略即保留），第一个配好的 provider 自动成为默认。
+> **设为默认的开关是 `makeDefault`（布尔，默认 `false`），不是 `isDefault`** —— `isDefault` 只出现在**回执与列表**里。
+> 三个 `*_upsert` 的回执都是 `{ provider, status: "created" | "updated", apiKeyHint, isDefault }`；三个 `*_set_default` 都是 `{ provider, status: "default" }`；三个 `*_delete` 都是 `{ provider, status: "deleted", warning? }`（`warning` 只在删完已无默认时出现）。三组的 `provider` 入参在 `set_default` / `delete` 上都是 1–64 字符的自由字符串。
 
 #### LLM Provider（对话大模型）
-1. **`llm_providers_list`**：列出已配置的 LLM 模型服务商（Key 仅回掩码）。
-2. **`llm_provider_upsert`**：配置或更新 LLM 服务商。
-   - 入参：`provider` (如 `deepseek`), `apiKey` (可选更新), `baseUrl`, `modelId`, `isDefault` (布尔)。
-3. **`llm_set_default`**：将指定 provider 设为默认对话模型。
+1. **`llm_providers_list`**（只读）：列出已配置的 LLM 模型服务商（Key 仅回掩码）。
+   - 入参：无。
+   - 返回：`[{ provider, baseUrl, apiKeyHint, modelId, hasCustomModels, isDefault, dailyTokenLimit, dailyCostLimitCents, maxTurnsPerSession, updatedAt }]`。
+2. **`llm_provider_upsert`**（写）：配置或更新 LLM 服务商。
+   - 入参：`provider`（**必填**，pi-ai 的 provider id，`^[a-z0-9][a-z0-9._-]{0,63}$`，如 `deepseek`）、`apiKey`（可选，8–512 字符明文，加密入库）、`baseUrl`（可选，URL，≤512 字符；传 `null` = 清空回 provider 默认）、`modelId`（可选，1–128）、`models`（可选，≤64 项的对象数组；传 `null` = 清空）、`makeDefault`（布尔，默认 `false`）、`dailyTokenLimit` / `dailyCostLimitCents` / `maxTurnsPerSession`（可选，非负整数，0 = 不限）。
+   - 首次配置必须给出 `apiKey` 与 `modelId`；配置改动在**下一轮**生效（既有会话按配置指纹重建）。
+3. **`llm_set_default`**（写）：将指定 provider 设为默认对话模型。
    - 入参：`provider`。
-4. **`llm_provider_delete`**：删除指定的 provider（默认 provider 不允许直接删除）。
+4. **`llm_provider_delete`**（写）：删除指定 provider。
+   - 入参：`provider`。**默认 provider 也能删**（拦住就没法删最后一个）；删完已无默认时回执带 `warning: "已无默认 provider，agent 对话将被拒绝"`。
 
 #### WebSearch Provider（联网搜索外呼）
-5. **`websearch_providers_list`**：列出搜索服务商（带掩码与白名单状态）。
-6. **`websearch_provider_upsert`**：配置或更新联网搜索服务商。
-   - 入参：`provider`, `apiKey`, `baseUrl`, `modelId`, `dailySearchLimit` (0 为不限), `toolType` (可选), `totalTimeoutMs` / `idleTimeoutMs` (可选), `makeDefault`。
-   - `toolType` 是闭集（zod 与迁移 015 的库级 CHECK 同步），**同时唯一决定线协议**（R-GSEARCH，2026-09-07）：
-     - `web_search`（默认）/ `web_search_YYYY_MM_DD`：OpenAI 系 Responses API 内置搜索，`POST {baseUrl}/v1/responses`（DeepSeek 与自建网关同一套）。
+5. **`websearch_providers_list`**（只读）：列出搜索服务商（带掩码与白名单）。
+   - 入参：无。
+   - 返回：`{ allowedHosts: [...], providers: [{ provider, baseUrl, apiKeyHint, modelId, toolType, totalTimeoutMs, idleTimeoutMs, dailySearchLimit, isDefault, updatedAt }] }`。
+6. **`websearch_provider_upsert`**（写）：配置或更新联网搜索服务商。
+   - 入参：`provider`（**必填**，自取标签，`^[a-z0-9][a-z0-9._-]{0,63}$`）、`apiKey`（可选，8–512）、`baseUrl`（可选，≤512，须过白名单校验）、`modelId`（可选，1–128）、`toolType`（可选，见下）、`totalTimeoutMs`（可选，10000–300000，默认 180000）、`idleTimeoutMs`（可选，5000–120000，默认 45000；不得大于 `totalTimeoutMs`）、`dailySearchLimit`（可选，非负整数，默认 0 = 不限）、`makeDefault`（布尔，默认 `false`）。
+   - `toolType` 是闭集（zod 正则与迁移 015 的库级 CHECK 同步），**同时唯一决定线协议**（R-GSEARCH，2026-09-07）：
+     - `web_search`（库默认）/ `web_search_YYYY_MM_DD`：OpenAI 系 Responses API 内置搜索，`POST {baseUrl}/v1/responses`（DeepSeek 与自建网关同一套）。
      - `google_search`：Gemini 原生 Google Search grounding，`POST {baseUrl}/v1/chat/completions` + `tools:[{google_search:{}}]`；配合网关上 `owned_by=antigravity` 的 `gemini-*` 模型（如 `gemini-3.8-flash-high` / `gemini-pro-agent`）。其它 `toolType` 与 gemini 模型的组合不报错但拿不到联网结果，见 `docs/security.md` §1 R-GSEARCH 补记。
-   - 防护：`baseUrl` 的域名必须在 `apps/api/shared/websearch-hosts.ts` 白名单或环境变量追加列表内。
-7. **`websearch_set_default`**：设置默认搜索服务商。
-8. **`websearch_provider_delete`**：删除搜索服务商。
+   - 防护：`baseUrl` 的 host 必须在 `apps/api/shared/websearch-hosts.ts` 白名单（或环境变量追加列表）内，且必须是 https、不带 query/fragment、不内嵌凭据。
+   - 首次配置必须给出 `apiKey`、`baseUrl` 与 `modelId`；配好之后还要 `tool_config_set{name:"web_search", enabled:true}` 才会真正注册（种子行默认是关的）。
+7. **`websearch_set_default`**（写）：设置默认搜索服务商。
+   - 入参：`provider`。
+8. **`websearch_provider_delete`**（写）：删除搜索服务商。
+   - 入参：`provider`。删掉默认的那个之后 `web_search` 工具**下一轮起不再注册**，`tool_config` 里的开关不会被动。
 
 #### ImageGen Provider（生图外呼）
-9. **`imagegen_providers_list`**：列出生图服务商。
-10. **`imagegen_provider_upsert`**：配置或更新生图服务商。
-    - 入参：`provider`, `apiKey`, `baseUrl`, `modelId`, `apiStyle` (`images` 或 `chat`), `imageSize` (如 `1024x1024`), `dailyImageLimit`。
-    - 防护：`baseUrl` 必须在 `apps/api/shared/imagegen-hosts.ts` 独立白名单内。
-11. **`imagegen_set_default`**：设置默认生图服务商。
-12. **`imagegen_provider_delete`**：删除生图服务商。
+9. **`imagegen_providers_list`**（只读）：列出生图服务商。
+   - 入参：无。
+   - 返回：`{ allowedHosts: [...], providers: [{ provider, baseUrl, apiKeyHint, modelId, apiStyle, imageSize, totalTimeoutMs, idleTimeoutMs, dailyImageLimit, isDefault, updatedAt }] }`。
+10. **`imagegen_provider_upsert`**（写）：配置或更新生图服务商。
+    - 入参：`provider`（**必填**，`^[a-z0-9][a-z0-9._-]{0,63}$`）、`apiKey`（可选，8–512）、`baseUrl`（可选，≤512，须过生图白名单）、`modelId`（可选，1–128）、`apiStyle`（可选，`images` / `chat`，库默认 `images`）、`imageSize`（可选，`auto` 或 `1024x1024` 这类 `^(auto|[0-9]{3,4}x[0-9]{3,4})$`；传 `null` = 不发、用上游默认；`chat` 形态忽略）、`totalTimeoutMs`（可选，10000–300000，默认 180000）、`idleTimeoutMs`（可选，5000–120000，默认 30000；不得大于 `totalTimeoutMs`）、`dailyImageLimit`（可选，非负整数，默认 0 = 不限）、`makeDefault`（布尔，默认 `false`）。
+    - 防护：`baseUrl` 必须在 `apps/api/shared/imagegen-hosts.ts` 独立白名单内（与搜索白名单是两份），同样要求 https、无 query/fragment、不内嵌凭据。
+    - 首次配置必须给出 `apiKey`、`baseUrl` 与 `modelId`；配好之后还要 `tool_config_set{name:"generate_image", enabled:true}`。
+11. **`imagegen_set_default`**（写）：设置默认生图服务商。
+    - 入参：`provider`。
+12. **`imagegen_provider_delete`**（写）：删除生图服务商。
+    - 入参：`provider`。删掉默认的那个之后 `generate_image` 工具**下一轮起不再注册**（已生成的图片不受影响）。
 
 ---
 
 ### 6.5 站点与工具开关控制（4 个）
 
-1. **`tool_config_list`**（只读）：查看系统工具的启停开关状态（如 `web_search`, `generate_image`, `skill_load`, `skill_run` 等）。
+1. **`tool_config_list`**（只读）：查看 agent 业务工具的启停开关状态（如 `web_search`, `generate_image`, `skill_load`, `skill_run` 等）。
+   - 入参：无。
+   - 返回：`[{ name, enabled, dangerous, note, updatedAt }]`。
 2. **`tool_config_set`**（写）：设置指定工具启用或停用。
-   - 入参：`name` (工具名), `enabled` (布尔值)。
-   - 注意：高危工具（如 `skill_run`）受环境变量双闸保护，即使此处开闸，宿主环境未解锁仍无法生效。
+   - 入参：`name`（snake_case，`^[a-z0-9][a-z0-9_]{0,63}$`）、`enabled`（布尔）、`dangerous`（可选布尔）、`note`（可选，≤256 字符）。
+   - 返回：`{ name, enabled, status: "created" | "updated" }`。
+   - 注意：`dangerous=true` 的工具（如 `skill_run`）受**双闸**保护，即使此处开闸，宿主 env 未加 `XRAY_UNLOCK_DANGEROUS_TOOLS=1` 仍不会被注册。
 3. **`site_tabs_list`**（只读）：查询顶部五格 Tab 的可见性配置。
-   - 返回：`runtime`, `notes`, `skills`, `source`, `about` 的可见状态（`visible`）。
+   - 入参：无。
+   - 返回：`[{ key, label, path, visible, updatedAt }]`，`key` 为 `runtime` / `notes` / `skills` / `source` / `about`；`updatedAt` 为 `null` = 这个 tab 从没被配置过（此时按可见处理）。
 4. **`site_tab_set`**（写）：动态设置顶部某一 Tab 是否展示。
-   - 入参：`key` (`runtime` / `notes` / `skills` / `source` / `about`；R-SOURCE 起 enum 五值), `visible` (布尔值)。
-   - 边界：属于合规运维开关。隐藏仅作用于导航栏呈现与页面路由 307，后端数据接口不受影响。
+   - 入参：`key`（enum：`runtime` / `notes` / `skills` / `source` / `about`；R-SOURCE 起五值）、`visible`（布尔）。
+   - 返回：`{ key, visible, status: "created" | "updated", visibleTabs }`（`visibleTabs` = 改完之后仍可见的 key 列表）。
+   - 边界：属于合规运维开关。隐藏仅作用于导航栏呈现与页面路由 307，后端数据接口不受影响；**不许关掉最后一个可见的 tab**（会拒绝）。
 
 ---
 
 ### 6.6 Skills 技能库管理（8 个）
 
 > **设计准则**：用于管理展示自研与精选的 Skill 目录包。只收 UTF-8 文本，纯文本渲染，不收二进制文件，不接受可执行代码直接在宿主服务运行。
+> **命名口径**：分类的展示名是 `name`（不是 `title`）；skill 的卡片文案是 `summary`（没有 `description` 入参），LICENSE 作为普通文本文件放进 `files`（没有 `license` 入参）。
 
 1. **`skills_categories_list`**（只读）：技能分类列表。
+   - 入参：无。
+   - 返回：`[{ slug, name, dot, sortOrder, skillCount }]`。
 2. **`skills_category_upsert`**（写）：新增或更新技能分类。
-   - 入参：`slug`, `title`, `description`, `sortOrder`。
+   - 入参：`slug`、`name`（1–64 字符）、`dot`（`#RRGGBB`）、`sortOrder`（整数 0–9999，默认 0）。
+   - 返回：`{ slug, status: "saved" }`。
 3. **`skills_category_delete`**（写）：删除空分类。
-4. **`skills_list`**（只读）：技能包清单列表（不含文件具体内容）。
+   - 入参：`slug`。分类下还有 skill 时拒绝删除。
+   - 返回：`{ slug, status: "deleted" }`。
+4. **`skills_list`**（只读）：技能包清单（不含文件）。
    - 入参：`categorySlug`（可选）。
-5. **`skills_get`**（只读）：获取指定技能元信息与文件列表（含相对路径、文件类型 kind、大小，不含长文本内容，防止撑爆上下文）。
-   - 入参：`name`。
+   - 返回：`[{ name, categorySlug, summary, sourceType, repo, repoUrl, version, sortOrder, fileCount, zipSize, url, updatedAt }]`。
+5. **`skills_get`**（只读）：获取指定技能元信息与文件清单（含相对路径、`kind`、字节数与行数，**不含长文本内容**，防止撑爆上下文）。
+   - 入参：`name`（`^[a-z0-9][a-z0-9-]{0,63}$`）。
+   - 返回：`skills_list` 的元信息字段 + `files: [{ path, kind, sizeBytes, lineCount }]` + `url` / `zipUrl`。
 6. **`skills_file_get`**（只读）：读取指定技能包内的单个文件内容。
-   - 入参：`name`, `path`。
-7. **`skills_upsert`**（写）：创建或全量覆盖技能包（**整包替换**）。
-   - 入参：`name`, `categorySlug`, `summary`, `description`, `repo`, `repoUrl` (可选), `license` (可选), `files` 数组（含 `path` 与 `content`）。
-   - 规则：必须包含根目录 `SKILL.md` 且 frontmatter `name` 与技能名完全一致；整包 ≤ 64 个文件、单文件 ≤ 256 KB、整包文本 ≤ 512 KB；自动生成一致性 ZIP 包。
-8. **`skills_delete`**（写）：删除技能包。
+   - 入参：`name`、`path`（1–200 字符）。
+   - 返回：`{ path, kind, content, sizeBytes, lineCount }`。
+7. **`skills_upsert`**（写）：创建或全量覆盖技能包（**整包替换**：每次都要带全部文件，库内多出来的文件会被删掉）。
+   - 入参：`name`、`categorySlug`、`summary`（≤512 字符，默认 `""`）、`sourceType`（**必填**，`own` = 自研 / `curated` = 精选第三方）、`repo`（**必填**，`owner/repo`，安装命令由它派生）、`repoUrl`（可选，带主机名的 http(s) 绝对地址；省略 = 页面不渲染 GitHub 外链）、`version`（可选，≤32 字符，页面显示 `v<版本>`）、`sortOrder`（整数 0–9999，默认 0）、`files`（1–64 项，每项 `path`（≤200 字符）与 `content`（UTF-8 原文））。
+   - 规则：根目录必须有 `SKILL.md` 且 frontmatter 的 `name` 与技能名完全一致；`kind` 由扩展名派生且是闭集（`markdown / python / shell / typescript / javascript / json / yaml / toml / text`），二进制、svg、html 一律拒；`path` 相对、无 `..`、不以 `/` 开头、每段只用 `[A-Za-z0-9._-]`、至多 4 段；整包 ≤ 64 个文件、单文件 ≤ 256 KB、整包文本 ≤ 512 KB；任一文件不合规则整包不入库；入库时自动打好一致的 ZIP 包。内容与库内完全一致时整行不动（`unchanged`，`updatedAt` 不刷新）。
+   - 返回：`{ name, status: "created" | "updated" | "unchanged", fileCount, totalBytes, zipSize, url, zipUrl }`。
+8. **`skills_delete`**（写）：删除技能包，连同全部文件，不可恢复。
+   - 入参：`name`。
+   - 返回：`{ name, status: "deleted" }`。
 
 ---
 
@@ -276,15 +337,19 @@
 > **设计准则**：控制 Agent 是否被允许通过 `skill_load` 注入上下文以及通过 `skill_run` 在独立容器中运行 Python 脚本。
 
 1. **`skills_agent_set`**（写）：授权或收回某个 Skill 在 Agent 对话中的使用权限。
-   - 入参：`name` (技能名), `enabled` (布尔值)。
-   - 严格约束：**只能在代码白名单（`runner/skills/`）之内开关**。若不在代码清单中会直接拒绝；改动可用集合必须走发版流程。
-2. **`skills_agent_status`**（只读）：Agent 可用技能的“状态透视镜”。
+   - 入参：`name`（技能名）、`enabled`（布尔）。
+   - 返回：`{ name, agentEnabled, status: "saved" }`。
+   - 严格约束：**只能在代码清单（`runner/skills/`，即 `shared/skills.generated.ts`）之内开关**，不在清单里直接拒；库里也必须已有展示副本（先 `skills_upsert`），否则报 NotFound。改可用集合要发版。改动对**新会话**生效。
+2. **`skills_agent_status`**（只读）：Agent 可用技能的「状态透视镜」。
    - 入参：无。
-   - 返回：每个白名单技能的 `inLibrary`（是否已入库）、`agentEnabled`（是否开启授权）、`consistency`（`ok` / `drift` / `missing`，有偏差时列出文件差异路径）、`available`（是否完全可用），以及当前两个执行工具的开关闸状态。
+   - 返回：`{ gates: { skill_load, skill_run }, skills: [{ name, network, scripts, inLibrary, agentEnabled, consistency, drift?, available }] }`——`network` 是该 skill 声明的出网档次、`scripts` 是它声明的可运行脚本文件名；`consistency` 为 `ok` / `drift` / `missing`（`drift` 时另有 `drift: { missing, extra, changed }` 三组路径）；`available` = `inLibrary ∧ agentEnabled ∧ consistency === "ok"`。
+   - drift 的修法：用 `skills_upsert` 重新上传与代码副本相同的文件。
 3. **`sandbox_config_get`**（只读）：读取执行沙箱的配额限制。
-   - 返回：`dailyRunLimit`（日调用上限，0 为不限）、`totalTimeoutMs`（超时阈值）。
-4. **`sandbox_config_set`**（写）：调整沙箱执行限制。
-   - 入参：`dailyRunLimit`（可选）、`totalTimeoutMs`（可选，5000–120000 毫秒，受数据库 CHECK 约束）。
+   - 入参：无。
+   - 返回：`{ dailyRunLimit, totalTimeoutMs, updatedAt }`（单行不存在 = 迁移 013 没跑，报 NotFound）。
+4. **`sandbox_config_set`**（写）：调整沙箱执行限制（**部分更新**，省略的字段保留原值）。
+   - 入参：`dailyRunLimit`（可选，整数 0–1000000，0 = 不限）、`totalTimeoutMs`（可选，5000–120000 毫秒，与数据库 CHECK 同界）。
+   - 返回：`{ dailyRunLimit, totalTimeoutMs, updatedAt, status: "saved" }`。执行容器侧另有 rlimit，这里改不到。
 
 ---
 
@@ -295,9 +360,9 @@
 > 只收文本（UTF-8、无 NUL）；kind 由扩展名 / 文件名派生且是闭集（`markdown / typescript / javascript / python / shell / powershell / sql / json / yaml / toml / css / dockerfile / text`）；`path` 相对、无 `..`、无反斜杠、每段 `[A-Za-z0-9._()[]-]`、≤ 12 段、≤ 300 字符；单文件 ≤ 256 KB、一批 ≤ 512 KB / ≤ 200 个、一个快照 ≤ 2000 个文件（`apps/api/shared/source-pack.ts`）。快照**只来自 git 树**由脚本保证（`docs/security.md` §4 R-SOURCE 补记）。
 
 1. **`source_snapshot_begin`**（写）：按 `sha` 建（或重建）staging 快照，并带整份 manifest。
-   - 入参：`sha`（40 位小写十六进制）、`files[]`（每项 `path` / `sha256`（64 位十六进制）/ `bytes` / `lines`，不含内容；1–2000 项）。
+   - 入参：`sha`（40 位小写十六进制）、`files[]`（每项 `path` / `sha256`（64 位十六进制）/ `bytes`（0–262144）/ `lines`（非负整数），不含内容；1–2000 项）。
    - 行为：服务端把 current 快照里 `(path, sha256)` 相同的文件内容直接复制过来；同 sha 重 begin = 清掉上次的 staging 重来；sha 已是 current 时什么都不动。
-   - 返回：`{ sha, total, reused, missing[], alreadyCurrent, status }`（`missing` 是还缺内容的路径）。
+   - 返回：`{ sha, total, reused, missing[], alreadyCurrent, status }`（`missing` 是还缺内容的路径；`status` 为 `staging` 或 `already_current`）。
 2. **`source_files_put`**（写）：给 staging 快照补一批内容。
    - 入参：`sha`、`files[]`（每项 `path` / `content`；1–200 项，内容总量 ≤ 512 KB）。
    - 规则：只收 manifest 里的 path；服务端现算 sha256 必须等于 manifest 声明值，否则**整批拒**（事务回滚）；同文件重传（哈希相同）幂等。
@@ -305,10 +370,13 @@
 3. **`source_snapshot_commit`**（写）：把 staging 翻成 current。
    - 入参：`sha`。
    - 行为：一个事务里核 manifest 每一项都有内容且行数相符 → 现 current 退下 → 本 sha 置 current → **删除其余全部快照**；任一不符整体回滚、current 不变，并点名缺哪些文件；sha 本来就是 current 时回 `unchanged`。
-   - 返回：`{ sha, fileCount, totalBytes, publishedAt, replaced, unchanged, status, url }`。
-4. **`source_snapshots_list`**（只读）：列出 current 与残留的 staging（`sha` / `shortSha` / `status` / `fileCount` / `totalBytes` / `pending` / `createdAt` / `publishedAt`）。
+   - 返回：`{ sha, fileCount, totalBytes, publishedAt, replaced, unchanged, status, url }`（`status` 为 `current` 或 `unchanged`，`replaced` 是被换下的上一版 sha、首次发布或 unchanged 时为 `null`，`url` 恒为 `/source`）。
+4. **`source_snapshots_list`**（只读）：列出 current 与残留的 staging。
+   - 入参：无。
+   - 返回：`[{ sha, shortSha, status, fileCount, totalBytes, pending, createdAt, publishedAt }]`（`publishedAt` 对 staging 为 `null`）。
 5. **`source_snapshot_delete`**（写）：删除一份**非 current** 的快照（残留的 staging）；删 current 会拒绝——站点上要换内容就发下一版。
    - 入参：`sha`。
+   - 返回：`{ sha, status: "deleted" }`。
 
 审计：四个写工具（`begin` / `put` / `commit` / `delete`）每次调用一行 `mcp_audit`（`summary` 只有 sha 前 7 位与文件数，不记正文）；`put` 对每个文件核 sha256 / bytes / lines 三个事实，`commit` 从实际文件行重算 `totalBytes`。
 
