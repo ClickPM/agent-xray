@@ -389,6 +389,17 @@ html {
     padding: 0 16px calc(var(--m-bottom-inset) + 16px) !important;
   }
 
+  /* R-MOBILE-2(画板 5c):一级页的功能条**不占文档流**。
+     条的实高是 `44 + safe-top`,负外边距只抵掉那 44 —— 剩下的 safe-top 正好成为
+     内容顶部的安全区留白,大标题于是「贴在安全区下 8」(那 8 是 `.m-h1` 的 margin-top)。
+     ⚠️ 不能改成 `position:fixed` 或整条不渲染:前者要另找定位祖先(各页的滚动容器
+     在 layout 那一层之下),后者会让条出现的那一刻把内容推下 44 —— 内容一动,
+     「大标题滚出了没有」的判定跟着翻,来回抖。这条只作用在传了 collapseTitle 的
+     一级页上;二级页(4m / 4p)的条照旧占流、从到顶起就在。 */
+  .m-pagebar-float {
+    margin-bottom: calc(-1 * var(--m-topbar-h));
+  }
+
   /* 一级页大标题(iOS Large Title)。桌面 20/650 → 34/700;副标题 13 → 15 */
   .m-h1 {
     font-size: 34px !important;
@@ -680,11 +691,17 @@ html {
     padding: 2px 8px !important;
   }
 
-  /* About 头像行:桌面「头像 + 简介 + GitHub 按钮」三段并排,
-     358 宽里会把简介压成一列窄字 —— 收成上下两块 */
+  /* About 头像行(画板 4r / 5c①,R-MOBILE-2 按所有者裁定收口):
+     桌面是「头像 + 简介 + GitHub 按钮」三段并排;移动端**回到画板的形态** ——
+     头像 +(@名 / repo 数)一行居中,简介移到行外独立成段(页面里那一块带
+     `m-show-narrow`),`GitHub ↗` 不渲染。首版收成上下两块是因为简介还在行里,
+     现在行里只剩两段短内容,一行放得下(64 + 14 + 剩余 ≈ 280)。
+     `flex-wrap` 是给 `origin ↗` 留的:它没被裁定去掉(@名 代不了它),
+     配了的时候整枚按钮折到第二行,不去挤 @名。 */
   .m-about-head {
-    flex-direction: column;
-    align-items: stretch !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: wrap;
     gap: 14px !important;
   }
   /* iOS 头像不描边 */

@@ -38,8 +38,11 @@ export function NotesIndex({
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto" }} className="m-page">
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 32px 64px" }} className="m-page-wrap">
-        {/* R-MOBILE:一级页没有上一级,左位子空着;RSS 从内联 ghost 按钮移到功能条右位子(画板 4k) */}
+        {/* R-MOBILE:一级页没有上一级,左位子空着;RSS 从内联 ghost 按钮移到功能条右位子(画板 4k)。
+            R-MOBILE-2(画板 5c③):到顶整条不出现,此时 RSS 在大标题行右端(见下面那一枚);
+            滚过大标题后条淡入,条里是 17/600 的「Notes」+ 右位子这一枚圆按钮。 */}
         <MobilePageBar
+          collapseTitle="Notes"
           right={
             <MobileBarButton label="RSS 订阅" onClick={() => setRssOpen(true)}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -64,6 +67,19 @@ export function NotesIndex({
               <circle cx="5" cy="19" r="1" />
             </svg>
           </GhostButton>
+          {/* R-MOBILE-2(画板 5c③):到顶时功能条不在,RSS 回到大标题行右端(位置照桌面 2a),
+              **按钮本身原尺寸平移**:仍是条里那一枚 30 圆 + `--m-fill` 底、命中 44。
+              滚上去之后它会从玻璃条底下穿过 —— 条里那一枚接手,不做交接动画。
+              上外边距 5 = 画板的 -3 加上 `.m-h1` 自己的 margin-top 8。 */}
+          <div className="m-show-narrow" style={{ flex: "none", margin: "5px -7px 0 0" }}>
+            <MobileBarButton label="RSS 订阅" onClick={() => setRssOpen(true)}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 11a9 9 0 0 1 9 9" />
+                <path d="M4 4a16 16 0 0 1 16 16" />
+                <circle cx="5" cy="19" r="1" />
+              </svg>
+            </MobileBarButton>
+          </div>
         </div>
 
         {categories.map((cat) => (
