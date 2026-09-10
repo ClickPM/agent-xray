@@ -61,7 +61,10 @@ mem_limit  = API_RSS_p95 × 1.3(突发余量)
 3. 在云厂商备案控制台提交:个人备案,网站名称避免「Agent/AI 服务」等敏感表述,建议以「个人技术学习分享」类目申报
 4. 审核周期约 1–3 周;**备案通过前,云厂商会拦截 80/443 的 HTTP 服务** → 开发期用 `IP:8080` 等非标端口自测
 5. 备案通过后:域名解析 A 记录 → 服务器 IP,`.env` 填 `SITE_ADDRESS=<域名>`,Caddy 在 443 自动签发 TLS。**生产 80 刻意不给响应**(所有者要求),证书走 TLS-ALPN-01(见 `docs/security.md` §5)——别按「放开 80/443」的老口径去核 80
-6. 网站底部挂备案号(`.env` 的 `ICP_BEIAN`,运行期注入;web footer 预留位)。**ICP 之外还有公安联网备案**:网站开通后 30 日内办,底部要同时挂公安备案号并链到 `beian.mps.gov.cn`;当前 `SiteFooter` 只支持一个 ICP 号,要挂第二个得改组件(R11 上线时待所有者确认口径,未做)
+6. 网站底部挂备案号(`.env` 的 `ICP_BEIAN`,运行期注入;web footer 预留位)。**ICP 之外还有公安联网备案**:网站开通后 30 个工作日内办,底部要同时挂公安备案号并链到 `beian.mps.gov.cn`。**2026-09-10 已办并落地**(苏公网安备,`SiteFooter` 同时支持两个号):
+   - 号码走 `.env` 的 `MPS_BEIAN=<备案号原文>`,与 `ICP_BEIAN` 同一套运行期注入;查询链接的 `?code=` 由组件从号码里取数字串,不用另填
+   - **备案编号图标必须是备案系统「点击下载备案编号图标」下来的原文件**,已按原字节存为 `apps/web/public/beian-mps.png`(36×40 PNG);格式要求是「图标在前、号码在右」
+   - 底栏版式:两个号并排一行,高度仍 26px;窄到一行放不下时折行(号码必须可见,不截断)
 
 ## 2. 服务器初始化(一次性)
 
@@ -107,6 +110,7 @@ ssh <host> "docker load -i ~/deploy/xray-<sha>.tar && chmod +x ~/deploy/migrate.
 cd ~/deploy && cp .env.example .env && chmod 600 .env    # 首次
 # 填 IMAGE_TAG=<sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY / METRICS_IP_SALT
 #   / SITE_ADDRESS=<域名> / SITE_REDIRECT_FROM=<裸域> / SITE_ORIGIN=https://www.<域名> / ICP_BEIAN=<备案号>
+#   / MPS_BEIAN=<公安联网备案号原文>(2026-09-10 起;留空则底栏只挂 ICP 一个号)
 #   / XRAY_IMAGEGEN_EXTRA_HOSTS=<生图网关域名>(R-IMAGEGEN;与上一条是两份清单,网关域名两处都写)
 #   / XRAY_WEBSEARCH_EXTRA_HOSTS=<LLM/搜索网关域名>   ← 生产首次部署最容易漏:内置白名单只有两个域,
 #     不补这项 websearch_provider_upsert 直接拒(R11 实测;130 早就设了所以从没暴露)
@@ -155,5 +159,5 @@ docker compose up -d                   # 3) 再起 api / web / caddy
 - [ ] SSE 事件流抽查:无 Authorization/api-key 字段。**判据是结构化的**——遍历每帧 JSON 看有没有凭据形状的**键**;`grep -i authorization` 会命中对话正文里的那个英文单词(R10 实测 7 次全是误报)
 - [ ] SSE 优雅关闭:`docker compose stop api` 时客户端**在停机同刻(+0s)拿到确定的终止**而非挂到超时。**别钉死 curl 退出码**(R9 见 `18`、R10 见 `0`,取决于断开落在响应分块的哪个位置)
 - [ ] 限额:小额度演练超限路径(拒新会话 + 前端提示)
-- [ ] 备案号已挂 footer
+- [ ] **两个备案号都已挂 footer**(ICP 链到 `beian.miit.gov.cn`;公安联网备案是「图标 + 号码」且链到 `beian.mps.gov.cn/#/query/webSearch?code=<数字串>`)。判据是**在生产页面上看**:`.env` 少填一项那半边就静默不渲染,本机与 130 都不配、看不出来
 - [ ] **egress 出网过滤**(R-WEBFETCH):`sudo ~/deploy/egress-filter.sh --install-unit` 跑过,`sudo ~/deploy/egress-filter.sh --status` 六条全 `ok`(退出码 0),`systemctl is-enabled xray-egress-filter` 回 `enabled`;容器内 `create_connection(('169.254.169.254',80),3)` 失败而 `('1.1.1.1',443)` 成功(`deploy-environments.md` 冒烟第 21 条 ②)。compose 改了 `egress` 网段时脚本的 `EGRESS_SUBNET` 与单元文件里的值要一起改

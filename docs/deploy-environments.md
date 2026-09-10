@@ -67,7 +67,7 @@
    cd deploy && cp .env.example .env && chmod 600 .env   # 首次
    # 填 IMAGE_TAG=<git-sha> / POSTGRES_PASSWORD / MCP_AUTH_TOKEN_HASH / CONFIG_ENCRYPTION_KEY
    #   / METRICS_IP_SALT / SITE_ORIGIN=<含 scheme 的对外地址>  ← 生成方式见 .env.example 里的注释
-   # 生产另填:ICP_BEIAN=<备案号>(预发留空则底栏不渲染)/ SITE_ADDRESS=<域名>(预发留空 = :80)
+   # 生产另填:ICP_BEIAN=<备案号> 与 MPS_BEIAN=<公安联网备案号>(预发两项都留空则底栏不渲染)/ SITE_ADDRESS=<域名>(预发留空 = :80)
    #   / SITE_REDIRECT_FROM=<裸域>(预发留空)/ XRAY_WEBSEARCH_EXTRA_HOSTS=<网关域名>(不补则搜索 provider 写不进去)
    #   / XRAY_IMAGEGEN_EXTRA_HOSTS=<生图网关域名>(与上一条是两份清单,网关域名两处都写;不补则生图 provider 写不进去)
 
