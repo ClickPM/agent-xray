@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working in this repository.
 > **本文只留五块**:项目定位、仓库结构、开发模式与轮次流程、硬性规则、本地开发与部署。
 > 架构/安全/部署细节都在 `docs/`,轮次拆解在仓库根 [`ROUNDS.md`](ROUNDS.md),按需读。
 > **书写约定:硬性规则编号只增不改、不重排**(代码注释会引用「CLAUDE.md 规则 N」);删掉的规则留「已废弃」占位。
-> `AGENTS.md` 是给 codex 审查者的指针文件,指向本文,无需双份维护。
+> `AGENTS.md` 是给**外部审查者**的指针文件(2026-09-10 起执行器 = cursor CLI,codex 限流暂停),指向本文,无需双份维护。
 
 ## 项目定位
 
@@ -45,34 +45,40 @@ runner/       **R-SKILLS-2 已落地**:agent 可运行 skills 的执行容器(`D
 .claude/      encore 官方 skills(skills-lock.json 锁版本,升级 `npx -y skills update`)
               + MCP 启动脚本。`.mcp.json` 另注册了三个站点管理面(本机 / 130 / 生产),
               token 各走各的环境变量、都不入库,分工见下方「本地开发」的表;
-              自建 skill sync-notes 已随 R6 删除
+              自建 skill sync-notes 已随 R6 删除。**独立审查的两份也在这里**(2026-09-10):
+              `cursor-review-prompt.md` = 审查任务书契约(入库),`cursor-review.ps1` = 启动脚本,
+              运行产物落 `.claude/reviews/`(gitignored);流程见 `docs/review-workflow.md`
 .agents/      `.claude/skills` 的镜像,给 codex 审查者用(生成物,`dev.ps1 skills` 同步)。
-              实测:codex 只认仓库级 `.agents/skills` 与 `.codex/skills`,**不认 `.claude/skills`**
+              实测:codex 只认仓库级 `.agents/skills` 与 `.codex/skills`,**不认 `.claude/skills`**。
+              **2026-09-10 起休眠**:执行器换成 cursor CLI,它不自动加载这个目录(审查任务书让它按需读),
+              但目录与同步命令原样留着 —— 切回 codex 只是换回命令
 dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 ```
 
 ## 开发模式与轮次流程
 
-**Claude Code solo 开发,codex 独立审查**;不做视觉 review(规则 7 管住样式即可)。
+**Claude Code solo 开发,独立审查做缺陷门禁**;不做视觉 review(规则 7 管住样式即可)。
+**审查执行器 2026-09-10 起 = cursor CLI(`cursor-agent`)+ 模型 `cursor-grok-4.6-high`**(所有者裁定:codex 被限流,暂停使用);
+换的只是执行器,下面三条策略(范围 / 收口 / 边界)一字不改。发起命令、结果取回与坑清单在 [`docs/review-workflow.md`](docs/review-workflow.md)。
 
 ```
 开工:cp rounds/TEMPLATE.md rounds/round-NN/round-NN.md,按 ROUNDS.md 该轮拆解填任务卡
   → 实现(遵守规则 7/8/9)
   → 验证:dev.ps1 test / check + 任务卡验收项全过
-  → codex 独立审查:默认 /codex:review;质疑设计取舍用 /codex:adversarial-review;
-     改动超过 1–2 个文件带 --background,用 /codex:status、/codex:result 跟进
+  → 独立审查:powershell -File .claude\cursor-review.ps1(默认全量分支 diff、后台跑);
+     质疑设计取舍加 -Kind adversarial;小 diff 想直接看结果加 -Wait;结果落 .claude/reviews/<时间戳>-<kind>.out.md
   → findings 逐条处理(采纳整改 / 不采纳写明理由),回填任务卡「代码审查」段
   → 只要有采纳整改的 findings → 再发一轮复审(缺陷门禁,非设计评审),范围按下方「审查范围」
   → commit + 更新 ROUNDS.md 进度表
 ```
 
-- **审查范围(所有者裁定 2026-08-31)**:**只有前两轮**用固定的全量范围(`branch diff against main`);**第 3 轮起只审「上一轮 findings 整改后的 diff」**,即 `--base <上一轮已审提交>`。
-  - 命令:`node <codex-companion.mjs> review --background --base <上一轮已审提交>`(companion 支持 `--base <ref>` 与 `--scope <auto|working-tree|branch>`;`/codex:review` 这个版本不接受自定义关注点,但接受这两个参数)。
+- **审查范围(所有者裁定 2026-08-31)**:**只有前两轮**用固定的全量范围(`branch diff against main`);**第 3 轮起只审「上一轮 findings 整改后的 diff」**,即只审 `<上一轮已审提交>..HEAD`。
+  - 命令:`powershell -File .claude\cursor-review.ps1 -Scope since -Base <上一轮已审提交>`(默认 `-Scope branch` = `main...HEAD` 全量;`since` = `<Base>..HEAD` 整改 diff;`-Note` 传本轮要点)。
   - 为什么:全量重扫一条百文件的分支单轮要 20 分钟上下,而第 3 轮起的复审职责只是「确认整改本身没引入新缺陷」。把范围收到整改 diff 既符合本条流程原本的措辞(「对**整改 diff** 再发一轮复审」),也避免审查器每轮在同一批未改动代码上重新起意。
   - 代价要认:整改 diff 之外的问题这几轮不会再被扫到。所以**前两轮必须是全量**,那是覆盖面的来源;第 3 轮起是门禁,不是覆盖。
 - **复审收口标准(所有者裁定 2026-08-28)**:审查/复审循环不得带**阻塞性问题或明显 bug/漏洞类 findings**(high 级,或任何会丢数据、漏凭据、泄资源、逻辑错误的问题)收口——继续「整改 → 复审」直到此类 findings 清零才允许合并 `main`;低危改进项可写明理由记 `rounds/BACKLOG.md` 后放行。禁止以「spike 会被替换」「概率低」为由跳过整改(可作为**方案取舍**的理由写进任务卡,但对应风险必须有显式兜底)。
 - **审查边界(所有者裁定 2026-08-28)**:**严禁以审查代替设计**——审查是缺陷门禁,不负责长出方案;findings 若指向设计缺陷,停下回任务卡/所有者层面重定方案,不在「整改 → 复审」循环里逐条堆补丁。**非严重阻塞性 findings 严禁新增机制类修复**(新队列/新协议/新抽象/新配置/新导出面):只允许最小改动(改判断、改文案、删代码)或写明理由记 `rounds/BACKLOG.md`;机制类修复仅限严重阻塞性 bug/漏洞。发起复审时把本条作为审查要求带给审查者:只判定并报告缺陷与严重级别,不展开设计方案。
-- 降级到 Claude Code 自带 `/code-review` 只认硬失败(codex CLI 未安装/未登录/启动失败),降级原因写进任务卡;「等得久」「改动小」不是理由。
+- 降级到 Claude Code 自带 `/code-review` 只认硬失败(`cursor-agent` 未安装/未登录/启动失败/限流),降级原因写进任务卡;「等得久」「改动小」不是理由。
 - 同一验收项针对性整改后连续 2 次仍不过 → 写 `rounds/round-NN/BLOCKED.md` 停下呼人,禁止放宽验收(rounds/README.md)。
 - 分支:每轮在 `round-NN` 分支开发,审查通过后合并 `main`;纯文档与微修可直接 `main`。**投产后(2026-09-02 起)较大迭代依旧走本流程**(命名轮 `round-<名字>`);任何发到生产的 SHA 都要在 `docs/releases.md` 加一行。
 - 跨轮次发现的问题写 `rounds/BACKLOG.md`,不当场顺手改。
@@ -225,7 +231,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 .\dev.ps1 db <名>    # encore db shell <数据库名>
 .\dev.ps1 build      # 构建 api + web 生产镜像(tag = git 短 SHA;脏工作区会拒绝)
 .\dev.ps1 ship <host> [sha]   # 镜像 + 五件部署资产送到服务器(不传 .env;R-WEBFETCH 起含 egress-filter.sh);发版后记 docs/releases.md
-.\dev.ps1 skills     # 把 .claude\skills 镜像到 .agents\skills(codex 审查者只认后者)
+.\dev.ps1 skills     # 把 .claude\skills 镜像到 .agents\skills(codex 审查者只认后者;codex 暂停期间这条休眠)
 .\dev.ps1 skills-gen # 读 runner\skills 生成两份同源清单(runner\manifest.json + apps\api\shared\skills.generated.ts;R-SKILLS-2)
 .\dev.ps1 runner     # 本机起 skill-runner 执行容器(TCP 开发模式 127.0.0.1:8000;api 侧设 $env:XRAY_SKILL_RUNNER_URL="http://127.0.0.1:8000")
 .\dev.ps1 runner egress   # 起 egress 档实例(127.0.0.1:8001,有公网;api 侧设 $env:XRAY_SKILL_RUNNER_EGRESS_URL="http://127.0.0.1:8001";R-WEBFETCH)
@@ -259,7 +265,7 @@ cd apps\web; npm run dev   # 前端 next dev :3000
 - **`.mcp.json` 的改动要重启会话才生效**,而且 MCP client 连不上时只在会话启动时报一次 `ConnectionRefused`——中途起后端不会自动重连。急着用可以直接对 `/mcp` 发 JSON-RPC,但要带齐 2026-07-28 的逐请求契约,**正本在 `apps/api/mcp/README.md`「三条容易改错的地方」第 3 条**(精确请求形状照 `rounds/round-10/checklist.md` §9 抄)。最常中招的一条:`params._meta` 的三个键必须带 `io.modelcontextprotocol/` 命名空间前缀且不能少 `clientInfo`,否则 handler **静默**落到 2025-11-25 的 legacy 路径——`tools/*` 照常通、`server/discover` 却回 `-32601`,看起来像端点坏了,其实是请求走错了协议时代。
 - `.claude/skills/` 有 8 个 encore 官方 skills(api/auth/code-review/database/frontend/secret/service/testing),写对应领域代码时按需触发,框架细节以 skills 为准;自建的 `sync-notes` 已随 R5 管道废除(R6 删除)。
 - **worktree 用完必须 `dev.ps1 wt-clean` 删,别手删也别只跑 `git worktree remove`**(2026-08-31 实测):在 worktree 里跑过 encore 之后,目录会被那个会话的 `encore mcp run` 与注册过该 app 的 encore daemon 一起握着句柄,`git worktree remove` 报 `Permission denied`、目录删到一半只剩空壳,登记与磁盘长期不一致。`wt-clean` 把「安全闸 → 杀占用进程 → 长路径强删 → (仍在才)停 encore → prune → 拉回 daemon」固化成一条命令。**「仍删不掉」有两种原因,别一律当会话占用**(2026-09-02 实测):① 路径超过 MAX_PATH(残留在深层 `node_modules`,没有任何进程持句柄),脚本已先走 `rd /s /q` 长路径删除、只有它也失败才停同机共用的 daemon;② 另一个 Claude Code 会话以该 worktree 为 cwd(目录已空但 busy),用 CCD 的 `list_sessions` 按 `cwd` 找到那个会话、关掉后重跑(`archive_session` 得所有者明确同意,脚本不替你关)。两种情况的判据与处理细节以 `dev.ps1` 里 `wt-clean` 的注释头为准,本文不复述。
-- **skill 升级或新增后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。
+- **skill 升级或新增后必须 `dev.ps1 skills` 重新同步镜像**:codex 审查者只从 `.agents/skills` 加载(实测不认 `.claude/skills`),漏同步的表现是审查悄悄退回到旧版清单——不报错,只是少查东西。**2026-09-10 起 codex 暂停、执行器换 cursor CLI**(它不自动加载那个目录,靠审查任务书按需读),这条在切回 codex 之前只是保持镜像不腐;审查工作流见 [`docs/review-workflow.md`](docs/review-workflow.md)。
 
 ## 部署环境矩阵
 

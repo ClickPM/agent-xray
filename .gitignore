@@ -49,3 +49,7 @@ __pycache__/
 # 两个都会让 dev.ps1 build 的洁净检查判脏,进而拒绝构建。
 .codex/
 .venv/
+
+# cursor CLI 审查器的运行产物(实例化的任务书 + stdout/stderr),不入库;
+# 审查契约本体是 .claude/cursor-review-prompt.md,那份要入库。
+.claude/reviews/

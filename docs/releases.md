@@ -41,7 +41,7 @@
 
 原因是 `migrate.sh` 里的 `docker compose run/exec` 继承了 ssh 的 stdin,把 heredoc 剩下的行当自己的输入读走了
 (用户级 `~/.claude/CLAUDE.md`「本机 Windows 环境」记的 `docker compose exec -T` 同一个坑,这次是隔着
-`migrate.sh` 中招的)。两条口径:**发版四步一条命令一次 ssh**,或者每条 compose 命令都带 `< /dev/null`。
+`migrate.sh` 中招的)。两条口径:**一条命令一个 ssh**(发版四步就发四次,别串成一次),或者每条 compose 命令都带 `< /dev/null`。
 判据别只看退出码 —— 每步之后 `docker compose ps` 核 `{{.Image}}` 的 tag 与 `{{.Status}}`。
 
 ### 发版前拦下:合并进 `main` 的测试文件里有两个**字面**控制字节(2026-09-09,`995dc49`)

@@ -29,9 +29,11 @@
 
 ## 代码审查
 
-<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」:codex 独立审查,硬失败才降级 /code-review。 -->
+<!-- 完成后回填。审查路由见 CLAUDE.md「开发模式」与 docs/review-workflow.md:
+     独立审查 = cursor CLI + grok 4.6 high(2026-09-10 起;codex 限流暂停),硬失败才降级 /code-review。 -->
 
-- 审查方式:<codex /codex:review | codex /codex:adversarial-review | /code-review(写明降级原因)>
+- 审查方式:<cursor-review.ps1(默认档)| cursor-review.ps1 -Kind adversarial | /code-review(写明降级原因)>
+- 审查器与模型:<cursor CLI cursor-grok-4.6-high | 其它(写明原因)>
 - findings 处理:<逐条:采纳整改 / 不采纳及理由;或链接同目录记录文件>
 - 结论:<PASS | 整改后 PASS>
 

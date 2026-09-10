@@ -3,7 +3,7 @@
 > 拆解方法参照 GPUI-Pi:小轮次、可证伪验收、风险前置、止损明确。目录规则见 [`rounds/README.md`](rounds/README.md),每轮任务卡在开工时从 [`rounds/TEMPLATE.md`](rounds/TEMPLATE.md) 建立为 `rounds/round-NN/round-NN.md`。
 > 每轮收口时更新本表(状态 / 完成日期 / 审查记录指针)。范围与验收要点以下方「各轮拆解」为准;与 `docs/architecture.md`、`docs/security.md` 冲突时以后者为准。
 >
-> **功能边界(所有者裁定,2026-08-28;此后多次修订,逐条见下方「第 N 次修订」,最近一次是 2026-09-09 第十四次)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2v(共 29 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 与 2q–2r 于 2026-09-08 新增,见第十一、第十二次修订;2s–2t 于 2026-09-09 新增,见第十三次修订;2u–2v 于 2026-09-09 新增,见第十四次修订)+ **移动端**画板 4a–4z + 5a–5b(共 28 块,2026-09-07 新增 4a–4u 见 R-MOBILE,2026-09-08 追加 4v–4x 见 R-CROSSLINK,2026-09-09 追加 4y–4z 见 R-CARDS,2026-09-09 追加 5a–5b 见 R-CARDS-2)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
+> **功能边界(所有者裁定,2026-08-28;此后多次修订,逐条见下方「第 N 次修订」,最近一次是 2026-09-10 第十五次)**:本 roadmap 与各轮任务卡**严禁新增设计稿没有的功能**——站点访客功能以 [`design/`](design/README.md) **桌面**画板 1a–1g + 2a–2v(共 29 块;2f–2h、2i–2k 与 2l–2m 于 2026-09-03 新增,见第六、第九、第十次修订;2n–2p 与 2q–2r 于 2026-09-08 新增,见第十一、第十二次修订;2s–2t 于 2026-09-09 新增,见第十三次修订;2u–2v 于 2026-09-09 新增,见第十四次修订)+ **移动端**画板 4a–4z + 5a–5b(共 28 块,2026-09-07 新增 4a–4u 见 R-MOBILE,2026-09-08 追加 4v–4x 见 R-CROSSLINK,2026-09-09 追加 4y–4z 见 R-CARDS,2026-09-09 追加 5a–5b 见 R-CARDS-2;**R-MOBILE-2 的 5c–5d 于 2026-09-10 裁定、设计稿待交付**,见第十五次修订)+ 可交互原型为唯一边界(**两套画板同一个功能范围**,移动端只换呈现、不新增功能),加上 `docs/` 已定稿的安全与部署要求(它们是约束,不是功能)。**画板 3a–3e(/admin 后台)已废弃**:管理功能改由无状态 MCP 管理服务承担(无前端界面),其范围以 R6 拆解的裁定清单为准;画板已于 2026-09-02 从画布删除,`3x` 号段作废不复用。实现中想到的新功能一律进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md) 等所有者裁定,不进任何轮次。
 >
 > **2026-09-01 修订(R-VISITOR)**:所有者裁定在会话列表新增**删除入口**——设计稿画板 1a–1e 没有这个东西,
 > 属规则 8 的例外,理由是「站点公开可访问之后,访客需要一条自己清掉对话的通路」,是隐私功能而非产品功能。
@@ -162,6 +162,20 @@
 > 设计稿 2026-09-09 并入 `design/`(四项判据全过:`Agent X-Ray Cards 2.dc.html` 75,355 B / 2 块,`Agent X-Ray Mobile - Runtime 2.dc.html` 125,528 B / 2 块,`support.js` md5 未变;两份都是新文件、无三方合并),
 > 同日在分支 `round-cards2` 实现,codex 4 轮审查收口(第 4 轮零 findings)后合并 `main`,**待发版**。
 
+> **2026-09-10 第十五次修订(R-MOBILE-2)**:所有者在真机 **standalone(添加到主屏幕)**下报障四条,核出的根因是**移动端 21 块画板是以微信 webview 为主场景画的** ——
+> 每屏顶部画着「状态栏 59」+「微信导航栏 44 · 不可控」两条占位,而代码从不渲染那两条(2026-09-07「按普通 H5 做」的二次裁定)。
+> 在微信里我们那条 44 高功能条压在宿主导航栏之下不突兀;**在 standalone 与普通浏览器里宿主那条不存在**,一级页(Notes / Skills / About)两侧都空的功能条就成了裸空白。
+> 同一原因牵出屏底两条:备案底栏 26 高(画板从未画过它,属 `docs/` 部署约束)挡在 Tab Bar 下方 ⇒ Tab Bar 贴的是「内容区底」而非屏底,
+> 它自己那 34 的安全区留白落在 Home Indicator 上方(屏底一条白带),随滚动收起时只滑出 49、**剩 26 的残条压住备案号**(生产实测:收起后 `translateY(0, 83)`、`footerCovered = 26px`)。
+> **所有者裁定四件事**:① 备案两号(ICP + 公安联网)在移动端**统一搬进 About 页尾、不再占屏底高度**(桌面底栏零改动);② 移动端屏底从此只有 Tab Bar,贴真正的屏底;
+> ③ Tab Bar 随滚动收起时整条滑出屏外、不留残条;④ 顶部取 **1-A**:一级页**滚到顶不出功能条**、大标题贴安全区,滚过大标题后玻璃条淡入并带 **17/600 左对齐的收起标题**
+> (即画板 `4k` 附早已定过、但首版**未实现**的「大标题收起态」)。同轮把 About 移动端**按画板 `4r` 收口**(去掉 `GitHub ↗` 按钮、头像行照 `4r`)—— 那是补既有画板,不是新设计。
+> 与 R-TOOLS / R-PERF / R-TOOLCARDS / R-SOURCE / R-CROSSLINK / R-CARDS / R-CARDS-2 同一顺序、**不是**规则 8 的例外:移动 `5c`(一级页顶部两态)/ `5d`(屏底两态 + About 页尾备案行)
+> 放**新文件** `Agent X-Ray Mobile - Shell.dc.html`(`- Notes Skills About` 已 198,838 B、离 256 KiB 只剩 63 KB,不追加),并入 `design/` **之后**才开代码。
+> **已认代价**:移动端首页(Runtime,自身不滚动)不再显示备案号,备案抽查通常看首页底部 —— 所有者认这个风险(桌面底栏照旧、移动 About 里有);
+> 更稳的变体(Notes / Skills 页尾也各挂一条)记 `rounds/BACKLOG.md`。提示词 [`rounds/round-mobile2/design-prompt.md`](rounds/round-mobile2/design-prompt.md),
+> 拆解 [`rounds/round-mobile2/round-mobile2.md`](rounds/round-mobile2/round-mobile2.md)。
+
 ## 进度表
 
 | 轮 | 内容 | 状态 | 完成 |
@@ -200,6 +214,7 @@
 | **R-CROSSLINK** | 跨栏 / 跨页联动:Ask why 预填(1-A)+ 卡片 ↔ Timeline 双向定位 + Notes 章节 → Runtime 入口,共用「预填、永不自动发送」一个原语;桌面 `2q` / `2r`(新文件)+ 移动 `4v`–`4x` + `1b` / `4f` 注释 | ✅ **已完成、待发版**(所有者裁定 2026-09-08,第二轮;分支 `round-crosslink`,codex 三轮 6 条 findings 全部采纳整改、末轮零 findings;[任务卡](rounds/round-crosslink/round-crosslink.md) · [画板提示词](rounds/round-crosslink/design-prompt.md);设计稿 `2q` / `2r`(新文件 `Agent X-Ray Crosslink.dc.html`)+ `4v` / `4w` / `4x` + `1b` / `4f` 注释于 2026-09-08 并入,四项判据全过;`docs/security.md` §0 第 10 条已写并翻成「已落地」;零后端机制,api 侧只有一句提示词;`dev.ps1 test` = api 609 + web 56 用例全绿,14 项验收本机逐项实测) | — |
 | **R-CARDS** | 会话区信息卡片:内容级 ` ```xray-card ` 围栏块(六种 kind 闭集、声明式交互、非法回落、流式骨架、只在会话区开);桌面 `2s` / `2t`(新文件)+ 移动 `4y` / `4z` | ✅ **已发版 `d342b18`**(2026-09-09;分支 `round-cards`;设计稿 `2s` / `2t`(新文件 `Agent X-Ray Cards.dc.html`)+ `4y` / `4z` 同日并入,四项判据全过;交付 `lib/xray-card.ts`(六种 kind 闭集 + 上限 + 链接口径 + 围栏闭合判据,web 用例 93 条里新增 37 条)· `components/XrayCard.tsx` · `Markdown.tsx` 三个默认关的 prop · 会话区两处接线 · `globals.css` 移动端差别(宽度驱动走容器查询、只在 768 断点内;触控语汇走同一断点)· `runtime.ts` 卡片段 · `cards-e2e.test.ts`;**codex 四轮共 10 条 findings(全部 P2、high 为零):9 条采纳、1 条不采纳记 BACKLOG,末轮零 findings**;`dev.ps1 test` api 35 文件 613 用例 + web 93 用例全绿,`tsc` 过;本机 faux provider 验收 15 项 14 过,#13 的真实 provider 留证已于发版当日在生产补齐(**验收 15 项全过**);生产冒烟 33 项 0 失败,发布记录 [`docs/releases.md`](docs/releases.md);[任务卡](rounds/round-cards/round-cards.md) · [画板提示词](rounds/round-cards/design-prompt.md);`docs/security.md` §0 第 11 条已写;不是 pi 工具、无迁移、MCP 仍 51) | — |
 | **R-CARDS-2** | 会话区 UI 组件 2.0:`xray-card` 新增 `choice` / `form` 两种**可回传** kind(单选点即发、多选与表单 submit 发,文本只由可见字组成)+ 新围栏 ` ```xray-html ` 静态 HTML 组件(`sandbox=""` iframe + 帧内 CSP + 窄清洗,宽 = 正文宽、高夹取、≤ 16 KB)+ 每轮最多两个组件前端硬限;桌面 `2u` / `2v`(新文件)+ 移动 `5a` / `5b`(新文件) | ✅ **已发版 `2c7f174`**(2026-09-09;设计稿 2026-09-09 并入、同日实现与审查;codex 4 轮 / 8 条 findings:2 P1 + 6 P2,7 条采纳、DOMParser 那条 P1 两轮同一假设有规范与实证不采纳;第 3 轮那条按「审查循环不是设计」回所有者裁定后换成 remark 插件在解析器的树上数;第 4 轮零 findings。[任务卡](rounds/round-cards2/round-cards2.md) · [画板提示词](rounds/round-cards2/design-prompt.md);`docs/security.md` §0 第 11 / 12 / 13 条翻「已落地」;仍是内容级、不是 pi 工具;无迁移 / 无端点 / MCP 仍 51 / 无新依赖;本机 faux 剧本 20 项验收全过,真实 provider 留证已于发版当日在生产补齐(**验收 20 项全过**);生产冒烟 27 项 0 失败 + 4 项正向对照(本轮四个新文件在旧快照下判 404、发版后翻成已渲染),发布记录 [`docs/releases.md`](docs/releases.md)) | — |
+| **R-MOBILE-2** | 移动端 standalone 壳层修补:一级页顶部空条(补画板 `4k` 附的大标题收起态 + 到顶不出条)· 备案两号搬进 About 页尾 · Tab Bar 贴屏底与收起不留残条 · About 按画板 `4r` 收口;移动 `5c` / `5d`(新文件) | 📝 **文档就绪、设计稿待交付**(所有者 2026-09-10 圈定 A1 / A2 / B1 / B2 + GitHub 按钮按 `4r`;[任务卡](rounds/round-mobile2/round-mobile2.md) · [画板提示词](rounds/round-mobile2/design-prompt.md);本轮起独立审查执行器 = cursor CLI + grok 4.6 high) | — |
 
 ## 里程碑
 
@@ -903,6 +918,33 @@ R-CARDS 的六种卡只有本地交互、回传只有预填,也没有自由内�
   其它页面不受影响;提示词 + 真实 provider 留证;既有零改动;文档同步。
 - **前置**:设计稿并入 `design/`;R-CARDS / R-CROSSLINK 已在生产。**止损**:纯前端 + 一段提示词,回滚 = 换回上一个镜像 tag;`Markdown` 不传 `html` / `onSend` 时与改前一字不差。
 
+### R-MOBILE-2 — 移动端 standalone 壳层修补:顶部空条 + 屏底 Tab Bar + 备案号搬家(修补轮;所有者裁定 2026-09-10;文档就绪、设计稿待交付)
+
+> 任务卡 [`rounds/round-mobile2/round-mobile2.md`](rounds/round-mobile2/round-mobile2.md),画板提示词 [`design-prompt.md`](rounds/round-mobile2/design-prompt.md)。
+> 移动 `5c` / `5d` 放新文件 `Agent X-Ray Mobile - Shell.dc.html`;并入 `design/` 之后才开工(分支 `round-mobile2`)。
+
+**问题**(所有者 2026-09-10 在真机 standalone 报障四条,生产上逐条实测复现,`375×812` + 模拟 `safe-top 59` / `safe-bottom 34`):
+① 除 Runtime 外每页头部一条空白 —— 功能条 `0 → 103`(44 + safe-top),About / Skills 首页条内两侧全空,且画板 `4k` 附的「大标题收起态」首版从未实现,所以滚起来它也不会有内容;
+② Tab Bar 下方一条白带 —— Tab Bar `703 → 786`(49 + 34),内容区底 786、备案底栏 786 → 812,那 34 的安全区留白没落在 Home Indicator 上;
+③ 备案号占屏底高度(R-MOBILE 任务卡当时就记着「ICP 位置画板没画,要不要换位置请裁定」);
+④ Tab Bar 随滚动收起后被遮挡 —— 只滑出自身高度,`footerCovered = 26px`,屏底剩一条「只有图标、没有文字」的残条(与所有者第二张截图一致;**这条在普通手机浏览器里同样存在**,与安全区无关)。
+
+**根因一句话**:①是「以微信 webview 为主场景」的画板假设在 standalone 下不成立;②③④是同一件事 —— 备案底栏参与了移动端布局,Tab Bar 因此贴不到屏底。
+
+**裁定与分工**(所有者圈定 A1 / A2 / B1 / B2,GitHub 按钮按 `4r`):
+**A1**(不需画板)`SiteFooter` 在 ≤768px 不渲染 + 备案两号搬进 About 页尾,抽一个共用组件承载 env 读取与链接口径 —— 一次解决 ②③④;
+**A2**(不需画板)补画板 `4k` 附的大标题收起态,三个一级页共用;
+**B1**(需画板 `5c`)一级页到顶不出功能条、Notes 的 RSS 到顶时回标题行右端;
+**B2**(需画板 `5d`)About 页尾备案行的版式定版;另**按画板 `4r`** 去掉移动端 `GitHub ↗` 按钮并把头像行收回 `4r` 的形态。
+**不做**:C1 一级页彻底无功能条、C2 Notes / Skills 页尾也挂备案(都记 BACKLOG)。
+
+**交付**:`components/SiteFooter.tsx`(拆出共用的备案行)· `app/(site)/about/page.tsx`(页尾备案行 + 按 `4r` 收口)· `components/mobile/MobilePageBar.tsx` 与三个一级页(收起态 + 到顶不出条)·
+`globals.css` 移动段 · 任务卡与 `docs/deploy-cn-lightweight.md`(备案号在移动端的位置与验收判据)。
+**不交付**:后端 / 迁移 / MCP(仍 51)/ 新依赖 / 桌面任何改动 / 移动端新功能 / 二级页功能条形态。
+
+- 验收(细则在任务卡):`check` / `test` / web `tsc`;两种视口 × 到顶 / 滚动后 × 四 Tab 逐屏比对画板;备案两号在移动端可见可点、屏底不再占高;Tab Bar 收起后屏底零残条;桌面逐项零改动;文档同步。
+- **前置**:`5c` / `5d` 并入 `design/`(A1 / A2 不依赖画板,可先落地)。**止损**:纯前端,回滚 = 换回上一个镜像 tag。
+
 ## 轮次外事项
 
 跨轮次发现的问题进 [`rounds/BACKLOG.md`](rounds/BACKLOG.md),不当场顺手改(CLAUDE.md 开发约定)。
@@ -918,3 +960,4 @@ R-CARDS 的六种卡只有本地交互、回传只有预填,也没有自由内�
 | 2026-09-02 | ① Timeline 进行中行整行明暗脉动没有方向感,长工具调用看着像卡住;② 生成期间发送按钮仍可点 | `9dd0c89`:进行中行改成自左向右的波浪扫光(只动 `background-position`,合成器属性),发送按钮生成期间转圈禁用、输入框不禁用;两份画板同步(规则 7/8) |
 | 2026-09-02 | 文章页顶端阅读进度线永远停在 31%(照抄了画板 2c 定格的那一帧) | `d2a87d0`:新增 `ReadingProgress.tsx` 接真实滚动(`transform: scaleX` + rAF 合帧写 ref,找最近可滚动祖先),样式一字未动;画板加注释说明 31% 是示意。与上一条一起以 `d2a87d0` 上生产,见 [`docs/releases.md`](docs/releases.md) |
 | 2026-09-07 | 主模型换成 Gemini 系(`gemini-3.8-flash-high`)后当天复现:问 2026 赛季的比赛,首轮不搜、直接答「尚未举办」;被要求搜了之后又把 grounding 回来的赛果判成 Fandom 同人推演。harness 侧核出 4 处确定缺口:系统提示没有日期、「搜不搜」全靠模型自判、搜索结果没有可信度锚、搜索网关那句请求也没有日期;外加首轮命名抢占了唯一的一次 tool call(Gemini 经 OpenAI 兼容线多数一轮只发一个调用) | `b6b31c8`:五处文案修补 —— A1 底座加【时间基准】段(会话开始的站点本地时间,精确到分;「开始于」措辞在整个会话里都成立)/ A2 搜索段改两条硬规则(访客要求搜就必须搜;随时间变化 / 不确定已否发生的事实先搜再答)并删「必要时指出这段内容可疑」/ A3 结果头加「[实时检索 · 时间]」一行(带来源时说「不符不是判虚构的理由、带链接让访客核对」,零来源时明说未经核实;不说「已核实 / 以来源为准」)/ A4 网关请求前缀带日期 / B1 命名段改「不要为了命名而推迟或省掉其它工具」;`shared/site-time.ts` 加 `siteNowLabel`。**零机制、零前端、零迁移、零 MCP 工具变动**;`docs/security.md` §1 二次补记先于代码;`thinkingLevel: "low"`(B2)未动,等查完自定义模型目录再定。**codex 审查 4 轮 / 7 条 / 全部采纳**(第 1 轮 1 P1 + 2 P2:零来源不盖章、「已发生」止于会话时间、硬规则①排除本站教程;第 2 轮 2 P2:会话时间只作「现在」下界、google 线来源非 grounding 元数据故不说「以来源为准」;第 3 轮 2 P1:硬规则①点名内容边界例外与已搜过不重复、资料句不预设已检索到;第 4 轮零 findings),整改后 PASS。第 3 轮起本应只审整改 diff,但本次尚无已提交基线可作 `--base`、改动仅 9 文件,四轮都审工作树,每轮 4–6 分钟。**已发版 `d9fefb4`**(2026-09-07,迁移 15 不变;生产端到端三例逐条过:时间基准答对当天日期与星期、不明说搜索时模型自己调 `web_search` 且不再以「尚未发生」拒答、说「搜一下本站教程」走 `notes_search`;B1 实测 `session_rename` 与 `web_search` 落同一轮。留证 [`docs/releases.md`](docs/releases.md)) |
+| 2026-09-10 | **工程流程变更(不是站点改动)**:独立审查执行器从 codex 切到 **cursor CLI(`cursor-agent`)+ `cursor-grok-4.6-high`** —— codex 被限流,所有者裁定暂停使用 | 所有者裁定 2026-09-10。**策略三条不变**(前两轮全量 / 第 3 轮起只审整改 diff;不得带 high 级 findings 收口;审查不代替设计、非严重 finding 不许机制类修复),换的只是执行器。新增 [`docs/review-workflow.md`](docs/review-workflow.md) + `.claude/cursor-review-prompt.md`(审查任务书契约,入库)+ `.claude/cursor-review.ps1`(启动脚本,后台 `Start-Process` 脱离 + 结果落 `.claude/reviews/`,gitignored);`CLAUDE.md` / `AGENTS.md` / `rounds/README.md` / `rounds/TEMPLATE.md` 同步。codex 那套(`codex-companion.mjs`、`.agents/skills` 镜像)原样留着休眠,**切回由所有者裁定**;两者不并用 |

@@ -64,7 +64,12 @@ mem_limit  = API_RSS_p95 × 1.3(突发余量)
 6. 网站底部挂备案号(`.env` 的 `ICP_BEIAN`,运行期注入;web footer 预留位)。**ICP 之外还有公安联网备案**:网站开通后 30 个工作日内办,底部要同时挂公安备案号并链到 `beian.mps.gov.cn`。**2026-09-10 已办并落地**(苏公网安备,`SiteFooter` 同时支持两个号):
    - 号码走 `.env` 的 `MPS_BEIAN=<备案号原文>`,与 `ICP_BEIAN` 同一套运行期注入;查询链接的 `?code=` 由组件从号码里取数字串,不用另填
    - **备案编号图标必须是备案系统「点击下载备案编号图标」下来的原文件**,已按原字节存为 `apps/web/public/beian-mps.png`(36×40 PNG);格式要求是「图标在前、号码在右」
-   - 底栏版式:两个号并排一行,高度仍 26px;窄到一行放不下时折行(号码必须可见,不截断)
+   - **桌面**底栏版式:两个号并排一行,高度仍 26px;窄到一行放不下时折行(号码必须可见,不截断)
+   - **移动端(≤768px)不在屏底挂**(所有者裁定 2026-09-10,R-MOBILE-2):底栏在窄视口整条不渲染,两个号搬到 **About 页尾**
+     (两号各一行居中、公安图标在左、可点,画板 `5d` ③)。原因是屏底那 26px 会把移动端 Tab Bar 顶离屏幕底缘,
+     还让 Tab Bar 随滚动收起时剩一条残条压在号码上(生产实测 `footerCovered = 26px`)。
+     **已认的残余风险**:移动端首页(Runtime)自身不滚动,搬走后手机上首页看不到号码 —— 备案抽查通常看首页底部,
+     所有者认此风险(桌面底栏照旧、移动 About 里有);更稳的变体(Notes / Skills 页尾也各挂一条)记 `rounds/BACKLOG.md`
 
 ## 2. 服务器初始化(一次性)
 
@@ -159,5 +164,7 @@ docker compose up -d                   # 3) 再起 api / web / caddy
 - [ ] SSE 事件流抽查:无 Authorization/api-key 字段。**判据是结构化的**——遍历每帧 JSON 看有没有凭据形状的**键**;`grep -i authorization` 会命中对话正文里的那个英文单词(R10 实测 7 次全是误报)
 - [ ] SSE 优雅关闭:`docker compose stop api` 时客户端**在停机同刻(+0s)拿到确定的终止**而非挂到超时。**别钉死 curl 退出码**(R9 见 `18`、R10 见 `0`,取决于断开落在响应分块的哪个位置)
 - [ ] 限额:小额度演练超限路径(拒新会话 + 前端提示)
-- [ ] **两个备案号都已挂 footer**(ICP 链到 `beian.miit.gov.cn`;公安联网备案是「图标 + 号码」且链到 `beian.mps.gov.cn/#/query/webSearch?code=<数字串>`)。判据是**在生产页面上看**:`.env` 少填一项那半边就静默不渲染,本机与 130 都不配、看不出来
+- [ ] **两个备案号都已挂上,且两种视口各看一次**(ICP 链到 `beian.miit.gov.cn`;公安联网备案是「图标 + 号码」且链到 `beian.mps.gov.cn/#/query/webSearch?code=<数字串>`)。
+      判据是**在生产页面上看**:`.env` 少填一项那半边就静默不渲染,本机与 130 都不配、看不出来。
+      **桌面**看任意页的底栏;**移动端(≤768px)看 About 页尾** —— 屏底那条在窄视口刻意不渲染(R-MOBILE-2,见 §1 第 6 步)
 - [ ] **egress 出网过滤**(R-WEBFETCH):`sudo ~/deploy/egress-filter.sh --install-unit` 跑过,`sudo ~/deploy/egress-filter.sh --status` 六条全 `ok`(退出码 0),`systemctl is-enabled xray-egress-filter` 回 `enabled`;容器内 `create_connection(('169.254.169.254',80),3)` 失败而 `('1.1.1.1',443)` 成功(`deploy-environments.md` 冒烟第 21 条 ②)。compose 改了 `egress` 网段时脚本的 `EGRESS_SUBNET` 与单元文件里的值要一起改
