@@ -41,6 +41,18 @@ $repoRoot = $PSScriptRoot
 Set-Location "$repoRoot\apps\api"
 $encore = "$HOME\.encore\bin\encore.exe"
 
+# —— docker daemon 在 WSL(2026-09-14 迁移)——
+# 本机 Docker Desktop 已卸载,daemon 现在跑在 WSL Ubuntu-24.04 里,经 loopback TCP 暴露:
+#   WSL 侧:/etc/systemd/system/docker.service.d/override.conf 给 dockerd 加了 -H tcp://127.0.0.1:2375
+#          (只绑 loopback——WSL2 是 NAT 模式,局域网路由不到;Windows 经 WSL 的 localhost 转发可达)
+#   Win 侧:docker CLI 是 download.docker.com 的静态二进制 C:\Users\Click\bin\docker.exe,不装 Desktop
+# **encore 也吃这个变量**:本地 Postgres 与 encore build docker 都要经 daemon。
+# 【daemon 常驻 + 同机与 ticketBookingB2B 共用】第一个拉起 encore daemon 的进程的环境决定了它连哪个
+# docker,之后再改这一行对已在跑的 daemon 无效 —— 所以同一份 DOCKER_HOST 还写进了**用户级环境变量**
+# (setx 等价物),别只依赖这里。daemon 连错了的表现:encore run 卡在起本地 Postgres,且报错不提 docker。
+# 已设值的不覆盖(允许临时指向别的 daemon)。
+if (-not $env:DOCKER_HOST) { $env:DOCKER_HOST = "tcp://127.0.0.1:2375" }
+
 # —— Bun 统一运行时(R-BUN)——
 # bun-runtime 实验位写在 apps/api/encore.app,encore run / build 都会读到。
 # 但 **基座镜像只能由 --base 指定**:encore.app 的 build.docker.base_image 仅对
@@ -87,6 +99,62 @@ function Publish-SourceSnapshot([string]$targetHost, [string]$sha) {
     Write-Host "==> 源码快照 $sha → $($t.url)(token 取自环境变量 $($t.tokenEnv))"
     & node "$repoRoot\tools\source-publish\publish.mjs" --sha $sha --mcp $t.url --token-env $t.tokenEnv
     return ($LASTEXITCODE -eq 0)
+}
+
+# —— 让 WSL 的 VM 别自己关机 ——
+#
+# 【这是本次迁移最坑的一条,2026-09-14 实测】WSL 的 VM 在**空闲 ~60 秒**后会自动关机,
+# 而它判定的「空闲」只看**有没有 wsl 会话**,根本不看 VM 里还跑着 dockerd。后果是:
+#   · 一条 docker build 跑到中途,daemon 忽然消失 —— CLI 报的是 `unexpected EOF`;
+#   · 隔几分钟再敲命令,报 `connectex: ...拒绝`,可这时进 WSL 一看 dockerd 明明 active
+#     (因为 `wsl ...` 这条命令本身又把 VM 唤醒了)——**从 VM 内部永远看不到这个故障**。
+# 这两种表现极像「网络转发不稳」,查错方向很容易跑偏(本次就先误判成 WSL 的 localhost relay 间歇失效)。
+# 判据只有一个:**在 Windows 侧**跑 `wsl -l --running -v` 看 STATE 是不是 Stopped。
+#
+# `.wslconfig` 的 `vmIdleTimeout=-1` **无效**(WSL 2.6.1 实测:不报警告、也不起作用,VM 照关)。
+# 唯一管用的是钉一个常驻 wsl 会话,只要它活着 VM 就不会关。
+function Ensure-WslDocker {
+    $alive = Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" -ErrorAction SilentlyContinue |
+             Where-Object { $_.CommandLine -like "*sleep infinity*" }
+    if (-not $alive) {
+        Write-Host "==> 起 WSL 保活会话(VM 空闲 60s 会自己关机,连带 dockerd)"
+        Start-Process -FilePath "wsl.exe" `
+            -ArgumentList "-d", "Ubuntu-24.04", "--", "sleep", "infinity" -WindowStyle Hidden
+    }
+}
+
+# —— docker daemon 可达性预检 ——
+# 不做这一步的表现各不相同、且都不提「daemon 在 WSL 里」:encore run 卡在起本地 Postgres 后超时,
+# docker build 只回一句 Windows 风格的 connectex 拒绝。统一在入口处判一次,把排查顺序写进报错。
+# 重试是必需的:VM 刚被保活会话唤醒时,systemd 还要几秒才把 dockerd 拉起来。
+function Assert-Docker {
+    Ensure-WslDocker
+    foreach ($i in 1..6) {
+        & docker version --format "{{.Server.Version}}" 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { return }
+        Start-Sleep -Seconds 2
+    }
+    throw @"
+连不上 docker daemon(DOCKER_HOST=$env:DOCKER_HOST)。daemon 在 WSL Ubuntu-24.04 里,依次查:
+  1) wsl -l --running -v                                         STATE 是 Stopped 就是 VM 自己关了
+                                                                 (本该由保活会话钉住,见 Ensure-WslDocker)
+  2) wsl -d Ubuntu-24.04 -u root -- systemctl is-active docker    不是 active 就 systemctl start docker
+  3) wsl -d Ubuntu-24.04 -- ss -ltn | grep 2375                   没有监听 = override.conf 丢了,
+                                                                 见本文件头部「docker daemon 在 WSL」段
+注意第 2、3 条自己会唤醒 VM,所以它们「看着正常」不代表没出过故障 —— 先看第 1 条。
+"@
+}
+
+# —— Windows 路径 → WSL 路径 ——
+# 【为什么必须转】bind mount 的路径是由 **daemon** 解析的,daemon 在 WSL 里:把 D:\... 原样传过去,
+# Linux 侧当成一个名叫 "D:\..." 的相对路径,报的是 "invalid mount path: must be absolute",
+# 不是「路径不存在」——照着报错去查盘符和文件是查不出东西的。
+# 只有 bind mount(-v)要转;docker build 的 context 与 docker save -o 的输出都由 **CLI** 侧处理,
+# 照常用 Windows 路径。
+function ConvertTo-WslPath([string]$p) {
+    $full = (Resolve-Path -LiteralPath $p).Path
+    if ($full -notmatch '^([A-Za-z]):(.*)$') { throw "不是本地盘符路径,转不成 WSL 路径:$p" }
+    "/mnt/" + $Matches[1].ToLower() + ($Matches[2].Replace('\', '/'))
 }
 
 # —— runner 镜像的本机构建(runner / runner-test 共用)——
@@ -191,6 +259,10 @@ function Remove-DevWorktree([string]$name, [bool]$force) {
         Write-Host "    已删除"
     }
 }
+
+# 需要 docker 的子命令统一预检(daemon 在 WSL,见头部)。**用排除法**:下面这几个确定不碰 docker,
+# 其余一律预检 —— 子命令打错字会落到 default 分支去跑 encore run,那同样需要 daemon。
+if ($Cmd -notin @("check", "gen", "skills", "skills-gen", "source-publish", "wt-clean")) { Assert-Docker }
 
 switch ($Cmd) {
     "test"  {
@@ -384,9 +456,14 @@ switch ($Cmd) {
         # (有公网;生产是专用 egress 网络 + 宿主 DOCKER-USER 过滤,本机不复现那两道)。
         $egress = ($args -contains "egress") -or ($args -contains "-Egress")
         Build-RunnerImage
+        # 【为什么每条 docker run 都带 -i】daemon 迁到 WSL(2026-09-14)之后,Windows 的 docker CLI 连
+        # **远程 daemon** 时不带 -i 就收不到容器的 stdout/stderr —— 不是报错,是**静默零字节**
+        # (实测:docker run --rm hello-world 输出 0 字节,退出码照样 0;加 -a STDOUT -a STDERR 也没用,
+        # 只有 -i 或事后 docker logs 拿得到)。表现是容器跑着、日志一片空白,排查时会误以为容器没起来。
+        # -i 只是把 stdin 保持打开,本文件里的容器都不读 stdin,没有副作用。
         if ($egress) {
             Write-Host "==> docker run egress(Ctrl+C 停;RUNNER_LISTEN=tcp://0.0.0.0:8000 → 127.0.0.1:8001)"
-            & docker run --rm --init --name xray-runner-egress-dev -p 127.0.0.1:8001:8000 `
+            & docker run --rm -i --init --name xray-runner-egress-dev -p 127.0.0.1:8001:8000 `
                 -e RUNNER_LISTEN=tcp://0.0.0.0:8000 -e RUNNER_NETWORK=egress -e RUNNER_CONCURRENCY=1 `
                 --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
                 --tmpfs /run/runner:rw,size=1m,uid=10001,gid=10001 `
@@ -394,7 +471,7 @@ switch ($Cmd) {
                 xray-runner:dev
         } else {
             Write-Host "==> docker run(Ctrl+C 停;RUNNER_LISTEN=tcp://0.0.0.0:8000 → 127.0.0.1:8000)"
-            & docker run --rm --init --name xray-runner-dev -p 127.0.0.1:8000:8000 `
+            & docker run --rm -i --init --name xray-runner-dev -p 127.0.0.1:8000:8000 `
                 -e RUNNER_LISTEN=tcp://0.0.0.0:8000 -e RUNNER_NETWORK=none `
                 --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
                 --tmpfs /run/runner:rw,size=1m,uid=10001,gid=10001 `
@@ -408,14 +485,18 @@ switch ($Cmd) {
         # 与真实运行同一套 rlimit,打印每种形状的耗时与 VmPeak / VmHWM(任务卡验收 ⑦ 的数据来源)。
         # 两段都 --network none:测试不该有任何出网。tests\ 目录只 bind mount,不进镜像、不进清单、不进库。
         Build-RunnerImage
-        $tests = "$repoRoot\runner\tests"
+        # daemon 在 WSL(2026-09-14 迁移):bind mount 的路径由 daemon 解析,必须是 /mnt/d/... 而不是 D:\...。
+        # 本文件里**只有这两处 -v 需要转**,docker build 的 context 与 docker save -o 都走 CLI 侧、照旧用 Windows 路径。
+        $tests = ConvertTo-WslPath "$repoRoot\runner\tests"
         Write-Host "==> unittest(--network none)"
-        & docker run --rm --init --network none --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
+        # -i 是必须的:daemon 在 WSL,不带它就收不到容器输出(见 runner 分支的注释)——
+        # 测试结果会整段消失,只剩退出码。
+        & docker run --rm -i --init --network none --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
             -v "${tests}:/tests:ro" --entrypoint /opt/venv/bin/python xray-runner:dev `
             -I -B -m unittest discover -s /tests -p "test_*.py" -v
         if ($LASTEXITCODE -ne 0) { throw "runner 单元测试失败" }
         Write-Host "==> pathological(经 launch.py,rlimit 与真实运行相同;--memory 256m 与 egress 实例相同)"
-        & docker run --rm --init --network none --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
+        & docker run --rm -i --init --network none --read-only --tmpfs /run/work:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001 `
             --memory 256m --pids-limit 64 --cpus 1.0 `
             -v "${tests}:/tests:ro" --entrypoint /opt/venv/bin/python xray-runner:dev `
             -I -B /opt/launch.py 30 /tests/pathological.py

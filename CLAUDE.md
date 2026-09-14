@@ -235,7 +235,7 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 ## 本地开发
 
 ```powershell
-.\dev.ps1            # 后端 encore run :4000(需 Docker Desktop 已启动,本地 Postgres 走容器)
+.\dev.ps1            # 后端 encore run :4000(需 WSL 里的 docker daemon 已起,本地 Postgres 走容器)
 .\dev.ps1 test       # encore test(经 bun --bun 跑 vitest)
 .\dev.ps1 check      # encore check(编译校验)
 .\dev.ps1 gen        # encore gen client → apps/web/lib/api-client.ts(排除 mcp 服务)
@@ -252,6 +252,22 @@ dev.ps1       Windows 本地 encore 唯一入口(规则 1)
 cd apps\web; npm run dev   # 前端 next dev :3000
 ```
 
+- **docker daemon 在 WSL,不在 Windows**(2026-09-14 迁移,所有者卸载了 Docker Desktop)。Windows 侧只留 docker CLI
+  静态二进制(`C:\Users\Click\bin\docker.exe`),经 `DOCKER_HOST=tcp://127.0.0.1:2375` 连 WSL Ubuntu-24.04 里的 dockerd
+  (WSL 侧 systemd drop-in 给它加了 loopback 监听;WSL2 是 NAT 模式,局域网到不了)。**encore 也吃这个变量** ——
+  本地 Postgres 与 `encore build docker` 都经 daemon,`dev.ps1` 头部与 `.claude/mcp-encore.ps1` 各设了一份兜底,
+  另有一份用户级环境变量(daemon 常驻且与 ticketBookingB2B 共用,谁先拉起它谁的环境说了算)。四个已实测的坑写在
+  `dev.ps1` 对应注释里,**头一个最坑**:
+    1. **WSL 的 VM 空闲 ~60 秒就自己关机**,而它判定「空闲」只看有没有 wsl 会话、不看 VM 里跑着 dockerd ——
+       构建跑到一半 daemon 消失(CLI 报 `unexpected EOF`)、隔几分钟再敲命令报 connectex 拒绝。**从 VM 内部永远查不出来**
+       (`wsl ...` 这条命令本身就把 VM 唤醒了,进去一看 dockerd 明明 active),极易误判成「网络转发不稳」。
+       判据是**在 Windows 侧**跑 `wsl -l --running -v` 看 STATE。`.wslconfig` 的 `vmIdleTimeout=-1` 无效(WSL 2.6.1 实测),
+       靠 `Ensure-WslDocker` 钉一个常驻 wsl 会话解决。
+    2. **`docker run` 不带 `-i` 收不到容器输出**(静默零字节、退出码仍是 0)。
+    3. **bind mount 的路径由 daemon 解析,必须是 `/mnt/d/...`**(`ConvertTo-WslPath`)。
+    4. **docker 29 默认开的 containerd image store 会让 `encore build docker` 失败**(`archive/tar: write too long`);
+       已在 WSL 侧 `daemon.json` 关掉,判据是 `docker info` 的 `Storage Driver` 要是 `overlay2` 而不是 `overlayfs`。
+  机器级细节在用户级 `~/.claude/CLAUDE.md`。
 - **`dev.ps1 test` 跑两处**(R-SKILLS-2 起):`encore test`(api)之后再在 `apps/web` 跑 `bun test lib`(前端纯函数投影测试,`node:test` 写法、零新增依赖);
   带文件参数时只筛 api 侧。`dev.ps1 build` 出**三个**镜像(api / web / runner),构建前先 `--check` 清单是否与 `runner/skills` 一致。
   **第三处是 `dev.ps1 runner-test`**(R-WEBFETCH 起):python `unittest` 与病态输入夹具要在 runner 镜像里跑(要 docker),不并进 `dev.ps1 test`;

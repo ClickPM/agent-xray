@@ -15,7 +15,7 @@
 
 | 环境 | 位置 | 方式 | 运行时 | 状态 |
 |---|---|---|---|---|
-| 开发 | 本机 Windows | `dev.ps1` → `encore run :4000`;本地 Postgres 由 encore 经 Docker Desktop 管理 | bun(`encore.app` 的 `bun-runtime` 实验位) | 可用(R0 起) |
+| 开发 | 本机 Windows | `dev.ps1` → `encore run :4000`;本地 Postgres 由 encore 经 docker 管理,**daemon 在 WSL Ubuntu-24.04 里**(2026-09-14 起,Docker Desktop 已卸载;Windows 侧只有 docker CLI + `DOCKER_HOST=tcp://127.0.0.1:2375`,见 CLAUDE.md「本地开发」) | bun(`encore.app` 的 `bun-runtime` 实验位) | 可用(R0 起) |
 | 测试 | 同上 | `dev.ps1 test` → `encore test` → `bun --bun vitest run` | bun | 可用(R-BUN 起) |
 | 预发 | 130 服务器 | docker compose(`deploy/`)。**可选环境**:有需要时先在 130 发版验证,不是发生产的前置(所有者裁定 2026-09-03);SHA 允许落后于生产 | bun(`oven/bun:1.4.0-slim` 基座) | **可用**(R9,2026-09-01 全链路实测通过;`http://192.168.100.130`,当前 `7cc17fe` / 迁移 7) |
 | 生产 | 境内轻量服务器 | docker compose;若经过 130 验证则原样提升**同一个镜像**(SHA 相同,不重新构建) | bun | **已投产**(R11,2026-09-02,`https://www.kzgai.cloud/`);逐次发版见 [`releases.md`](releases.md) |

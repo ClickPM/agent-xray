@@ -24,17 +24,21 @@ async function seed(files: Array<[string, string]>) {
     files.length,
     files.reduce((a, [, c]) => a + Buffer.byteLength(c, "utf8"), 0),
   );
-  for (const [path, content] of files) {
-    await db.rawExec(
-      `INSERT INTO source_files (sha, path, kind, sha256, bytes, lines, content) VALUES ($1, $2, 'text', $3, $4, $5, $6)`,
-      SHA,
-      path,
-      sha256(content),
-      Buffer.byteLength(content, "utf8"),
-      content.split("\n").length - (content.endsWith("\n") ? 1 : 0),
-      content,
-    );
-  }
+  // 一条 INSERT 写完所有文件行,不逐条循环:夹具最多要塞 405 行(下面那条预算越界的用例),
+  // 而**每次 rawExec 都是一次跨进程往返** —— 本机 docker daemon 搬到 WSL 之后(2026-09-14)
+  // 单次往返变贵,逐条插入会让那条用例超过 vitest 默认的 5s 上限而红。批量写与逐条写对这几个
+  // 用例是同一件事(没有任何用例依赖插入顺序或逐行可见性),所以这里只改夹具、不动断言。
+  await db.rawExec(
+    `INSERT INTO source_files (sha, path, kind, sha256, bytes, lines, content)
+     SELECT $1, p, 'text', s, b, l, c
+     FROM unnest($2::text[], $3::text[], $4::int[], $5::int[], $6::text[]) AS t(p, s, b, l, c)`,
+    SHA,
+    files.map(([path]) => path),
+    files.map(([, content]) => sha256(content)),
+    files.map(([, content]) => Buffer.byteLength(content, "utf8")),
+    files.map(([, content]) => content.split("\n").length - (content.endsWith("\n") ? 1 : 0)),
+    files.map(([, content]) => content),
+  );
 }
 
 const TOOLS_TS = Array.from({ length: 12 }, (_, i) => `line ${i + 1}: const v${i + 1} = ${i + 1};`).join("\n") + "\n";
